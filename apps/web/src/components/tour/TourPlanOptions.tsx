@@ -1,4 +1,16 @@
-import { TOUR_PLAN_FOCUSES, TOUR_PLAN_FOCUS_KEYS, TOUR_PLAN_PACES, TOUR_PLAN_PACE_KEYS, TOUR_PLAN_TRANSPORTS, TOUR_PLAN_TRANSPORT_KEYS } from '@repo/utils';
+import {
+  TOUR_PLAN_FAMES,
+  TOUR_PLAN_FAME_KEYS,
+  TOUR_PLAN_FOCUSES,
+  TOUR_PLAN_FOCUS_KEYS,
+  TOUR_PLAN_PACES,
+  TOUR_PLAN_PACE_KEYS,
+  TOUR_PLAN_PURPOSES,
+  TOUR_PLAN_PURPOSE_KEYS,
+  TOUR_PLAN_PURPOSE_MAX,
+  TOUR_PLAN_TRANSPORTS,
+  TOUR_PLAN_TRANSPORT_KEYS,
+} from '@repo/utils';
 import { Chip, Group } from './TourFilterBar';
 import type { TourPlanOptionsValue } from './tourFormat';
 
@@ -6,6 +18,8 @@ import type { TourPlanOptionsValue } from './tourFormat';
 // 취향은 추천 목록의 순위에도 반영되므로 어느 지역에서나, 속도·이동수단은 일정표를 만드는 지역(itinerary)에서만 보인다.
 // 숙소 동네·꼭 갈 곳·뺄 곳은 결과를 본 뒤 고르므로 일정표 쪽에 있다.
 // 출발일(12차) — 일정에 날짜를 붙이고 예보가 닿는 날의 비를 반영한다. dateHint 는 호출부가 예보 상태로 만든 한 줄.
+// 14차 다양화 — 목적(그 목적의 여행이 평균보다 더 간 곳을 앞세운다, 셋까지)과 장소(유명한 곳 위주 ↔ 덜 알려진 곳도). 둘 다 목록
+// 순위에도 반영되므로 어느 지역에서나 보인다.
 
 interface Props {
   value: TourPlanOptionsValue;
@@ -35,6 +49,31 @@ export const TourPlanOptions = ({ value, onChange, itinerary, minDate, dateHint 
           </Chip>
         );
       })}
+    </Group>
+    <Group label="목적">
+      {TOUR_PLAN_PURPOSE_KEYS.map((k) => {
+        const on = value.purposes.includes(k);
+        const full = !on && value.purposes.length >= TOUR_PLAN_PURPOSE_MAX;
+        return (
+          <Chip
+            key={k}
+            active={on}
+            onClick={() => {
+              if (!full) onChange({ ...value, purposes: on ? value.purposes.filter((p) => p !== k) : [...value.purposes, k] });
+            }}
+          >
+            <span className={full ? 'opacity-40' : undefined}>{TOUR_PLAN_PURPOSES[k].label}</span>
+          </Chip>
+        );
+      })}
+      <span className="text-[11px] text-muted-foreground">{TOUR_PLAN_PURPOSE_MAX}개까지</span>
+    </Group>
+    <Group label="장소">
+      {TOUR_PLAN_FAME_KEYS.map((k) => (
+        <Chip key={k} active={value.fame === k} onClick={() => onChange({ ...value, fame: k })}>
+          {TOUR_PLAN_FAMES[k].label}
+        </Chip>
+      ))}
     </Group>
     {itinerary && (
       <Group label="이동">

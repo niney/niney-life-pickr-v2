@@ -583,3 +583,65 @@ describe('식사 자리 대체·같은 곳 묶음(13차)', () => {
     expect(loose.days[0]!.stops.map((x) => x.id)).toEqual(expect.arrayContaining(['t-island', 't-island-bridge']));
   });
 });
+
+describe('다른 코스 보기(14차) — 변형 번호', () => {
+  // 한 동네에 점수·시간대가 같은 볼거리 여덟 곳과 식당 넷 — 1등과 2등의 차이가 가까움(거리)뿐이다.
+  const H = { lat: 35.16, lng: 129.16 };
+  const flat = { bands: [5, 5, 5, 5, 0] };
+  const cs: PlanCandidate[] = [
+    ...repeat(8, (i) => cand(`s${i}`, i % 2 === 0 ? '자연' : '문화', H.lat + 0.004 * i, H.lng + 0.003 * (i % 3), 5, flat)),
+    ...repeat(4, (i) => cand(`m${i}`, '식당', H.lat + 0.005 * i, H.lng - 0.004, 4, flat)),
+    // 점수가 1등의 절반에 못 미치는 곳 — 어떤 번호에서도 뽑히지 않는다(잡음 ±35%: 0.65 ÷ 1.35 ≈ 0.48).
+    cand('weak', '자연', H.lat + 0.002, H.lng + 0.001, 1.5, flat),
+  ];
+  const plan = (variant?: number) =>
+    synthesizePlanItinerary({
+      days: 1,
+      candidates: cs,
+      zones: buildPlanZones(cs.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng, n: Math.round(c.score * 10) })), 9),
+      reachKm: 9,
+      skeletons: { similar: emptyPlanSkeletonSet(), region: emptyPlanSkeletonSet() },
+      posBase: { first: 0, mid: 0, last: 0 },
+      legModel: fitPlanLegModel([]),
+      typeStay: new Map(),
+      variant,
+    });
+  const ids = (variant?: number): string[] => plan(variant).days[0]!.stops.map((x) => x.id);
+
+  it('0 은 번호를 안 준 것과 같고, 같은 번호는 늘 같은 코스', () => {
+    expect(ids(0)).toEqual(ids());
+    for (const v of [1, 7, 42, 99]) expect(ids(v)).toEqual(ids(v));
+  });
+
+  it('번호를 바꾸면 상위권 후보가 번갈아 뽑힌다 — 자리 수·묶음(볼거리·식당)은 그대로', () => {
+    const courses = Array.from({ length: 20 }, (_, i) => ids(i + 1));
+    expect(new Set(courses.map((c) => c.join('>'))).size).toBeGreaterThan(8);
+    // 여러 번호에 걸쳐 후보 대부분이 한 번은 쓰인다(기준 코스는 넷뿐).
+    expect(new Set(courses.flat()).size).toBeGreaterThanOrEqual(10);
+    for (const c of courses) {
+      expect(c).toHaveLength(4);
+      // 기본 뼈대: 볼거리 → 식당 → 볼거리 → 식당.
+      expect(c.map((id) => id[0])).toEqual(['s', 'm', 's', 'm']);
+    }
+  });
+
+  it('잡음은 묶여 있다 — 점수가 1등의 절반에 못 미치는 후보는 어떤 번호에서도 뽑히지 않고, 꼭 갈 곳은 흔들리지 않는다', () => {
+    for (let v = 1; v <= 60; v += 1) expect(ids(v)).not.toContain('weak');
+    for (let v = 1; v <= 10; v += 1) {
+      const r = synthesizePlanItinerary({
+        days: 1,
+        candidates: cs,
+        zones: buildPlanZones(cs.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng, n: Math.round(c.score * 10) })), 9),
+        reachKm: 9,
+        skeletons: { similar: emptyPlanSkeletonSet(), region: emptyPlanSkeletonSet() },
+        posBase: { first: 0, mid: 0, last: 0 },
+        legModel: fitPlanLegModel([]),
+        typeStay: new Map(),
+        pinned: new Set(['weak']),
+        variant: v,
+      });
+      expect(r.days[0]!.stops.find((x) => x.id === 'weak')).toMatchObject({ pinned: true });
+      expect(r.unplaced).toEqual([]);
+    }
+  });
+});

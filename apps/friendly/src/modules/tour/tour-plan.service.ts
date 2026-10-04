@@ -18,6 +18,10 @@
 //   · 날씨(12차) — 비 오는 일차(wetDays, 화면이 예보에서 골라 보낸다)는 야외 유형을 낮추고 실내에 가까운 유형을 앞세운다.
 //     서버는 예보를 부르지 않는다(외부 의존 없이 결정적).
 //
+//   · 다양화(14차) — 유명도(점수에서 여행 수의 몫) · 여행 목적(그 목적의 여행이 더 간 곳) · 다른 코스 보기(변형 번호).
+//     표본이 모자라 풀린 조건도 버리지 않는다 — 그 조건 하나만 같은 여행의 선호를 순위에 남긴다(조건이 달라도 같은 코스가
+//     나오던 것을 줄인다).
+//
 // 지역 프로필(후보·시간대·일차 위치·여행별 요약·권역·이동 모델)은 지역 키로 10분 캐시한다. 적재·제거(다른 프로세스)로 데이터
 // 버전이 바뀌면 프로필을 버리고 다음 요청부터 새로 만든다(tour-data-version.ts). docs/PLAN-tour-log.md §10차·§11차.
 
@@ -26,9 +30,11 @@ import type { TourInsightsQueryType, TourPlanAltType, TourPlanBodyType, TourPlan
 import {
   TOUR_ITINERARY_REGIONS,
   TOUR_K_MIN,
+  TOUR_PLAN_FAMES,
   TOUR_PLAN_FOCUSES,
   TOUR_PLAN_FOCUS_BOOST,
   TOUR_PLAN_PACES,
+  TOUR_PLAN_PURPOSES,
   TOUR_RATING_MIN_N,
   TOUR_REGIONS,
   TOUR_RESTAURANT_TYPE_SHORTS,
@@ -87,6 +93,19 @@ const LIFT_PRIOR = 3;
 const LIFT_RANGE = [0.5, 2] as const;
 const TYPE_LIFT_RANGE = [0.7, 1.5] as const;
 const TYPE_SHARE_PRIOR = 0.02;
+// 조건별 선호(14차) — "그 조건 하나만 같은 여행" 의 선호를 곱할 때의 지수.
+//   풀린 조건: 그대로(1). 비슷한 여행(풀고 남은 조건)과 겹치지 않는 조건이라 곱해도 같은 근거를 두 번 세지 않는다. 풀리지 않은
+//   조건의 선호까지 곱하면 더 갈리지만(실측 — 제주 200개 조건의 서로 다른 일정 159 → 164개) 비슷한 여행과 같은 근거를 두 번
+//   세게 된다. 비슷한 여행의 선호와 곱한 값은 0.4~3 으로 자른다.
+//   여행 목적: 세제곱(선호 2배 → 8배). 사용자가 직접 고른 것이라 일정에 드러나야 한다 — 그대로(1) 곱하면 방문 수에 묻혀 일정이
+//   한 곳도 바뀌지 않고(실측: 테마파크 목적인데 기준과 같은 일정), 제곱이면 역사 유적 목적에 역사 유적이 하나도 안 든다.
+//   세제곱에서 역사 유적 → 항파두리, 테마파크 → 뽀로로앤타요·신화워터파크가 든다. 목적을 여럿 곱한 값은 0.1~10 으로 자른다.
+const RELAXED_LIFT_POWER = 1;
+const PURPOSE_LIFT_POWER = 3;
+const TOTAL_LIFT_RANGE = [0.4, 3] as const;
+const PURPOSE_TOTAL_RANGE = [0.1, 10] as const;
+// "목적에 맞는 곳" 표시 — 그 목적의 여행 5건 이상이 갔고 평균의 이 배수 이상.
+const PURPOSE_FIT_LIFT = 1.3;
 // ── 11차 입력 확장 ──
 // 대중교통 — 버스 구간 기록이 모자라면 차 모델 × 1.8 + 10분(기다림·환승), 하루 권역은 반경의 0.7배·앞 장소 거리 감쇠는 5km.
 const TRANSIT_FALLBACK = { factor: 1.8, extra: 10 } as const;
@@ -150,6 +169,11 @@ interface PoolPlace {
 // 여행 1건의 요약 — 간 후보 장소·유형별 방문 수·일차별 유형 순서. 메모리 안에서만 쓰고 응답에는 집계로만 나간다.
 interface TripFacts {
   nights: number;
+  // 조건별 선호(14차)를 메모리에서 가르기 위한 여행 속성·미션 코드. 응답에는 나가지 않는다.
+  ageGrp: string | null;
+  gender: string | null;
+  month: number;
+  missions: Set<string>;
   places: Set<string>;
   types: Map<string, number>;
   days: PlanTripDay[];
@@ -179,6 +203,8 @@ interface ScoredPlace {
   score: number;
   similarN: number | null;
   lift: number | null;
+  // 고른 여행 목적에 맞는 곳인가(14차).
+  purposeFit: boolean;
 }
 
 // 일차 위치 — 당일 여행은 only, 첫날 first, 마지막 날(박수 + 1 일차 이후) last, 그 사이 mid.
@@ -302,7 +328,10 @@ export class TourPlanService {
         where: { ...placeWhere, nTravelers: { gte: TOUR_K_MIN }, nRated: { gte: TOUR_RATING_MIN_N }, bayesScore: { not: null }, typeShort: { notIn: [...PLAN_EXCLUDED_TYPES] } } as Prisma.TourPlaceWhereInput,
         select: { id: true, name: true, typeShort: true, sido: true, sigungu: true, emd: true, lat: true, lng: true, isIsland: true, nTravelers: true, bayesScore: true, stayMedian: true, spendPpMedian: true, spendN: true },
       }),
-      this.prisma.tourTrip.findMany({ where: tourRegionTripWhere(region) as Prisma.TourTripWhereInput, select: { id: true, nights: true } }),
+      this.prisma.tourTrip.findMany({
+        where: tourRegionTripWhere(region) as Prisma.TourTripWhereInput,
+        select: { id: true, nights: true, ageGrp: true, gender: true, month: true, missionCodes: true },
+      }),
       this.prisma.tourVisit.findMany({
         where: { isPrivate: false, ...tourRegionVisitWhere(region) } as Prisma.TourVisitWhereInput,
         select: { travelId: true, placeId: true, typeShort: true, dayIndex: true, visitOrder: true, arrivalHour: true },
@@ -371,7 +400,22 @@ export class TourPlanService {
     const poolOf = (placeId: string | null): PoolPlace | undefined => (placeId ? pool.get(alias.get(placeId) ?? placeId) : undefined);
 
     // 방문 한 번 훑기 — 장소별 유형·시간대·일차 위치, 여행별 요약, 지역 유형 비중, (일정 지역이면) 하루 자리 순서.
-    const trips = new Map<string, TripFacts>(tripRows.map((t) => [t.id, { nights: t.nights, places: new Set<string>(), types: new Map<string, number>(), days: [] }]));
+    const trips = new Map<string, TripFacts>(
+      tripRows.map((t) => [
+        t.id,
+        {
+          nights: t.nights,
+          ageGrp: t.ageGrp,
+          gender: t.gender,
+          month: t.month,
+          // 원본 표기 "1;13;26".
+          missions: new Set((t.missionCodes ?? '').split(';').map((c) => c.trim()).filter(Boolean)),
+          places: new Set<string>(),
+          types: new Map<string, number>(),
+          days: [],
+        },
+      ]),
+    );
     const typeVisits = new Map<string, number>();
     let typeVisitsTotal = 0;
     const posCount = { first: 0, mid: 0, last: 0 };
@@ -525,41 +569,93 @@ export class TourPlanService {
     // 조건이 하나도 없어 지역 여행 전체가 대상이면 "비슷한 여행" 가중은 의미가 없다(전부 1).
     const personalized = matched > 0 && matched < profile.totalTrips;
 
-    // 비슷한 여행의 장소별 방문 여행 수 · 유형 비중 · 하루 유형 순서 · 박수.
-    const segPlace = new Map<string, number>();
-    const segTypeVisits = new Map<string, number>();
-    const segTypeTrips = new Map<string, number>();
-    let segVisits = 0;
+    // 여행 묶음의 장소별 방문 여행 수 · 유형 비중.
+    interface Segment {
+      n: number;
+      place: Map<string, number>;
+      typeVisits: Map<string, number>;
+      typeTrips: Map<string, number>;
+      visits: number;
+    }
+    const segmentOf = (ids: Iterable<string>): Segment => {
+      const seg: Segment = { n: 0, place: new Map(), typeVisits: new Map(), typeTrips: new Map(), visits: 0 };
+      for (const id of ids) {
+        const facts = profile.trips.get(id);
+        if (!facts) continue;
+        seg.n += 1;
+        for (const pid of facts.places) countMap(seg.place, pid);
+        for (const [type, c] of facts.types) {
+          countMap(seg.typeVisits, type, c);
+          countMap(seg.typeTrips, type);
+          seg.visits += c;
+        }
+      }
+      return seg;
+    };
+    // 그 묶음이 이 장소를 평균보다 얼마나 가나 — 5건 이상 간 곳은 장소 단위로, 그 미만이면 유형 선호로 물러선다.
+    // n = 묶음의 여행 수(비슷한 여행은 조회한 건수 그대로).
+    const liftOf = (seg: Segment, n: number, p: PoolPlace): { lift: number; segN: number | null } => {
+      const segN = seg.place.get(p.id) ?? 0;
+      if (segN >= TOUR_K_MIN) return { lift: clamp((segN + LIFT_PRIOR) / ((n * p.n) / profile.totalTrips + LIFT_PRIOR), LIFT_RANGE[0], LIFT_RANGE[1]), segN };
+      if (seg.visits === 0 || profile.typeVisitsTotal === 0 || (seg.typeTrips.get(p.kind) ?? 0) < TOUR_K_MIN) return { lift: 1, segN: null };
+      const share = (seg.typeVisits.get(p.kind) ?? 0) / seg.visits;
+      const all = (profile.typeVisits.get(p.kind) ?? 0) / profile.typeVisitsTotal;
+      return { lift: clamp((share + TYPE_SHARE_PRIOR) / (all + TYPE_SHARE_PRIOR), TYPE_LIFT_RANGE[0], TYPE_LIFT_RANGE[1]), segN: null };
+    };
+
+    // 비슷한 여행(조건을 다 맞춘 여행 — 사다리로 풀고 남은 조건) · 그 하루 유형 순서 · 박수.
+    const joint = segmentOf(tripIds);
     const segDays: PlanTripDay[] = [];
     const segNights: number[] = [];
     for (const id of tripIds) {
       const facts = profile.trips.get(id);
       if (!facts) continue;
       segNights.push(facts.nights);
-      for (const pid of facts.places) countMap(segPlace, pid);
-      for (const [type, c] of facts.types) {
-        countMap(segTypeVisits, type, c);
-        countMap(segTypeTrips, type);
-        segVisits += c;
-      }
       if (personalized) segDays.push(...facts.days);
     }
-    const typeLift = (kind: string): number => {
-      if (!personalized || segVisits === 0 || profile.typeVisitsTotal === 0 || (segTypeTrips.get(kind) ?? 0) < TOUR_K_MIN) return 1;
-      const seg = (segTypeVisits.get(kind) ?? 0) / segVisits;
-      const all = (profile.typeVisits.get(kind) ?? 0) / profile.typeVisitsTotal;
-      return clamp((seg + TYPE_SHARE_PRIOR) / (all + TYPE_SHARE_PRIOR), TYPE_LIFT_RANGE[0], TYPE_LIFT_RANGE[1]);
+
+    // 조건별 선호(14차) — 풀린 조건과 여행 목적은 "그 조건 하나만 같은 여행" 묶음으로 본다. 조건을 통째로 버리면 조합이 조금만
+    // 좁아도 결과가 같아진다(실측 — 제주 200개 조건 중 175개가 조건을 풀고 100개는 연령까지 풀었다). 조건 하나씩은 표본이
+    // 두껍다(30대 597건 · 2박 610건). 묶음이 20건 미만이거나 지역 여행 전부면(가를 것이 없다) 쓰지 않는다.
+    const sideOf = (pred: (t: TripFacts) => boolean, power: number): { seg: Segment; power: number } | null => {
+      const ids: string[] = [];
+      for (const [id, t] of profile.trips) if (pred(t)) ids.push(id);
+      return ids.length >= TOUR_INSIGHTS_MIN_TRIPS && ids.length < profile.totalTrips ? { seg: segmentOf(ids), power } : null;
     };
+    const relaxedPred: Record<(typeof ladder)[number], (t: TripFacts) => boolean> = {
+      month: (t) => t.month === body.month,
+      gender: (t) => t.gender === body.gender,
+      nights: (t) => (body.nights !== undefined && body.nights >= 4 ? t.nights >= 4 : t.nights === body.nights),
+      ageGrp: (t) => t.ageGrp === body.ageGrp,
+    };
+    type Side = { seg: Segment; power: number };
+    const isSide = (x: Side | null): x is Side => x !== null;
+    const relaxedSides = ladder.filter((key) => relaxed.includes(key)).map((key) => sideOf(relaxedPred[key], RELAXED_LIFT_POWER)).filter(isSide);
+    const purposeSides = [...new Set(body.purposes ?? [])].map((key) => sideOf((t) => t.missions.has(TOUR_PLAN_PURPOSES[key].mission), PURPOSE_LIFT_POWER)).filter(isSide);
 
     // 취향(11차) — 고른 묶음의 유형에 가중. 목록 순위와 일정표 후보 점수에 같이 들어간다.
     const focusKinds = new Set<string>((body.focus ?? []).flatMap((f) => [...TOUR_PLAN_FOCUSES[f].kinds]));
+    // 유명도(14차) — 여행 수의 지수. 기본(famous)은 √여행 수.
+    const fameExp = TOUR_PLAN_FAMES[body.fame ?? 'famous'].exponent;
     const scored: ScoredPlace[] = profile.pool
       .map((p) => {
-        const segN = segPlace.get(p.id) ?? 0;
-        const similar = personalized && segN >= TOUR_K_MIN;
-        const lift = similar ? clamp((segN + LIFT_PRIOR) / ((matched * p.n) / profile.totalTrips + LIFT_PRIOR), LIFT_RANGE[0], LIFT_RANGE[1]) : typeLift(p.kind);
+        // 표시하는 "비슷한 여행 N건 · 평균의 몇 배" 는 조건을 다 맞춘 여행 기준이고, 조건별 선호는 순위에만 들어간다.
+        const own = personalized ? liftOf(joint, matched, p) : { lift: 1, segN: null };
+        let lift = own.lift;
+        for (const side of relaxedSides) lift *= liftOf(side.seg, side.seg.n, p).lift ** side.power;
+        if (relaxedSides.length > 0) lift = clamp(lift, TOTAL_LIFT_RANGE[0], TOTAL_LIFT_RANGE[1]);
+        // 여행 목적 — 목적마다 곱하고 한꺼번에 자른다. 장소 단위로 평균보다 뚜렷이 더 간 곳은 "목적에 맞는 곳" 으로 표시한다.
+        let purpose = 1;
+        let purposeFit = false;
+        for (const side of purposeSides) {
+          const fit = liftOf(side.seg, side.seg.n, p);
+          purpose *= fit.lift ** side.power;
+          if (fit.segN !== null && fit.lift >= PURPOSE_FIT_LIFT) purposeFit = true;
+        }
+        if (purposeSides.length > 0) lift *= clamp(purpose, PURPOSE_TOTAL_RANGE[0], PURPOSE_TOTAL_RANGE[1]);
         const focus = focusKinds.has(p.kind) ? TOUR_PLAN_FOCUS_BOOST : 1;
-        return { p, score: Math.max(0, p.bayes - PLAN_BASELINE) * Math.sqrt(p.n) * lift * focus, similarN: similar ? segN : null, lift: similar ? Math.round(lift * 10) / 10 : null };
+        const fame = fameExp === 0.5 ? Math.sqrt(p.n) : p.n ** fameExp;
+        return { p, score: Math.max(0, p.bayes - PLAN_BASELINE) * fame * lift * focus, similarN: own.segN, lift: own.segN !== null ? Math.round(own.lift * 10) / 10 : null, purposeFit };
       })
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score || b.p.n - a.p.n || a.p.name.localeCompare(b.p.name));
@@ -594,6 +690,7 @@ export class TourPlanService {
       const it = profile.itinerary;
       const routable = routableIn(it.cfg);
       const byId = new Map(scored.map((x) => [x.p.id, x.p]));
+      const purposeFitIds = new Set(scored.filter((x) => x.purposeFit).map((x) => x.p.id));
       // 꼭 갈 곳·뺄 곳(11차) — 이름(+읍면동)으로 후보를 찾는다. 둘 다에 있으면 꼭 갈 곳이 이긴다.
       const resolve = (keys: TourPlanPlaceKeyType[] | undefined): Array<{ key: TourPlanPlaceKeyType; p: PoolPlace | null }> =>
         (keys ?? []).map((key) => ({ key, p: scored.filter((x) => matchesKey(x.p, key)).sort((a, b) => b.p.n - a.p.n)[0]?.p ?? null }));
@@ -634,6 +731,7 @@ export class TourPlanService {
         wetFactor: WET_KIND_FACTOR,
         hubKm: it.cfg.hubKm,
         mealFallback: it.cfg.mealFallback,
+        variant: body.variant,
       });
       const toAlt = (id: string): TourPlanAltType => {
         const p = byId.get(id)!;
@@ -663,6 +761,7 @@ export class TourPlanService {
               moveKm: s.moveKm,
               spendPp: p.spendPp,
               pinned: s.pinned,
+              purposeFit: purposeFitIds.has(p.id),
               alternatives: s.altIds.map(toAlt),
             };
           }),
@@ -717,6 +816,7 @@ export class TourPlanService {
       stayMin: x.p.stayMin,
       spendPp: x.p.spendPp,
       placeId: registered.get(x.p.id) ?? null,
+      purposeFit: x.purposeFit,
     });
 
     return {

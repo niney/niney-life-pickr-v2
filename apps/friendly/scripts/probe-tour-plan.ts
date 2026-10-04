@@ -6,8 +6,10 @@
 //   ④ 동반 × 박수 훑기 — 조건마다 비슷한 여행 수·완화·일수(채운/바란)·뼈대 근거·하루 평균 이동·기준 대비 상위 10곳 겹침
 //      (겹침이 늘 10이면 비슷한 여행 가중이 순위를 못 바꾸는 것, 일수가 모자라면 후보·권역이 모자란 것)
 //   ⑤ 지역 훑기(13차, --regions) — 일정표를 여는 지역 전부를 당일·1박·2박으로 돌려 거점·채운 일수·하루 자리 수·식사 자리 유무를 한 줄씩
+//   ⑥ 다양성(14차, --diversity) — 연령 5 × 동반 8 × 박수 5 = 200개 조건의 일정이 서로 얼마나 다른지(서로 다른 일정·하루·장소 수,
+//      가장 흔한 첫날, 자주 나오는 곳)와, 변형 번호·유명도·여행 목적이 한 조건의 일정을 얼마나 바꾸는지
 //
-// 실행: pnpm --filter friendly probe:tour-plan [--region=jeju] [--sweep-only] [--regions]
+// 실행: pnpm --filter friendly probe:tour-plan [--region=jeju] [--sweep-only] [--regions] [--diversity]
 //   .env 의 DB 를 읽는다. 일정표는 utils TOUR_ITINERARY_REGIONS 지역만 나온다(그 밖은 장소만).
 /* eslint-disable no-console */
 
@@ -26,9 +28,11 @@ if (!isTourRegionKey(regionArg)) throw new Error(`모르는 지역: ${regionArg}
 const region = regionArg;
 const SWEEP_ONLY = args.includes('--sweep-only');
 const REGIONS_ONLY = args.includes('--regions');
+const DIVERSITY_ONLY = args.includes('--diversity');
 
 const ACCOMPANY = ['나홀로 여행', '2인 여행(가족 외)', '2인 가족 여행', '3인 이상 여행(가족 외)', '3인 이상 가족 여행(친척 포함)', '자녀 동반 여행', '부모 동반 여행', '3대 동반 여행(친척 포함)'];
 const NIGHTS = [0, 1, 2, 3, 4];
+const AGES = ['20', '30', '40', '50', '60'] as const;
 const SAMPLES: Array<{ label: string; body: Partial<TourPlanBodyType> }> = [
   { label: '30대 · 2인 여행 · 2박', body: { ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 } },
   { label: '자녀 동반 · 3박', body: { accompany: '자녀 동반 여행', nights: 3 } },
@@ -65,6 +69,88 @@ const printPlan = (label: string, r: TourPlanResultType, topN = 12): void => {
   }
 };
 
+// ⑥ 다양성(14차) — 일정에 든 장소 이름으로만 잰다(공개 응답과 같은 집계).
+type Stops = Array<{ name: string; kind: string; n: number; mean: number | null }>;
+const stopsOf = (r: TourPlanResultType): Stops => r.itinerary?.days.flatMap((d) => d.stops) ?? [];
+const daysOf = (r: TourPlanResultType): string[] => r.itinerary?.days.map((d) => d.stops.map((x) => x.name).join('→')) ?? [];
+const jaccard = (a: Stops, b: Stops): number => {
+  const A = new Set(a.map((x) => x.name));
+  const B = new Set(b.map((x) => x.name));
+  const both = [...A].filter((x) => B.has(x)).length;
+  return both / (A.size + B.size - both || 1);
+};
+const tally = (xs: string[]): Map<string, number> => {
+  const m = new Map<string, number>();
+  for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1);
+  return m;
+};
+const meanSat = (xs: Stops): string => (xs.reduce((a, x) => a + (x.mean ?? 0), 0) / Math.max(1, xs.length)).toFixed(2);
+const medianN = (xs: Stops): number => [...xs.map((x) => x.n)].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
+
+const diversity = async (service: TourPlanService): Promise<void> => {
+  console.log(`코스 다양성 점검 — ${tourRegionLabel(region)}(${region})`);
+  const runs: Array<{ nights: number; relaxed: string[]; stops: Stops; days: string[]; list: string[] }> = [];
+  for (const ageGrp of AGES) {
+    for (const accompany of ACCOMPANY) {
+      for (const nights of NIGHTS) {
+        const r = await service.plan({ region, ageGrp, accompany, nights });
+        runs.push({ nights, relaxed: r.relaxed, stops: stopsOf(r), days: daysOf(r), list: r.places.map((x) => x.name) });
+      }
+    }
+  }
+  const n = runs.length;
+  const pct = (c: number): string => `${Math.round((c / n) * 100)}%`;
+  const inRuns = tally(runs.flatMap((r) => [...new Set(r.stops.map((x) => x.name))]));
+  const firstDays = tally(runs.map((r) => r.days[0] ?? '-'));
+  console.log(`\n■ 조건 ${n}개(연령 ${AGES.length} × 동반 ${ACCOMPANY.length} × 박수 ${NIGHTS.length}) — 조건을 풀지 않은 것 ${runs.filter((r) => r.relaxed.length === 0).length}개 · 연령까지 푼 것 ${runs.filter((r) => r.relaxed.includes('ageGrp')).length}개`);
+  console.log(`  서로 다른 일정표 ${new Set(runs.map((r) => r.days.join(' / '))).size}개 · 서로 다른 하루 ${new Set(runs.flatMap((r) => r.days)).size}개(전체 ${runs.reduce((a, r) => a + r.days.length, 0)}일) · 서로 다른 첫날 ${firstDays.size}개`);
+  console.log(`  일정에 한 번이라도 나온 장소 ${inRuns.size}곳 · 목록에 한 번이라도 나온 장소 ${new Set(runs.flatMap((r) => r.list)).size}곳`);
+  console.log(`  자주 나오는 곳: ${[...inRuns.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, c]) => `${name} ${pct(c)}`).join(' · ')}`);
+  console.log(`  가장 흔한 첫날: ${[...firstDays.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([d, c]) => `${pct(c)} ${d}`).join(' | ')}`);
+  for (const nights of NIGHTS) {
+    const g = runs.filter((r) => r.nights === nights);
+    let sum = 0;
+    let pairs = 0;
+    for (let i = 0; i < g.length; i += 1) {
+      for (let j = i + 1; j < g.length; j += 1) {
+        sum += jaccard(g[i]!.stops, g[j]!.stops);
+        pairs += 1;
+      }
+    }
+    console.log(`  ${nights === 0 ? '당일' : `${nights}박`}: 서로 다른 일정 ${new Set(g.map((r) => r.days.join('/'))).size}/${g.length} · 두 조건의 장소 겹침(자카드) 평균 ${(sum / Math.max(1, pairs)).toFixed(2)}`);
+  }
+
+  const seg = { region, ...SAMPLES[0]!.body };
+  const base = await service.plan(seg);
+  const b = stopsOf(base);
+  console.log(`\n■ 한 조건(${SAMPLES[0]!.label})에서 — 기준: ${daysOf(base).join(' / ')}`);
+  const VARIANTS = 12;
+  const seen = new Set(b.map((x) => x.name));
+  const courses = new Set<string>();
+  let overlap = 0;
+  let sat = 0;
+  for (let v = 1; v <= VARIANTS; v += 1) {
+    const r = await service.plan({ ...seg, variant: v });
+    const s = stopsOf(r);
+    for (const x of s) seen.add(x.name);
+    courses.add(daysOf(r).join(' / '));
+    overlap += jaccard(b, s);
+    sat += Number(meanSat(s));
+  }
+  console.log(`  다른 코스 보기 1~${VARIANTS}번: 서로 다른 코스 ${courses.size}개 · 기준과 장소 겹침 평균 ${(overlap / VARIANTS).toFixed(2)} · 나온 장소 ${seen.size}곳(기준 ${b.length}곳) · 평균 만족도 ${(sat / VARIANTS).toFixed(2)}(기준 ${meanSat(b)})`);
+  for (const fame of ['famous', 'mixed', 'hidden'] as const) {
+    const r = await service.plan({ ...seg, fame });
+    const s = stopsOf(r);
+    console.log(`  장소 ${fame.padEnd(6)}: 일정 장소의 여행 수 중앙 ${medianN(s)}건 · 평균 만족도 ${meanSat(s)} · 기준과 겹침 ${jaccard(b, s).toFixed(2)} · 목록 상위: ${r.places.slice(0, 4).map((x) => `${x.name}(${x.n})`).join(', ')}`);
+  }
+  for (const purpose of ['history', 'hiking', 'theme', 'culture', 'sports', 'filming'] as const) {
+    const r = await service.plan({ ...seg, purposes: [purpose] });
+    const s = stopsOf(r);
+    const fit = r.itinerary?.days.flatMap((d) => d.stops.filter((x) => x.purposeFit).map((x) => x.name)) ?? [];
+    console.log(`  목적 ${purpose.padEnd(8)}: 기준과 겹침 ${jaccard(b, s).toFixed(2)} · 평균 만족도 ${meanSat(s)} · 목적에 맞는 곳 ${fit.length}곳${fit.length ? ` — ${fit.slice(0, 5).join(', ')}` : ''}`);
+  }
+};
+
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
   try {
@@ -84,6 +170,10 @@ const main = async (): Promise<void> => {
           );
         }
       }
+      return;
+    }
+    if (DIVERSITY_ONLY) {
+      await diversity(service);
       return;
     }
     const base = await service.plan({ region });

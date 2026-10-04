@@ -13,6 +13,8 @@ import { TravelPlanPage } from './TravelPlanPage';
 // 11차 — ⑤ 일정 옵션(속도·취향·이동수단)은 기본값이 아닐 때만 요청에 실린다 ⑥ 핀(꼭 갈 곳)·×(빼기)·숙소 동네는 고르는
 // 즉시 다시 짜고, 지역을 바꿔 찾으면 비운다.
 // 12차 — ⑦ 출발일을 넣으면 예보(단기·중기)를 불러 비 오는 일차 번호를 보내고, 일차 카드에 날짜·예보·비 표시를 붙인다.
+// 14차 — ⑨ 목적·장소(유명도) 옵션은 기본값이 아닐 때만 요청에 실리고 목적은 셋까지 ⑩ "다른 코스 보기" 는 변형 번호를 올려 다시
+// 짜고(폼으로 다시 찾으면 처음 코스로, 일정 편집은 보던 번호 유지) ⑪ 목적에 맞는 곳 표시.
 // 13차 — ⑧ 제주 밖 지역도 일정표·일정 옵션이 나오고('전체' 만 장소만), 거점 동네를 알리고, 예보는 응답이 알려 준 지점으로 불러
 // 다음에 찾을 때부터 비 오는 일차를 보낸다. 식당이 없는 날은 그렇게 알린다.
 
@@ -30,6 +32,7 @@ const place = (over: Partial<TourPlanPlaceType> & Pick<TourPlanPlaceType, 'name'
   stayMin: null,
   spendPp: null,
   placeId: null,
+  purposeFit: false,
   ...over,
 });
 const stop = (over: Partial<TourPlanStopType> & Pick<TourPlanStopType, 'name' | 'kind' | 'arriveMin'>): TourPlanStopType => ({
@@ -43,6 +46,7 @@ const stop = (over: Partial<TourPlanStopType> & Pick<TourPlanStopType, 'name' | 
   moveKm: null,
   spendPp: null,
   pinned: false,
+  purposeFit: false,
   alternatives: [],
   ...over,
 });
@@ -467,5 +471,81 @@ describe('TravelPlanPage', () => {
     await waitFor(() => expect(screen.getByRole('combobox', { name: '숙소 동네' })).toBeEnabled());
     fireEvent.change(screen.getByRole('combobox', { name: '숙소 동네' }), { target: { value: '속초시 조양동·중앙동' } });
     await waitFor(() => expect(screen.queryByText(/주변에서 짰습니다/)).not.toBeInTheDocument());
+  });
+
+  it('목적·장소 — 기본값이 아닐 때만 요청에 실리고, 목적은 셋까지 고른다. 목적에 맞는 곳은 표시한다', async () => {
+    const fit: TourPlanResultType = {
+      ...RESULT,
+      places: RESULT.places.map((p, i) => (i === 1 ? { ...p, purposeFit: true } : p)),
+      itinerary: { ...RESULT.itinerary!, days: RESULT.itinerary!.days.map((d) => ({ ...d, stops: d.stops.map((s) => (s.name === '협재해수욕장' ? { ...s, purposeFit: true } : s)) })) },
+    };
+    const bodies = usePlan(() => fit);
+    renderPage();
+    expect(screen.getByText(/추천 점수 = \(보정 만족도 − 3.3\) × √여행 수 × 비슷한 여행자 선호 × 취향$/)).toBeInTheDocument();
+    for (const name of ['역사 유적', '등산', '쇼핑']) fireEvent.click(screen.getByRole('button', { name }));
+    // 넷째는 들어가지 않는다.
+    fireEvent.click(screen.getByRole('button', { name: '촬영지' }));
+    fireEvent.click(screen.getByRole('button', { name: '덜 알려진 곳도' }));
+    expect(screen.getByText(/추천 점수 = \(보정 만족도 − 3.3\) × 비슷한 여행자 선호 × 취향 × 목적 — 여행 수는 보지 않습니다/)).toBeInTheDocument();
+    submit();
+    await screen.findByRole('heading', { name: '추천 일정' });
+    expect(bodies).toEqual([{ ...BASE_BODY, purposes: ['history', 'hiking', 'shopping'], fame: 'hidden' }]);
+    // 목적에 맞는 곳 — 일정의 장소와 목록 카드에.
+    expect(within(screen.getByRole('article', { name: '2일차' })).getByText('목적')).toBeInTheDocument();
+    expect(within(screen.getByRole('article', { name: '1일차' })).queryByText('목적')).not.toBeInTheDocument();
+    expect(within(listSection()).getAllByText('고른 목적의 여행이 많이 간 곳')).toHaveLength(1);
+
+    // 다시 누르면 빠지고, 장소를 기본(유명한 곳 위주)으로 되돌리면 실리지 않는다.
+    fireEvent.click(screen.getByRole('button', { name: '등산' }));
+    fireEvent.click(screen.getByRole('button', { name: '골고루' }));
+    expect(screen.getByText(/× ∜여행 수 ×/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '유명한 곳 위주' }));
+    submit();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual({ ...BASE_BODY, purposes: ['history', 'shopping'] });
+  });
+
+  it('다른 코스 보기 — 변형 번호를 올려 다시 짜고, 일정 편집은 보던 번호를 유지하며, 폼으로 다시 찾으면 처음 코스로 돌아간다', async () => {
+    const bodies = usePlan();
+    renderPage();
+    submit();
+    await screen.findByRole('heading', { name: '추천 일정' });
+    expect(bodies).toEqual([BASE_BODY]);
+    expect(screen.queryByText(/^코스 \d/)).not.toBeInTheDocument();
+    const next = () => screen.getByRole('button', { name: '다른 코스 보기' });
+
+    fireEvent.click(next());
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual({ ...BASE_BODY, variant: 1 });
+    expect(await screen.findByText(/^코스 2 — /)).toBeInTheDocument();
+
+    await waitFor(() => expect(next()).toBeEnabled());
+    fireEvent.click(next());
+    await waitFor(() => expect(bodies).toHaveLength(3));
+    expect(bodies[2]).toEqual({ ...BASE_BODY, variant: 2 });
+    expect(await screen.findByText(/^코스 3 — /)).toBeInTheDocument();
+
+    // 일정 편집(빼기) — 보던 코스 번호 그대로 다시 짠다.
+    await waitFor(() => expect(screen.getByRole('button', { name: '용두암 일정에서 빼기' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '용두암 일정에서 빼기' }));
+    await waitFor(() => expect(bodies).toHaveLength(4));
+    expect(bodies[3]).toEqual({ ...BASE_BODY, variant: 2, avoid: [{ name: '용두암', emd: '용담이동' }] });
+
+    // 처음 코스로.
+    await waitFor(() => expect(screen.getByRole('button', { name: '처음 코스로' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '처음 코스로' }));
+    await waitFor(() => expect(bodies).toHaveLength(5));
+    expect(bodies[4]).toEqual({ ...BASE_BODY, avoid: [{ name: '용두암', emd: '용담이동' }] });
+    await waitFor(() => expect(screen.queryByText(/^코스 \d/)).not.toBeInTheDocument());
+
+    // 다른 코스를 보다가 폼으로 다시 찾으면 번호가 0 으로 돌아간다.
+    await waitFor(() => expect(next()).toBeEnabled());
+    fireEvent.click(next());
+    await waitFor(() => expect(bodies).toHaveLength(6));
+    expect(bodies[5]).toMatchObject({ variant: 1 });
+    await waitFor(() => expect(screen.getByRole('button', { name: '비슷한 여행 찾기' })).toBeEnabled());
+    submit();
+    await waitFor(() => expect(bodies).toHaveLength(7));
+    expect(bodies[6]).toEqual({ ...BASE_BODY, avoid: [{ name: '용두암', emd: '용담이동' }] });
   });
 });

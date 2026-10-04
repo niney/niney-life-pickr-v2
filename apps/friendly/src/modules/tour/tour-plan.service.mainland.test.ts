@@ -10,10 +10,12 @@ import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/tem
 import { TourPlanService } from './tour-plan.service.js';
 import tourPublicRoutes from './tour-public.route.js';
 
-// 코스 일정표를 제주 밖으로(13차) — 격리 DB 에 강원 여행 44건과 세 동네(강릉 · 속초(강릉에서 52km) · 춘천(100km 넘게 떨어진 내륙,
-// 식당 후보 없음))의 장소를 심고 ① 같은 곳 합치기(세트가 달라 따로 잡힌 강문해변) ② 일정은 거점 동네 주변에서(거점 라벨·예보 지점)
+// 코스 일정표를 제주 밖으로(13차) — 격리 DB 에 강원 여행 44건과 네 동네(강릉 · 속초(강릉에서 52km) · 춘천(100km 넘게 떨어진 내륙,
+// 식당 후보 없음) · 삼척(44km, 방문 기록 없이 후보만))의 장소를 심고 ① 같은 곳 합치기(세트가 달라 따로 잡힌 강문해변) ② 일정은 거점 동네 주변에서(거점 라벨·예보 지점)
 // ③ 일정에 넣지 않는 이름(마트·아파트)과 사실상 같은 곳 묶음 ④ 숙소 동네·꼭 갈 곳이 거점을 옮긴다 ⑤ 식당 없는 동네는 볼거리로
 // ⑥ 권역(여러 시도)은 라벨에 시도 ⑦ '전체' 는 여전히 장소만 ⑧ 라우트.
+// 14차 다양화 — ⑨ 유명도(점수에서 여행 수의 몫) ⑩ 여행 목적(그 목적의 여행이 더 간 곳 · 목적에 맞는 곳 표시) ⑪ 풀린 조건의 선호
+// ⑫ 다른 코스 보기(변형 번호 — 같은 번호는 같은 코스).
 // 제주 지역의 동작은 tour-plan.service.test.ts 가 본다.
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId|lat|lng|latitude|longitude)$/;
@@ -67,6 +69,14 @@ const PLACES: PlaceSeed[] = [
   { id: 'east:C1', name: '남이섬', typeShort: '자연', lat: 37.88, lng: 127.73, sigungu: '춘천시', emd: '남산면', n: 12, bayes: 4.5, island: true },
   { id: 'east:C2', name: '소양강스카이워크', typeShort: '자연', lat: 37.893, lng: 127.724, sigungu: '춘천시', emd: '근화동', n: 8, bayes: 4.3 },
   { id: 'east:C3', name: '의암호', typeShort: '산책', lat: 37.87, lng: 127.7, sigungu: '춘천시', emd: '삼천동', n: 6, bayes: 4.2 },
+  // ── 삼척(강릉에서 44km — 거점 반경 38km 밖). 방문 기록이 없어 시간대·일차 선호가 없고 표본·만족도가 전부 같다 — 점수가 비슷한
+  //    후보가 모인 동네(다른 코스 보기가 고르는 곳이 달라지는 조건).
+  { id: 'east:M1', name: '삼척해변', typeShort: '자연', lat: 37.45, lng: 129.16, sigungu: '삼척시', emd: '교동', n: 7, bayes: 4.4 },
+  { id: 'east:M2', name: '죽서루', typeShort: '역사', lat: 37.44, lng: 129.165, sigungu: '삼척시', emd: '성내동', n: 7, bayes: 4.4 },
+  { id: 'east:M3', name: '이사부사자공원', typeShort: '테마', lat: 37.46, lng: 129.17, sigungu: '삼척시', emd: '교동', n: 7, bayes: 4.4 },
+  { id: 'east:M4', name: '삼척장미공원', typeShort: '산책', lat: 37.445, lng: 129.175, sigungu: '삼척시', emd: '정상동', n: 7, bayes: 4.4 },
+  { id: 'east:M5', name: '새천년해안도로', typeShort: '자연', lat: 37.465, lng: 129.155, sigungu: '삼척시', emd: '교동', n: 7, bayes: 4.4 },
+  { id: 'east:M6', name: '삼척항', typeShort: '상업', lat: 37.435, lng: 129.185, sigungu: '삼척시', emd: '정하동', n: 7, bayes: 4.4 },
 ];
 // 여행 하루의 방문 [장소 id, 유형, 도착 시각].
 type Stop = [string, string, number];
@@ -75,24 +85,29 @@ interface TripSeed {
   dataset: 'east' | 'jeju';
   nights: number;
   days: Stop[][];
+  // 14차 — 강릉 1박 20건은 여성·쇼핑 미션(1), 나머지 24건은 남성·역사 유적 미션(3).
+  gender?: '남';
+  missions?: string;
 }
+const OTHERS = { gender: '남', missions: '3;22' } as const;
 const TRIPS: TripSeed[] = [
   // 강릉 1박 20건 — 첫날 식당 → 볼거리 → 볼거리, 떠나는 날 볼거리 → 식당.
   ...Array.from({ length: 20 }, (_, i): TripSeed => ({
     id: `east:GA${i}`,
     dataset: 'east',
     nights: 1,
+    missions: '1;22',
     days: [
       [['east:G4', '식당', 12], ['east:G1', '자연', 14], ['east:G3', '상업', 17]],
       [['east:G5', '자연', 10], ['east:G6', '식당', 12]],
     ],
   })),
   // 속초 당일 10건.
-  ...Array.from({ length: 10 }, (_, i): TripSeed => ({ id: `east:SA${i}`, dataset: 'east', nights: 0, days: [[['east:S4', '식당', 12], ['east:S1', '자연', 14], ['east:S2', '상업', 16], ['east:S3', '역사', 17]]] })),
+  ...Array.from({ length: 10 }, (_, i): TripSeed => ({ id: `east:SA${i}`, dataset: 'east', nights: 0, ...OTHERS, days: [[['east:S4', '식당', 12], ['east:S1', '자연', 14], ['east:S2', '상업', 16], ['east:S3', '역사', 17]]] })),
   // 춘천 당일 6건 — 볼거리만.
-  ...Array.from({ length: 6 }, (_, i): TripSeed => ({ id: `east:CA${i}`, dataset: 'east', nights: 0, days: [[['east:C1', '자연', 10], ['east:C2', '자연', 14], ['east:C3', '산책', 16]]] })),
+  ...Array.from({ length: 6 }, (_, i): TripSeed => ({ id: `east:CA${i}`, dataset: 'east', nights: 0, ...OTHERS, days: [[['east:C1', '자연', 10], ['east:C2', '자연', 14], ['east:C3', '산책', 16]]] })),
   // 제주·도서 세트의 강원 여행 8건 — 강문해변만.
-  ...Array.from({ length: 8 }, (_, i): TripSeed => ({ id: `JA${i}`, dataset: 'jeju', nights: 0, days: [[['J-G1', '자연', 15]]] })),
+  ...Array.from({ length: 8 }, (_, i): TripSeed => ({ id: `JA${i}`, dataset: 'jeju', nights: 0, ...OTHERS, days: [[['J-G1', '자연', 15]]] })),
 ];
 
 describe('tour plan — 제주 밖 지역의 일정표(격리 DB)', () => {
@@ -124,6 +139,8 @@ describe('tour plan — 제주 밖 지역의 일정표(격리 DB)', () => {
         endDate: '2023-06-02',
         nights: t.nights,
         ...SEG,
+        gender: t.gender ?? SEG.gender,
+        missionCodes: t.missions ?? null,
         nVisits: 5,
         nPublic: 5,
         nJeju: 0,
@@ -245,8 +262,8 @@ describe('tour plan — 제주 밖 지역의 일정표(격리 DB)', () => {
     expect(weatherName(r)).toBe('강릉');
     expect(it).toMatchObject({ stayArea: null, unplaced: [], legBasis: 'default' });
     expect(it.days.every((d) => d.fromStayMin === null && d.toStayMin === null)).toBe(true);
-    // 숙소 동네 선택지 — 권역 셋(후보 3곳 이상), 방문 많은 순.
-    expect(r.areas.map((a) => a.label.split(' ')[0])).toEqual(['강릉시', '속초시', '춘천시']);
+    // 숙소 동네 선택지 — 권역 넷(후보 3곳 이상), 방문 많은 순.
+    expect(r.areas.map((a) => a.label.split(' ')[0])).toEqual(['강릉시', '속초시', '삼척시', '춘천시']);
   });
 
   it('일정에 넣지 않는 이름(마트·아파트)은 목록에만 남고, 사실상 같은 곳(강문해변·강문해변 솟대다리)은 한 일정에 하나만', async () => {
@@ -297,6 +314,82 @@ describe('tour plan — 제주 밖 지역의 일정표(격리 DB)', () => {
     const r = await service.plan({ region: 'all' });
     expect(r.places.length).toBeGreaterThan(0);
     expect(r).toMatchObject({ itinerary: null, areas: [] });
+  });
+
+  // ── 14차 다양화 ─────────────────────────────────────────────────────────────
+  const scoreOf = (r: TourPlanResultType, name: string): number => r.places.find((x) => x.name === name)!.score;
+
+  it('유명도 — 점수에서 여행 수가 차지하는 몫을 줄인다(기본 √n · 골고루 n^¼ · 덜 알려진 곳도: 여행 수를 보지 않는다)', async () => {
+    const famous = await service.plan({ region: 'gangwon' });
+    const mixed = await service.plan({ region: 'gangwon', fame: 'mixed' });
+    const hidden = await service.plan({ region: 'gangwon', fame: 'hidden' });
+    // 강문해변(여행 38건 · 만족 4.46)과 안목해변(20건 · 4.6) — 기본은 방문 많은 강문해변이, 여행 수를 안 보면 만족도 높은 안목해변이 앞선다.
+    expect(scoreOf(famous, '강문해변')).toBe(7.1);
+    expect(scoreOf(famous, '안목해변')).toBe(5.8);
+    expect(scoreOf(mixed, '강문해변')).toBe(2.9);
+    expect(scoreOf(mixed, '안목해변')).toBe(2.7);
+    expect(scoreOf(hidden, '강문해변')).toBe(1.2);
+    expect(scoreOf(hidden, '안목해변')).toBe(1.3);
+    // 여행 수를 안 보면 보정 만족도 순 — 표본 9건·10건인 곳이 맨 위로 온다.
+    expect(famous.places[0]!.name).toBe('강문해변');
+    expect(hidden.places.slice(0, 3).map((x) => x.name)).toEqual(['강릉푸른아파트', '이마트 강릉점', '안목해변']);
+    // 기본값을 적어 보내도 같다.
+    expect((await service.plan({ region: 'gangwon', fame: 'famous' })).places).toEqual(famous.places);
+  });
+
+  it('여행 목적 — 그 목적의 여행이 평균보다 더 간 곳을 세게 앞세우고(선호의 세제곱) "목적에 맞는 곳" 으로 표시한다', async () => {
+    const plain = await service.plan({ region: 'gangwon', nights: 0 });
+    const history = await service.plan({ region: 'gangwon', nights: 0, purposes: ['history'] });
+    expect(plain.places.every((x) => !x.purposeFit)).toBe(true);
+    // 역사 유적 미션(3) 여행 24건 — 속초물회(여행 10건)는 그 가운데 10건이 갔다: (10 + 3) ÷ (24 × 10 ÷ 44 + 3) = 1.54배 → 맞는 곳.
+    // 강문해변(38건)은 8건뿐: (8 + 3) ÷ (24 × 38 ÷ 44 + 3) = 0.46 → 0.5 로 잘려 세제곱 0.125배.
+    // 의암호(6건)도 6건 전부가 그 미션 여행이다: (6 + 3) ÷ (24 × 6 ÷ 44 + 3) = 1.43배. 소양강스카이워크(8건 중 6건)는 1.22배라 아니다.
+    expect(history.places.filter((x) => x.purposeFit).map((x) => x.name).sort()).toEqual(['속초물회', '의암호']);
+    expect(scoreOf(history, '속초물회') / scoreOf(plain, '속초물회')).toBeCloseTo(1.54 ** 3, 0);
+    expect(scoreOf(history, '강문해변') / scoreOf(plain, '강문해변')).toBeCloseTo(0.125, 1);
+    // 일정에 든 장소에도 같은 표시가 붙고, 볼거리 순서가 바뀐다 — 역사 유형(영금정)이 방문 많은 속초해수욕장보다 먼저 온다.
+    const order = (r: TourPlanResultType): string[] => r.itinerary!.days[0]!.stops.map((x) => x.name);
+    expect(order(plain)).toEqual(['속초물회', '속초해수욕장', '속초관광수산시장', '영금정']);
+    expect(order(history)).toEqual(['속초물회', '영금정', '속초해수욕장', '속초관광수산시장']);
+    expect(history.itinerary!.days[0]!.stops.map((x) => x.purposeFit)).toEqual([true, false, false, false]);
+    expect(plain.itinerary!.days[0]!.stops.every((x) => !x.purposeFit)).toBe(true);
+    // 표본이 20건에 못 미치는 목적(이 DB 에 등산 미션은 없다)은 아무 일도 하지 않는다.
+    expect((await service.plan({ region: 'gangwon', nights: 0, purposes: ['hiking'] })).places).toEqual(plain.places);
+  });
+
+  it('풀린 조건도 버리지 않는다 — 그 조건 하나만 같은 여행의 선호를 순위에 남긴다(표시하는 비슷한 여행 수는 그대로)', async () => {
+    const plain = await service.plan({ region: 'gangwon', nights: 1 });
+    // 남성 · 1박은 0건 → 성별을 풀어 1박 20건. 남성 여행 24건은 강문해변을 8건만 갔다(평균대로면 20.7건) → 선호 0.5 배(하한).
+    const relaxed = await service.plan({ region: 'gangwon', gender: '남', nights: 1 });
+    expect(relaxed).toMatchObject({ matchedTrips: 20, relaxed: ['gender'] });
+    expect(scoreOf(relaxed, '강문해변') / scoreOf(plain, '강문해변')).toBeCloseTo(0.5, 1);
+    // 남성 여행이 평균보다 더 간 속초물회(10건 중 10건: 1.54배)는 그만큼 오른다.
+    expect(scoreOf(relaxed, '속초물회') / scoreOf(plain, '속초물회')).toBeCloseTo(1.54, 1);
+    const beach = (r: TourPlanResultType) => r.places.find((x) => x.name === '강문해변');
+    expect(beach(plain)).toMatchObject({ similarN: 20, lift: 1.1 });
+    expect(beach(relaxed)).toMatchObject({ similarN: 20, lift: 1.1 });
+    // 풀린 조건이 없으면 달라지지 않는다.
+    expect((await service.plan({ region: 'gangwon', gender: '여', nights: 1 })).relaxed).toEqual([]);
+  });
+
+  it('다른 코스 보기 — 변형 번호가 같으면 같은 코스, 0 은 번호를 안 준 것과 같고, 번호를 바꾸면 다른 코스가 나온다', async () => {
+    const names = (r: TourPlanResultType): string => r.itinerary!.days.map((d) => d.stops.map((s) => s.name).join('→')).join(' / ');
+    // 삼척 — 점수가 같은 볼거리 여섯 곳 중 네 곳을 고른다(당일 뼈대 식당 → 볼거리 셋, 식당 후보가 없어 볼거리로).
+    const areas = (await service.plan({ region: 'gangwon', nights: 0 })).areas;
+    const body = { region: 'gangwon', nights: 0, stayArea: areas.find((a) => a.label.startsWith('삼척시'))!.label } as const;
+    const base = await service.plan(body);
+    expect(base.itinerary!.days[0]!.stops).toHaveLength(4);
+    expect(names(await service.plan({ ...body, variant: 0 }))).toBe(names(base));
+    const variants = await Promise.all(Array.from({ length: 8 }, (_, i) => service.plan({ ...body, variant: i + 1 })));
+    expect(new Set(variants.map(names)).size).toBeGreaterThan(2);
+    expect(variants.some((r) => names(r) !== names(base))).toBe(true);
+    expect(names(await service.plan({ ...body, variant: 5 }))).toBe(names(variants[4]!));
+    // 어느 번호든 삼척 안에서만 고른다(거점은 그대로) · 목록(추천 장소)은 변형과 무관하다 — 일정에서 고르는 곳만 바뀐다.
+    expect(variants.every((r) => r.itinerary!.days.every((d) => d.stops.every((x) => x.sigungu === '삼척시')))).toBe(true);
+    expect(variants[4]!.places).toEqual(base.places);
+    // 점수 차이가 뚜렷한 동네(강릉 — 장소마다 가는 시각·일차가 갈린다)는 번호를 바꿔도 같은 코스다: 잡음은 ±35% 로 묶여 있다.
+    const rigid = await Promise.all([0, 1, 2, 3].map((variant) => service.plan({ region: 'gangwon', ...SEG, nights: 1, variant })));
+    expect(new Set(rigid.map(names)).size).toBe(1);
   });
 
   it('라우트 — 식별자·좌표 키 없이 거점·예보 지점만 나간다', async () => {

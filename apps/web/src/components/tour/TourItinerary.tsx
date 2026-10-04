@@ -11,6 +11,7 @@ import { clockLabel, durationLabel, naverMapSearchUrl, won, type TourDayWeather 
 // 11차 — 꼭 갈 곳은 핀 표시, 장소마다 "빼기"(onAvoid → 그 장소 없이 다시 짠다), 숙소 동네를 줬으면 숙소에서·숙소까지 이동.
 // 12차 — 출발일을 줬으면 일차마다 날짜와 예보(weather), 비 오는 날로 짠 일차(day.wet)는 표시한다.
 // 13차 — 제주 밖은 식당마다 표본이 얇아 식사 자리를 볼거리로 채운 날이 있다. 식당이 하나도 없는 날은 그렇게 알린다.
+// 14차 — 고른 여행 목적에 맞는 곳(stop.purposeFit)에 "목적" 표시.
 
 const BASIS_LABEL: Record<TourPlanDayType['patternBasis'], string> = {
   similar: '비슷한 여행에서 흔한 하루 순서',
@@ -66,6 +67,11 @@ const StopRow = ({ stop, prev, onAvoid, busy }: { stop: TourPlanStopType; prev: 
             {stop.pinned && (
               <span className="inline-flex flex-none items-center gap-0.5 rounded bg-teal-600/10 px-1 py-px text-[10px] font-medium text-teal-800 dark:text-teal-300">
                 <Pin className="size-3" aria-hidden />꼭
+              </span>
+            )}
+            {stop.purposeFit && (
+              <span title="고른 목적의 여행이 많이 간 곳" className="flex-none rounded bg-violet-500/10 px-1 py-px text-[10px] font-medium text-violet-800 dark:text-violet-300">
+                목적
               </span>
             )}
             <TourMapLink name={stop.name} sigungu={stop.sigungu} />

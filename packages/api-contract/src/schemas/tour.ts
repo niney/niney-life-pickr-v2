@@ -563,6 +563,10 @@ export type TourInsightsResultType = z.infer<typeof TourInsightsResult>;
 //   stayArea: 숙소 동네(응답 areas[].label 중 하나 — 그 근처 동네를 앞세우고 숙소까지 이동 분을 붙인다)
 //   must / avoid: 꼭 넣을 곳 / 일정에서 뺄 곳. 장소는 이름(+읍면동)으로 가리킨다 — 응답에 장소 id 가 없다.
 //   wetDays(12차): 비가 오는 일차 번호(1부터). 화면이 날씨 예보에서 골라 보낸다 — 그날은 실내에 가까운 유형을 앞세운다.
+// 14차 코스 다양화 —
+//   fame: 추천 점수에서 여행 수가 차지하는 몫(famous √n(기본) · mixed n^¼ · hidden 여행 수를 보지 않음). 목록 순위에도 반영된다.
+//   purposes: 여행 목적(최대 3) — 그 목적의 여행이 평균보다 더 간 곳을 앞세운다(목록 순위에도).
+//   variant: 다른 코스 보기(0~99, 0 = 점수가 가장 높은 코스). 같은 번호는 같은 코스 — 1등 대신 상위권에서 번갈아 고른다.
 export const TOUR_PLAN_PACE_KEYS = ['relaxed', 'normal', 'packed'] as const;
 export const TourPlanPace = z.enum(TOUR_PLAN_PACE_KEYS);
 export type TourPlanPaceType = z.infer<typeof TourPlanPace>;
@@ -572,6 +576,12 @@ export type TourPlanFocusType = z.infer<typeof TourPlanFocus>;
 export const TOUR_PLAN_TRANSPORT_KEYS = ['car', 'transit'] as const;
 export const TourPlanTransport = z.enum(TOUR_PLAN_TRANSPORT_KEYS);
 export type TourPlanTransportType = z.infer<typeof TourPlanTransport>;
+export const TOUR_PLAN_FAME_KEYS = ['famous', 'mixed', 'hidden'] as const;
+export const TourPlanFame = z.enum(TOUR_PLAN_FAME_KEYS);
+export type TourPlanFameType = z.infer<typeof TourPlanFame>;
+export const TOUR_PLAN_PURPOSE_KEYS = ['theme', 'history', 'culture', 'sports', 'hiking', 'shopping', 'spa', 'filming', 'hotplace', 'newplace'] as const;
+export const TourPlanPurpose = z.enum(TOUR_PLAN_PURPOSE_KEYS);
+export type TourPlanPurposeType = z.infer<typeof TourPlanPurpose>;
 export const TourPlanPlaceKey = z.object({
   name: z.string().trim().min(1).max(80),
   emd: z.string().trim().max(40).nullable().optional(),
@@ -592,6 +602,9 @@ export const TourPlanBody = z.object({
   must: z.array(TourPlanPlaceKey).max(8).optional(),
   avoid: z.array(TourPlanPlaceKey).max(30).optional(),
   wetDays: z.array(z.number().int().min(1).max(5)).max(5).optional(),
+  fame: TourPlanFame.optional(),
+  purposes: z.array(TourPlanPurpose).max(3).optional(),
+  variant: z.number().int().min(0).max(99).optional(),
 });
 export type TourPlanBodyType = z.infer<typeof TourPlanBody>;
 
@@ -603,6 +616,7 @@ export const TourPlanPlace = z.object({
   sigungu: z.string().nullable(),
   emd: z.string().nullable(),
   // 이 장소를 다녀간 여행 수(≥5) · 보정 만족도(bayes) · 점수 = (보정 만족도 − 3.3) × √n × 비슷한 여행자 선호 × 취향(focus 를 줬을 때).
+  // 14차 — fame 을 주면 √n 대신 n^¼(mixed)·1(hidden), 풀린 조건과 여행 목적(purposes)의 선호도 점수에 곱해진다.
   n: z.number().int(),
   mean: z.number().nullable(),
   score: z.number(),
@@ -615,6 +629,8 @@ export const TourPlanPlace = z.object({
   spendPp: z.number().nullable(),
   // 등록된 맛집이면 네이버 placeId(상세 링크·그룹투표 후보), 아니면 null.
   placeId: z.string().nullable(),
+  // 고른 여행 목적(purposes)에 맞는 곳인가(14차) — 그 목적의 여행 5건 이상이 갔고 평균의 1.3배 이상. 목적을 안 줬으면 false.
+  purposeFit: z.boolean(),
 });
 export type TourPlanPlaceType = z.infer<typeof TourPlanPlace>;
 
@@ -647,6 +663,8 @@ export const TourPlanStop = z.object({
   spendPp: z.number().nullable(),
   // 꼭 갈 곳(must)으로 넣은 장소.
   pinned: z.boolean(),
+  // 고른 여행 목적(purposes)에 맞는 곳인가(14차) — 그 목적의 여행 5건 이상이 갔고 평균의 1.3배 이상. 목적을 안 줬으면 false.
+  purposeFit: z.boolean(),
   // 같은 자리에 넣을 만한 다른 후보(최대 2).
   alternatives: z.array(TourPlanAlt),
 });

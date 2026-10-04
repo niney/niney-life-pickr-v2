@@ -1,11 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BarChart3, Loader2, Pin, Vote, X } from 'lucide-react';
+import { BarChart3, Loader2, Pin, Shuffle, Vote, X } from 'lucide-react';
 import { mergeDailyRows, useTourPlan, useWeatherForecast, useWeatherMid, type TourInsightsParams } from '@repo/shared';
 import type { TourPlanBodyType, TourPlanPlaceKeyType, TourPlanPlaceType, TourPlanResultType, TourPlanStopType, VoteOptionInputType } from '@repo/api-contract';
 import {
   TOUR_ITINERARY_MAX_DAYS,
   TOUR_ITINERARY_REGIONS,
+  TOUR_PLAN_VARIANT_MAX,
   isTourItineraryRegion,
   isTourRegionKey,
   kmaConditionIsWet,
@@ -55,6 +56,9 @@ import { cn } from '~/lib/utils';
 // 일차 번호(wetDays)로 보낸다. 서버는 예보를 부르지 않는다. 예보 지점은 제주는 미리 정해져 있고(제주시), 그 밖의 지역은 일정의
 // 거점에 따라 달라 서버가 응답(itinerary.weatherPlaceId)으로 알려 준다 — 그래서 첫 결과에는 날짜·예보만 붙고, 비 예보는 다음에
 // 찾을 때(다시 찾기·일정 편집)부터 반영된다.
+//
+// 14차 다양화 — 목적·장소(유명도) 옵션은 폼에서, "다른 코스 보기" 는 결과에서. 변형 번호(variant)를 하나 올려 같은 조건으로 다시
+// 짠다(같은 번호는 같은 코스). 폼으로 다시 찾으면 처음 코스(0)로 돌아가고, 일정 편집은 보던 코스 번호를 유지한다.
 
 const LADDER_LABEL: Record<string, string> = { month: '월', gender: '성별', nights: '박수', ageGrp: '연령' };
 
@@ -80,6 +84,7 @@ export const TravelPlanPage = () => {
   const [filters, setFilters] = useState<TourInsightsParams>({ region: 'jeju', ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 });
   const [options, setOptions] = useState<TourPlanOptionsValue>(DEFAULT_TOUR_PLAN_OPTIONS);
   const [edits, setEdits] = useState<PlanEdits>(NO_EDITS);
+  const [variant, setVariant] = useState(0);
   const [onlyRestaurants, setOnlyRestaurants] = useState(false);
   const [picked, setPicked] = useState<Record<string, TourPlanPlaceType>>({});
   const [shown, setShown] = useState<{ r: TourPlanResultType; asked: Partial<TourPlanBodyType>; startDate: string | null } | null>(null);
@@ -125,8 +130,8 @@ export const TravelPlanPage = () => {
             : '예보는 열흘 뒤까지만 나옵니다 — 날짜만 붙입니다'
           : `${weatherPlaceLabel(wxPlace)} 기준 예보 반영 · 비 예보 ${formWeather.filter((w) => w.wet).length}일`;
 
-  // 요청 본문 — 옵션은 기본값이 아닐 때만 싣는다. 속도·이동수단·일정 편집은 일정표를 만드는 지역에서만 뜻이 있다.
-  const run = (e: PlanEdits) => {
+  // 요청 본문 — 옵션은 기본값이 아닐 때만 싣는다. 속도·이동수단·일정 편집·변형 번호는 일정표를 만드는 지역에서만 뜻이 있다.
+  const run = (e: PlanEdits, v: number) => {
     const body: Partial<TourPlanBodyType> = {
       region,
       ageGrp: filters.ageGrp,
@@ -135,6 +140,9 @@ export const TravelPlanPage = () => {
       month: filters.month,
       nights: filters.nights,
       ...(options.focus.length > 0 ? { focus: options.focus } : {}),
+      ...(options.purposes.length > 0 ? { purposes: options.purposes } : {}),
+      ...(options.fame !== 'famous' ? { fame: options.fame } : {}),
+      ...(formItineraryRegion && v > 0 ? { variant: v } : {}),
       ...(formItineraryRegion && options.pace !== 'normal' ? { pace: options.pace } : {}),
       ...(formItineraryRegion && options.transport !== 'car' ? { transport: options.transport } : {}),
       ...(formItineraryRegion && e.stayArea ? { stayArea: e.stayArea } : {}),
@@ -153,11 +161,17 @@ export const TravelPlanPage = () => {
     // 숙소 동네·꼭 갈 곳·뺄 곳은 그 지역의 것 — 지역을 바꿔 찾으면 비운다.
     const keep = shown && shown.asked.region === region ? edits : NO_EDITS;
     setEdits(keep);
-    run(keep);
+    setVariant(0);
+    run(keep, 0);
   };
   const applyEdits = (next: PlanEdits) => {
     setEdits(next);
-    run(next);
+    run(next, variant);
+  };
+  // 다른 코스 보기 — 번호를 하나 올린다(끝까지 가면 처음 코스로 돌아온다).
+  const showCourse = (v: number) => {
+    setVariant(v);
+    run(edits, v);
   };
   const isPinned = (p: { name: string; emd?: string | null }) => edits.must.some((m) => sameTourPlace(m, p));
   const togglePin = (p: TourPlanPlaceType) => {
@@ -176,6 +190,8 @@ export const TravelPlanPage = () => {
   // 결과 표시는 "물어본 조건" 기준 — 폼을 고치는 중에도 결과의 지역·박수 라벨이 따라 바뀌지 않게.
   const asked = shown?.asked;
   const askedRegion = asked?.region ?? 'jeju';
+  // 지금 보이는 코스의 번호(0 = 처음 코스).
+  const shownVariant = asked?.variant ?? 0;
   const itineraryRegion = isTourItineraryRegion(askedRegion);
   const wantedDays = asked?.nights !== undefined ? tourItineraryDays(asked.nights) : null;
   // 일차별 날짜·예보 — 일정이 바란 일수보다 짧으면(가운데 날이 빠졌을 수 있다) 날짜가 어긋나므로 붙이지 않는다. 폼의 지역을 바꿔
@@ -227,7 +243,11 @@ export const TravelPlanPage = () => {
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
               비슷한 여행 찾기
             </Button>
-            <span className="text-xs text-muted-foreground">추천 점수 = (보정 만족도 − 3.3) × √여행 수 × 비슷한 여행자 선호 × 취향</span>
+            <span className="text-xs text-muted-foreground">
+              추천 점수 = (보정 만족도 − 3.3){options.fame === 'famous' ? ' × √여행 수' : options.fame === 'mixed' ? ' × ∜여행 수' : ''} × 비슷한 여행자 선호 × 취향
+              {options.purposes.length > 0 && ' × 목적'}
+              {options.fame === 'hidden' && ' — 여행 수는 보지 않습니다'}
+            </span>
           </div>
         </form>
 
@@ -245,7 +265,7 @@ export const TravelPlanPage = () => {
           <>
             <div className={cn('rounded-md border px-3 py-2 text-xs', r.insufficient ? 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300' : 'border-teal-600/30 bg-teal-600/5')}>
               같은 조건의 여행 <b>{r.matchedTrips}건</b>
-              {r.relaxed.length > 0 && <> — 표본이 적어 {r.relaxed.map((k) => LADDER_LABEL[k] ?? k).join(' · ')} 조건은 풀었습니다</>}
+              {r.relaxed.length > 0 && <> — 표본이 적어 {r.relaxed.map((k) => LADDER_LABEL[k] ?? k).join(' · ')} 조건은 풀었습니다(그 조건만 같은 여행의 선호는 순위에 남깁니다)</>}
               {r.insufficient && ' · 그래도 20건 미만이라 참고만 하세요'}
             </div>
 
@@ -289,6 +309,21 @@ export const TravelPlanPage = () => {
                   ))}
                   {edits.must.length === 0 && edits.avoid.length === 0 && <span className="text-muted-foreground">아래 목록의 핀으로 꼭 갈 곳을 넣고, 일정의 ×로 장소를 뺄 수 있어요</span>}
                 </div>
+                {r.itinerary && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => showCourse((variant + 1) % (TOUR_PLAN_VARIANT_MAX + 1))}>
+                      <Shuffle className="size-3.5" /> 다른 코스 보기
+                    </Button>
+                    {shownVariant > 0 && (
+                      <>
+                        <span className="text-muted-foreground">코스 {shownVariant + 1} — 가장 점수가 높은 장소 대신 상위권에서 바꿔 짠 코스입니다</span>
+                        <button type="button" disabled={busy} onClick={() => showCourse(0)} className="underline underline-offset-2 hover:text-foreground disabled:opacity-40">
+                          처음 코스로
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
                 {r.itinerary ? (
                   <>
                     {r.itinerary.unplaced.length > 0 && (
@@ -363,6 +398,7 @@ export const TravelPlanPage = () => {
                               {p.kind} · {[p.sigungu, p.emd].filter(Boolean).join(' ')} · {p.n}팀 · 만족 {p.mean !== null ? p.mean.toFixed(1) : '–'}
                             </div>
                             {facts.length > 0 && <div className="text-[11px] text-muted-foreground">{facts.join(' · ')}</div>}
+                            {p.purposeFit && <div className="text-[11px] font-medium text-violet-700 dark:text-violet-300">고른 목적의 여행이 많이 간 곳</div>}
                             {p.similarN !== null && (
                               <div className="text-[11px] font-medium text-teal-700 dark:text-teal-300">
                                 비슷한 여행 {p.similarN}건{p.lift !== null && p.lift >= 1.2 && ` · 평균의 ${p.lift.toFixed(1)}배`}

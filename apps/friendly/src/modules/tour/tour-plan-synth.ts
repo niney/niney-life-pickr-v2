@@ -300,6 +300,11 @@ export interface PlanSynthInput {
   hubKm?: number | null;
   // 식사 자리에 넣을 식당 후보가 그 권역에 없으면 볼거리로 채운다(식당마다 표본이 얇은 지역).
   mealFallback?: boolean;
+  // ── 14차 다른 코스 보기 ──
+  // 변형 번호(0·생략 = 점수가 가장 높은 코스). 0 이 아니면 후보와 권역의 점수에 번호별로 고정된 잡음을 곱해, 1등 대신 상위권이
+  // 번갈아 뽑히게 한다. 같은 번호는 같은 결과다(난수를 차례로 뽑지 않고 번호와 후보 id 로 정한다 — 권역을 견줄 때와 채울 때
+  // 같은 후보가 같은 점수로 보여야 한다).
+  variant?: number;
 }
 export interface PlanSynthStop {
   id: string;
@@ -352,6 +357,10 @@ const STAY_SCALE_KM = 45;
 const BAND_HOUR = [9, 12, 15, 18, 21] as const;
 // 거점 반경 안에서 날을 다 못 채우면 이 배수까지 넓혀 한 번 더 짠다(그래도 모자라면 채운 날만 낸다).
 const HUB_RELAX = 2;
+// 변형(14차)의 잡음 폭 — 후보 점수 ±35%, 권역 점수 ±30%. 1등의 절반에 못 미치는 후보는 어떤 번호에서도 1등을 못 이긴다
+// (0.65 ÷ 1.35 ≈ 0.48). 권역은 하루 점수의 합이라 후보 잡음이 서로 지워진다 — 권역에도 따로 준다.
+const VARIANT_CANDIDATE_SPREAD = 0.35;
+const VARIANT_ZONE_SPREAD = 0.3;
 
 const hourFit = (c: PlanCandidate, band: number): number => {
   const total = c.bands.reduce((a, b) => a + b, 0);
@@ -365,6 +374,21 @@ const posFit = (c: PlanCandidate, pos: PlanDayPos, base: PlanSynthInput['posBase
   return clamp((c.pos[pos] + POS_PRIOR * b) / (total + POS_PRIOR) / b, 0.6, 1.8);
 };
 const prox = (km: number, scale: number): number => 1 / (1 + km / scale);
+// 번호와 열쇠로 정해지는 [0, 1) 값(FNV-1a 뒤섞기) — 변형 잡음용. 같은 번호·같은 열쇠는 늘 같은 값이다.
+const hash01 = (seed: number, key: string): number => {
+  let h = (2166136261 ^ Math.imul(seed, 0x9e3779b1)) >>> 0;
+  for (let i = 0; i < key.length; i += 1) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  h ^= h >>> 12;
+  h = Math.imul(h, 0x297a2d39);
+  h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+};
+const jitter = (variant: number, key: string, spread: number): number => (variant === 0 ? 1 : 1 + spread * (2 * hash01(variant, key) - 1));
 const peakHour = (c: PlanCandidate): number => {
   let best = -1;
   for (let i = 0; i < c.bands.length; i += 1) if (c.bands[i]! > 0 && (best < 0 || c.bands[i]! > c.bands[best]!)) best = i;
@@ -411,6 +435,10 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
     }),
   );
   const stayFactor = input.zones.map((z) => (stay ? prox(planKmBetween(z, stay), input.stayScaleKm ?? STAY_SCALE_KM) : 1));
+  // 변형 잡음 — 후보마다·권역마다 한 번 정해 두고 어디서나 같은 값을 쓴다. 꼭 갈 곳은 사용자가 고른 것이라 흔들지 않는다.
+  const variant = Math.max(0, Math.round(input.variant ?? 0));
+  const candNoise = new Map(input.candidates.map((c) => [c.id, pinned.has(c.id) ? 1 : jitter(variant, c.id, VARIANT_CANDIDATE_SPREAD)]));
+  const zoneNoise = input.zones.map((_, zi) => jitter(variant, `zone:${zi}`, VARIANT_ZONE_SPREAD));
   // 같은 묶음의 후보 id — 한 곳을 쓰면 묶음 전체를 쓴 것으로 친다.
   const groupIds = new Map<string, string[]>();
   for (const c of input.candidates) {
@@ -461,6 +489,7 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
       // 식당은 등록된 맛집을 조금 앞세우고, 볼거리는 그날 이미 나온 세부 유형이면 조금 깎는다.
       const scoreOf = (c: PlanCandidate): number =>
         c.score *
+        candNoise.get(c.id)! *
         wetOf(c, wet) *
         hourFit(c, band) *
         posFit(c, pos, input.posBase) *
@@ -539,7 +568,7 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
     if (limitKm !== null) {
       const first = plans[0]!;
       const fills = input.zones.map((_, zi) => fillDay(zi, first.sk, first.pos, none, false));
-      const dayValue = fills.map((f) => (enough(f) ? f.total : 0));
+      const dayValue = fills.map((f, zi) => (enough(f) ? f.total * zoneNoise[zi]! : 0));
       const spot = input.zones.map((z, zi) => {
         const cs = dayValue[zi]! > 0 ? fills[zi]!.slots.map((x) => x.c) : [];
         return cs.length > 0 ? { lat: cs.reduce((a, c) => a + c.lat, 0) / cs.length, lng: cs.reduce((a, c) => a + c.lng, 0) / cs.length } : { lat: z.lat, lng: z.lng };
@@ -589,7 +618,7 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
         .filter((zi) => within === null || within[zi]!)
         .map((zi) => ({ zi, ...fillDay(zi, p.sk, p.pos, used, p.wet) }))
         .filter(enough)
-        .map((r) => ({ ...r, total: r.total * stayFactor[r.zi]! }))
+        .map((r) => ({ ...r, total: r.total * stayFactor[r.zi]! * zoneNoise[r.zi]! }))
         .sort((a, b) => b.total - a.total || a.zi - b.zi);
     const takenZones = new Set<number>();
 

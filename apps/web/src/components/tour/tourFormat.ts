@@ -1,6 +1,6 @@
 // 여행로그 공개 화면 공용 상수·포맷 — 컴포넌트 파일과 분리(react-refresh: 컴포넌트만 export).
 
-import type { TourPlanFocusType, TourPlanPaceType, TourPlanPlaceKeyType, TourPlanTransportType } from '@repo/api-contract';
+import type { TourPlanFameType, TourPlanFocusType, TourPlanPaceType, TourPlanPlaceKeyType, TourPlanPurposeType, TourPlanTransportType } from '@repo/api-contract';
 import { TOUR_REGIONS, type TourRegionKey } from '@repo/utils';
 
 // 지역 라벨(7차) — utils TOUR_REGIONS. 지역 칩(권역 1행 → 시도 2행)은 TourFilterBar 가 utils TOUR_REGION_GROUPS 로 그린다.
@@ -71,8 +71,11 @@ export interface TourPlanOptionsValue {
   // 여행 시작일 "YYYY-MM-DD"(12차) — 일정에 날짜를 붙이고, 예보가 닿는 날은 비 오는 날을 실내 위주로 짠다. 서버에는 날짜가 아니라
   // 비 오는 일차 번호(wetDays)만 간다.
   startDate: string | null;
+  // 14차 다양화 — 유명도(점수에서 여행 수의 몫)와 여행 목적(최대 TOUR_PLAN_PURPOSE_MAX 개). 둘 다 목록 순위에도 반영된다.
+  fame: TourPlanFameType;
+  purposes: TourPlanPurposeType[];
 }
-export const DEFAULT_TOUR_PLAN_OPTIONS: TourPlanOptionsValue = { pace: 'normal', focus: [], transport: 'car', startDate: null };
+export const DEFAULT_TOUR_PLAN_OPTIONS: TourPlanOptionsValue = { pace: 'normal', focus: [], transport: 'car', startDate: null, fame: 'famous', purposes: [] };
 // 꼭 갈 곳·뺄 곳은 이름(+읍면동)으로 가리킨다 — 응답에 장소 id 가 없다.
 export const tourPlaceKey = (p: { name: string; emd?: string | null }): TourPlanPlaceKeyType => ({ name: p.name, emd: p.emd ?? null });
 export const sameTourPlace = (a: { name: string; emd?: string | null }, b: { name: string; emd?: string | null }): boolean => a.name === b.name && (a.emd ?? null) === (b.emd ?? null);

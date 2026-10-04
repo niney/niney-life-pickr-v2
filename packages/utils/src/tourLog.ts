@@ -255,6 +255,40 @@ export const TOUR_PLAN_TRANSPORTS: Record<TourPlanTransportKey, { label: string 
   transit: { label: '대중교통' },
 };
 
+// ── 14차 코스 다양화 ──────────────────────────────────────────────────────────
+// 조건이 달라도, 다시 찾아도 같은 코스가 나오던 것을 푼다(2026-10-04 실측 — 제주 200개 조건의 일정에 나오는 장소가 후보 815곳 중
+// 85곳, 조건의 59% 가 같은 첫날). 키 목록은 @repo/api-contract 의 zod enum 과 같아야 한다(friendly 테스트가 검증).
+// 유명도 — 추천 점수에서 "여행 수" 가 차지하는 몫(여행 수의 지수). 후보의 8할이 여행 20건 미만인데 보정 만족도는 인기 장소와 같은
+// 수준이라(중앙 4.35 대 4.43) √여행 수를 그대로 곱하면 늘 같은 곳이 이긴다. 기본은 지금까지와 같은 famous.
+export const TOUR_PLAN_FAME_KEYS = ['famous', 'mixed', 'hidden'] as const;
+export type TourPlanFameKey = (typeof TOUR_PLAN_FAME_KEYS)[number];
+export const TOUR_PLAN_FAMES: Record<TourPlanFameKey, { label: string; exponent: number }> = {
+  famous: { label: '유명한 곳 위주', exponent: 0.5 },
+  mixed: { label: '골고루', exponent: 0.25 },
+  hidden: { label: '덜 알려진 곳도', exponent: 0 },
+};
+// 여행 목적 — 원본의 미션(코드표 MIS, 여행마다 1~5개 받는다)으로 "그 목적의 여행이 평균보다 더 간 곳" 을 앞세운다. 유형 묶음에
+// 일괄 가중을 주는 취향(focus)과 달리 장소 단위다(역사 유적 → 항파두리·제주목 관아, 등산 → 한라산·오름). 21개 미션 가운데 표본이
+// 두껍고(권역마다 100건 이상) 장소가 실제로 갈리는 것만 연다. mission = MIS 코드.
+export const TOUR_PLAN_PURPOSE_KEYS = ['theme', 'history', 'culture', 'sports', 'hiking', 'shopping', 'spa', 'filming', 'hotplace', 'newplace'] as const;
+export type TourPlanPurposeKey = (typeof TOUR_PLAN_PURPOSE_KEYS)[number];
+export const TOUR_PLAN_PURPOSES: Record<TourPlanPurposeKey, { label: string; mission: string }> = {
+  theme: { label: '테마파크·동식물원', mission: '2' },
+  history: { label: '역사 유적', mission: '3' },
+  culture: { label: '전시·공연', mission: '6' },
+  sports: { label: '야외 스포츠·레포츠', mission: '5' },
+  hiking: { label: '등산', mission: '28' },
+  shopping: { label: '쇼핑', mission: '1' },
+  spa: { label: '온천·스파', mission: '10' },
+  filming: { label: '촬영지', mission: '12' },
+  hotplace: { label: '요즘 뜨는 곳', mission: '26' },
+  newplace: { label: '새로운 곳 찾기', mission: '24' },
+};
+// 목적은 셋까지 — 여러 개를 곱하면 가중이 한쪽으로 쏠린다.
+export const TOUR_PLAN_PURPOSE_MAX = 3;
+// 다른 코스 보기 — 변형 번호(0 = 가장 점수가 높은 코스). 같은 번호는 같은 코스다.
+export const TOUR_PLAN_VARIANT_MAX = 99;
+
 // 출처 표기(AI 허브 이용정책 — NIA 사업결과·데이터명·aihub.or.kr 필수). 집계를 쓰는 모든 섹션 하단에 그대로.
 // 세트를 합쳐 집계하므로 데이터명은 적재 가능한 세트 전부를 적는다(TOUR_DATASETS 순서).
 export const TOUR_DATASET_NAMES: readonly string[] = TOUR_DATASET_KEYS.map((k) => TOUR_DATASETS[k].name);

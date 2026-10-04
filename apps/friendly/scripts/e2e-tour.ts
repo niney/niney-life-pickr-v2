@@ -172,6 +172,30 @@ const apiChecks = async (): Promise<void> => {
     if (!jeju || jeju.base !== null || jeju.weatherPlaceId !== '11G00201') throw new Error(`제주 거점 ${jeju?.base} · 예보 ${jeju?.weatherPlaceId}`);
     return `거점 ${it.base} · 예보 ${it.weatherPlaceId} · ${it.days.map((d) => `[${d.area}] ${d.stops.length}곳`).join(' / ')}`;
   });
+  await step('API plan 다양화(14차) — 변형 번호는 같은 번호면 같은 코스·다른 번호면 다른 코스, 유명도·목적은 목록 순위를 바꾼다, 잘못된 값 400', async () => {
+    const seg = { ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 };
+    const course = (p: Plan): string => (p.itinerary?.days ?? []).map((d) => d.stops.map((x) => x.name).join('>')).join('/');
+    const base = (await postPlan(seg)).body;
+    const zero = (await postPlan({ ...seg, variant: 0 })).body;
+    if (course(zero) !== course(base)) throw new Error('variant 0 이 기준과 다름');
+    const v3a = (await postPlan({ ...seg, variant: 3 })).body;
+    const v3b = (await postPlan({ ...seg, variant: 3 })).body;
+    if (course(v3a) !== course(v3b)) throw new Error('같은 번호가 다른 코스');
+    const others = await Promise.all([1, 2, 3, 4, 5].map(async (variant) => course((await postPlan({ ...seg, variant })).body)));
+    const distinct = new Set(others.filter((c) => c !== course(base))).size;
+    if (distinct === 0) throw new Error('번호를 바꿔도 같은 코스');
+    const top = (p: Plan): string => p.places.slice(0, 5).map((x) => x.name).join(',');
+    const hidden = (await postPlan({ ...seg, fame: 'hidden' })).body;
+    if (top(hidden) === top(base)) throw new Error('fame hidden 이 순위를 안 바꿈');
+    if (hidden.places.some((x) => x.n < 5)) throw new Error('n<5 장소');
+    const history = (await postPlan({ ...seg, purposes: ['history'] })).body;
+    if (top(history) === top(base)) throw new Error('purposes 가 순위를 안 바꿈');
+    for (const bad of [{ variant: 100 }, { fame: 'x' }, { purposes: ['theme', 'history', 'culture', 'sports'] }]) {
+      const res = await postPlan({ ...seg, ...bad });
+      if (res.status !== 400) throw new Error(`${JSON.stringify(bad)} → ${res.status}`);
+    }
+    return `변형 5개 중 기준과 다른 코스 ${distinct}개 · hidden 상위 ${hidden.places[0]?.name} · history 상위 ${history.places[0]?.name}`;
+  });
   await step('API plan 입력 확장(11·12차) — 속도·이동수단·숙소 동네·꼭 갈 곳·뺄 곳·비 오는 날이 일정에 반영, 잘못된 값 400', async () => {
     const seg = { ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 };
     const base = (await postPlan(seg)).body;

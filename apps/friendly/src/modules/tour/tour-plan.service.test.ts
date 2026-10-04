@@ -1,8 +1,22 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { TourPlanFocus, TourPlanPace, TourPlanTransport, type TourPlanResultType } from '@repo/api-contract';
-import { TOUR_PLAN_FOCUSES, TOUR_PLAN_FOCUS_KEYS, TOUR_PLAN_PACES, TOUR_PLAN_PACE_KEYS, TOUR_PLAN_TRANSPORTS, TOUR_PLAN_TRANSPORT_KEYS, tourSyncLayer } from '@repo/utils';
+import { TourPlanBody, TourPlanFame, TourPlanFocus, TourPlanPace, TourPlanPurpose, TourPlanTransport, type TourPlanResultType } from '@repo/api-contract';
+import {
+  TOUR_PLAN_FAMES,
+  TOUR_PLAN_FAME_KEYS,
+  TOUR_PLAN_FOCUSES,
+  TOUR_PLAN_FOCUS_KEYS,
+  TOUR_PLAN_PACES,
+  TOUR_PLAN_PACE_KEYS,
+  TOUR_PLAN_PURPOSES,
+  TOUR_PLAN_PURPOSE_KEYS,
+  TOUR_PLAN_PURPOSE_MAX,
+  TOUR_PLAN_TRANSPORTS,
+  TOUR_PLAN_TRANSPORT_KEYS,
+  TOUR_PLAN_VARIANT_MAX,
+  tourSyncLayer,
+} from '@repo/utils';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import sensiblePlugin from '../../plugins/sensible.js';
@@ -275,7 +289,7 @@ describe('tour plan (격리 DB)', () => {
     expect(r).toMatchObject({ regionTrips: 30, matchedTrips: 24, relaxed: [], insufficient: false, excludedClosed: 1 });
 
     // 우진해장국 — 지역 24건·보정 4.6, 비슷한 여행 24건 전부 방문 → (24+3) ÷ (24×24/30+3) = 1.2배.
-    expect(place(r, '우진해장국')).toEqual({ name: '우진해장국', kind: '식당', sigungu: '제주시', emd: '삼도이동', n: 24, mean: 4.6, score: 7.7, similarN: 24, lift: 1.2, peak: '점심', stayMin: 50, spendPp: 11000, placeId: 'n-ujin' });
+    expect(place(r, '우진해장국')).toEqual({ name: '우진해장국', kind: '식당', sigungu: '제주시', emd: '삼도이동', n: 24, mean: 4.6, score: 7.7, similarN: 24, lift: 1.2, peak: '점심', stayMin: 50, spendPp: 11000, placeId: 'n-ujin', purposeFit: false });
     // 용두암은 지역 30건이 다 가는 곳이라 평균 그대로(1.0배).
     expect(place(r, '용두암')).toMatchObject({ n: 30, mean: 4, similarN: 24, lift: 1, peak: '오후', placeId: null });
     // 비슷한 여행이 가지 않은 곳도 사라지지 않는다 — 숫자는 그대로, similarN·lift 만 비운다.
@@ -533,6 +547,17 @@ describe('tour plan (격리 DB)', () => {
     expect(Object.keys(TOUR_PLAN_PACES)).toEqual([...TOUR_PLAN_PACE_KEYS]);
     expect(Object.keys(TOUR_PLAN_FOCUSES)).toEqual([...TOUR_PLAN_FOCUS_KEYS]);
     expect(Object.keys(TOUR_PLAN_TRANSPORTS)).toEqual([...TOUR_PLAN_TRANSPORT_KEYS]);
+    // 14차 다양화 — 유명도·여행 목적, 그리고 개수·범위 상한.
+    expect(TourPlanFame.options).toEqual([...TOUR_PLAN_FAME_KEYS]);
+    expect(TourPlanPurpose.options).toEqual([...TOUR_PLAN_PURPOSE_KEYS]);
+    expect(Object.keys(TOUR_PLAN_FAMES)).toEqual([...TOUR_PLAN_FAME_KEYS]);
+    expect(Object.keys(TOUR_PLAN_PURPOSES)).toEqual([...TOUR_PLAN_PURPOSE_KEYS]);
+    const ok = (body: object): boolean => TourPlanBody.safeParse(body).success;
+    expect(ok({ purposes: TOUR_PLAN_PURPOSE_KEYS.slice(0, TOUR_PLAN_PURPOSE_MAX) })).toBe(true);
+    expect(ok({ purposes: TOUR_PLAN_PURPOSE_KEYS.slice(0, TOUR_PLAN_PURPOSE_MAX + 1) })).toBe(false);
+    expect(ok({ variant: TOUR_PLAN_VARIANT_MAX })).toBe(true);
+    expect(ok({ variant: TOUR_PLAN_VARIANT_MAX + 1 })).toBe(false);
+    expect(ok({ fame: 'unknown' })).toBe(false);
   });
 
   it('라우트 — POST plan 200(식별자·좌표 키 없음), 잘못된 입력 400', async () => {

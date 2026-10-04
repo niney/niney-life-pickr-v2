@@ -20,7 +20,7 @@ import { TourPlanService } from './tour-plan.service.js';
 import { getRestaurantTourStats } from './tour-public.service.js';
 import { TourRegionService } from './tour-region.service.js';
 
-// 여행로그 공개 라우트(4~6차·10차·13차) — 맛집 상세 "여행자" 탭 집계, 인사이트(필터), 코스 추천(+일정표), 밀도 격자·숙소·지역 비교. 인증 없음,
+// 여행로그 공개 라우트(4~6차·10~14차) — 맛집 상세 "여행자" 탭 집계, 인사이트(필터), 코스 추천(+일정표), 밀도 격자·숙소·지역 비교. 인증 없음,
 // 로컬 DB 뿐. 응답 스키마에 여행·방문·여행자 식별자가 없고 집단 분해는 소셀 억제(서비스). 매칭 없는 식당의 tour-stats 는 404.
 
 const PlaceParams = z.object({ placeId: z.string().min(1).max(64) });
@@ -111,7 +111,11 @@ const tourPublicRoutes: FastifyPluginAsync = async (app) => {
         'stayArea(응답 areas[].label 중 하나 — 가까운 동네를 앞세우고 fromStayMin·toStayMin 을 채운다) · must/avoid(꼭 넣을 곳·일정에서 뺄 곳, ' +
         '이름(+읍면동)으로 가리킨다. 못 넣은 꼭 갈 곳은 itinerary.unplaced) · wetDays(비 오는 일차 번호 — 그날은 야외 유형을 낮추고 실내에 가까운 유형을 ' +
         '앞세운다. 서버는 날씨를 조회하지 않으니 호출하는 쪽이 itinerary.weatherPlaceId 지점의 /weather/forecast·/weather/mid 로 골라 보낸다 — ' +
-        '제주 밖은 일정을 한 번 받아야 지점을 알 수 있다).',
+        '제주 밖은 일정을 한 번 받아야 지점을 알 수 있다). ' +
+        '다양화(14차): fame(추천 점수에서 여행 수의 몫 — famous √n(기본) · mixed n^¼ · hidden 여행 수를 보지 않음, 목록 순위에도 반영) · ' +
+        'purposes(여행 목적, 최대 3 — 그 목적의 여행이 평균보다 더 간 곳을 세게 앞세우고 그런 곳에 purposeFit 을 단다) · ' +
+        'variant(다른 코스 보기, 0~99 — 0 은 점수가 가장 높은 코스, 다른 번호는 상위권 장소로 바꿔 짠 코스이고 같은 번호는 같은 결과). ' +
+        '표본이 모자라 풀린 조건(relaxed)도 버리지 않고 그 조건 하나만 같은 여행의 선호를 순위에 곱한다.',
       body: TourPlanBody,
       response: { 200: TourPlanResult },
     },
