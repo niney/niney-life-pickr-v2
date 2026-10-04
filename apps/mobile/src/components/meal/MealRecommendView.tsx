@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +25,8 @@ import {
   useAirLocation,
   startMealDraftFromRecommendation,
   useCreateMealRecommendation,
+  useDeleteAllMealRecommendations,
+  useDeleteMealRecommendation,
   useMealRecommendationContext,
   useMealRecommendationEvent,
   useMealRecommendations,
@@ -60,6 +63,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   // '최근 추천' 목록에서 예전 추천을 골라 보는 중인지 — 새로 받거나 '최신 추천으로'를 누르면 풀린다(웹과 같다).
   const [browsing, setBrowsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 지운 추천 id — 목록·직전 추천이 다시 받아지기 전에 지운 추천이 잠깐 되살아나지 않게 가린다(웹과 같다).
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(() => new Set());
   const scrollRef = useRef<ScrollView>(null);
   // 추천 카드의 스크롤 위치 — 목록에서 고르면 바뀐 카드로 올려 보여 준다.
   const cardY = useRef(0);
@@ -69,12 +74,18 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   const airLocation = useAirLocation();
   const create = useCreateMealRecommendation();
   const recommendationEvent = useMealRecommendationEvent();
+  const removeOne = useDeleteMealRecommendation();
+  const removeAll = useDeleteAllMealRecommendations();
   const shownEventIds = useRef(new Set<string>());
 
-  const shown = current ?? ctx.data?.latest ?? null;
+  const notRemoved = (
+    r: MealRecommendationType | null | undefined,
+  ): MealRecommendationType | null => (r && !removedIds.has(r.id) ? r : null);
+  const historyItems = (history.data?.items ?? []).filter((r) => !removedIds.has(r.id));
+  const shown = notRemoved(current) ?? notRemoved(ctx.data?.latest);
   const today = toLocalDateKey(new Date());
   // 최근 추천(최신순)의 맨 앞 = 가장 최근에 받은 추천.
-  const newest = history.data?.items[0] ?? null;
+  const newest = historyItems[0] ?? null;
   const viewingPast = browsing && shown !== null && newest !== null && shown.id !== newest.id;
   const configuredSlots = ctx.data?.preference.slots.length
     ? ctx.data.preference.slots
@@ -110,6 +121,59 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
     setCurrent(newest);
     setBrowsing(false);
   };
+
+  // 지우면 반응(👍👎·선택)도 함께 지워져 되돌릴 수 없다 — 확인을 거친다. 보고 있던 추천을 지우면 카드는 남은 것 중
+  // 가장 최근 추천으로 돌아간다(웹과 같다).
+  const removed = (ids: readonly string[], includesShown: boolean) => {
+    setRemovedIds((prev) => new Set([...prev, ...ids]));
+    if (includesShown) {
+      setCurrent(null);
+      setBrowsing(false);
+    }
+  };
+  const deleteFailed = (e: unknown) =>
+    Alert.alert(
+      '삭제하지 못했어요',
+      e instanceof ApiError ? e.message : '잠시 뒤 다시 시도해 주세요.',
+    );
+
+  const confirmDeleteOne = (rec: MealRecommendationType) =>
+    Alert.alert(
+      '추천 삭제',
+      '이 추천을 삭제할까요? 남긴 평가·선택도 함께 지워져 다음 추천에 반영되지 않아요. 이 추천으로 남긴 식단 기록은 그대로예요. 되돌릴 수 없어요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: () =>
+            removeOne.mutate(rec.id, {
+              onSuccess: () => removed([rec.id], rec.id === shown?.id),
+              onError: deleteFailed,
+            }),
+        },
+      ],
+    );
+
+  const confirmDeleteAll = () =>
+    Alert.alert(
+      '최근 추천 모두 삭제',
+      '받은 추천을 모두 삭제할까요? 추천에 남긴 평가·선택도 함께 지워져 다음 추천에 반영되지 않아요. 식단 기록은 그대로예요. 되돌릴 수 없어요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: () => {
+            const ids = [...historyItems.map((r) => r.id), ...(shown ? [shown.id] : [])];
+            removeAll.mutate(undefined, {
+              onSuccess: () => removed(ids, true),
+              onError: deleteFailed,
+            });
+          },
+        },
+      ],
+    );
 
   const request = (force: boolean) => {
     setError(null);
@@ -513,40 +577,67 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
       ) : null}
 
       {/* 목록은 늘 최신순 그대로 — 보고 있는 추천을 목록에서 빼면 누를 때마다 줄이 빠지고 끼어들어 헷갈렸다
-          (2026-10-04). 보고 있는 줄만 강조한다. */}
-      {(history.data?.items.length ?? 0) > 1 ? (
+          (2026-10-04). 보고 있는 줄만 강조한다. 지우기가 생겨 한 개여도 보인다(마지막 추천도 지울 수 있게). */}
+      {historyItems.length > 0 ? (
         <Card>
-          <CardTitle title="최근 추천" sub="눌러서 다시 열면 그 추천으로 기록을 이어갈 수 있어요" />
+          <CardTitle
+            title="최근 추천"
+            sub="눌러서 다시 열면 그 추천으로 기록을 이어갈 수 있어요"
+            right={
+              <Pressable
+                accessibilityRole="button"
+                onPress={confirmDeleteAll}
+                disabled={removeAll.isPending}
+                hitSlop={8}
+              >
+                <Text style={styles.deleteAllText}>모두 삭제</Text>
+              </Pressable>
+            }
+          />
           <View style={styles.itemList}>
-            {history.data!.items.map((item) => {
+            {historyItems.map((item) => {
               const active = item.id === shown?.id;
+              const when = recommendationWhenLabel(item, today);
               return (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  onPress={() => openFromHistory(item)}
-                  style={[
-                    styles.historyRow,
-                    active ? { backgroundColor: theme.colors.surfaceAlt } : null,
-                  ]}
-                >
-                  <Text style={styles.historyText} numberOfLines={1}>
-                    <Text style={{ color: theme.colors.textMuted }}>
-                      {recommendationWhenLabel(item, today)}
-                    </Text>
-                    {' · '}
-                    {recommendationHistoryFoods(item)}
-                  </Text>
-                  <Text
+                <View key={item.id} style={styles.historyLine}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => openFromHistory(item)}
                     style={[
-                      styles.itemMeta,
-                      active ? { color: theme.colors.primary, fontWeight: '700' } : null,
+                      styles.historyRow,
+                      active ? { backgroundColor: theme.colors.surfaceAlt } : null,
                     ]}
                   >
-                    {active ? '보는 중' : (recommendationProgressLabel(item) ?? '보기')}
-                  </Text>
-                </Pressable>
+                    <Text style={styles.historyText} numberOfLines={1}>
+                      <Text style={{ color: theme.colors.textMuted }}>{when}</Text>
+                      {' · '}
+                      {recommendationHistoryFoods(item)}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.itemMeta,
+                        active ? { color: theme.colors.primary, fontWeight: '700' } : null,
+                      ]}
+                    >
+                      {active ? '보는 중' : (recommendationProgressLabel(item) ?? '보기')}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${when} 추천 삭제`}
+                    onPress={() => confirmDeleteOne(item)}
+                    disabled={removeOne.isPending}
+                    hitSlop={6}
+                    style={styles.historyDelete}
+                  >
+                    <MaterialCommunityIcons
+                      name="trash-can-outline"
+                      size={16}
+                      color={theme.colors.textMuted}
+                    />
+                  </Pressable>
+                </View>
               );
             })}
           </View>
@@ -634,7 +725,10 @@ const createStyles = (theme: Theme) =>
     candidateFeedbackLabel: { flex: 1, fontSize: 12, lineHeight: 17 },
     feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
     feedbackLabel: { fontSize: 12, color: theme.colors.textMuted, flex: 1 },
+    historyLine: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     historyRow: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
@@ -643,6 +737,8 @@ const createStyles = (theme: Theme) =>
       borderRadius: 8,
     },
     historyText: { flex: 1, color: theme.colors.text, fontSize: 13 },
+    historyDelete: { padding: 6 },
+    deleteAllText: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '600' },
     pastBanner: {
       flexDirection: 'row',
       alignItems: 'center',

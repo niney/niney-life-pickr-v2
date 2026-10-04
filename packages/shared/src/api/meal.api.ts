@@ -6,6 +6,8 @@ import {
   type DeleteMealPhotosResultType,
   type DeleteMealDataInputType,
   type DeleteMealDataResultType,
+  type DeleteMealRecommendationsInputType,
+  type DeleteMealRecommendationsResultType,
   type FrequentMealItemsResultType,
   type ListMealRecommendationsResultType,
   type MealRecommendationContextType,
@@ -178,6 +180,16 @@ export const mealApi = {
     ),
 
   recommendationContext: () => apiFetch<MealRecommendationContextType>(Routes.Meal.recommendationContext),
+
+  // 추천 삭제 — 반응 이벤트도 함께 지워져 다음 추천 학습에서 빠진다. 되돌릴 수 없어 화면이 먼저 확인한다.
+  removeRecommendation: (id: string) =>
+    apiFetch<void>(Routes.Meal.recommendation(id), { method: 'DELETE' }),
+
+  deleteAllRecommendations: (input: DeleteMealRecommendationsInputType) =>
+    apiFetch<DeleteMealRecommendationsResultType>(Routes.Meal.recommendations, {
+      method: 'DELETE',
+      body: JSON.stringify(input),
+    }),
 
   recommendationFeedback: (id: string, input: MealRecommendationFeedbackInputType) =>
     apiFetch<MealRecommendationType>(Routes.Meal.recommendationFeedback(id), {

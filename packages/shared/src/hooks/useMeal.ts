@@ -19,8 +19,9 @@ import type {
   UpdateMealEntryInputType,
   UpdateMealPreferenceInputType,
 } from '@repo/api-contract';
+import { MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION } from '@repo/api-contract';
 import { mealApi, type ListMealEntriesInput, type MealPhotoUploadFile } from '../api/meal.api.js';
-import { isMealDraftPrincipalCurrent } from '../stores/mealDraftStore.js';
+import { isMealDraftPrincipalCurrent, useMealDraftStore } from '../stores/mealDraftStore.js';
 
 // 쿼리 키 루트 ['meal', ...] — 목록 ['meal','list',query], 단건 ['meal','one',id],
 // 달력 ['meal','calendar',month], 통계 ['meal','stats',from,to], 선호 ['meal','preference'].
@@ -330,6 +331,38 @@ export const useCreateMealRecommendation = () => {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
     },
+  });
+};
+
+// 추천을 지우면 목록·직전 추천(context)·통계(추천 수락률)가 바뀐다. 지운 추천에서 시작한 기록 초안이 남아 있으면
+// 출처만 떼어 낸다 — 서버도 지워진 추천 출처는 일반 기록으로 저장하지만, 초안의 '추천에서 고른 메뉴' 안내가 남지 않게.
+const afterRecommendationsDeleted = (
+  qc: ReturnType<typeof useQueryClient>,
+  deleted: 'all' | readonly string[],
+): void => {
+  void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'stats'] });
+  const draft = useMealDraftStore.getState();
+  const origin = draft.originRecommendationId;
+  if (origin && (deleted === 'all' || deleted.includes(origin))) {
+    draft.setField('originRecommendationId', null);
+  }
+};
+
+export const useDeleteMealRecommendation = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => mealApi.removeRecommendation(id),
+    onSuccess: (_r, id) => afterRecommendationsDeleted(qc, [id]),
+  });
+};
+
+export const useDeleteAllMealRecommendations = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      mealApi.deleteAllRecommendations({ confirmation: MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION }),
+    onSuccess: () => afterRecommendationsDeleted(qc, 'all'),
   });
 };
 

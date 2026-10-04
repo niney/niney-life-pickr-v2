@@ -8,6 +8,7 @@ import {
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
 } from 'lucide-react';
 import {
   MEAL_ALLERGEN_LABEL,
@@ -22,6 +23,8 @@ import {
   startMealDraftFromRecommendation,
   useAirLocation,
   useCreateMealRecommendation,
+  useDeleteAllMealRecommendations,
+  useDeleteMealRecommendation,
   useFoodRestaurants,
   useMealRecommendationContext,
   useMealRecommendationFeedback,
@@ -40,6 +43,7 @@ import {
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { ConfirmDialog } from '~/components/ui/confirm-dialog';
 import { cn } from '~/lib/utils';
 import { useMealDraftReady } from './useMealDraftReady';
 
@@ -62,6 +66,10 @@ export const MealRecommendTab = () => {
   // 사용자가 '최근 추천' 목록에서 예전 추천을 골라 보는 중인지 — 새로 받거나 '최신 추천으로'를 누르면 풀린다.
   // 같은 날·끼니 재요청으로 캐시된 예전 추천이 돌아온 경우는 지금 요청한 것이라 지난 추천으로 보지 않는다.
   const [browsing, setBrowsing] = useState(false);
+  // 지우기 확인창 대상 — 추천 하나 또는 '모두'.
+  const [pendingDelete, setPendingDelete] = useState<MealRecommendationType | 'all' | null>(null);
+  // 지운 추천 id — 목록·직전 추천이 다시 받아지기 전에 지운 추천이 화면에 잠깐 되살아나지 않게 가린다.
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(() => new Set());
   const cardRef = useRef<HTMLDivElement>(null);
 
   const ctx = useMealRecommendationContext();
@@ -70,12 +78,18 @@ export const MealRecommendTab = () => {
   const create = useCreateMealRecommendation();
   const feedback = useMealRecommendationFeedback();
   const recommendationEvent = useMealRecommendationEvent();
+  const removeOne = useDeleteMealRecommendation();
+  const removeAll = useDeleteAllMealRecommendations();
   const shownEventIds = useRef(new Set<string>());
 
   const today = toLocalDateKey(now);
-  const shown = current ?? ctx.data?.latest ?? null;
+  const notRemoved = (
+    r: MealRecommendationType | null | undefined,
+  ): MealRecommendationType | null => (r && !removedIds.has(r.id) ? r : null);
+  const historyItems = (history.data?.items ?? []).filter((r) => !removedIds.has(r.id));
+  const shown = notRemoved(current) ?? notRemoved(ctx.data?.latest);
   // 최근 추천(최신순)의 맨 앞 = 가장 최근에 받은 추천.
-  const newest = history.data?.items[0] ?? null;
+  const newest = historyItems[0] ?? null;
   const viewingPast = browsing && shown !== null && newest !== null && shown.id !== newest.id;
   const configuredSlots = ctx.data?.preference.slots?.length
     ? ctx.data.preference.slots
@@ -110,6 +124,28 @@ export const MealRecommendTab = () => {
     setCurrent(newest);
     setBrowsing(false);
   };
+
+  // 지우면 반응(👍👎·선택)도 함께 지워져 되돌릴 수 없다 — 확인창을 거친다. 보고 있던 추천을 지우면 카드는 남은 것 중
+  // 가장 최근 추천으로 돌아간다(직전 추천을 다시 받아 오는 동안은 비워 둔다).
+  const confirmDelete = () => {
+    const target = pendingDelete;
+    if (!target) return;
+    const ids =
+      target === 'all'
+        ? [...historyItems.map((r) => r.id), ...(shown ? [shown.id] : [])]
+        : [target.id];
+    const onSuccess = () => {
+      setRemovedIds((prev) => new Set([...prev, ...ids]));
+      if (target === 'all' || target.id === shown?.id) {
+        setCurrent(null);
+        setBrowsing(false);
+      }
+      setPendingDelete(null);
+    };
+    if (target === 'all') removeAll.mutate(undefined, { onSuccess });
+    else removeOne.mutate(target.id, { onSuccess });
+  };
+  const deleteError = removeOne.error ?? removeAll.error;
 
   const request = (force: boolean) => {
     create.mutate(
@@ -279,46 +315,90 @@ export const MealRecommendTab = () => {
       </div>
 
       {/* 목록은 늘 최신순 그대로 — 보고 있는 추천을 목록에서 빼면 누를 때마다 줄이 빠지고 끼어들어 헷갈렸다
-          (2026-10-04). 보고 있는 줄만 강조한다. */}
-      {(history.data?.items.length ?? 0) > 1 ? (
+          (2026-10-04). 보고 있는 줄만 강조한다. 지우기가 생겨 한 개여도 보인다(마지막 추천도 지울 수 있게). */}
+      {historyItems.length > 0 ? (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">최근 추천</CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+              onClick={() => setPendingDelete('all')}
+            >
+              모두 삭제
+            </Button>
           </CardHeader>
           <CardContent className="space-y-1">
-            {history.data!.items.map((r) => {
+            {historyItems.map((r) => {
               const active = r.id === shown?.id;
               const progress = recommendationProgressLabel(r);
+              const when = recommendationWhenLabel(r, today);
               return (
-                <button
+                <div
                   key={r.id}
-                  type="button"
-                  aria-current={active ? 'true' : undefined}
-                  onClick={() => openFromHistory(r)}
                   className={cn(
-                    'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+                    'flex items-center gap-1 rounded-md',
                     active ? 'bg-accent' : 'hover:bg-accent',
                   )}
                 >
-                  <span className="min-w-0 truncate">
-                    <span className="text-muted-foreground">
-                      {recommendationWhenLabel(r, today)}
+                  <button
+                    type="button"
+                    aria-current={active ? 'true' : undefined}
+                    onClick={() => openFromHistory(r)}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-2 px-2 py-1.5 text-left text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="text-muted-foreground">{when}</span>
+                      {' · '}
+                      {recommendationHistoryFoods(r)}
                     </span>
-                    {' · '}
-                    {recommendationHistoryFoods(r)}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                    {r.feedback?.rating === 1 ? (
-                      <ThumbsUp className="size-3.5 text-primary" />
-                    ) : null}
-                    {active ? <span className="font-medium text-primary">보는 중</span> : progress}
-                  </span>
-                </button>
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                      {r.feedback?.rating === 1 ? (
+                        <ThumbsUp className="size-3.5 text-primary" />
+                      ) : null}
+                      {active ? (
+                        <span className="font-medium text-primary">보는 중</span>
+                      ) : (
+                        progress
+                      )}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${when} 추천 삭제`}
+                    onClick={() => setPendingDelete(r)}
+                    className="shrink-0 rounded p-1.5 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
               );
             })}
+            {deleteError ? (
+              <p className="pt-1 text-xs text-destructive">
+                {deleteError instanceof Error ? deleteError.message : '추천을 삭제하지 못했어요.'}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete === 'all' ? '최근 추천 모두 삭제' : '추천 삭제'}
+        description={
+          pendingDelete === 'all'
+            ? '받은 추천을 모두 삭제할까요? 추천에 남긴 평가·선택도 함께 지워져 다음 추천에 반영되지 않아요. 식단 기록은 그대로예요. 되돌릴 수 없어요.'
+            : '이 추천을 삭제할까요? 남긴 평가·선택도 함께 지워져 다음 추천에 반영되지 않아요. 이 추천으로 남긴 식단 기록은 그대로예요. 되돌릴 수 없어요.'
+        }
+        confirmLabel="삭제"
+        variant="destructive"
+        pending={removeOne.isPending || removeAll.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

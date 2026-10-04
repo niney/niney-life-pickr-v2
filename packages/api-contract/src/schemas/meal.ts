@@ -689,6 +689,23 @@ export const ListMealRecommendationsResult = z.object({
 });
 export type ListMealRecommendationsResultType = z.infer<typeof ListMealRecommendationsResult>;
 
+// 추천 이력 전체 삭제 — 추천과 그 반응 이벤트를 지운다(다음 추천 학습·수락률 통계에서도 빠진다). 식단 기록·
+// 일일 추천 한도는 그대로. 화면은 확인창을 거친 뒤 이 문구를 실어 보낸다(실수 호출 방지).
+export const MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION = 'DELETE_MY_MEAL_RECOMMENDATIONS' as const;
+
+export const DeleteMealRecommendationsInput = z
+  .object({ confirmation: z.literal(MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION) })
+  .strict();
+export type DeleteMealRecommendationsInputType = z.infer<typeof DeleteMealRecommendationsInput>;
+
+export const DeleteMealRecommendationsResult = z.object({
+  deleted: z.object({
+    recommendations: z.number().int().nonnegative(),
+    recommendationEvents: z.number().int().nonnegative(),
+  }),
+});
+export type DeleteMealRecommendationsResultType = z.infer<typeof DeleteMealRecommendationsResult>;
+
 export const MealRecommendationFeedbackInput = z.object({
   pickedName: z.string().trim().min(1).max(60).nullable().optional(),
   rating: MealRecommendationRating.optional(),

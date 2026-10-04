@@ -3,6 +3,8 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   CreateMealRecommendationInput,
+  DeleteMealRecommendationsInput,
+  DeleteMealRecommendationsResult,
   ListMealRecommendationsQuery,
   ListMealRecommendationsResult,
   MealRecommendation,
@@ -99,6 +101,45 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
           }
           if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);
           throw app.httpErrors.badRequest(e.message);
+        }
+        throw e;
+      }
+    },
+  });
+
+  typed.delete(Routes.Meal.recommendations, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      summary: '내 추천 이력 전체 삭제 — 추천과 반응 이벤트, 확인 문구 필수',
+      description:
+        '본문 confirmation 이 정확히 "DELETE_MY_MEAL_RECOMMENDATIONS" 여야 한다. 되돌릴 수 없다. 지운 추천의 ' +
+        '선택·평가·기록 연결은 다음 추천 학습과 수락률 통계에서도 빠진다. 식단 기록과 일일 추천 한도는 그대로다.',
+      security: [{ bearerAuth: [] }],
+      body: DeleteMealRecommendationsInput,
+      response: { 200: DeleteMealRecommendationsResult },
+    },
+    handler: async (req) => service.removeAll(req.user.userId),
+  });
+
+  typed.delete(Routes.Meal.recommendation(':id'), {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      summary: '추천 삭제 — 반응 이벤트도 함께, 이 추천으로 만든 식단 기록은 유지',
+      description:
+        '되돌릴 수 없다. 같은 날짜·끼니로 다시 요청하면 저장된 추천 대신 새로 만들어 일일 한도를 1회 차감한다.',
+      security: [{ bearerAuth: [] }],
+      params: IdParams,
+      response: { 204: z.null() },
+    },
+    handler: async (req, reply) => {
+      try {
+        await service.remove(req.user.userId, req.params.id);
+        return reply.code(204).send(null);
+      } catch (e) {
+        if (e instanceof MealRecommendationError && e.code === 'not_found') {
+          throw app.httpErrors.notFound(e.message);
         }
         throw e;
       }

@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 194개 — 공개 84 · 선택 인증 15 · 로그인 95. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 196개 — 공개 84 · 선택 인증 15 · 로그인 97. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -120,7 +120,9 @@
 | POST | `/api/v1/meals/recognize` | 로그인 | 10/분 | body | 식단 사진 음식 인식 — 비전 LLM 1콜, 사용자별 일일 한도, 식단 기록은 만들지 않음 |
 | GET | `/api/v1/meals/recommendations` | 로그인 |  | `limit` | 내 다음 끼니 추천 이력 — 최신순, limit 기본 20·최대 50 |
 | POST | `/api/v1/meals/recommendations` | 로그인 | 10/분 | body | 다음 끼니 추천 생성 — 텍스트 LLM 1콜, 캐시 히트는 일일 한도 미차감 |
+| DELETE | `/api/v1/meals/recommendations` | 로그인 |  | body | 내 추천 이력 전체 삭제 — 추천과 반응 이벤트, 확인 문구 필수 |
 | GET | `/api/v1/meals/recommendations/context` | 로그인 |  |  | 추천 화면 초기 데이터 — 기록 수·최근 먹은 음식·선호 설정·직전 추천 |
+| DELETE | `/api/v1/meals/recommendations/:id` | 로그인 |  |  | 추천 삭제 — 반응 이벤트도 함께, 이 추천으로 만든 식단 기록은 유지 |
 | POST | `/api/v1/meals/recommendations/:id/events` | 로그인 |  | body | 추천 반응 이벤트 기록 — 노출·후보 선택·평가·식당 열기·닫기(logged 는 거부) |
 | POST | `/api/v1/meals/recommendations/:id/feedback` | 로그인 |  | body | 추천 피드백 반영 — 고른 음식·세트 평가(±1)·이 추천으로 만든 식단 기록 연결 |
 | GET | `/api/v1/meals/stats` | 로그인 |  | `from`*, `to`* | 기간 식단 통계 — 분류별 분포·자주 먹은 음식·연속 기록·영양 평균·인사이트 |

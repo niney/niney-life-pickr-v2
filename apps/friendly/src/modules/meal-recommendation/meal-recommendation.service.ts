@@ -9,6 +9,7 @@ import { z } from 'zod';
 import {
   MealRecommendationStatus,
   type CreateMealRecommendationInputType,
+  type DeleteMealRecommendationsResultType,
   type MealPreferenceType,
   type MealRecommendationContextType,
   type MealRecommendationFeedbackInputType,
@@ -163,6 +164,35 @@ export class MealRecommendationService {
       include: { events: { orderBy: { createdAt: 'asc' } } },
     });
     return rows.map(toRecommendation);
+  }
+
+  // 추천 삭제 — 반응 이벤트(선택·평가·기록 연결)도 함께 지워 다음 추천 학습·수락률 통계에서 빠진다. 같은 날·
+  // 끼니로 다시 받으면 새로 만든다(일일 한도 차감, 한도 카운터는 그대로). 이 추천에서 만든 식단 기록은 남는다 —
+  // originRecommendationId 는 FK 가 아닌 출처 스냅샷이다. 생성 중인 추천과 엇갈리지 않게 식단 쓰기 장벽 안에서.
+  async remove(userId: string, id: string): Promise<void> {
+    await mealMutationBarrier.runExclusive(userId, () =>
+      this.prisma.$transaction(async (tx) => {
+        const row = await tx.mealRecommendation.findFirst({
+          where: { id, userId },
+          select: { id: true },
+        });
+        if (!row) throw new MealRecommendationError('not_found', '추천을 찾을 수 없습니다.');
+        await tx.mealRecommendationEvent.deleteMany({ where: { recommendationId: id, userId } });
+        await tx.mealRecommendation.delete({ where: { id } });
+      }),
+    );
+  }
+
+  async removeAll(userId: string): Promise<DeleteMealRecommendationsResultType> {
+    return mealMutationBarrier.runExclusive(userId, () =>
+      this.prisma.$transaction(async (tx) => {
+        const events = await tx.mealRecommendationEvent.deleteMany({ where: { userId } });
+        const recommendations = await tx.mealRecommendation.deleteMany({ where: { userId } });
+        return {
+          deleted: { recommendations: recommendations.count, recommendationEvents: events.count },
+        };
+      }),
+    );
   }
 
   async create(

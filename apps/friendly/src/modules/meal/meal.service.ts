@@ -529,12 +529,30 @@ export class MealService {
         rankingVersion: number;
         rating: number | null;
       } | null = null;
-      if (originRecommendationId) {
-        const recommendation = await tx.mealRecommendation.findFirst({
-          where: { id: originRecommendationId, userId },
-          select: { id: true, itemsJson: true, feedbackJson: true, promptVersion: true },
-        });
-        if (!recommendation) throw new MealServiceError('invalid', '원본 추천을 찾을 수 없습니다.');
+      let source = input.source;
+      let originId = originRecommendationId;
+      const recommendation = originRecommendationId
+        ? await tx.mealRecommendation.findUnique({
+            where: { id: originRecommendationId },
+            select: {
+              id: true,
+              userId: true,
+              itemsJson: true,
+              feedbackJson: true,
+              promptVersion: true,
+            },
+          })
+        : null;
+      if (recommendation && recommendation.userId !== userId) {
+        throw new MealServiceError('invalid', '원본 추천을 찾을 수 없습니다.');
+      }
+      if (originRecommendationId && !recommendation) {
+        // 원본 추천이 지워졌으면(추천 삭제 — 다른 기기에서 지웠는데 이 기기 초안이 남은 경우 등) 일반 기록으로
+        // 남긴다. 먹은 사실까지 막을 이유는 없다. 남의 추천 id 는 위에서 그대로 거부한다.
+        source = 'manual';
+        originId = null;
+      }
+      if (recommendation) {
         const pickedName = findMealRecommendationCandidate(
           recommendation.itemsJson,
           input.items.filter((item) => item.isMain).map((item) => item.name),
@@ -568,8 +586,8 @@ export class MealService {
           placeId: input.placeId ?? null,
           placeName: input.placeName ?? null,
           memo: input.memo ?? null,
-          source: input.source,
-          originRecommendationId,
+          source,
+          originRecommendationId: originId,
           recognitionJson: input.recognition ? JSON.stringify(input.recognition) : null,
           items: { createMany: { data: itemData } },
         },

@@ -674,6 +674,39 @@ describe('meal routes (격리 DB)', () => {
     ).toBe(204);
   });
 
+  it('원본 추천이 지워졌으면 추천 출처 기록도 일반 기록으로 저장한다(남은 초안이 막히지 않게)', async () => {
+    const recommendation = await app.prisma.mealRecommendation.create({
+      data: {
+        userId: 'meal-user',
+        targetDate: '2026-09-02',
+        targetSlot: 'lunch',
+        summary: '추천',
+        status: 'done',
+      },
+    });
+    await app.prisma.mealRecommendation.delete({ where: { id: recommendation.id } });
+    const saved = await app.inject({
+      method: 'POST',
+      url: ENTRIES,
+      headers: auth,
+      payload: {
+        eatenAt: '2026-09-02T03:00:00.000Z',
+        eatenDate: '2026-09-02',
+        slot: 'lunch',
+        source: 'recommendation',
+        originRecommendationId: recommendation.id,
+        items: [{ name: '김치찌개', isMain: true, source: 'recommendation' }],
+      },
+    });
+    expect(saved.statusCode).toBe(201);
+    const entry = saved.json<MealEntryType>();
+    expect(entry).toMatchObject({ source: 'manual', originRecommendationId: null });
+    expect(
+      (await app.inject({ method: 'DELETE', url: `${ENTRIES}/${entry.id}`, headers: auth }))
+        .statusCode,
+    ).toBe(204);
+  });
+
   it('사진 업로드 → 원본·썸네일 조회, 남의 사진은 403', async () => {
     const { payload, headers } = multipart(jpeg);
     const up = await app.inject({

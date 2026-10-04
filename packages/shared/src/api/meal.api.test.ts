@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MEAL_DATA_DELETE_CONFIRMATION } from '@repo/api-contract';
+import {
+  MEAL_DATA_DELETE_CONFIRMATION,
+  MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
+} from '@repo/api-contract';
 import { configureApi } from './client.js';
 import { mealApi } from './meal.api.js';
 
@@ -43,5 +46,31 @@ describe('mealApi 데이터 관리', () => {
     expect(init.method).toBe('DELETE');
     expect(init.body).toBe(JSON.stringify({ confirmation: MEAL_DATA_DELETE_CONFIRMATION }));
     expect((init.headers as Headers).get('Content-Type')).toBe('application/json');
+  });
+
+  it('추천 삭제는 단건 DELETE, 모두 삭제는 확인 문자열을 DELETE JSON body 로 보낸다', async () => {
+    const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) =>
+      Promise.resolve(
+        init?.body
+          ? jsonResponse({ deleted: { recommendations: 2, recommendationEvents: 1 } })
+          : new Response(null, { status: 204 }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await mealApi.removeRecommendation('rec-1');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/meals/recommendations/rec-1');
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe('DELETE');
+
+    const res = await mealApi.deleteAllRecommendations({
+      confirmation: MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/v1/meals/recommendations');
+    const init = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(init.method).toBe('DELETE');
+    expect(init.body).toBe(
+      JSON.stringify({ confirmation: MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION }),
+    );
+    expect(res.deleted.recommendations).toBe(2);
   });
 });

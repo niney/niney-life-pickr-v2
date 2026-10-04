@@ -17167,6 +17167,77 @@
             }
           }
         }
+      },
+      "delete": {
+        "summary": "내 추천 이력 전체 삭제 — 추천과 반응 이벤트, 확인 문구 필수",
+        "tags": [
+          "meal"
+        ],
+        "description": "본문 confirmation 이 정확히 \"DELETE_MY_MEAL_RECOMMENDATIONS\" 여야 한다. 되돌릴 수 없다. 지운 추천의 선택·평가·기록 연결은 다음 추천 학습과 수락률 통계에서도 빠진다. 식단 기록과 일일 추천 한도는 그대로다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirmation": {
+                    "type": "string",
+                    "enum": [
+                      "DELETE_MY_MEAL_RECOMMENDATIONS"
+                    ]
+                  }
+                },
+                "required": [
+                  "confirmation"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "object",
+                      "properties": {
+                        "recommendations": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "recommendationEvents": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "recommendations",
+                        "recommendationEvents"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "deleted"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/meals/recommendations/context": {
@@ -17649,6 +17720,48 @@
                     "latest"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meals/recommendations/{id}": {
+      "delete": {
+        "summary": "추천 삭제 — 반응 이벤트도 함께, 이 추천으로 만든 식단 기록은 유지",
+        "tags": [
+          "meal"
+        ],
+        "description": "되돌릴 수 없다. 같은 날짜·끼니로 다시 요청하면 저장된 추천 대신 새로 만들어 일일 한도를 1회 차감한다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "204": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "enum": [
+                    "null"
+                  ],
+                  "nullable": true
                 }
               }
             }

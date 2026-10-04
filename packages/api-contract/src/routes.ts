@@ -349,8 +349,10 @@ export const Meal = {
   recognize: `${API_PREFIX}/meals/recognize`,
   // 선호 설정 조회/저장(사용자당 1행).
   preference: `${API_PREFIX}/meals/preference`,
-  // 추천 생성(POST) / 최근 목록(GET).
+  // 추천 생성(POST) / 최근 목록(GET) / 전체 삭제(DELETE, 확인 문구).
   recommendations: `${API_PREFIX}/meals/recommendations`,
+  // 추천 단건 삭제(DELETE).
+  recommendation: (id: string) => `${API_PREFIX}/meals/recommendations/${id}`,
   // 추천 화면 진입용 컨텍스트(기록 수·최근 음식·선호·최신 추천).
   recommendationContext: `${API_PREFIX}/meals/recommendations/context`,
   // 추천 피드백(👍👎·먹었어요).

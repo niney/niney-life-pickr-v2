@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MEAL_DEFAULT_WEIGHTS, type MealPreferenceType } from '@repo/api-contract';
+import {
+  MEAL_DEFAULT_WEIGHTS,
+  MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
+  type MealPreferenceType,
+} from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import { env } from '../../config/env.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
@@ -742,6 +746,8 @@ describe('MealRecommendationService (격리 DB)', () => {
       { id: 'rec-u', role: 'USER' },
       { id: 'rec-retention-u', role: 'USER' },
       { id: 'rec-signal-u', role: 'USER' },
+      { id: 'rec-delete-u', role: 'USER' },
+      { id: 'rec-delete-other-u', role: 'USER' },
     ]);
     provider = new FakeProvider();
     cache = { get: () => provider } as unknown as AdapterCache;
@@ -1137,6 +1143,78 @@ describe('MealRecommendationService (격리 DB)', () => {
     expect(first.recommendation.id).toBe(joined.recommendation.id);
     expect(consumeQuota).toHaveBeenCalledTimes(1);
     expect(provider.calls).toHaveLength(1);
+  });
+
+  describe('추천 삭제', () => {
+    const authFor = (userId: string) => ({
+      authorization: `Bearer ${app.jwt.sign({ userId, email: `${userId}@x.com`, role: 'USER' })}`,
+    });
+    const seedRecommendation = (userId: string, targetDate: string) =>
+      app.prisma.mealRecommendation.create({
+        data: { userId, targetDate, targetSlot: 'dinner', summary: '추천', status: 'done' },
+      });
+    const event = (recommendationId: string, userId: string, kind: string) =>
+      app.prisma.mealRecommendationEvent.create({
+        data: { recommendationId, userId, kind, platform: 'web', rankingVersion: 5 },
+      });
+
+    it('하나 지우기 — 반응 이벤트도 함께 지우고, 남의 추천·없는 추천은 404', async () => {
+      const mine = await seedRecommendation('rec-delete-u', '2099-02-01');
+      const theirs = await seedRecommendation('rec-delete-other-u', '2099-02-01');
+      await event(mine.id, 'rec-delete-u', 'shown');
+      await event(theirs.id, 'rec-delete-other-u', 'shown');
+      const del = (id: string) =>
+        app.inject({
+          method: 'DELETE',
+          url: `/api/v1/meals/recommendations/${id}`,
+          headers: authFor('rec-delete-u'),
+        });
+
+      expect((await del(theirs.id)).statusCode).toBe(404);
+      expect((await del(mine.id)).statusCode).toBe(204);
+      expect(await app.prisma.mealRecommendation.findUnique({ where: { id: mine.id } })).toBeNull();
+      expect(
+        await app.prisma.mealRecommendationEvent.count({ where: { recommendationId: mine.id } }),
+      ).toBe(0);
+      expect((await del(mine.id)).statusCode).toBe(404);
+      // 남의 추천과 그 이벤트는 그대로.
+      expect(
+        await app.prisma.mealRecommendationEvent.count({ where: { recommendationId: theirs.id } }),
+      ).toBe(1);
+      await app.prisma.mealRecommendation.delete({ where: { id: theirs.id } });
+    });
+
+    it('모두 지우기 — 확인 문구가 있어야 하고, 내 추천·이벤트만 지운다(일일 한도는 그대로)', async () => {
+      const a = await seedRecommendation('rec-delete-u', '2099-02-02');
+      await seedRecommendation('rec-delete-u', '2099-02-03');
+      const other = await seedRecommendation('rec-delete-other-u', '2099-02-02');
+      await event(a.id, 'rec-delete-u', 'candidate_picked');
+      await app.prisma.mealDailyQuota.create({
+        data: { userId: 'rec-delete-u', date: '2099-02-02', purpose: 'recommendation', count: 3 },
+      });
+      const delAll = (payload?: object) =>
+        app.inject({
+          method: 'DELETE',
+          url: '/api/v1/meals/recommendations',
+          headers: authFor('rec-delete-u'),
+          ...(payload ? { payload } : {}),
+        });
+
+      expect((await delAll({ confirmation: 'yes' })).statusCode).toBe(400);
+      expect((await delAll()).statusCode).toBe(400);
+      const res = await delAll({ confirmation: MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ deleted: { recommendations: 2, recommendationEvents: 1 } });
+      expect(await app.prisma.mealRecommendation.count({ where: { userId: 'rec-delete-u' } })).toBe(
+        0,
+      );
+      expect(await app.prisma.mealDailyQuota.count({ where: { userId: 'rec-delete-u' } })).toBe(1);
+      expect(
+        await app.prisma.mealRecommendation.findUnique({ where: { id: other.id } }),
+      ).not.toBeNull();
+      await app.prisma.mealRecommendation.delete({ where: { id: other.id } });
+      await app.prisma.mealDailyQuota.deleteMany({ where: { userId: 'rec-delete-u' } });
+    });
   });
 
   it('HTTP route 는 서비스 quota 초과를 429로 응답한다', async () => {

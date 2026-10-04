@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
+import { MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION } from '@repo/api-contract';
 import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/shared';
 import { server } from '~/test/msw';
 import { MealPage } from './MealPage';
@@ -491,8 +492,11 @@ describe('MealPage — 추천·설정 탭', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /추천/ }));
 
-    // 목록 줄은 받은 시각(HH:MM)이 붙은 버튼 — 카드 버튼에는 시각이 없다.
-    const rows = async () => screen.findAllByRole('button', { name: /\d{2}:\d{2}/ });
+    // 목록 줄은 받은 시각(HH:MM)이 붙은 버튼 — 카드 버튼에는 시각이 없다. 줄마다 붙은 삭제 버튼은 뺀다.
+    const rows = async () =>
+      (await screen.findAllByRole('button', { name: /\d{2}:\d{2}/ })).filter(
+        (button) => !button.getAttribute('aria-label')?.endsWith('추천 삭제'),
+      );
     const order = async () => (await rows()).map((row) => row.textContent ?? '');
     expect(await order()).toEqual([
       expect.stringContaining('연어초밥'),
@@ -523,6 +527,73 @@ describe('MealPage — 추천·설정 탭', () => {
     expect(screen.getByRole('button', { name: /다시 추천/ })).toBeInTheDocument();
     // 노출은 처음 보인 최신 추천만 — 목록에서 다시 연 예전 추천은 새 노출이 아니다.
     await waitFor(() => expect(shownIds).toEqual(['r3']));
+  });
+
+  it('최근 추천 삭제 — 확인창을 거쳐 지우고, 보던 추천이면 남은 최신으로, 모두 삭제도', async () => {
+    await setMealDraftPrincipal('u1');
+    // 지울 추천에서 시작한 기록 초안 — 지우면 출처만 떼어 낸다.
+    useMealDraftStore.getState().start({ originRecommendationId: 'r3' });
+    const withItem = (id: string, name: string, createdAt: string) => ({
+      ...recommendation,
+      id,
+      items: [{ ...recommendation.items[0]!, name }],
+      createdAt,
+    });
+    let items = [
+      withItem('r3', '연어초밥', '2026-08-22T10:00:00.000Z'),
+      withItem('r2', '김치찌개', '2026-08-22T09:00:00.000Z'),
+    ];
+    const deleted: string[] = [];
+    let deletedAll: unknown = null;
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: items[0] ?? null }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items })),
+      http.delete(`${RECOMMENDATIONS_URL}/:id`, ({ params }) => {
+        deleted.push(String(params['id']));
+        items = items.filter((r) => r.id !== params['id']);
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.delete(RECOMMENDATIONS_URL, async ({ request }) => {
+        deletedAll = await request.json();
+        const count = items.length;
+        items = [];
+        return HttpResponse.json({ deleted: { recommendations: count, recommendationEvents: 0 } });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+
+    const deleteButtons = async () => screen.findAllByRole('button', { name: /추천 삭제$/ });
+    // 확인창에서 취소하면 지우지 않는다.
+    fireEvent.click((await deleteButtons())[0]!);
+    expect(screen.getByRole('alertdialog', { name: '추천 삭제' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    expect(deleted).toEqual([]);
+
+    // 보고 있던 최신(연어초밥)을 지우면 카드는 남은 최신(김치찌개)으로.
+    fireEvent.click((await deleteButtons())[0]!);
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    await waitFor(() => expect(deleted).toEqual(['r3']));
+    expect(
+      await screen.findByRole('button', { name: '김치찌개 먹은 메뉴로 기록' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '연어초밥 먹은 메뉴로 기록' }),
+    ).not.toBeInTheDocument();
+    expect(useMealDraftStore.getState().originRecommendationId).toBeNull();
+
+    // 모두 삭제 — 확인 문자열을 실어 보내고, 카드·목록이 비어야 한다.
+    fireEvent.click(screen.getByRole('button', { name: '모두 삭제' }));
+    expect(screen.getByRole('alertdialog', { name: '최근 추천 모두 삭제' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    await waitFor(() =>
+      expect(deletedAll).toEqual({ confirmation: MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION }),
+    );
+    await waitFor(() => expect(screen.queryByText('최근 추천')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /먹은 메뉴로 기록/ })).not.toBeInTheDocument();
   });
 
   it('설정 탭 — 슬라이더·절대 제외·덜 선호 음식을 나눠 PUT 한다', async () => {
