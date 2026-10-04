@@ -12,6 +12,8 @@ import { z } from 'zod';
 
 export const VOTE_OPTIONS_MIN = 2;
 export const VOTE_OPTIONS_MAX = 8;
+// 투표자 상한(새 voterKey) 409 메시지의 앞머리 — 마감 409 와 같은 상태 코드라 웹이 이것으로 구분해 서버 문구를 보여 준다.
+export const VOTE_VOTERS_FULL_MESSAGE_PREFIX = '참여 인원이 가득 찼어요';
 
 // 후보 스냅샷 — 즐겨찾기 계약(restaurant-favorite)과 동일한 바운드의 축소판.
 // 클라이언트가 목록/즐겨찾기에서 고른 항목을 그대로 보낸다(서버 재조회 없음).

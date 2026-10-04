@@ -193,6 +193,23 @@ describe('VotePage', () => {
     expect(await screen.findByText(/방금 마감된 투표예요/)).toBeInTheDocument();
   });
 
+  it('투표자 상한(409)은 마감 안내 대신 서버 문구(인원·수정 가능)를 보여 준다', async () => {
+    const full = '참여 인원이 가득 찼어요(최대 100명). 이미 투표한 사람만 수정할 수 있어요.';
+    server.use(
+      http.get(SHARED_URL, () => HttpResponse.json(openSession())),
+      http.put(BALLOT_URL, () => errorBody(409, 'Conflict', full)),
+    );
+
+    renderVotePage();
+
+    fireEvent.change(await screen.findByLabelText('내 이름'), { target: { value: '민수' } });
+    fireEvent.click(screen.getByRole('button', { name: /초밥천국/ }));
+    fireEvent.click(screen.getByRole('button', { name: '투표하기' }));
+
+    expect(await screen.findByText(full)).toBeInTheDocument();
+    expect(screen.queryByText(/방금 마감된 투표예요/)).not.toBeInTheDocument();
+  });
+
   it('방장(isOwner)에게만 마감 버튼이 보인다', async () => {
     server.use(http.get(SHARED_URL, () => HttpResponse.json(openSession({ isOwner: true }))));
 

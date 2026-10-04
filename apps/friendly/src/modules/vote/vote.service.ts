@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   VOTE_OPTIONS_MAX,
+  VOTE_VOTERS_FULL_MESSAGE_PREFIX,
   type CreateVoteInputType,
   type MyVotesResultType,
   type SharedVoteSessionType,
@@ -269,7 +270,7 @@ export class VoteService {
     if (Number(row?.n ?? 0) >= VOTE_VOTERS_MAX) {
       throw new VoteError(
         'full',
-        `참여 인원이 가득 찼어요(최대 ${VOTE_VOTERS_MAX}명). 이미 투표한 사람만 수정할 수 있어요.`,
+        `${VOTE_VOTERS_FULL_MESSAGE_PREFIX}(최대 ${VOTE_VOTERS_MAX}명). 이미 투표한 사람만 수정할 수 있어요.`,
       );
     }
   }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Check, Copy, Loader2, Lock, Users, Vote } from 'lucide-react';
-import type { SharedVoteSessionType } from '@repo/api-contract';
+import { VOTE_VOTERS_FULL_MESSAGE_PREFIX, type SharedVoteSessionType } from '@repo/api-contract';
 import {
   ApiError,
   useCloseVote,
@@ -249,7 +249,10 @@ const VotingView = ({ token, data }: { token: string; data: SharedVoteSessionTyp
         {submitMutation.isError && (
           <p className="text-sm text-destructive" aria-live="polite">
             {submitMutation.error instanceof ApiError && submitMutation.error.statusCode === 409
-              ? '방금 마감된 투표예요 — 잠시 후 결과가 표시됩니다.'
+              ? // 409 는 마감 직후 도착한 표와 투표자 상한 두 가지 — 상한은 서버 문구(인원·수정 가능 안내)를 그대로.
+                submitMutation.error.message.startsWith(VOTE_VOTERS_FULL_MESSAGE_PREFIX)
+                ? submitMutation.error.message
+                : '방금 마감된 투표예요 — 잠시 후 결과가 표시됩니다.'
               : '투표에 실패했어요. 다시 시도해 주세요.'}
           </p>
         )}
