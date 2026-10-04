@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   Gauge,
@@ -8,6 +9,7 @@ import {
   Settings as SettingsIcon,
   type LucideIcon,
 } from 'lucide-react';
+import { AdminSectionFallback } from '~/components/admin/AdminLayout';
 import { cn } from '~/lib/utils';
 
 interface Tab {
@@ -63,6 +65,9 @@ export const AdminSettingsPage = () => (
       })}
     </nav>
 
-    <Outlet />
+    {/* 하위 설정 페이지도 lazy 청크 — 받는 동안 머리·탭은 그대로 두고 아래만 스피너. */}
+    <Suspense fallback={<AdminSectionFallback />}>
+      <Outlet />
+    </Suspense>
   </div>
 );

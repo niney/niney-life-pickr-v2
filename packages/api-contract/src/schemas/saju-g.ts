@@ -1,6 +1,6 @@
 import { z } from 'zod';
+import { SAJU_G_PROFILES_MAX } from '../constants.js';
 
-export const SAJU_G_GUEST_KEY_HEADER = 'x-guest-key';
 export const SajuGElement = z.enum(['wood', 'fire', 'earth', 'metal', 'water']);
 export const SajuGKind = z.enum(['natal', 'annual', 'daily']);
 export type SajuGKindType = z.infer<typeof SajuGKind>;
@@ -170,7 +170,6 @@ export const ListSajuGReadingsResult = z.object({
   nextCursor: z.string().nullable(),
 });
 export type ListSajuGReadingsResultType = z.infer<typeof ListSajuGReadingsResult>;
-export const SAJU_G_PROFILES_MAX = 20;
 export const SajuGProfileInput = z.object({
   name: z
     .string()

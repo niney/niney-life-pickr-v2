@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AIR_FORECAST_CODES, AIR_HISTORY_TERMS } from '../constants.js';
 
 // 에어코리아 대기오염정보(한국환경공단, data.go.kr 15073861 ArpltnInforInqireSvc) —
 // friendly 가 5개 오퍼레이션을 프록시한다. 업스트림은 값이 전부 문자열이고 결측을
@@ -82,7 +83,6 @@ export const AirSidoRealtimeResult = z.object({
 export type AirSidoRealtimeResultType = z.infer<typeof AirSidoRealtimeResult>;
 
 // ── 측정소별 실시간 측정정보 (getMsrstnAcctoRltmMesureDnsty) ────────────────
-export const AIR_HISTORY_TERMS = ['DAILY', 'MONTH', '3MONTH'] as const;
 export const AirHistoryTerm = z.enum(AIR_HISTORY_TERMS);
 export type AirHistoryTermType = z.infer<typeof AirHistoryTerm>;
 
@@ -146,7 +146,6 @@ export const AirBadStationsResult = z.object({
 export type AirBadStationsResultType = z.infer<typeof AirBadStationsResult>;
 
 // ── 대기질 예보통보 (getMinuDustFrcstDspth) ─────────────────────────────────
-export const AIR_FORECAST_CODES = ['PM10', 'PM25', 'O3'] as const;
 export const AirForecastCode = z.enum(AIR_FORECAST_CODES);
 export type AirForecastCodeType = z.infer<typeof AirForecastCode>;
 

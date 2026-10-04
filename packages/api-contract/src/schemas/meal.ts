@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import {
+  MEAL_DATA_DELETE_CONFIRMATION,
+  MEAL_MAX_ITEMS_PER_ENTRY,
+  MEAL_MAX_PHOTOS_PER_ENTRY,
+  MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
+  MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
+} from '../constants.js';
 import { MealAllergen } from './allergen.js';
 import { FoodCuisine, FoodDishType, FoodMainIngredient } from './food.js';
 
@@ -45,8 +52,6 @@ export const MealPhotoToken = z
   .string()
   .regex(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
 
-export const MEAL_MAX_PHOTOS_PER_ENTRY = 5;
-export const MEAL_MAX_ITEMS_PER_ENTRY = 20;
 // 기록 수 상한 — 내보내기·통계·백업이 범위 행을 읽으므로 무한 적재를 막는다(초과 생성·복원은 409).
 // 하루 3~5끼 기준 10년치를 넘는 값이라 정상 사용은 닿지 않는다.
 export const MEAL_MAX_ENTRIES_PER_USER = 20_000;
@@ -842,10 +847,7 @@ export const ListMealRecommendationsResult = z.object({
 });
 export type ListMealRecommendationsResultType = z.infer<typeof ListMealRecommendationsResult>;
 
-// 추천 이력 전체 삭제 — 추천과 그 반응 이벤트를 지운다(다음 추천 학습·수락률 통계에서도 빠진다). 식단 기록·
-// 일일 추천 한도는 그대로. 화면은 확인창을 거친 뒤 이 문구를 실어 보낸다(실수 호출 방지).
-export const MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION = 'DELETE_MY_MEAL_RECOMMENDATIONS' as const;
-
+// 추천 이력 전체 삭제 — 확인 문구(MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION)는 constants.ts.
 export const DeleteMealRecommendationsInput = z
   .object({ confirmation: z.literal(MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION) })
   .strict();
@@ -966,10 +968,7 @@ export type MealRecommendationContextType = z.infer<typeof MealRecommendationCon
 
 // ── 내 식단 데이터 내보내기·전체 삭제 ───────────────────────────────────────
 
-// 단순 확인 버튼 한 번으로 개인 기록을 전부 지우지 않도록 클라이언트와 서버가 공유하는
-// 정확 일치 문구다. 화면은 사용자가 이 문자열을 직접 입력한 뒤에만 DELETE 를 호출한다.
-export const MEAL_DATA_DELETE_CONFIRMATION = 'DELETE_ALL_MY_MEAL_DATA' as const;
-export const MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION = 'DELETE_OLD_MEAL_PHOTOS' as const;
+// 전체 삭제·사진 정리 확인 문구(MEAL_DATA_DELETE_CONFIRMATION 등)는 constants.ts.
 
 // 내보내기 형식은 이후 필드가 바뀌어도 소비자가 명시적으로 분기할 수 있게 이름+버전을 둔다.
 export const MEAL_DATA_EXPORT_FORMAT = 'niney-life-pickr.meal-data' as const;

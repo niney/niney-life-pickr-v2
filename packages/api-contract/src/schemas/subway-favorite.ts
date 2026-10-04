@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SUBWAY_FAVORITES_MAX } from '../constants.js';
 
 // 지하철 즐겨찾기 — 버스 즐겨찾기(bus-favorite.ts)와 동일 골격: 로그인 사용자의
 // 서버 저장분이며, 비로그인은 클라이언트(localStorage) 저장 후 로그인 시 sync 로
@@ -9,9 +10,8 @@ import { z } from 'zod';
 // 스냅샷만으로 완결하고 도착 재진입 실패(404)는 FE 가 안내한다(버스의 죽은 stId
 // 안내와 동일 계약).
 
-// 사용자·종류당 상한 — PUT 단건은 초과 시 400, sync 는 상한까지 채우고 나머지는
-// 조용히 버린다(버스와 동일 정책).
-export const SUBWAY_FAVORITES_MAX = 100;
+// 사용자·종류당 상한(SUBWAY_FAVORITES_MAX)은 constants.ts — PUT 단건은 초과 시 400, sync 는 상한까지
+// 채우고 나머지는 조용히 버린다(버스와 동일 정책).
 
 // `${lineId 4자리}:${역명}` 합성 — 콜론·한글 포함이라 URL 에선 인코딩된다
 // (Routes 빌더가 책임, 서버 라우트 등록은 디코드 트릭 — 도착 라우트와 동일).

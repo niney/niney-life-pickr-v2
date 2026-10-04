@@ -34,6 +34,9 @@ FE/BE 모두 사용하는 타입/검증 로직은 반드시 `packages/api-contra
 
 - friendly: `fastify-type-provider-zod`가 자동 검증 + OpenAPI 생성
 - 웹/앱: `@repo/shared`의 API 함수가 동일 타입으로 호출
+- FE 가 **값으로** 쓰는 상수(한도·헤더 이름·확인 문구)와 순수 함수는 스키마 파일이 아니라 zod 없는 모듈
+  (`src/constants.ts`, `src/*.aggregates.ts`·`settlement.*.ts`)에 두고 스키마가 거기서 가져다 쓴다. 스키마 파일의
+  값을 웹 엔트리 경로가 import 하면 zod 와 스키마가 첫 로드에 실린다(`apps/web/vite.config.ts` 의 첫 로드 가드가 경고).
 
 ### 2. 공유 FE 로직은 `@repo/shared`에
 
@@ -76,6 +79,8 @@ FE/BE 모두 사용하는 타입/검증 로직은 반드시 `packages/api-contra
 - **Docker 추가하지 말 것** (SQLite라 불필요)
 - **Redis 사용 금지** (단일 인스턴스 + lru-cache로 충분)
 - **패키지 간 순환 의존 금지** (shared → api-contract ✅, 반대는 ❌)
+- **`packages/*` 에 부작용 전용 모듈 금지** — 세 패키지는 `sideEffects: false` 라, import 만으로 뭔가를
+  등록·구독하는 모듈은 번들러가 지운다(웹이 배럴로 import 해도 쓰는 모듈만 실리게 하려는 선언).
 
 ## 명령어
 

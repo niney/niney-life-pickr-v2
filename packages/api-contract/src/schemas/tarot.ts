@@ -11,7 +11,6 @@ import { z } from 'zod';
 
 export const TAROT_QUESTION_MAX_LENGTH = 200;
 export const TAROT_CHOICE_MAX_LENGTH = 40;
-export const TAROT_GUEST_KEY_HEADER = 'x-guest-key';
 
 export const TarotSpreadId = z.enum(['daily', 'three-ppf', 'three-sar', 'choice', 'menu', 'celtic']);
 export type TarotSpreadIdType = z.infer<typeof TarotSpreadId>;

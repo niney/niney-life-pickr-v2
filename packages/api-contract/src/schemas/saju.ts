@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TAROT_GUEST_KEY_HEADER } from './tarot.js';
+import { SAJU_ASK_QUESTION_MAX_LENGTH } from '../constants.js';
 
 // 사주 — 로그인 없이 쓰는 공개 풀이 + 회원 프로필·기록. 계산 규칙·데이터의 단일 출처는 @repo/utils
 // (saju.ts / sajuCalendar.ts …)이고, 여기 enum 은 그와 **같은 값**이어야 한다(api-contract 는 utils 에
@@ -12,7 +12,6 @@ import { TAROT_GUEST_KEY_HEADER } from './tarot.js';
 // 긴 풀이(full)는 섹션 4개(personality·year·cycle·advice)를 서버가 병렬로 LLM 에 보내고, 응답은
 // 즉시(정적 본문 + jobId) 돌려준 뒤 클라이언트가 job 을 long-poll 해 도착한 섹션을 받는다.
 
-export const SAJU_GUEST_KEY_HEADER = TAROT_GUEST_KEY_HEADER;
 export const SAJU_SUPPORTED_YEAR_RANGE = { from: 1900, to: 2050 } as const;
 export const SAJU_PROFILE_LABEL_MAX_LENGTH = 20;
 export const SAJU_PROFILE_MAX = 10;
@@ -502,7 +501,6 @@ export type SajuFoodResultType = z.infer<typeof SajuFoodResult>;
 
 export const SajuAskTopic = z.enum(['job-change', 'startup', 'move', 'marriage', 'exam', 'invest', 'trip', 'contract', 'confess']);
 export type SajuAskTopicType = z.infer<typeof SajuAskTopic>;
-export const SAJU_ASK_QUESTION_MAX_LENGTH = 200;
 
 export const SajuAskWhen = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('this-month') }),

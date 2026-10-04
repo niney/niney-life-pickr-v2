@@ -1,4 +1,4 @@
-import { ErrorResponseSchema } from '@repo/api-contract';
+import type { ErrorResponse } from '@repo/api-contract';
 
 export interface ApiClientConfig {
   baseUrl: string;
@@ -42,6 +42,20 @@ export class ApiError extends Error {
   }
 }
 
+// 표준 에러 응답({ statusCode, error, message }) 판정. ErrorResponseSchema.safeParse 와 같은 조건을
+// 손으로 본다 — 이 모듈은 모든 API 호출이 지나가는 엔트리 경로라, 스키마를 값으로 import 하면 zod 가
+// 웹 첫 로드 번들에 고정된다(api-contract constants.ts 머리 주석).
+const isErrorResponse = (body: unknown): body is ErrorResponse => {
+  if (typeof body !== 'object' || body === null) return false;
+  const b = body as Record<string, unknown>;
+  return (
+    typeof b.statusCode === 'number' &&
+    !Number.isNaN(b.statusCode) &&
+    typeof b.error === 'string' &&
+    typeof b.message === 'string'
+  );
+};
+
 let config: ApiClientConfig = { baseUrl: '' };
 
 export const configureApi = (cfg: ApiClientConfig): void => {
@@ -70,9 +84,8 @@ export const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise
   if (!res.ok) {
     if (res.status === 401) await requestConfig.onUnauthorized?.(token);
     const body = await res.json().catch(() => null);
-    const parsed = ErrorResponseSchema.safeParse(body);
-    if (parsed.success) {
-      throw new ApiError(parsed.data.statusCode, parsed.data.error, parsed.data.message, body);
+    if (isErrorResponse(body)) {
+      throw new ApiError(body.statusCode, body.error, body.message, body);
     }
     // body 가 표준 에러 모양이 아니어도 caller 가 활용할 수 있게 그대로 보존.
     throw new ApiError(res.status, res.statusText, res.statusText, body);

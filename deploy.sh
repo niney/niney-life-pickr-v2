@@ -101,7 +101,11 @@ pull() {
 gen()        { step "prisma generate";      pnpm --filter friendly db:generate; }
 migrate()    { step "prisma migrate deploy"; pnpm --filter friendly exec prisma migrate deploy; }
 build_api()  { step "friendly 빌드";        pnpm --filter friendly build; }
-build_web()  { step "web 빌드";             pnpm --filter web build; chmod -R o+rX "$WEB_DIST"; }
+# 예전 `tsc -b` 가 흘린 apps/web/vite.config.js(gitignore 라 pull 로는 안 지워진다)가 남아 있으면 지운다.
+# Vite 는 .js 설정을 .ts 보다 먼저 읽어, 그 파일이 있으면 vite.config.ts 의 변경이 조용히 무시된다
+# (2026-10 운영 빌드의 청크 구성이 그 상태로 보였다 — 서버에서 직접 확인한 것은 아니다). 빌드 스크립트가
+# --config 로 .ts 를 명시하지만 손으로 돌릴 때를 위해 치운다.
+build_web()  { step "web 빌드";             rm -f "$ROOT/apps/web/vite.config.js"; pnpm --filter web build; chmod -R o+rX "$WEB_DIST"; }
 pm_stop()    { step "서버 중단";            pm2 stop friendly; }
 pm_start()   { step "서버 기동";            pm2 start friendly --update-env; pm2 save; }
 pm_reload()  { step "서버 reload";          pm2 reload friendly --update-env; pm2 save; }

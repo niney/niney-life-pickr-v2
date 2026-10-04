@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Activity,
@@ -10,6 +10,7 @@ import {
   Compass,
   Footprints,
   Home,
+  Loader2,
   MessagesSquare,
   ScrollText,
   Settings,
@@ -80,6 +81,13 @@ const readInitialCollapsed = (): boolean => {
     return false;
   }
 };
+
+// lazy 페이지 청크 로딩 폴백 — 본문 영역에만 스피너(설정 페이지의 하위 Outlet 도 같은 걸 쓴다).
+export const AdminSectionFallback = () => (
+  <div className="flex min-h-[40vh] items-center justify-center">
+    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+  </div>
+);
 
 export const AdminLayout = () => {
   const [collapsed, setCollapsed] = useState<boolean>(readInitialCollapsed);
@@ -336,7 +344,10 @@ export const AdminLayout = () => {
       <main className="flex min-w-0 flex-1 flex-col">
         <AdminTopBar onMenuClick={() => setMobileOpen(true)} />
         <div className="flex-1">
-          <Outlet />
+          {/* 페이지는 각자 lazy 청크(AdminRoutes) — 받는 동안 사이드바·상단바는 두고 본문만 스피너. */}
+          <Suspense fallback={<AdminSectionFallback />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BUS_FAVORITES_MAX } from '../constants.js';
 import { BusStationItem } from './bus.js';
 
 // 버스 즐겨찾기 — 로그인 사용자의 서버 저장분. 비로그인은 클라이언트
@@ -6,10 +7,7 @@ import { BusStationItem } from './bus.js';
 // 대상은 두 종류: 정류장(stId) / 정류장×노선 조합(stId+busRouteId).
 // 노선 단독 즐겨찾기는 조회 화면이 없어 만들지 않는다.
 
-// 사용자·종류당 상한 — localStorage 비대화와 서버 남용을 함께 막는다.
-// PUT 단건은 초과 시 400, sync 는 상한까지만 채우고 나머지를 조용히 버린다
-// (로그인 직후 병합이 에러로 끊기는 것보다 목록이 진실이 되는 쪽이 낫다).
-export const BUS_FAVORITES_MAX = 100;
+// 사용자·종류당 상한(BUS_FAVORITES_MAX)은 constants.ts — FE 스토어가 값으로 쓴다.
 
 export const BusFavoriteStationParams = z.object({
   // 서울시 9자리 정류소 고유 ID (BusStationItem.stId 와 동일 ID 공간).

@@ -1,50 +1,75 @@
-import { lazy, Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+import { lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from '../../components/admin/AdminLayout';
-import { AdminAiKeysPage } from './AdminAiKeysPage';
-import { AdminAiTestPage } from './AdminAiTestPage';
-import { AdminAiUsagePage } from './AdminAiUsagePage';
-import { AdminAnalyticsPage } from './AdminAnalyticsPage';
-import { AdminAutoDiscoverPage } from './AdminAutoDiscoverPage';
-import { AdminCatchtableShopPage } from './AdminCatchtableShopPage';
-import { AdminCatchtableTestPage } from './AdminCatchtableTestPage';
-import { AdminCrawlTestPage } from './AdminCrawlTestPage';
-import { AdminDiningcodePage } from './AdminDiningcodePage';
-import { AdminDiningcodeShopPage } from './AdminDiningcodeShopPage';
-import { AdminDiningcodeTestPage } from './AdminDiningcodeTestPage';
-import { AdminDiscoverPage } from './AdminDiscoverPage';
-import { AdminHomePage } from './AdminHomePage';
-import { AdminLogRunDetailPage } from './AdminLogRunDetailPage';
-import { AdminLogSettingsPage } from './AdminLogSettingsPage';
-import { AdminQuotasPage } from './AdminQuotasPage';
-import { AdminLogsPage } from './AdminLogsPage';
-import { AdminMapKeysPage } from './AdminMapKeysPage';
-import { AdminRestaurantDetailPage } from './AdminRestaurantDetailPage';
-import { AdminRestaurantsPage } from './AdminRestaurantsPage';
-import { AdminReviewSearchPage } from './AdminReviewSearchPage';
-import { AdminSettingsPage } from './AdminSettingsPage';
-import { AdminTablingPage } from './AdminTablingPage';
-import { AdminTablingTestPage } from './AdminTablingTestPage';
-import { AdminTelegramPage } from './AdminTelegramPage';
-import { AdminTourPage } from './AdminTourPage';
 
-// 음식 카탈로그 — 어드민 청크 안에서 한 번 더 lazy. 적재 잡·카탈로그 표·통계는 이
-// 페이지에서만 쓰는 코드라 다른 어드민 페이지 진입 비용에 얹히지 않게 분리한다.
-const AdminFoodPage = lazy(() =>
-  import('./AdminFoodPage').then((m) => ({ default: m.AdminFoodPage })),
+// 페이지별 lazy — 어드민 URL 하나를 열 때 그 페이지 청크만 받는다. 전부 정적 import 였을 땐 어느
+// 화면이든 어드민 전체 + 지도 라이브러리(ol)를 받았다(2026-10 실측 919kB → 셸 22kB, 로그 화면 +13kB,
+// 지도를 쓰는 화면만 +330~520kB). 로딩 폴백은 AdminLayout·AdminSettingsPage 가 Outlet 을 Suspense 로
+// 감싸 본문 영역에만 띄운다(사이드바·설정 탭은 유지).
+const AdminAiKeysPage = lazy(() => import('./AdminAiKeysPage').then((m) => ({ default: m.AdminAiKeysPage })));
+const AdminAiTestPage = lazy(() => import('./AdminAiTestPage').then((m) => ({ default: m.AdminAiTestPage })));
+const AdminAiUsagePage = lazy(() => import('./AdminAiUsagePage').then((m) => ({ default: m.AdminAiUsagePage })));
+const AdminAnalyticsPage = lazy(() =>
+  import('./AdminAnalyticsPage').then((m) => ({ default: m.AdminAnalyticsPage })),
 );
-
-// 어드민 레이아웃(사이드바) 안쪽에서만 도는 청크 폴백 — 본문 영역만 스피너.
-const SectionFallback = () => (
-  <div className="flex min-h-[40vh] items-center justify-center">
-    <Loader2 className="size-5 animate-spin text-muted-foreground" />
-  </div>
+const AdminAutoDiscoverPage = lazy(() =>
+  import('./AdminAutoDiscoverPage').then((m) => ({ default: m.AdminAutoDiscoverPage })),
 );
+const AdminCatchtableShopPage = lazy(() =>
+  import('./AdminCatchtableShopPage').then((m) => ({ default: m.AdminCatchtableShopPage })),
+);
+const AdminCatchtableTestPage = lazy(() =>
+  import('./AdminCatchtableTestPage').then((m) => ({ default: m.AdminCatchtableTestPage })),
+);
+const AdminCrawlTestPage = lazy(() =>
+  import('./AdminCrawlTestPage').then((m) => ({ default: m.AdminCrawlTestPage })),
+);
+const AdminDiningcodePage = lazy(() =>
+  import('./AdminDiningcodePage').then((m) => ({ default: m.AdminDiningcodePage })),
+);
+const AdminDiningcodeShopPage = lazy(() =>
+  import('./AdminDiningcodeShopPage').then((m) => ({ default: m.AdminDiningcodeShopPage })),
+);
+const AdminDiningcodeTestPage = lazy(() =>
+  import('./AdminDiningcodeTestPage').then((m) => ({ default: m.AdminDiningcodeTestPage })),
+);
+const AdminDiscoverPage = lazy(() =>
+  import('./AdminDiscoverPage').then((m) => ({ default: m.AdminDiscoverPage })),
+);
+const AdminFoodPage = lazy(() => import('./AdminFoodPage').then((m) => ({ default: m.AdminFoodPage })));
+const AdminHomePage = lazy(() => import('./AdminHomePage').then((m) => ({ default: m.AdminHomePage })));
+const AdminLogRunDetailPage = lazy(() =>
+  import('./AdminLogRunDetailPage').then((m) => ({ default: m.AdminLogRunDetailPage })),
+);
+const AdminLogSettingsPage = lazy(() =>
+  import('./AdminLogSettingsPage').then((m) => ({ default: m.AdminLogSettingsPage })),
+);
+const AdminLogsPage = lazy(() => import('./AdminLogsPage').then((m) => ({ default: m.AdminLogsPage })));
+const AdminMapKeysPage = lazy(() => import('./AdminMapKeysPage').then((m) => ({ default: m.AdminMapKeysPage })));
+const AdminQuotasPage = lazy(() => import('./AdminQuotasPage').then((m) => ({ default: m.AdminQuotasPage })));
+const AdminRestaurantDetailPage = lazy(() =>
+  import('./AdminRestaurantDetailPage').then((m) => ({ default: m.AdminRestaurantDetailPage })),
+);
+const AdminRestaurantsPage = lazy(() =>
+  import('./AdminRestaurantsPage').then((m) => ({ default: m.AdminRestaurantsPage })),
+);
+const AdminReviewSearchPage = lazy(() =>
+  import('./AdminReviewSearchPage').then((m) => ({ default: m.AdminReviewSearchPage })),
+);
+const AdminSettingsPage = lazy(() =>
+  import('./AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })),
+);
+const AdminTablingPage = lazy(() => import('./AdminTablingPage').then((m) => ({ default: m.AdminTablingPage })));
+const AdminTablingTestPage = lazy(() =>
+  import('./AdminTablingTestPage').then((m) => ({ default: m.AdminTablingTestPage })),
+);
+const AdminTelegramPage = lazy(() =>
+  import('./AdminTelegramPage').then((m) => ({ default: m.AdminTelegramPage })),
+);
+const AdminTourPage = lazy(() => import('./AdminTourPage').then((m) => ({ default: m.AdminTourPage })));
 
-// 어드민 서브트리 전체를 한 모듈로 모아 App.tsx 에서 React.lazy 로 1회만 import
-// 하기 위한 컴포넌트. 어드민 16개 페이지 + OpenLayers(지도) 코드가 메인 번들에서
-// 빠져, 공개 진입(익명 사용자)이 받는 첫 청크가 대폭 작아진다.
+// 어드민 서브트리의 라우트 표 — App.tsx 가 React.lazy 로 1회 import 한다. 이 모듈에는 셸(AdminLayout)과
+// 라우트 표만 남기고 페이지는 위처럼 각자 청크로 뺐다.
 //
 // App.tsx 에 path="/admin/*" 로 마운트되므로 여기 path 는 모두 /admin 기준 상대
 // 경로다 (index === /admin). Navigate 의 target 만 절대 경로 유지(옛 북마크 호환).
@@ -68,14 +93,7 @@ const AdminRoutes = () => (
       <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
       <Route path="tabling" element={<AdminTablingPage />} />
       <Route path="analytics" element={<AdminAnalyticsPage />} />
-      <Route
-        path="food"
-        element={
-          <Suspense fallback={<SectionFallback />}>
-            <AdminFoodPage />
-          </Suspense>
-        }
-      />
+      <Route path="food" element={<AdminFoodPage />} />
       <Route path="ai-usage" element={<AdminAiUsagePage />} />
       <Route path="logs" element={<AdminLogsPage />} />
       <Route path="logs/:runId" element={<AdminLogRunDetailPage />} />

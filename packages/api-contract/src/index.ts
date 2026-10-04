@@ -44,6 +44,8 @@ export * from './schemas/saju.js';
 export * from './schemas/saju-g.js';
 export * from './schemas/usage-quota.js';
 export * from './schemas/tour.js';
+export * from './constants.js';
+export * from './restaurant.aggregates.js';
 export * from './settlement.calculator.js';
 export * from './settlement.drink-kinds.js';
 export * from './settlement.labels.js';

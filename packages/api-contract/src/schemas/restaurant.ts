@@ -257,71 +257,7 @@ export const CanonicalListItem = z.object({
 });
 export type CanonicalListItemType = z.infer<typeof CanonicalListItem>;
 
-// SSE patch 등 클라이언트가 source 갱신 후 통합 카운트를 다시 계산할 때 호출.
-// 서버 list() 가 처음 내려준 값과 동일 로직.
-export const recomputeCanonicalAggregates = (
-  sources: RestaurantSourceSummaryType[],
-): Pick<
-  CanonicalListItemType,
-  | 'totalReviews'
-  | 'summaryPending'
-  | 'summaryRunning'
-  | 'summaryDone'
-  | 'summaryFailed'
-  | 'avgSentimentScore'
-  | 'avgSatisfactionScore'
-  | 'positiveCount'
-  | 'negativeCount'
-  | 'neutralCount'
-  | 'mixedCount'
-> => {
-  let totalReviews = 0;
-  let summaryPending = 0;
-  let summaryRunning = 0;
-  let summaryDone = 0;
-  let summaryFailed = 0;
-  let positiveCount = 0;
-  let negativeCount = 0;
-  let neutralCount = 0;
-  let mixedCount = 0;
-  // 가중평균: source 의 (avg, done 수) 곱을 합산 / 전체 done 수.
-  let sentSum = 0;
-  let sentN = 0;
-  let satSum = 0;
-  let satN = 0;
-  for (const s of sources) {
-    totalReviews += s.totalReviews;
-    summaryPending += s.summaryPending;
-    summaryRunning += s.summaryRunning;
-    summaryDone += s.summaryDone;
-    summaryFailed += s.summaryFailed;
-    positiveCount += s.positiveCount;
-    negativeCount += s.negativeCount;
-    neutralCount += s.neutralCount;
-    mixedCount += s.mixedCount;
-    if (s.avgSentimentScore !== null && s.summaryDone > 0) {
-      sentSum += s.avgSentimentScore * s.summaryDone;
-      sentN += s.summaryDone;
-    }
-    if (s.avgSatisfactionScore !== null && s.summaryDone > 0) {
-      satSum += s.avgSatisfactionScore * s.summaryDone;
-      satN += s.summaryDone;
-    }
-  }
-  return {
-    totalReviews,
-    summaryPending,
-    summaryRunning,
-    summaryDone,
-    summaryFailed,
-    avgSentimentScore: sentN > 0 ? sentSum / sentN : null,
-    avgSatisfactionScore: satN > 0 ? satSum / satN : null,
-    positiveCount,
-    negativeCount,
-    neutralCount,
-    mixedCount,
-  };
-};
+// 통합 카운트 재계산(recomputeCanonicalAggregates)은 ../restaurant.aggregates.ts — zod 없는 모듈.
 
 // 어드민 list 검색/페이징/정렬 쿼리. q 는 canonical 조립이 끝난 통합 행에서
 // 가게명·카테고리·출처별 식별자를 토큰 AND 방식으로 찾는다. 정렬 키는 클라 기존 옵션과 동일 —

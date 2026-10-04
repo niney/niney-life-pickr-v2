@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import {
   BarChart3,
   ChevronLeft,
@@ -18,7 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { RegionStatsMap } from './RegionStatsMap';
+
+// 지도 탭을 누를 때만 받는다 — 정적 import 면 어드민 홈이 표만 보여도 지도 라이브러리(ol 315kB)를 받는다.
+const RegionStatsMap = lazy(() => import('./RegionStatsMap').then((m) => ({ default: m.RegionStatsMap })));
 
 type View = 'bar' | 'table' | 'map';
 
@@ -221,7 +223,17 @@ export const RegionStatsPanel = () => {
           </Table>
         )}
 
-        {data && total > 0 && view === 'map' && <RegionStatsMap data={data} />}
+        {data && total > 0 && view === 'map' && (
+          <Suspense
+            fallback={
+              <div className="flex h-[420px] w-full items-center justify-center rounded-lg border bg-muted/30 text-sm text-muted-foreground">
+                지도를 불러오는 중…
+              </div>
+            }
+          >
+            <RegionStatsMap data={data} />
+          </Suspense>
+        )}
       </CardContent>
     </Card>
   );
