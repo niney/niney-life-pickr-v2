@@ -250,6 +250,56 @@ describe('life-map routes (격리 DB)', () => {
     expect(toilet.json<LifeMapPointsResultType>().total).toBe(3);
   });
 
+  it('셀 상한 — 넓은 bbox + 높은 줌은 셀을 키워(유효 줌 9) 접고, bbox 를 조금씩 바꿔도 같은 결과(D-1)', async () => {
+    const z9 = (await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox: KOREA_BBOX, zoom: '9' }) })).json<LifeMapPointsResultType>();
+    expect(z9.mode).toBe('cells');
+    for (const [bbox, zoom] of [
+      [KOREA_BBOX, '22'],
+      ['124,33,131.9993,39', '22'],
+      ['-180,-85,180,85', '20'],
+    ] as const) {
+      const body = (await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox, zoom }) })).json<LifeMapPointsResultType>();
+      expect(body.mode).toBe('cells');
+      expect(body.cells).toEqual(z9.cells);
+      expect(body.total).toBe(4);
+    }
+  });
+
+  it('점 모드 범위 — 줌에 맞는 화면 크기(32타일)를 넘는 bbox 는 셀, 빽빽하면 COUNT 뒤 셀로 강등하고 total 은 COUNT(D-7)', async () => {
+    // SEOUL_BBOX(경도 0.02°)는 z19 에서 29타일 → 점, z20 에서 58타일 → 셀(예전엔 1.5° 고정 상한이라 점).
+    const z19 = (await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox: SEOUL_BBOX, zoom: '19' }) })).json<LifeMapPointsResultType>();
+    expect(z19.mode).toBe('points');
+    expect(z19.total).toBe(3);
+    const z20 = (await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox: SEOUL_BBOX, zoom: '20' }) })).json<LifeMapPointsResultType>();
+    expect(z20.mode).toBe('cells');
+    expect(z20.total).toBe(3);
+
+    // 강등 기준을 작게 주입 — 박스 안 3건 > 2 면 셀, 3 이면 점(total = COUNT).
+    const { LifeMapService } = await import('./life-map.service.js');
+    const q = { layer: 'cctv', bbox: SEOUL_BBOX, zoom: 16, open24: false, disabled: false, kids: false, diaper: false, bell: false } as const;
+    const demoted = await new LifeMapService({ prisma: app.prisma, pointsDemoteCount: 2 }).getPoints(q);
+    expect(demoted.mode).toBe('cells');
+    expect(demoted.total).toBe(3);
+    const kept = await new LifeMapService({ prisma: app.prisma, pointsDemoteCount: 3 }).getPoints(q);
+    expect(kept.mode).toBe('points');
+    expect(kept.items).toHaveLength(3);
+    expect(kept.total).toBe(3);
+    // 필터·좌표 없는 행 제외도 COUNT 에 같은 조건으로 걸린다.
+    const toilet = await new LifeMapService({ prisma: app.prisma }).getPoints({ ...q, layer: 'toilet', zoom: 14, open24: true });
+    expect([toilet.mode, toilet.total, toilet.items.length]).toEqual(['points', 1, 1]);
+  });
+
+  it('status·crime — 사용자 무관 정적 응답은 public Cache-Control(D-10)', async () => {
+    for (const url of [STATUS_URL, '/api/v1/life-map/crime']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['cache-control']).toBe('public, max-age=300');
+    }
+    // 뷰포트 조회(키가 bbox 마다 다름)에는 붙이지 않는다.
+    const pts = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox: SEOUL_BBOX, zoom: '16' }) });
+    expect(pts.headers['cache-control']).toBeUndefined();
+  });
+
   it('points — 화장실 점 모드 + 편의 필터(AND)', async () => {
     const all = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'toilet', bbox: SEOUL_BBOX, zoom: '14' }) });
     const allBody = all.json<LifeMapPointsResultType>();

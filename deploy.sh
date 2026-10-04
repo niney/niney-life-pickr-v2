@@ -145,7 +145,10 @@ life_map_data() {
   if [[ "$force" == 1 || "${hospital:-0}" == 0 ]]; then
     step "일상지도 병의원 적재(HIRA API, 지오코더 --offline)"; pnpm --filter friendly load:life-hospitals --offline || echo "  (병의원 적재 실패 — DATA_GO_KR_API_KEY/활용신청 확인 뒤 재실행)"
   fi
-  # 상가(생활 업종) — 분기 zip 을 풀지 않고 스트리밍 적재(~120만 행, 수 분). 적재 뒤 맛집 ↔ 상가업소 매칭 갱신.
+  # 상가(생활 업종) — 분기 zip 을 풀지 않고 스트리밍 적재(~130만 행, 수 분). 스테이징 표에 5천 행씩 짧은 트랜잭션으로
+  # 넣은 뒤 원본과 바꿔 끼운다(교체 = 원본 DROP + RENAME + (kind,lat,lng) 인덱스 생성, 쓰기 락 실측 12초 — 예전 한 트랜잭션
+  # 전량 교체는 349초). 서버가 떠 있어도 되지만 교체 동안 서버 쓰기가 기다리므로 모든 연결 busy_timeout 30초(prisma 플러그인)
+  # 전제다. 디스크는 교체 동안 상가 표 한 벌(~0.4GB)만큼 더 쓰고, 빈 페이지는 다음 적재가 재사용한다. 적재 뒤 맛집 ↔ 상가업소 매칭 갱신.
   if [[ "$force" == 1 || "${store:-0}" == 0 ]]; then
     if [[ -n "$LIFE_STORE_ZIP" && -f "$LIFE_STORE_ZIP" ]]; then
       step "일상지도 상가 적재"; pnpm --filter friendly load:life-stores "$LIFE_STORE_ZIP"

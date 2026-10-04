@@ -21,7 +21,6 @@ import {
 const SCAN_CHUNK = 5000;
 const UPDATE_CHUNK = 500;
 const CREATE_CHUNK = 500;
-const STATS_TX_TIMEOUT_MS = 10 * 60_000;
 
 export interface HousingDerivedOptions {
   geocode: GeocodeBatchOptions;
@@ -282,7 +281,7 @@ const bandCondition = (band: HousingAreaBand): Prisma.Sql => {
   }
 };
 
-interface StatRow {
+export interface HousingStatRow {
   complexId: string;
   dealType: string;
   band: string;
@@ -305,14 +304,132 @@ const toFiniteOrNull = (v: unknown): number | null => {
   return n !== null && Number.isFinite(n) ? n : null;
 };
 
+// ── 섀도 표 교체 ──
+// 예전엔 한 쓰기 트랜잭션에서 31만 행을 지우고 다시 넣어 쓰기 락을 13.5~18초 잡았다(D-4·X-5 — 그동안 서버의 모든
+// 쓰기가 멈추고, 데이터가 늘면 busy_timeout 30초를 넘겨 실패한다). 지금은 같은 정의의 _next 표를 짧은 트랜잭션
+// (5,000행)으로 채운 뒤 DROP + RENAME + 적재 이력을 한 트랜잭션으로 바꿔 끼운다. 표 정의(+ 보조 인덱스)는
+// sqlite_master 에서 복사하므로 마이그레이션이 열을 더해도 따라가고 Prisma 스키마는 그대로다. _next 는 시작할 때
+// DROP IF EXISTS 하고 실패하면 지운다 — 중단 잔여물이 migrate drift 로 남지 않게. 동시에 두 번 돌면 늦게 시작한
+// 쪽이 _next 를 지워 먼저 쪽이 실패할 뿐 원본은 교체 트랜잭션에서만 바뀐다.
+const STATS_TABLE = 'housing_complex_stats';
+export const HOUSING_STATS_NEXT_TABLE = `${STATS_TABLE}_next`;
+const STATS_COLUMNS = [
+  'complexId',
+  'dealType',
+  'band',
+  'latestPrice',
+  'latestRent',
+  'latestArea',
+  'latestFloor',
+  'latestDate',
+  'count12',
+  'count',
+  'unitPrice12',
+  'latestDealType',
+] as const;
+
+export interface HousingStatsWriteOptions {
+  // INSERT 문 하나의 행 수(12열 × 400 = 4,800 바인드)·트랜잭션 하나의 행 수 — 테스트가 작게 줘 청크 경계를 탄다.
+  insertRows?: number;
+  txRows?: number;
+}
+
+const statsShadowDdl = async (prisma: PrismaClient): Promise<{ createNext: string; indexes: string[] }> => {
+  const objs = await prisma.$queryRaw<{ type: string; sql: string | null }[]>(
+    Prisma.sql`SELECT type, sql FROM sqlite_master WHERE tbl_name = ${STATS_TABLE} AND sql IS NOT NULL`,
+  );
+  const table = objs.find((o) => o.type === 'table')?.sql ?? '';
+  const createNext = table.replace(/^CREATE TABLE\s+"?housing_complex_stats"?(?=\s*\()/i, `CREATE TABLE "${HOUSING_STATS_NEXT_TABLE}"`);
+  if (!table || createNext === table) throw new Error(`${STATS_TABLE} 표 정의를 복사하지 못했습니다`);
+  // 보조 인덱스(지금은 없음 — PK autoindex 는 sql 이 없고 RENAME 이 이름을 따라 바꾼다)는 교체 뒤 원래 이름으로 다시 만든다.
+  return { createNext, indexes: objs.filter((o) => o.type === 'index').map((o) => o.sql!) };
+};
+
+class StatsShadowWriter {
+  private buf: HousingStatRow[] = [];
+  count = 0;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly insertRows: number,
+    private readonly txRows: number,
+  ) {}
+
+  async push(rows: HousingStatRow[]): Promise<void> {
+    for (const r of rows) {
+      this.buf.push(r);
+      if (this.buf.length >= this.txRows) await this.flush();
+    }
+  }
+
+  async flush(): Promise<void> {
+    if (this.buf.length === 0) return;
+    const rows = this.buf;
+    this.buf = [];
+    const stmts: Prisma.PrismaPromise<number>[] = [];
+    for (let i = 0; i < rows.length; i += this.insertRows) {
+      const values = rows
+        .slice(i, i + this.insertRows)
+        .map(
+          (r) =>
+            Prisma.sql`(${r.complexId}, ${r.dealType}, ${r.band}, ${r.latestPrice}, ${r.latestRent}, ${r.latestArea}, ${r.latestFloor}, ${r.latestDate}, ${r.count12}, ${r.count}, ${r.unitPrice12}, ${r.latestDealType})`,
+        );
+      stmts.push(
+        this.prisma.$executeRaw`INSERT INTO ${Prisma.raw(`"${HOUSING_STATS_NEXT_TABLE}"`)} (${Prisma.raw(STATS_COLUMNS.map((c) => `"${c}"`).join(', '))}) VALUES ${Prisma.join(values)}`,
+      );
+    }
+    await this.prisma.$transaction(stmts);
+    this.count += rows.length;
+  }
+}
+
 // 구간마다 raw SQL 2개(최근 거래는 윈도 함수, 건수·단위가는 GROUP BY)를 JS 에서 합쳐 전량 교체.
 // 해제(canceled) 거래·단지 미연결 거래는 제외. 12개월 창은 today 기준.
 // 유형×구간 행에 더해 단지마다 **폴백 행(dealType='any', band='all')** 하나 — 세 유형을 통틀어 가장 최근
 // 거래(그 유형은 latestDealType)와 전체 유형 합계. 선택한 축에 거래가 없는 단지에 "다른 조건의 마지막
 // 거래" 를 보여 주는 용도라 요청 경로의 조인이 하나 더 늘 뿐 거래 표는 여전히 안 읽는다.
-export const rebuildHousingStats = async (prisma: PrismaClient, today: string = localToday()): Promise<number> => {
+// 쓰기는 위 섀도 표 교체 — 구간별 행을 계산하는 대로 _next 에 넣어 JS 에 전 행을 쥐지 않는다.
+export const rebuildHousingStats = (
+  prisma: PrismaClient,
+  today: string = localToday(),
+  opts: HousingStatsWriteOptions = {},
+): Promise<number> => replaceHousingStats(prisma, today, (emit) => computeHousingStatRows(prisma, today, emit), opts);
+
+// 섀도 표 교체 본체 — produce 가 넘기는 행으로 _next 를 채우고 바꿔 끼운다(쓰기 락 측정은 이걸 직접 부른다).
+export const replaceHousingStats = async (
+  prisma: PrismaClient,
+  today: string,
+  produce: (emit: (rows: HousingStatRow[]) => Promise<void>) => Promise<void>,
+  opts: HousingStatsWriteOptions = {},
+): Promise<number> => {
+  const { createNext, indexes } = await statsShadowDdl(prisma);
+  await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "${HOUSING_STATS_NEXT_TABLE}"`);
+  await prisma.$executeRawUnsafe(createNext);
+  const writer = new StatsShadowWriter(prisma, opts.insertRows ?? 400, opts.txRows ?? 5000);
+  try {
+    await produce((rows) => writer.push(rows));
+    await writer.flush();
+    await prisma.$transaction([
+      prisma.$executeRawUnsafe(`DROP TABLE "${STATS_TABLE}"`),
+      prisma.$executeRawUnsafe(`ALTER TABLE "${HOUSING_STATS_NEXT_TABLE}" RENAME TO "${STATS_TABLE}"`),
+      ...indexes.map((sql) => prisma.$executeRawUnsafe(sql)),
+      prisma.housingSync.create({ data: { kind: 'stats', count: writer.count, baseDate: today } }),
+    ]);
+  } catch (e) {
+    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "${HOUSING_STATS_NEXT_TABLE}"`).catch(() => undefined);
+    throw e;
+  }
+  return writer.count;
+};
+
+// 통계 행 계산 — 폴백 행, 이어서 구간별(전체·b1~b4) 행을 묶음마다 emit 으로 넘긴다(쓰기와 분리 — 결과 행 동일성 테스트).
+export const computeHousingStatRows = async (
+  prisma: PrismaClient,
+  today: string,
+  emit: (rows: HousingStatRow[]) => Promise<void>,
+): Promise<void> => {
   const since12 = housingDateMonthsAgo(today, 12);
-  const rows: StatRow[] = [];
+  let rows: HousingStatRow[] = [];
   const latestAny = await prisma.$queryRaw<
     { complexId: string; dealType: string; price: unknown; rent: unknown; area: unknown; floor: unknown; dealDate: string }[]
   >(Prisma.sql`SELECT "complexId", "dealType", "price", "rent", "area", "floor", "dealDate"
@@ -347,7 +464,9 @@ export const rebuildHousingStats = async (prisma: PrismaClient, today: string = 
       latestDealType: l.dealType,
     });
   }
+  await emit(rows);
   for (const band of HOUSING_AREA_BANDS) {
+    rows = [];
     const cond = bandCondition(band);
     const latest = await prisma.$queryRaw<
       { complexId: string; dealType: string; price: unknown; rent: unknown; area: unknown; floor: unknown; dealDate: string }[]
@@ -387,16 +506,6 @@ export const rebuildHousingStats = async (prisma: PrismaClient, today: string = 
         latestDealType: null,
       });
     }
+    await emit(rows);
   }
-  await prisma.$transaction(
-    async (tx) => {
-      await tx.housingComplexStat.deleteMany({});
-      for (let i = 0; i < rows.length; i += CREATE_CHUNK) {
-        await tx.housingComplexStat.createMany({ data: rows.slice(i, i + CREATE_CHUNK) });
-      }
-      await tx.housingSync.create({ data: { kind: 'stats', count: rows.length, baseDate: today } });
-    },
-    { timeout: STATS_TX_TIMEOUT_MS, maxWait: 60_000 },
-  );
-  return rows.length;
 };

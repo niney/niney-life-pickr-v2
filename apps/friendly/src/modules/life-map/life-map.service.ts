@@ -22,22 +22,31 @@ import {
   LIFE_STORE_LAYER_KINDS,
   haversineM,
   isLifeStoreLayerKind,
-  lifeCellSizeDeg,
   lifeStoreDisplayName,
   parseLifeCctvPurposes,
   parseLifeHospitalCategories,
   parseLifeStoreKinds,
 } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
+import {
+  CELL_CACHE_MAX_UNITS,
+  POINTS_DEMOTE_COUNT,
+  cellGrid,
+  cellKeyOf,
+  cellResultSize,
+  pointsSpanOk,
+} from '../../lib/map-cells.js';
 
 // 일상지도 조회 — 로컬 SQLite(LifeCctv 377k / LifeToilet 53k / LifeHospital 78k / LifeStore ~1.2M 중 레이어 6종
 // ~15만)만 읽는다. 업스트림 없음. 생활편의(store)는 적재 9종 중 LIFE_STORE_LAYER_KINDS 6종만 항상 걸러
 // 보여 준다(음식·카페·학원은 맛집 매칭·집값 인프라 전용).
 //
-// 뷰포트 조회는 두 모드: 줌이 레이어 임계 이상이고 bbox 가 좁으면 개별 점(인덱스 범위 조회,
-// 상한 LIFE_MAP_POINTS_MAX + truncated), 아니면 전국 고정 원점의 도(°) 격자로 GROUP BY 집계한
-// 셀(버블). 셀 조회는 bbox 를 셀 경계로 바깥 정렬한 키로 LRU 캐시(10분) — 전국 줌의 377k 행
-// 집계(수십 ms)가 패닝마다 반복되지 않게. 적재가 새로 되면 sync id 가 바뀌어 키가 갈린다.
+// 뷰포트 조회는 두 모드: 줌이 레이어 임계 이상이고 bbox 가 그 줌의 화면 크기 안(lib/map-cells
+// pointsSpanOk)이면 개별 점(인덱스 범위 조회, 상한 LIFE_MAP_POINTS_MAX + truncated), 아니면 전국 고정
+// 원점의 도(°) 격자로 GROUP BY 집계한 셀(버블). 점 모드는 커버링 COUNT 를 먼저 해 박스가 지나치게
+// 빽빽하면(POINTS_DEMOTE_COUNT) 셀로 강등한다. 셀 조회는 bbox 를 셀 경계로 바깥 정렬한 키로 LRU
+// 캐시(10분·셀 수 상한) — 전국 줌의 377k 행 집계(수십 ms)가 패닝마다 반복되지 않게. 셀 수가 상한을
+// 넘는 요청은 셀을 키워 접는다(cellGrid). 적재가 새로 되면 sync id 가 바뀌어 키가 갈린다.
 // 필터(CCTV 목적·화장실 편의)는 두 모드와 주변 목록에 똑같이 걸린다.
 
 export class LifeMapServiceError extends Error {
@@ -56,10 +65,14 @@ const LOAD_COMMAND: Record<LifeMapLayerType, string> = {
   hospital: 'load:life-hospitals',
   store: 'load:life-stores',
 };
-// 점 모드를 허용하는 bbox 최대 폭(도) — 줌 값을 속여 전국 bbox 로 점을 긁는 요청을 셀로 강등.
-const POINTS_MAX_SPAN_DEG = 1.5;
 const CELL_CACHE_TTL_MS = 10 * 60_000;
 const CELL_CACHE_MAX = 300;
+const LAYER_TABLE: Record<LifeMapLayerType, Prisma.Sql> = {
+  cctv: Prisma.raw('"life_cctvs"'),
+  toilet: Prisma.raw('"life_toilets"'),
+  hospital: Prisma.raw('"life_hospitals"'),
+  store: Prisma.raw('"life_stores"'),
+};
 
 interface Bbox {
   minLng: number;
@@ -206,11 +219,15 @@ const toStoreItem = (r: LifeStore): LifeStoreItemType => ({
 export interface LifeMapServiceDeps {
   prisma: PrismaClient;
   now?: () => Date;
+  // 점 모드 강등 기준(기본 POINTS_DEMOTE_COUNT) — 테스트 주입용.
+  pointsDemoteCount?: number;
 }
 
 export class LifeMapService {
   private readonly cellCache = new LRUCache<string, LifeMapPointsResultType>({
     max: CELL_CACHE_MAX,
+    maxSize: CELL_CACHE_MAX_UNITS,
+    sizeCalculation: cellResultSize,
     ttl: CELL_CACHE_TTL_MS,
   });
 
@@ -290,164 +307,13 @@ export class LifeMapService {
     };
   }
 
-  async getPoints(q: LifeMapPointsQueryType): Promise<LifeMapPointsResultType> {
-    const sync = await this.requireSync(q.layer);
-    const bbox = parseBbox(q.bbox);
-    const filters = toFilters(q);
-    const zoom = Math.floor(q.zoom);
-    const minPointZoom = LIFE_MAP_POINT_MIN_ZOOM[q.layer];
-    const narrow =
-      bbox.maxLat - bbox.minLat <= POINTS_MAX_SPAN_DEG && bbox.maxLng - bbox.minLng <= POINTS_MAX_SPAN_DEG;
-    const fetchedAt = sync.loadedAt.toISOString();
-    if (zoom >= minPointZoom && narrow) {
-      if (q.layer === 'cctv') return this.cctvPoints(bbox, filters, fetchedAt);
-      if (q.layer === 'toilet') return this.toiletPoints(bbox, filters, fetchedAt);
-      if (q.layer === 'store') return this.storePoints(bbox, filters, fetchedAt);
-      return this.hospitalPoints(bbox, filters, fetchedAt);
-    }
-    return this.cells(q.layer, zoom, bbox, filters, sync.id, fetchedAt);
-  }
-
-  private async cctvPoints(bbox: Bbox, f: Filters, fetchedAt: string): Promise<LifeMapPointsResultType> {
-    const where = this.cctvWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeCctv.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, purpose: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).map((r) => ({
-      id: r.id,
-      lat: r.lat,
-      lng: r.lng,
-      purpose: r.purpose,
-    }));
-    const total = truncated ? await this.deps.prisma.lifeCctv.count({ where }) : items.length;
-    return {
-      layer: 'cctv',
-      mode: 'points',
-      items,
-      cells: [],
-      total,
-      truncated,
-      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.cctv,
-      fetchedAt,
-    };
-  }
-
-  private async toiletPoints(bbox: Bbox, f: Filters, fetchedAt: string): Promise<LifeMapPointsResultType> {
-    const where = this.toiletWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeToilet.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, name: true, open24: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).flatMap((r) =>
-      r.lat !== null && r.lng !== null
-        ? [{ id: r.id, lat: r.lat, lng: r.lng, name: r.name, open24: r.open24 }]
-        : [],
-    );
-    const total = truncated ? await this.deps.prisma.lifeToilet.count({ where }) : items.length;
-    return {
-      layer: 'toilet',
-      mode: 'points',
-      items,
-      cells: [],
-      total,
-      truncated,
-      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.toilet,
-      fetchedAt,
-    };
-  }
-
-  private async hospitalPoints(bbox: Bbox, f: Filters, fetchedAt: string): Promise<LifeMapPointsResultType> {
-    const where = this.hospitalWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeHospital.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, name: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).flatMap((r) =>
-      r.lat !== null && r.lng !== null ? [{ id: r.id, lat: r.lat, lng: r.lng, name: r.name }] : [],
-    );
-    const total = truncated ? await this.deps.prisma.lifeHospital.count({ where }) : items.length;
-    return {
-      layer: 'hospital',
-      mode: 'points',
-      items,
-      cells: [],
-      total,
-      truncated,
-      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.hospital,
-      fetchedAt,
-    };
-  }
-
-  private async storePoints(bbox: Bbox, f: Filters, fetchedAt: string): Promise<LifeMapPointsResultType> {
-    const where = this.storeWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeStore.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, name: true, branch: true, kind: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).map((r) => ({
-      id: r.id,
-      lat: r.lat,
-      lng: r.lng,
-      name: lifeStoreDisplayName(r.name, r.branch),
-      kind: r.kind,
-    }));
-    const total = truncated ? await this.deps.prisma.lifeStore.count({ where }) : items.length;
-    return {
-      layer: 'store',
-      mode: 'points',
-      items,
-      cells: [],
-      total,
-      truncated,
-      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.store,
-      fetchedAt,
-    };
-  }
-
-  // 집계 셀 — 전국 고정 원점(LIFE_CELL_ORIGIN) 기준 도(°) 격자. bbox 를 셀 경계로 바깥 정렬해
-  // (a) 경계 셀도 온전히 집계되고 (b) 셀 하나 안의 패닝은 같은 캐시 키를 맞춘다.
-  private async cells(
-    layer: LifeMapLayerType,
-    zoom: number,
-    bbox: Bbox,
-    f: Filters,
-    syncId: number,
-    fetchedAt: string,
-  ): Promise<LifeMapPointsResultType> {
-    const { dLng, dLat } = lifeCellSizeDeg(zoom);
-    const o = LIFE_CELL_ORIGIN;
-    const q: Bbox = {
-      minLng: o.lng + Math.floor((bbox.minLng - o.lng) / dLng) * dLng,
-      maxLng: o.lng + Math.ceil((bbox.maxLng - o.lng) / dLng) * dLng,
-      minLat: o.lat + Math.floor((bbox.minLat - o.lat) / dLat) * dLat,
-      maxLat: o.lat + Math.ceil((bbox.maxLat - o.lat) / dLat) * dLat,
-    };
-    const key = `${layer}|${zoom}|${q.minLng.toFixed(6)},${q.minLat.toFixed(6)},${q.maxLng.toFixed(6)},${q.maxLat.toFixed(6)}|${filtersKey(f)}|${syncId}`;
-    const hit = this.cellCache.get(key);
-    if (hit) return hit;
-
-    const table =
-      layer === 'cctv'
-        ? Prisma.raw('"life_cctvs"')
-        : layer === 'toilet'
-          ? Prisma.raw('"life_toilets"')
-          : layer === 'store'
-            ? Prisma.raw('"life_stores"')
-            : Prisma.raw('"life_hospitals"');
+  // 원시 SQL 조건(셀 집계·커버링 COUNT 공용) — 필터 뜻은 Prisma where(점·주변 목록)와 같다.
+  private rawConds(layer: LifeMapLayerType, b: Bbox, f: Filters): Prisma.Sql[] {
     const conds: Prisma.Sql[] = [
-      Prisma.sql`"lat" >= ${q.minLat}`,
-      Prisma.sql`"lat" <= ${q.maxLat}`,
-      Prisma.sql`"lng" >= ${q.minLng}`,
-      Prisma.sql`"lng" <= ${q.maxLng}`,
+      Prisma.sql`"lat" >= ${b.minLat}`,
+      Prisma.sql`"lat" <= ${b.maxLat}`,
+      Prisma.sql`"lng" >= ${b.minLng}`,
+      Prisma.sql`"lng" <= ${b.maxLng}`,
     ];
     if (layer === 'cctv') {
       if (f.purposes.length > 0) conds.push(Prisma.sql`"purpose" IN (${Prisma.join(f.purposes)})`);
@@ -462,12 +328,163 @@ export class LifeMapService {
       if (f.diaper) conds.push(Prisma.sql`"diaper" = 1`);
       if (f.bell) conds.push(Prisma.sql`"bell" = 1`);
     }
+    return conds;
+  }
+
+  // 박스 안 행 수 — 좌표 인덱스((lat,lng)·생활편의 (kind,lat,lng))만 읽는 COUNT. Prisma count 는 id 를 고르는
+  // 하위 질의라 행마다 표를 다시 읽는다.
+  private async countIn(layer: LifeMapLayerType, b: Bbox, f: Filters): Promise<number> {
+    const rows = await this.deps.prisma.$queryRaw<{ n: unknown }[]>(
+      Prisma.sql`SELECT COUNT(*) AS n FROM ${LAYER_TABLE[layer]} WHERE ${Prisma.join(this.rawConds(layer, b, f), ' AND ')}`,
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  async getPoints(q: LifeMapPointsQueryType): Promise<LifeMapPointsResultType> {
+    const sync = await this.requireSync(q.layer);
+    const bbox = parseBbox(q.bbox);
+    const filters = toFilters(q);
+    const zoom = Math.floor(q.zoom);
+    const fetchedAt = sync.loadedAt.toISOString();
+    if (zoom >= LIFE_MAP_POINT_MIN_ZOOM[q.layer] && pointsSpanOk(zoom, bbox)) {
+      // 점은 박스 안 행을 id 순으로 정렬해 상한까지 자르므로 비용이 박스 안 행 수에 비례한다 — 먼저 세고, 정상 화면이
+      // 닿지 않는 밀도면 셀로 강등. total 은 이 COUNT 를 그대로 쓴다.
+      const total = await this.countIn(q.layer, bbox, filters);
+      if (total <= (this.deps.pointsDemoteCount ?? POINTS_DEMOTE_COUNT)) {
+        if (q.layer === 'cctv') return this.cctvPoints(bbox, filters, fetchedAt, total);
+        if (q.layer === 'toilet') return this.toiletPoints(bbox, filters, fetchedAt, total);
+        if (q.layer === 'store') return this.storePoints(bbox, filters, fetchedAt, total);
+        return this.hospitalPoints(bbox, filters, fetchedAt, total);
+      }
+    }
+    return this.cells(q.layer, zoom, bbox, filters, sync.id, fetchedAt);
+  }
+
+  private async cctvPoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
+    const where = this.cctvWhere(bbox, f);
+    const rows = await this.deps.prisma.lifeCctv.findMany({
+      where,
+      select: { id: true, lat: true, lng: true, purpose: true },
+      take: LIFE_MAP_POINTS_MAX + 1,
+    });
+    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
+    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).map((r) => ({
+      id: r.id,
+      lat: r.lat,
+      lng: r.lng,
+      purpose: r.purpose,
+    }));
+    return {
+      layer: 'cctv',
+      mode: 'points',
+      items,
+      cells: [],
+      total,
+      truncated,
+      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.cctv,
+      fetchedAt,
+    };
+  }
+
+  private async toiletPoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
+    const where = this.toiletWhere(bbox, f);
+    const rows = await this.deps.prisma.lifeToilet.findMany({
+      where,
+      select: { id: true, lat: true, lng: true, name: true, open24: true },
+      take: LIFE_MAP_POINTS_MAX + 1,
+    });
+    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
+    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).flatMap((r) =>
+      r.lat !== null && r.lng !== null
+        ? [{ id: r.id, lat: r.lat, lng: r.lng, name: r.name, open24: r.open24 }]
+        : [],
+    );
+    return {
+      layer: 'toilet',
+      mode: 'points',
+      items,
+      cells: [],
+      total,
+      truncated,
+      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.toilet,
+      fetchedAt,
+    };
+  }
+
+  private async hospitalPoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
+    const where = this.hospitalWhere(bbox, f);
+    const rows = await this.deps.prisma.lifeHospital.findMany({
+      where,
+      select: { id: true, lat: true, lng: true, name: true },
+      take: LIFE_MAP_POINTS_MAX + 1,
+    });
+    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
+    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).flatMap((r) =>
+      r.lat !== null && r.lng !== null ? [{ id: r.id, lat: r.lat, lng: r.lng, name: r.name }] : [],
+    );
+    return {
+      layer: 'hospital',
+      mode: 'points',
+      items,
+      cells: [],
+      total,
+      truncated,
+      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.hospital,
+      fetchedAt,
+    };
+  }
+
+  private async storePoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
+    const where = this.storeWhere(bbox, f);
+    const rows = await this.deps.prisma.lifeStore.findMany({
+      where,
+      select: { id: true, lat: true, lng: true, name: true, branch: true, kind: true },
+      take: LIFE_MAP_POINTS_MAX + 1,
+    });
+    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
+    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).map((r) => ({
+      id: r.id,
+      lat: r.lat,
+      lng: r.lng,
+      name: lifeStoreDisplayName(r.name, r.branch),
+      kind: r.kind,
+    }));
+    return {
+      layer: 'store',
+      mode: 'points',
+      items,
+      cells: [],
+      total,
+      truncated,
+      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.store,
+      fetchedAt,
+    };
+  }
+
+  // 집계 셀 — 전국 고정 원점(LIFE_CELL_ORIGIN) 기준 도(°) 격자. bbox 를 셀 경계로 바깥 정렬해
+  // (a) 경계 셀도 온전히 집계되고 (b) 셀 하나 안의 패닝은 같은 캐시 키를 맞춘다. 셀 수가 상한을 넘으면
+  // 셀을 키운다(cellGrid — 캐시 키도 실제 쓴 줌).
+  private async cells(
+    layer: LifeMapLayerType,
+    zoom: number,
+    bbox: Bbox,
+    f: Filters,
+    syncId: number,
+    fetchedAt: string,
+  ): Promise<LifeMapPointsResultType> {
+    const grid = cellGrid(zoom, bbox);
+    const { dLng, dLat, q } = grid;
+    const o = LIFE_CELL_ORIGIN;
+    const key = `${layer}|${cellKeyOf(grid)}|${filtersKey(f)}|${syncId}`;
+    const hit = this.cellCache.get(key);
+    if (hit) return hit;
+
     const rows = await this.deps.prisma.$queryRaw<{ cx: unknown; cy: unknown; n: unknown; lat: unknown; lng: unknown }[]>(
       Prisma.sql`SELECT CAST(("lng" - ${o.lng}) / ${dLng} AS INTEGER) AS cx,
                         CAST(("lat" - ${o.lat}) / ${dLat} AS INTEGER) AS cy,
                         COUNT(*) AS n, AVG("lat") AS lat, AVG("lng") AS lng
-                 FROM ${table}
-                 WHERE ${Prisma.join(conds, ' AND ')}
+                 FROM ${LAYER_TABLE[layer]}
+                 WHERE ${Prisma.join(this.rawConds(layer, q, f), ' AND ')}
                  GROUP BY cx, cy`,
     );
     // COUNT 는 SQLite 드라이버가 BigInt 로 돌려준다 — Number 로 접는다. 표시 좌표는 무게중심을

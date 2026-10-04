@@ -15,12 +15,12 @@ import {
   PARKING_POINTS_MAX,
   PARKING_POINT_MIN_ZOOM,
   haversineM,
-  lifeCellSizeDeg,
   type ParkingFeeType,
   type ParkingLotType,
   type ParkingOwnership,
 } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
+import { CELL_CACHE_MAX_UNITS, cellGrid, cellKeyOf, cellResultSize, pointsSpanOk } from '../../lib/map-cells.js';
 import { resolveCanonicalMembersByPlaceId } from '../restaurant/canonical-members.js';
 import { airportLotKey, buildAirportList, type ParkingLiveService, type ParkingLiveValue } from './parking-live.service.js';
 
@@ -38,7 +38,6 @@ export class ParkingServiceError extends Error {
   }
 }
 
-const POINTS_MAX_SPAN_DEG = 1.5;
 const CELL_CACHE_TTL_MS = 10 * 60_000;
 const CELL_CACHE_MAX = 300;
 const TIP_LIMIT = 5;
@@ -108,11 +107,18 @@ export const toParkingLotItem = (r: ParkingLot, live: ParkingLiveValue | null): 
 export interface ParkingServiceDeps {
   prisma: PrismaClient;
   live: ParkingLiveService;
+  // 충전소 마지막 상태 반영 시각 — 라우트가 EvService 의 메모(폴러가 갱신)를 넘긴다. 없으면 직접 MAX 를 읽는다.
+  evStatusAt?: () => Promise<string | null>;
   now?: () => Date;
 }
 
 export class ParkingService {
-  private readonly cellCache = new LRUCache<string, ParkingLotPointsResultType>({ max: CELL_CACHE_MAX, ttl: CELL_CACHE_TTL_MS });
+  private readonly cellCache = new LRUCache<string, ParkingLotPointsResultType>({
+    max: CELL_CACHE_MAX,
+    maxSize: CELL_CACHE_MAX_UNITS,
+    sizeCalculation: cellResultSize,
+    ttl: CELL_CACHE_TTL_MS,
+  });
 
   constructor(private readonly deps: ParkingServiceDeps) {}
 
@@ -122,6 +128,12 @@ export class ParkingService {
 
   private latestSync(kind: 'lots' | 'ev') {
     return this.deps.prisma.parkingSync.findFirst({ where: { kind }, orderBy: { loadedAt: 'desc' } });
+  }
+
+  private async evStatusAt(): Promise<string | null> {
+    if (this.deps.evStatusAt) return this.deps.evStatusAt();
+    const agg = await this.deps.prisma.evStation.aggregate({ _max: { statusAt: true } });
+    return agg._max.statusAt?.toISOString() ?? null;
   }
 
   private async requireLots() {
@@ -150,9 +162,10 @@ export class ParkingService {
       }
     };
     const detail = parseDetail(lots?.detail);
-    // 충전기 수는 적재 이력에 적어 둔 값(52만 행 count 를 매번 하지 않는다).
+    // 충전기 수는 적재 이력에 적어 둔 값(52만 행 count 를 매번 하지 않는다). 상태 반영 시각은 EvService 메모를 같이 써서
+    // 요청마다 10만 행 MAX 를 하지 않는다(E-9).
     const evChargers = parseDetail(ev?.detail)['chargers'] ?? 0;
-    const statusAt = ev ? await this.deps.prisma.evStation.aggregate({ _max: { statusAt: true } }) : null;
+    const statusAt = ev ? await this.evStatusAt() : null;
     const live = this.deps.live.lotStatus();
     const airports = this.deps.live.airportSnapshot();
     return {
@@ -169,7 +182,7 @@ export class ParkingService {
         stations: ev?.count ?? 0,
         chargers: evChargers,
         loadedAt: ev?.loadedAt.toISOString() ?? null,
-        statusAt: statusAt?._max.statusAt?.toISOString() ?? null,
+        statusAt,
       },
       live: {
         lotCount: live.count,
@@ -186,9 +199,9 @@ export class ParkingService {
     const bbox = parseBbox(q.bbox);
     const f: LotFilters = { publicOnly: q.publicOnly, freeOnly: q.freeOnly, liveOnly: q.liveOnly };
     const zoom = Math.floor(q.zoom);
-    const narrow = bbox.maxLat - bbox.minLat <= POINTS_MAX_SPAN_DEG && bbox.maxLng - bbox.minLng <= POINTS_MAX_SPAN_DEG;
     const fetchedAt = sync.loadedAt.toISOString();
-    if (zoom >= PARKING_POINT_MIN_ZOOM && narrow) {
+    // 점 모드는 그 줌의 화면 크기 안 bbox 만(lib/map-cells) — 넘는 bbox 는 셀.
+    if (zoom >= PARKING_POINT_MIN_ZOOM && pointsSpanOk(zoom, bbox)) {
       const where = this.where(bbox, f);
       const rows = await this.deps.prisma.parkingLot.findMany({
         where,
@@ -217,16 +230,12 @@ export class ParkingService {
     return this.cells(zoom, bbox, f, sync.id, fetchedAt);
   }
 
+  // 셀 수가 상한을 넘으면 셀을 키운다(cellGrid — 캐시 키도 실제 쓴 줌).
   private async cells(zoom: number, bbox: Bbox, f: LotFilters, syncId: number, fetchedAt: string): Promise<ParkingLotPointsResultType> {
-    const { dLng, dLat } = lifeCellSizeDeg(zoom);
+    const grid = cellGrid(zoom, bbox);
+    const { dLng, dLat, q } = grid;
     const o = LIFE_CELL_ORIGIN;
-    const q: Bbox = {
-      minLng: o.lng + Math.floor((bbox.minLng - o.lng) / dLng) * dLng,
-      maxLng: o.lng + Math.ceil((bbox.maxLng - o.lng) / dLng) * dLng,
-      minLat: o.lat + Math.floor((bbox.minLat - o.lat) / dLat) * dLat,
-      maxLat: o.lat + Math.ceil((bbox.maxLat - o.lat) / dLat) * dLat,
-    };
-    const key = `${zoom}|${q.minLng.toFixed(6)},${q.minLat.toFixed(6)},${q.maxLng.toFixed(6)},${q.maxLat.toFixed(6)}|${Number(f.publicOnly)}${Number(f.freeOnly)}|${syncId}`;
+    const key = `${cellKeyOf(grid)}|${Number(f.publicOnly)}${Number(f.freeOnly)}|${syncId}`;
     // 실시간 필터는 폴링마다 집합이 바뀌어 캐시하지 않는다(대상도 수백 곳뿐).
     if (!f.liveOnly) {
       const hit = this.cellCache.get(key);

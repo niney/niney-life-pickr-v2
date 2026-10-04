@@ -212,6 +212,87 @@ describe('parking routes (격리 DB)', () => {
     expect(res.airports.every((a) => a.lots.length === 0 && a.level === null)).toBe(true);
   });
 
+  it('셀 상한·점 모드 범위 — z22 전국은 셀을 키워 접고(주차장·충전소), 화면 크기를 넘는 bbox 는 셀(E-V1)', async () => {
+    for (const path of ['lots', 'ev']) {
+      const z9 = (await app.inject({ method: 'GET', url: `/api/v1/parking/${path}/points?${qs({ bbox: KOREA_BBOX, zoom: '9' })}` })).json<EvPointsResultType>();
+      for (const [bbox, zoom] of [
+        [KOREA_BBOX, '22'],
+        ['124,33,131.9991,39', '21'],
+      ] as const) {
+        const body = (await app.inject({ method: 'GET', url: `/api/v1/parking/${path}/points?${qs({ bbox, zoom })}` })).json<EvPointsResultType>();
+        expect(body.mode).toBe('cells');
+        expect(body.cells).toEqual(z9.cells);
+        expect(body.total).toBe(z9.total);
+      }
+      // SEOUL_BBOX(경도 0.02°)는 z20 에서 58타일 — 점이 아니라 셀.
+      expect((await app.inject({ method: 'GET', url: `/api/v1/parking/${path}/points?${qs({ bbox: SEOUL_BBOX, zoom: '20' })}` })).json<EvPointsResultType>().mode).toBe('cells');
+    }
+  });
+
+  it('충전소 상태 시각 공유·사용 가능만 셀 캐시 — 폴러가 반영하면 메모가 바로 바뀌고 주차 status 도 같은 값(E-9)', async () => {
+    const { EvService } = await import('./ev.service.js');
+    const { EvStatusPoller } = await import('./ev-status.service.js');
+    const { ParkingService } = await import('./parking.service.js');
+    const ev = new EvService({ prisma: app.prisma });
+    const live = new ParkingLiveService({ prisma: app.prisma, log: app.log, cron: '', seoulKey: '', dataGoKrKey: '' });
+    const svc = new ParkingService({ prisma: app.prisma, live, evStatusAt: () => ev.getStatusAt() });
+    const at = new Date('2026-09-25T07:20:00.000Z');
+    // ME1 의 두 충전기가 모두 충전 중으로 — ME1 이 '사용 가능' 에서 빠진다.
+    const fetchImpl = async (): Promise<Response> =>
+      new Response(
+        JSON.stringify({
+          resultCode: '00',
+          totalCount: 2,
+          items: {
+            item: [
+              { statId: 'ME1', chgerId: '01', stat: '3', statUpdDt: '20260925161900' },
+              { statId: 'ME1', chgerId: '02', stat: '3', statUpdDt: '20260925161900' },
+            ],
+          },
+        }),
+      );
+    const applied: Date[] = [];
+    const poller = new EvStatusPoller({
+      prisma: app.prisma,
+      log: app.log,
+      cron: '',
+      serviceKey: 'k',
+      fetchImpl,
+      now: () => at,
+      onApplied: (d) => {
+        applied.push(d);
+        ev.noteStatusAt(d);
+      },
+    });
+    const availQ = { bbox: KOREA_BBOX, zoom: 7, fastOnly: false, freeParkingOnly: false, availableOnly: true, openOnly: false } as const;
+    const before = await ev.getPoints(availQ);
+    expect(await poller.pollOnce()).toEqual({ rows: 2, stations: 1 });
+    expect(applied).toEqual([at]);
+    // 폴러 반영 → 메모가 새 시각, 주차 status 도 같은 메모(10만 행 MAX 를 따로 하지 않는다).
+    expect(await ev.getStatusAt()).toBe(at.toISOString());
+    expect((await svc.getStatus()).ev.statusAt).toBe(at.toISOString());
+    const marker = new Date('2030-01-01T00:00:00.000Z');
+    ev.noteStatusAt(marker);
+    expect((await svc.getStatus()).ev.statusAt).toBe(marker.toISOString());
+    // 사용 가능만 셀 — 키에 상태 시각이 들어가 폴링 사이엔 재사용, 시각이 바뀌면 다시 센다.
+    ev.noteStatusAt(at);
+    const afterPoll = await ev.getPoints(availQ);
+    expect(afterPoll.total).toBe(before.total - 1); // ME1 의 마지막 사용 가능 칸이 충전 중으로
+    await app.prisma.evStation.update({ where: { id: 'ME3' }, data: { availableCount: 0 } });
+    expect((await ev.getPoints(availQ)).total).toBe(afterPoll.total);
+    ev.noteStatusAt(new Date('2026-09-25T07:30:00.000Z'));
+    expect((await ev.getPoints(availQ)).total).toBe(afterPoll.total - 1);
+  });
+
+  it('status·airports — 폴러 주기로만 바뀌는 공개 응답은 public Cache-Control 1분(D-10)', async () => {
+    for (const url of ['/api/v1/parking/status', '/api/v1/parking/airports']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['cache-control']).toBe('public, max-age=60');
+    }
+    expect((await app.inject({ method: 'GET', url: `/api/v1/parking/lots/points?${qs({ bbox: SEOUL_BBOX, zoom: '15' })}` })).headers['cache-control']).toBeUndefined();
+  });
+
   it('맛집 리뷰 주차 — 공개 멤버 리뷰의 주차 관점 극성·주차 팁, 없는 식당 404', async () => {
     const placeId = 'PARK-T-1';
     const rest = await app.prisma.restaurant.create({

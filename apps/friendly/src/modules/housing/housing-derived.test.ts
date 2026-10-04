@@ -1,7 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
-import { housingJibunKey, housingUmdKey, rebuildHousingDerived } from './housing-derived.service.js';
+import {
+  HOUSING_STATS_NEXT_TABLE,
+  computeHousingStatRows,
+  housingJibunKey,
+  housingUmdKey,
+  rebuildHousingDerived,
+  rebuildHousingStats,
+  type HousingStatRow,
+} from './housing-derived.service.js';
 
 // 파생 재구축 — 격리 DB 에 단지 4 + 거래 8 을 시드하고 ① 지번 매칭(0 패딩·읍면동 마지막 토큰) ② 이름 매칭
 // (괄호 정규화·altNames) ③ 마스터에 없는 단지 → rtms 단지 생성(지오코더 offline) ④ 시도명을 모르는 시군구는
@@ -147,5 +155,70 @@ describe('housing derived (격리 DB)', () => {
     expect(r.reusedRtms).toBe(1);
     expect(r.createdRtms).toBe(0);
     expect((await prisma.housingTrade.findUnique({ where: { id: 't3b' } }))?.complexId).toBe('rt:11110:창신동:578-5:동대문맨션');
+  });
+
+  // 통계 섀도 표 교체(D-4·X-5) — 예전 쓰기(한 트랜잭션 deleteMany + createMany)와 같은 행을 남기고, _next 표·인덱스
+  // 이름·실패 시 원본 보존을 고정한다.
+  const snapshot = async () =>
+    (await prisma.housingComplexStat.findMany({ orderBy: [{ complexId: 'asc' }, { dealType: 'asc' }, { band: 'asc' }] })).map((s) => ({ ...s }));
+  const statsObjects = async () =>
+    (
+      await prisma.$queryRawUnsafe<{ type: string; name: string }[]>(
+        "SELECT type, name FROM sqlite_master WHERE tbl_name LIKE 'housing_complex_stats%' ORDER BY type, name",
+      )
+    ).map((o) => `${o.type}:${o.name}`);
+
+  it('통계 교체 — 예전 쓰기와 같은 행(청크 경계 포함), 교체 뒤 _next 없음·PK autoindex 이름 그대로', async () => {
+    // 예전 방식으로 같은 계산 결과를 써 둔 기준.
+    const rows: HousingStatRow[] = [];
+    await computeHousingStatRows(prisma, '2026-08-30', async (part) => {
+      rows.push(...part);
+    });
+    await prisma.$transaction(async (tx) => {
+      await tx.housingComplexStat.deleteMany({});
+      for (let i = 0; i < rows.length; i += 500) await tx.housingComplexStat.createMany({ data: rows.slice(i, i + 500) });
+    });
+    const legacy = await snapshot();
+    expect(legacy.length).toBeGreaterThan(5);
+    const objectsBefore = await statsObjects();
+    // 남은 _next(중단 잔여물)는 시작할 때 지운다.
+    await prisma.$executeRawUnsafe(`CREATE TABLE "${HOUSING_STATS_NEXT_TABLE}" (junk TEXT)`);
+
+    const n = await rebuildHousingStats(prisma, '2026-08-30', { insertRows: 2, txRows: 3 });
+    expect(n).toBe(legacy.length);
+    expect(await snapshot()).toEqual(legacy);
+    expect(await statsObjects()).toEqual(objectsBefore);
+    expect(objectsBefore).toEqual(['index:sqlite_autoindex_housing_complex_stats_1', 'table:housing_complex_stats']);
+    expect(await prisma.housingSync.findFirst({ where: { kind: 'stats' }, orderBy: { id: 'desc' } })).toMatchObject({ count: n, baseDate: '2026-08-30' });
+    // 교체된 표도 복합 PK 를 강제한다.
+    const dup = legacy[0]!;
+    await expect(prisma.housingComplexStat.create({ data: dup })).rejects.toThrow();
+    // 두 번째 교체(이미 RENAME 된 정의를 다시 복사)도 같은 결과.
+    expect(await rebuildHousingStats(prisma, '2026-08-30')).toBe(legacy.length);
+    expect(await snapshot()).toEqual(legacy);
+  });
+
+  it('통계 교체 — 채우는 도중 실패하면 원본·적재 이력은 그대로, _next 는 지운다', async () => {
+    const before = await snapshot();
+    const syncs = await prisma.housingSync.count({ where: { kind: 'stats' } });
+    let calls = 0;
+    // 두 번째 채우기 트랜잭션에서 실패하는 클라이언트(나머지는 그대로 위임).
+    const failing = new Proxy(prisma, {
+      get(target, prop, receiver) {
+        if (prop === '$transaction') {
+          return (arg: unknown) => {
+            calls += 1;
+            if (calls === 2) return Promise.reject(new Error('주입한 실패'));
+            return target.$transaction(arg as never);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver) as unknown;
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+      },
+    });
+    await expect(rebuildHousingStats(failing, '2026-08-30', { insertRows: 2, txRows: 3 })).rejects.toThrow('주입한 실패');
+    expect(await snapshot()).toEqual(before);
+    expect(await prisma.housingSync.count({ where: { kind: 'stats' } })).toBe(syncs);
+    expect(await statsObjects()).toEqual(['index:sqlite_autoindex_housing_complex_stats_1', 'table:housing_complex_stats']);
   });
 });

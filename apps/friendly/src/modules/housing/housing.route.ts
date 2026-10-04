@@ -25,6 +25,12 @@ import { HousingService } from './housing.service.js';
 // 없는 단지(404)만 라우트가 직접 응답한다(전역 error-handler 는 5xx 를 500 으로 뭉개므로 일상지도와 같은
 // replyUpstreamError 경로). 거래 자동 갱신(월 스케줄러)은 이 플러그인이 기동·정지한다.
 
+// 적재 현황 — /housing 진입당 1콜(클라이언트 staleTime 6h)이라 분당 120 이면 CGNAT 뒤 다수 사용자도 넉넉하다.
+// 서비스가 적재 이력 키로 집계를 재사용하지만, 확인 쿼리마저 무인증으로 연타되지 않게 전역(1000/분)보다 조인다.
+const STATUS_RATE = { max: 120, timeWindow: '1 minute' } as const;
+// 사용자 무관·적재 때만 바뀌는 응답 — Cloudflare·브라우저가 5분 흡수(D-10).
+const STATUS_CACHE_CONTROL = 'public, max-age=300';
+
 const housingRoutes: FastifyPluginAsync = async (app) => {
   const service = new HousingService({ prisma: app.prisma });
   const scheduler = new HousingRefreshScheduler({
@@ -43,12 +49,16 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.Housing.status, {
+    config: { rateLimit: STATUS_RATE },
     schema: {
       tags: ['housing'],
       summary: '집값 데이터 적재 현황(단지·유형별 거래 건수·기간·적재 시각) — 로컬 DB',
       response: { 200: HousingStatusResult },
     },
-    handler: async () => service.getStatus(),
+    handler: async (_req, reply) => {
+      reply.header('cache-control', STATUS_CACHE_CONTROL);
+      return service.getStatus();
+    },
   });
 
   // 뷰포트 조회 — 지도를 움직일 때마다 1콜. 일상지도와 같은 완만한 전용 프리셋.

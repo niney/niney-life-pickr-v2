@@ -35,6 +35,10 @@ import { ParkingService } from './parking.service.js';
 
 const PlaceParams = z.object({ placeId: z.string().min(1).max(64) });
 
+// 사용자 무관 공개 응답 중 폴러 주기(5·10분)로만 바뀌는 것(적재·폴링 현황, 공항 실시간) — 1분은 엣지·브라우저가
+// 흡수해도 폴링 간격보다 짧다(D-10).
+const POLLED_CACHE_CONTROL = 'public, max-age=60';
+
 const parkingRoutes: FastifyPluginAsync = async (app) => {
   const live = new ParkingLiveService({
     prisma: app.prisma,
@@ -43,14 +47,16 @@ const parkingRoutes: FastifyPluginAsync = async (app) => {
     seoulKey: env.SEOUL_OPEN_API_KEY,
     dataGoKrKey: env.DATA_GO_KR_API_KEY,
   });
+  const ev = new EvService({ prisma: app.prisma });
   const evPoller = new EvStatusPoller({
     prisma: app.prisma,
     log: app.log,
     cron: isTest ? '' : env.EV_STATUS_CRON,
     serviceKey: env.DATA_GO_KR_API_KEY,
+    onApplied: (at) => ev.noteStatusAt(at),
   });
-  const service = new ParkingService({ prisma: app.prisma, live });
-  const ev = new EvService({ prisma: app.prisma });
+  // 주차 status 의 충전소 상태 반영 시각은 EvService 메모를 같이 쓴다(요청마다 10만 행 MAX 를 하지 않게).
+  const service = new ParkingService({ prisma: app.prisma, live, evStatusAt: () => ev.getStatusAt() });
   // 폴러는 실제로 포트를 열 때만(onListen) — export:openapi 처럼 app.ready() 만 하는 스크립트·inject 테스트에서 업스트림을
   // 부르지 않게.
   app.addHook('onListen', async () => {
@@ -69,7 +75,10 @@ const parkingRoutes: FastifyPluginAsync = async (app) => {
       summary: '주차 적재·실시간 폴링 상태(주차장·충전소 건수, 마지막 폴링 시각)',
       response: { 200: ParkingStatusResult },
     },
-    handler: async () => service.getStatus(),
+    handler: async (_req, reply) => {
+      reply.header('cache-control', POLLED_CACHE_CONTROL);
+      return service.getStatus();
+    },
   });
 
   typed.get(Routes.Parking.lotPoints, {
@@ -200,7 +209,10 @@ const parkingRoutes: FastifyPluginAsync = async (app) => {
       description: '서버 폴러가 받은 최신 값(요청 경로 업스트림 0콜). 아직 못 받았으면 fetchedAt null·lots 빈 배열, 최근 폴링 실패면 stale=true(이전 값).',
       response: { 200: ParkingAirportsResult },
     },
-    handler: async () => service.getAirports(),
+    handler: async (_req, reply) => {
+      reply.header('cache-control', POLLED_CACHE_CONTROL);
+      return service.getAirports();
+    },
   });
 
   typed.get(decodeURIComponent(Routes.Parking.restaurantReviews(':placeId')), {

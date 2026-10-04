@@ -26,12 +26,16 @@ import { LifeMapService } from './life-map.service.js';
 // 없고, 미적재(503)·없는 항목(404)만 라우트가 직접 응답한다(전역 error-handler 는 5xx 를 500
 // 으로 뭉개므로 대중교통과 같은 replyUpstreamError 경로).
 
+// 사용자 무관·적재(또는 빌드) 때만 바뀌는 응답(적재 현황·범죄 통계) — Cloudflare·브라우저가 5분 흡수(D-10).
+const STATIC_CACHE_CONTROL = 'public, max-age=300';
+
 const lifeMapRoutes: FastifyPluginAsync = async (app) => {
   const service = new LifeMapService({ prisma: app.prisma });
   // 지역 이동 검색 — vworld 키는 설정>지도(DB 우선 + env 폴백)에서 요청마다 읽는다(키 교체 즉시 반영).
   const mapSettings = new MapSettingsService(app.prisma, { apiKey: env.VWORLD_API_KEY, domains: env.VWORLD_DOMAINS });
   const searchService = new LifeMapSearchService({
     getKey: async () => (await mapSettings.getSecret('vworld')).apiKey,
+    log: app.log,
   });
   // 범죄 통계 배경 레이어 — 빌드 산출물 JSON(기동 시 검증)을 그대로 내려준다.
   const crimeService = new LifeCrimeService();
@@ -43,7 +47,7 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
       tags: ['life-map'],
       summary: '지역 이동용 주소·장소 검색 — VWorld 검색 API 프록시, 10분 캐시',
       description:
-        'q 2~60자, limit 기본 8(최대 20). 장소(POI)와 도로명 주소 결과를 합쳐 돌려주며, 서버에 VWorld 키가 없으면 503 이 아니라 enabled:false 빈 결과로 200.',
+        'q 2~60자, limit 기본 8(최대 20). 장소(POI)와 도로명 주소 결과를 합쳐 돌려주며, 서버에 VWorld 키가 없거나 서버 전역 일일 업스트림 예산을 다 쓰면 503 이 아니라 enabled:false 빈 결과로 200(캐시된 검색어는 계속 결과를 준다).',
       querystring: LifeMapSearchQuery,
       response: { 200: LifeMapSearchResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
@@ -64,7 +68,10 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
       summary: '일상지도 레이어별 적재 현황(건수·기준일·적재 시각) — 로컬 DB',
       response: { 200: LifeMapStatusResult },
     },
-    handler: async () => service.getStatus(),
+    handler: async (_req, reply) => {
+      reply.header('cache-control', STATIC_CACHE_CONTROL);
+      return service.getStatus();
+    },
   });
 
   // 범죄 통계 — 시군구 229곳 전부(66KB)를 한 번에. 정적이라 클라이언트가 24h 캐시한다.
@@ -74,7 +81,10 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
       summary: '시군구별 범죄 발생률(인구 10만 명당)과 5등급 경계 — 경찰청 통계 기반 정적 데이터',
       response: { 200: LifeCrimeStatsResult },
     },
-    handler: async () => crimeService.getStats(),
+    handler: async (_req, reply) => {
+      reply.header('cache-control', STATIC_CACHE_CONTROL);
+      return crimeService.getStats();
+    },
   });
 
   // 뷰포트 조회 — 지도를 움직일 때마다(레이어당 1콜) 오므로 전용 프리셋으로 완만히 제한.

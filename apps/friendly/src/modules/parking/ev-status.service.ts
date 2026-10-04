@@ -90,6 +90,8 @@ export interface EvStatusDeps {
   timezone?: string;
   fetchImpl?: FetchLike;
   now?: () => Date;
+  // 충전소 칸을 at 시각으로 고친 직후(바뀐 충전소가 있을 때만) — EvService 가 statusAt 메모를 바로 갱신한다.
+  onApplied?: (at: Date) => void;
 }
 
 export class EvStatusPoller {
@@ -129,7 +131,9 @@ export class EvStatusPoller {
         if (res.items.length < EV_PAGE_SIZE || items.length >= res.totalCount) break;
       }
       const rows = parseEvStatusRows(items);
-      const stations = await applyEvStatus(this.deps.prisma, rows, this.deps.now?.() ?? new Date());
+      const at = this.deps.now?.() ?? new Date();
+      const stations = await applyEvStatus(this.deps.prisma, rows, at);
+      if (stations > 0) this.deps.onApplied?.(at);
       return { rows: rows.length, stations };
     } catch (e) {
       this.deps.log.warn({ err: e }, '[parking] 충전기 상태 폴링 실패');

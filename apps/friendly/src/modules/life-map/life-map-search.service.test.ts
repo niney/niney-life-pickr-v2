@@ -116,4 +116,62 @@ describe('LifeMapSearchService', () => {
     expect(await svc.search('강남역', 8)).toMatchObject({ enabled: false, items: [] });
     expect(calls).toHaveLength(0);
   });
+
+  it('검색어 정규화(대소문자·NFC) 키를 공유하고 응답 q 는 요청 그대로, 같은 검색어 동시 요청은 업스트림 한 번(D-9)', async () => {
+    const calls: string[] = [];
+    const svc = new LifeMapSearchService({ getKey: async () => 'k', fetchImpl: makeFetch(calls) });
+    const r1 = await svc.search('GS25 강남', 8);
+    expect(calls).toHaveLength(2);
+    const r2 = await svc.search('gs25   강남', 8);
+    expect(calls).toHaveLength(2); // 같은 키(캐시)
+    expect(r2.q).toBe('gs25 강남'); // 클라이언트는 응답 q 를 자기 검색어와 비교한다
+    expect(r2.items).toEqual(r1.items);
+    // NFD(자모 분리)로 온 같은 검색어도 같은 키.
+    await svc.search('GS25 강남'.normalize('NFD'), 8);
+    expect(calls).toHaveLength(2);
+
+    const [a, b, c] = await Promise.all([svc.search('을지로 3가', 8), svc.search('을지로 3가', 3), svc.search('을지로  3가', 1)]);
+    expect(calls).toHaveLength(4);
+    expect([a.items.length, b.items.length, c.items.length]).toEqual([3, 3, 1]);
+  });
+
+  it('서버 전역 일일 예산을 넘으면 새 검색은 enabled=false 빈 결과(캐시 히트는 계속), 재시도도 세고 다음 날 리셋', async () => {
+    const calls: string[] = [];
+    let now = new Date('2026-10-05T03:00:00Z'); // KST 12:00
+    let failFirst = true;
+    const base = makeFetch(calls);
+    // 첫 호출만 HTTP 502 — 어댑터가 1회 재시도하므로 첫 검색은 3콜을 쓴다.
+    const fetchImpl: FetchLike = async (url, init) => {
+      if (failFirst) {
+        failFirst = false;
+        calls.push(url);
+        return new Response('', { status: 502 });
+      }
+      return base(url, init);
+    };
+    const warns: unknown[] = [];
+    const svc = new LifeMapSearchService({ getKey: async () => 'k', fetchImpl, now: () => now, dailyBudget: 6, log: { warn: (o) => warns.push(o) } });
+    expect((await svc.search('강남역', 8)).enabled).toBe(true);
+    expect(calls).toHaveLength(3);
+    expect((await svc.search('시청역', 8)).enabled).toBe(true); // 3 + 2 = 5
+    expect(calls).toHaveLength(5);
+    const over = await svc.search('광화문', 8); // 5 + 2 > 6
+    expect(over).toMatchObject({ q: '광화문', enabled: false, items: [] });
+    expect(calls).toHaveLength(5);
+    expect(warns).toHaveLength(1);
+    expect((await svc.search('강남역', 8)).enabled).toBe(true); // 캐시 히트는 예산과 무관
+    await svc.search('종로', 8);
+    expect(warns).toHaveLength(1); // 경고는 하루 한 번
+    now = new Date('2026-10-05T15:30:00Z'); // KST 다음 날 00:30
+    expect((await svc.search('광화문', 8)).enabled).toBe(true);
+    expect(calls).toHaveLength(7);
+  });
+
+  it('서로 다른 검색어가 동시에 와도 예산을 넘겨 출발하지 않는다(기본 2콜은 시작할 때 잡는다)', async () => {
+    const calls: string[] = [];
+    const svc = new LifeMapSearchService({ getKey: async () => 'k', fetchImpl: makeFetch(calls), dailyBudget: 4 });
+    const rs = await Promise.all(['강남역', '시청역', '광화문'].map((q) => svc.search(q, 8)));
+    expect(rs.map((r) => r.enabled)).toEqual([true, true, false]);
+    expect(calls).toHaveLength(4);
+  });
 });

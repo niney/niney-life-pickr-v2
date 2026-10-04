@@ -194,6 +194,53 @@ describe('housing routes (격리 DB)', () => {
     expect(monthly.items.find((i) => i.id === 'H1')!.latest).toMatchObject({ price: 10000, rent: 120, area: 59.9 });
   });
 
+  it('status — 적재 이력이 그대로면 집계를 재사용(직접 고친 행은 다음 적재 뒤 반영), public Cache-Control(D-6·D-10)', async () => {
+    const before = await app.inject({ method: 'GET', url: STATUS_URL });
+    expect(before.headers['cache-control']).toBe('public, max-age=300');
+    const matched = before.json<HousingStatusResultType>().kapt.matched;
+    // 이력 없이 단지 행만 고치면 같은 집계(fetchedAt 은 매번 새 시각).
+    await app.prisma.housingComplex.update({ where: { id: 'H1' }, data: { kaptCode: 'A10099999' } });
+    const memo = (await app.inject({ method: 'GET', url: STATUS_URL })).json<HousingStatusResultType>();
+    expect(memo.kapt.matched).toBe(matched);
+    expect(memo.fetchedAt).not.toBe(before.json<HousingStatusResultType>().fetchedAt);
+    // 적재 이력이 생기면 다시 센다.
+    await app.prisma.housingSync.create({ data: { kind: 'kapt', count: 2 } });
+    const fresh = (await app.inject({ method: 'GET', url: STATUS_URL })).json<HousingStatusResultType>();
+    expect(fresh.kapt.matched).toBe(matched + 1);
+    await app.prisma.housingComplex.update({ where: { id: 'H1' }, data: { kaptCode: null } });
+    await app.prisma.housingSync.create({ data: { kind: 'kapt', count: 1 } });
+    expect((await app.inject({ method: 'GET', url: STATUS_URL })).json<HousingStatusResultType>().kapt.matched).toBe(matched);
+  });
+
+  it('points — 좌표 인덱스 고정(INDEXED BY 이름)·응답 순서는 세대수 작은 순(D-5)', async () => {
+    const { HOUSING_COMPLEX_COORD_INDEX } = await import('./housing.service.js');
+    expect(HOUSING_COMPLEX_COORD_INDEX).toBe('housing_complexes_lat_lng_idx');
+    const cols = await app.prisma.$queryRawUnsafe<{ name: string }[]>(`SELECT name FROM pragma_index_info('${HOUSING_COMPLEX_COORD_INDEX}') ORDER BY seqno`);
+    expect(cols.map((c) => c.name)).toEqual(['lat', 'lng']);
+    // 예전 (kind, households) 인덱스 순서와 같게 — H2(120세대) → H1(500세대).
+    const body = (await app.inject({ method: 'GET', url: pointsUrl({ bbox: SEOUL_BBOX, zoom: '15' }) })).json<HousingPointsResultType>();
+    expect(body.items.map((i) => i.id)).toEqual(['H2', 'H1']);
+  });
+
+  it('점 모드 범위·셀 상한 — 화면 크기를 넘는 bbox 는 셀, 빽빽하면 강등, z22 전국은 셀을 키워 접는다(D-7·D-1)', async () => {
+    // SEOUL_BBOX(경도 0.02°)는 z18 에서 15타일 → 점, z20 에서 58타일 → 셀.
+    expect((await app.inject({ method: 'GET', url: pointsUrl({ bbox: SEOUL_BBOX, zoom: '18' }) })).json<HousingPointsResultType>().mode).toBe('points');
+    const wide = (await app.inject({ method: 'GET', url: pointsUrl({ bbox: SEOUL_BBOX, zoom: '20' }) })).json<HousingPointsResultType>();
+    expect([wide.mode, wide.total]).toEqual(['cells', 2]);
+    const { HousingService } = await import('./housing.service.js');
+    const q = { bbox: SEOUL_BBOX, zoom: 15, dealType: 'trade', band: 'all' } as const;
+    const demoted = await new HousingService({ prisma: app.prisma, pointsDemoteCount: 1 }).getPoints(q);
+    expect([demoted.mode, demoted.total]).toEqual(['cells', 2]);
+    const kept = await new HousingService({ prisma: app.prisma, pointsDemoteCount: 2 }).getPoints(q);
+    expect([kept.mode, kept.total, kept.items.length]).toEqual(['points', 2, 2]);
+    // z22 전국 = 셀 격자 z9(집값은 한 단계 큰 칸 → 요청 줌 10 과 같은 결과).
+    const z10 = (await app.inject({ method: 'GET', url: pointsUrl({ bbox: KOREA_BBOX, zoom: '10' }) })).json<HousingPointsResultType>();
+    const z22 = (await app.inject({ method: 'GET', url: pointsUrl({ bbox: KOREA_BBOX, zoom: '22' }) })).json<HousingPointsResultType>();
+    expect(z22.mode).toBe('cells');
+    expect(z22.cells).toEqual(z10.cells);
+    expect(z22.total).toBe(3);
+  });
+
   it('points — 줌이 낮으면 셀 모드: 단지 수·거래 있는 단지 수·평균 단위가, 축이 셀 값에 반영', async () => {
     const res = await app.inject({ method: 'GET', url: pointsUrl({ bbox: KOREA_BBOX, zoom: '7' }) });
     const body = res.json<HousingPointsResultType>();

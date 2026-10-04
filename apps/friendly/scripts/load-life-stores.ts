@@ -94,7 +94,8 @@ const main = async (): Promise<void> => {
   let col: LifeStoreColumnIndex | null = null;
   const started = Date.now();
 
-  // 항목 순서대로 행을 정규화해 CHUNK_ROWS 씩 내보내는 스트림 — 교체 트랜잭션이 이걸 그대로 소비한다.
+  // 항목 순서대로 행을 정규화해 CHUNK_ROWS 씩 내보내는 스트림 — replaceLifeStores 가 청크마다 짧은 트랜잭션으로 스테이징 표에
+  // 넣고, 다 읽으면 원본과 바꿔 끼운다(쓰기 락은 청크당 짧게 + 교체 몇 초라 서버를 내리지 않아도 된다).
   async function* chunks(): AsyncGenerator<LifeStoreRow[]> {
     let buf: LifeStoreRow[] = [];
     for (const entry of entries) {

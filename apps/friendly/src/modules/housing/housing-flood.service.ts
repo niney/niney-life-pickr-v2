@@ -12,6 +12,8 @@ import { HOUSING_FLOOD_RADIUS_M, haversineM } from '@repo/utils';
 const FLOOD_CHECK_TTL_MS = 10 * 60_000;
 // 격자 한 칸(°) ≈ 위도 222m · 경도 176m(37.5°N) — 반경 100m 는 이웃 3×3 칸이면 충분.
 const CELL_DEG = 0.002;
+// 지도 배지 개수 메모 상한(좌표 키) — 단지 4.7만 개가 다 들어가고, 넘으면 비우고 다시 쌓는다(약 5MB 이하).
+const COUNT_MEMO_MAX = 100_000;
 
 interface FloodPoint {
   lat: number;
@@ -28,6 +30,8 @@ interface FloodState {
   sidos: Set<string>;
   fromYear: number;
   toYear: number;
+  // 반경 안 개수 메모(키 "lat,lng") — 색인(적재 sync id)마다 새로 만들어지므로 적재가 바뀌면 같이 버려진다.
+  counts: Map<string, number>;
 }
 
 const cellKey = (i: number, j: number): string => `${i}:${j}`;
@@ -75,7 +79,7 @@ export class HousingFloodIndex {
       fromYear = Math.min(fromYear, r.eventYear);
       toYear = Math.max(toYear, r.eventYear);
     }
-    this.state = rows.length > 0 ? { syncId: sync.id, checkedAt: this.now(), grid, sidos, fromYear, toYear } : null;
+    this.state = rows.length > 0 ? { syncId: sync.id, checkedAt: this.now(), grid, sidos, fromYear, toYear, counts: new Map() } : null;
     return this.state;
   }
 
@@ -96,6 +100,19 @@ export class HousingFloodIndex {
     return out;
   }
 
+  // 반경 안 개수 — 지도 점 모드가 단지마다(서울 z13 화면 4,000개) 부르므로 같은 적재 안에서는 좌표당 한 번만 센다
+  // (매번 near 하면 요청 1건이 이벤트 루프를 ~0.1초 막았다, D-V1). 좌표가 키라 지오코딩으로 단지 좌표가 바뀌어도 맞다.
+  static countNear(state: FloodState, lat: number, lng: number): number {
+    const key = `${lat},${lng}`;
+    let n = state.counts.get(key);
+    if (n === undefined) {
+      n = HousingFloodIndex.near(state, lat, lng).length;
+      if (state.counts.size >= COUNT_MEMO_MAX) state.counts.clear();
+      state.counts.set(key, n);
+    }
+    return n;
+  }
+
   // 법정동 시군구코드(5자리)의 시도가 침수흔적도 범위 안인지.
   static covers(state: FloodState, sggCd: string | null | undefined): boolean {
     return !!sggCd && state.sidos.has(sggCd.slice(0, 2));
@@ -104,7 +121,7 @@ export class HousingFloodIndex {
   // 지도 배지용 개수 — 범위 밖·미적재면 null.
   async countFor(lat: number, lng: number, sggCd: string): Promise<number | null> {
     const s = await this.ensure();
-    return s && HousingFloodIndex.covers(s, sggCd) ? HousingFloodIndex.near(s, lat, lng).length : null;
+    return s && HousingFloodIndex.covers(s, sggCd) ? HousingFloodIndex.countNear(s, lat, lng) : null;
   }
 
   // 단지 상세 — 건수·최대 침수심·사건 연월 묶음(최신 순). 범위 밖·미적재면 null.

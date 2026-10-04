@@ -32,10 +32,17 @@ import {
   isHousingAreaBand,
   isHousingComplexKind,
   isHousingDealType,
-  lifeCellSizeDeg,
   type HousingAreaBandStrict,
 } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
+import {
+  CELL_CACHE_MAX_UNITS,
+  POINTS_DEMOTE_COUNT,
+  cellGrid,
+  cellKeyOf,
+  cellResultSize,
+  pointsSpanOk,
+} from '../../lib/map-cells.js';
 import { HousingFloodIndex } from './housing-flood.service.js';
 
 // 집값 조회 — 로컬 SQLite(HousingComplex ≈4.6만 / HousingComplexStat / HousingComplexPrice / HousingTrade
@@ -44,10 +51,14 @@ import { HousingFloodIndex } from './housing-flood.service.js';
 // 단지 상세의 거래 목록에서만 읽는다. 침수 흔적(상세 flood·점 flood 개수)은 LifeFloodTrace 메모리 격자 색인
 // (HousingFloodIndex — 요청 시점 단지 좌표 반경 100m, 적재가 바뀌면 다시 올림).
 //
-// 뷰포트 조회는 일상지도와 같은 두 모드: 줌이 임계(HOUSING_POINT_MIN_ZOOM) 이상이고 bbox 가 좁으면
-// 단지별 점(배지값 = 축의 최근 거래, 상한 HOUSING_POINTS_MAX + truncated), 아니면 전국 고정 원점 도(°)
-// 격자로 GROUP BY 한 셀(단지 수·거래 있는 단지 수·그 단지들의 최근 거래 단위가 평균). 셀은 bbox 를 셀
-// 경계로 정렬한 키로 LRU 10분 캐시 — 통계가 재계산되면 sync id 가 바뀌어 키가 갈린다.
+// 뷰포트 조회는 일상지도와 같은 두 모드: 줌이 임계(HOUSING_POINT_MIN_ZOOM) 이상이고 bbox 가 그 줌의
+// 화면 크기 안(lib/map-cells pointsSpanOk)이면 단지별 점(배지값 = 축의 최근 거래, 상한 HOUSING_POINTS_MAX +
+// truncated — 잘릴 때는 세대수 작은 순, 아래 points 참고), 아니면 전국 고정 원점 도(°) 격자로 GROUP BY 한
+// 셀(단지 수·거래 있는 단지 수·그 단지들의 최근 거래 단위가 평균). 셀은 bbox 를 셀 경계로 정렬한 키로 LRU
+// 10분 캐시(셀 수 상한) — 통계가 재계산되면 sync id 가 바뀌어 키가 갈린다.
+//
+// 지도 원시 SQL 은 좌표 인덱스를 INDEXED BY 로 고정한다: kind 는 'apt' 단일값인데 통계(sqlite_stat1)가 없으면
+// 플래너가 (kind, households) 인덱스를 골라 4.7만 단지를 전부 룩업한다(points z15 207→3ms, D-5).
 //
 // 축에 거래가 없는 단지의 보강 순서(점·주변 목록 공통): fallback(다른 유형·전체 면적의 마지막 거래) →
 // official(전체 면적 공시가격 중위) → 없음. 둘 다 축에 거래가 있으면 채우지 않는다(fallback 은 null,
@@ -63,9 +74,15 @@ export class HousingServiceError extends Error {
   }
 }
 
-const POINTS_MAX_SPAN_DEG = 1.5;
+// 지도 원시 SQL 이 INDEXED BY 로 고정하는 좌표 인덱스 — 이름이 바뀌면 쿼리가 오류가 되므로 테스트가 고정한다.
+export const HOUSING_COMPLEX_COORD_INDEX = 'housing_complexes_lat_lng_idx';
+const COORD_INDEX = Prisma.raw(`"${HOUSING_COMPLEX_COORD_INDEX}"`);
 const CELL_CACHE_TTL_MS = 10 * 60_000;
 const CELL_CACHE_MAX = 300;
+// /housing/status 집계 재사용 — 적재 이력(sync id·거래 장부 시각)이 그대로면 다시 세지 않는다. 이력에 안 남는 변화
+// (단지 행 직접 수정 등)는 이 나이가 지나면 다시 센다.
+const STATUS_MAX_AGE_MS = 10 * 60_000;
+const STATUS_SYNC_KINDS = ['complex', 'stats', 'prices', 'kapt', 'buildings', 'geocode'] as const;
 // 단지 생활 인프라(반경 개수) 캐시 — 상가·병의원 표는 분기/월 단위로만 바뀐다. 키는 단지 id.
 const INFRA_CACHE_TTL_MS = 10 * 60_000;
 const INFRA_CACHE_MAX = 2000;
@@ -155,11 +172,22 @@ const bandOrder = (band: string): number => HOUSING_AREA_BANDS.indexOf(band as H
 export interface HousingServiceDeps {
   prisma: PrismaClient;
   now?: () => Date;
+  // 점 모드 강등 기준(기본 POINTS_DEMOTE_COUNT) — 테스트 주입용.
+  pointsDemoteCount?: number;
 }
 
+type HousingStatusBody = Omit<HousingStatusResultType, 'fetchedAt'>;
+
 export class HousingService {
-  private readonly cellCache = new LRUCache<string, HousingPointsResultType>({ max: CELL_CACHE_MAX, ttl: CELL_CACHE_TTL_MS });
+  private readonly cellCache = new LRUCache<string, HousingPointsResultType>({
+    max: CELL_CACHE_MAX,
+    maxSize: CELL_CACHE_MAX_UNITS,
+    sizeCalculation: cellResultSize,
+    ttl: CELL_CACHE_TTL_MS,
+  });
   private readonly infraCache = new LRUCache<string, HousingInfraType>({ max: INFRA_CACHE_MAX, ttl: INFRA_CACHE_TTL_MS });
+  private statusMemo: { key: string; at: number; value: HousingStatusBody } | null = null;
+  private statusInflight: Promise<HousingStatusBody> | null = null;
   // 침수 흔적 색인(서울시 침수흔적도) — 상세 flood·지도 점 flood 개수.
   private readonly flood: HousingFloodIndex;
 
@@ -183,21 +211,39 @@ export class HousingService {
     return { syncId: stats?.id ?? complex.id, fetchedAt: (stats ?? complex).loadedAt.toISOString() };
   }
 
+  // 무인증 /housing/status — 예전엔 요청마다 COUNT 풀스캔 5개 포함 13쿼리(~0.7초, D-6). 적재 이력 키(최신 sync id 6종 +
+  // 거래 장부 최신 시각)가 그대로면 이전 집계를 쓰고(확인 7쿼리, 수 ms), 동시 요청은 한 번만 센다.
   async getStatus(): Promise<HousingStatusResultType> {
+    this.statusInflight ??= this.loadStatus().finally(() => {
+      this.statusInflight = null;
+    });
+    const body = await this.statusInflight;
+    return { ...body, fetchedAt: this.now().toISOString() };
+  }
+
+  private async loadStatus(): Promise<HousingStatusBody> {
     const prisma = this.deps.prisma;
-    const [complex, stats, pricesSync, kaptSync, buildingsSync] = await Promise.all([
-      this.latestSync('complex'),
-      this.latestSync('stats'),
-      this.latestSync('prices'),
-      this.latestSync('kapt'),
-      this.latestSync('buildings'),
+    const [syncs, ledgerAt] = await Promise.all([
+      Promise.all(STATUS_SYNC_KINDS.map((k) => this.latestSync(k))),
+      prisma.housingTradeSync.aggregate({ _max: { fetchedAt: true } }),
     ]);
-    const [count, geocoded] = complex
-      ? await Promise.all([
-          prisma.housingComplex.count({ where: { kind: 'apt' } }),
-          prisma.housingComplex.count({ where: { kind: 'apt', lat: { not: null } } }),
-        ])
-      : [0, 0];
+    const key = [...syncs.map((s) => s?.id ?? 0), ledgerAt._max.fetchedAt?.getTime() ?? 0].join('|');
+    const nowMs = this.now().getTime();
+    const memo = this.statusMemo;
+    if (memo && memo.key === key && nowMs - memo.at < STATUS_MAX_AGE_MS) return memo.value;
+
+    const [complex, stats, pricesSync, kaptSync, buildingsSync] = syncs;
+    // 단지 수·보강 수 — 표 한 번 스캔. +kind 로 (kind, households) 인덱스를 끈다('apt' 단일값이라 타면 행마다 룩업).
+    const [c] = await prisma.$queryRaw<{ n: unknown; geocoded: unknown; kapt: unknown; fetched: unknown; pnu: unknown }[]>(
+      Prisma.sql`SELECT COUNT(*) AS n, COUNT("lat") AS geocoded, COUNT("kaptCode") AS kapt,
+                        COUNT("buildingFetchedAt") AS fetched, COUNT("pnu") AS pnu
+                 FROM "housing_complexes" WHERE +"kind" = 'apt'`,
+    );
+    const count = complex ? Number(c?.n ?? 0) : 0;
+    const geocoded = complex ? Number(c?.geocoded ?? 0) : 0;
+    const kaptMatched = Number(c?.kapt ?? 0);
+    const buildingsFetched = Number(c?.fetched ?? 0);
+    const buildingsTotal = Number(c?.pnu ?? 0);
     const ledger = async (dealTypes: string[]) => {
       const agg = await prisma.housingTradeSync.aggregate({
         where: { dealType: { in: dealTypes } },
@@ -215,15 +261,12 @@ export class HousingService {
       };
     };
     // 보강 — 공시가격은 'all' 행 수가 곧 단지 수, K-apt 는 단지코드가 붙은 수, 건축물대장은 조회한 수/PNU 보유 수.
-    const [trades, rents, priceAgg, kaptMatched, buildingsFetched, buildingsTotal] = await Promise.all([
+    const [trades, rents, priceAgg] = await Promise.all([
       ledger(['trade']),
       ledger(['jeonse', 'monthly']),
       prisma.housingComplexPrice.aggregate({ where: { band: ALL_BAND }, _count: { complexId: true }, _max: { year: true } }),
-      prisma.housingComplex.count({ where: { kind: 'apt', kaptCode: { not: null } } }),
-      prisma.housingComplex.count({ where: { kind: 'apt', buildingFetchedAt: { not: null } } }),
-      prisma.housingComplex.count({ where: { kind: 'apt', pnu: { not: null } } }),
     ]);
-    return {
+    const value: HousingStatusBody = {
       complexes: {
         loaded: complex !== null,
         count,
@@ -242,24 +285,43 @@ export class HousingService {
       },
       kapt: { loaded: kaptSync !== null, matched: kaptMatched, loadedAt: kaptSync?.loadedAt.toISOString() ?? null },
       buildings: { fetched: buildingsFetched, total: buildingsTotal, loadedAt: buildingsSync?.loadedAt.toISOString() ?? null },
-      fetchedAt: this.now().toISOString(),
     };
+    this.statusMemo = { key, at: nowMs, value };
+    return value;
   }
 
   async getPoints(q: HousingPointsQueryType): Promise<HousingPointsResultType> {
     const { syncId, fetchedAt } = await this.requireLoaded();
     const bbox = parseBbox(q.bbox);
     const zoom = Math.floor(q.zoom);
-    const narrow = bbox.maxLat - bbox.minLat <= POINTS_MAX_SPAN_DEG && bbox.maxLng - bbox.minLng <= POINTS_MAX_SPAN_DEG;
-    if (zoom >= HOUSING_POINT_MIN_ZOOM && narrow) return this.points(bbox, q.dealType, q.band, fetchedAt);
+    if (zoom >= HOUSING_POINT_MIN_ZOOM && pointsSpanOk(zoom, bbox)) {
+      // 일상지도와 같은 규약 — 먼저 세고, 정상 화면이 닿지 않는 밀도면 셀로 강등. total 은 이 COUNT.
+      const total = await this.countIn(bbox);
+      if (total <= (this.deps.pointsDemoteCount ?? POINTS_DEMOTE_COUNT)) {
+        return this.points(bbox, q.dealType, q.band, fetchedAt, total);
+      }
+    }
     return this.cells(zoom, bbox, q.dealType, q.band, syncId, fetchedAt);
   }
 
+  private async countIn(b: Bbox): Promise<number> {
+    const rows = await this.deps.prisma.$queryRaw<{ n: unknown }[]>(
+      Prisma.sql`SELECT COUNT(*) AS n FROM "housing_complexes" INDEXED BY ${COORD_INDEX}
+                 WHERE "kind" = 'apt' AND "lat" >= ${b.minLat} AND "lat" <= ${b.maxLat}
+                   AND "lng" >= ${b.minLng} AND "lng" <= ${b.maxLng}`,
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  // 점 — 박스 안 단지를 세대수 작은 순(없으면 앞, 같으면 rowid)으로 상한까지. 예전엔 플래너가 고른 (kind, households)
+  // 인덱스 순서가 그대로 잘림 표본·응답 순서(배지 겹침 순서)가 됐다 — 좌표 인덱스로 바꾸면 위도 순(화면 남쪽 띠)이
+  // 되므로 같은 순서를 명시한다. 정렬은 단지 표만 도는 하위 질의에서 하고, 통계·공시가격 조인은 잘린 뒤에만.
   private async points(
     bbox: Bbox,
     dealType: HousingDealTypeType,
     band: HousingAreaBandType,
     fetchedAt: string,
+    total: number,
   ): Promise<HousingPointsResultType> {
     const rows = await this.deps.prisma.$queryRaw<
       {
@@ -290,13 +352,16 @@ export class HousingService {
                         f."latestPrice" AS "anyPrice", f."latestRent" AS "anyRent", f."latestArea" AS "anyArea",
                         f."latestFloor" AS "anyFloor", f."latestDate" AS "anyDate", f."latestDealType" AS "anyType",
                         p."year" AS "prYear", p."median" AS "prMedian", p."count" AS "prCount"
-                 FROM "housing_complexes" c
+                 FROM (SELECT "id", "lat", "lng", "name", "sggCd", "households", "saleType", rowid AS "rid"
+                       FROM "housing_complexes" INDEXED BY ${COORD_INDEX}
+                       WHERE "kind" = 'apt' AND "lat" >= ${bbox.minLat} AND "lat" <= ${bbox.maxLat}
+                         AND "lng" >= ${bbox.minLng} AND "lng" <= ${bbox.maxLng}
+                       ORDER BY "households", rowid
+                       LIMIT ${HOUSING_POINTS_MAX + 1}) c
                  LEFT JOIN "housing_complex_stats" s ON s."complexId" = c."id" AND s."dealType" = ${dealType} AND s."band" = ${band}
                  LEFT JOIN "housing_complex_stats" f ON f."complexId" = c."id" AND f."dealType" = ${ANY_DEAL_TYPE} AND f."band" = ${ALL_BAND}
                  LEFT JOIN "housing_complex_prices" p ON p."complexId" = c."id" AND p."band" = ${ALL_BAND}
-                 WHERE c."kind" = 'apt' AND c."lat" >= ${bbox.minLat} AND c."lat" <= ${bbox.maxLat}
-                   AND c."lng" >= ${bbox.minLng} AND c."lng" <= ${bbox.maxLng}
-                 LIMIT ${HOUSING_POINTS_MAX + 1}`);
+                 ORDER BY c."households", c."rid"`);
     const truncated = rows.length > HOUSING_POINTS_MAX;
     const flood = await this.flood.ensure();
     const items = (truncated ? rows.slice(0, HOUSING_POINTS_MAX) : rows).map((r) => {
@@ -336,22 +401,16 @@ export class HousingService {
         official,
         saleType: r.saleType ?? null,
         flood:
-          flood && HousingFloodIndex.covers(flood, r.sggCd)
-            ? HousingFloodIndex.near(flood, Number(r.lat), Number(r.lng)).length
-            : null,
+          flood && HousingFloodIndex.covers(flood, r.sggCd) ? HousingFloodIndex.countNear(flood, Number(r.lat), Number(r.lng)) : null,
       };
     });
-    const total = truncated
-      ? await this.deps.prisma.housingComplex.count({
-          where: { kind: 'apt', lat: { gte: bbox.minLat, lte: bbox.maxLat }, lng: { gte: bbox.minLng, lte: bbox.maxLng } },
-        })
-      : items.length;
     return { mode: 'points', dealType, band, items, cells: [], total, truncated, minPointZoom: HOUSING_POINT_MIN_ZOOM, fetchedAt };
   }
 
   // 집계 셀 — 일상지도와 같은 전국 고정 원점 격자(bbox 셀 경계 바깥 정렬)이되 한 칸을 **두 배**(화면
   // ~128px)로 잡는다: 알약(평당가 글자 ~60~80px)이 일상지도의 숫자 버블보다 넓어 64px 칸에선 이웃과
-  // 겹친다(2026-08-30 실화면 확인). 단지 수·거래 있는 단지 수·최근 거래 단위가(만원/㎡) 평균.
+  // 겹친다(2026-08-30 실화면 확인). 단지 수·거래 있는 단지 수·최근 거래 단위가(만원/㎡) 평균. 셀 수가 상한을
+  // 넘으면 셀을 키운다(cellGrid — 캐시 키도 실제 쓴 줌).
   private async cells(
     zoom: number,
     bbox: Bbox,
@@ -360,15 +419,10 @@ export class HousingService {
     syncId: number,
     fetchedAt: string,
   ): Promise<HousingPointsResultType> {
-    const { dLng, dLat } = lifeCellSizeDeg(Math.max(0, zoom - 1));
+    const grid = cellGrid(zoom, bbox, { zoomOffset: -1 });
+    const { dLng, dLat, q } = grid;
     const o = LIFE_CELL_ORIGIN;
-    const q: Bbox = {
-      minLng: o.lng + Math.floor((bbox.minLng - o.lng) / dLng) * dLng,
-      maxLng: o.lng + Math.ceil((bbox.maxLng - o.lng) / dLng) * dLng,
-      minLat: o.lat + Math.floor((bbox.minLat - o.lat) / dLat) * dLat,
-      maxLat: o.lat + Math.ceil((bbox.maxLat - o.lat) / dLat) * dLat,
-    };
-    const key = `${zoom}|${q.minLng.toFixed(6)},${q.minLat.toFixed(6)},${q.maxLng.toFixed(6)},${q.maxLat.toFixed(6)}|${dealType}|${band}|${syncId}`;
+    const key = `${cellKeyOf(grid)}|${dealType}|${band}|${syncId}`;
     const hit = this.cellCache.get(key);
     if (hit) return hit;
     const rows = await this.deps.prisma.$queryRaw<
@@ -379,7 +433,7 @@ export class HousingService {
                         SUM(CASE WHEN s."latestPrice" IS NOT NULL THEN 1 ELSE 0 END) AS traded,
                         AVG(CASE WHEN s."latestPrice" IS NOT NULL THEN s."latestPrice" * 1.0 / s."latestArea" END) AS unit,
                         AVG(c."lat") AS lat, AVG(c."lng") AS lng
-                 FROM "housing_complexes" c
+                 FROM "housing_complexes" AS c INDEXED BY ${COORD_INDEX}
                  LEFT JOIN "housing_complex_stats" s ON s."complexId" = c."id" AND s."dealType" = ${dealType} AND s."band" = ${band}
                  WHERE c."kind" = 'apt' AND c."lat" >= ${q.minLat} AND c."lat" <= ${q.maxLat}
                    AND c."lng" >= ${q.minLng} AND c."lng" <= ${q.maxLng}

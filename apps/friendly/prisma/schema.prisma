@@ -1517,7 +1517,7 @@ model LifeStore {
   lat      Float
   lng      Float
 
-  @@index([lat, lng])
+  // 조회는 전부 kind IN 을 포함해 (kind, lat, lng) 를 탄다 — (lat, lng) 단독 인덱스(36MB)는 미사용이라 뺐다(재적재 교체 시간 절반).
   @@index([kind, lat, lng])
   @@map("life_stores")
 }
@@ -1705,7 +1705,9 @@ model EvStation {
   hasFast        Boolean
   statusAt       DateTime?
 
-  @@index([lat, lng])
+  // 좌표 + 지도 필터(사용 가능·급속·주차 무료·이용 제한) 커버링 — 필터를 켠 셀 집계가 표를 행마다 다시 읽지 않게(E-5).
+  // 접두가 (lat, lng) 라 점·주변 조회도 그대로 탄다.
+  @@index([lat, lng, availableCount, hasFast, parkingFree, limited])
   @@map("ev_stations")
 }
 

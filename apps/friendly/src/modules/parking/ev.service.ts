@@ -7,15 +7,16 @@ import type {
   EvStationDetailType,
   EvStationItemType,
 } from '@repo/api-contract';
-import { EV_POINT_MIN_ZOOM, LIFE_CELL_ORIGIN, PARKING_POINTS_MAX, evKindLabel, evStationLevel, haversineM, lifeCellSizeDeg } from '@repo/utils';
+import { EV_POINT_MIN_ZOOM, LIFE_CELL_ORIGIN, PARKING_POINTS_MAX, evKindLabel, evStationLevel, haversineM } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
+import { CELL_CACHE_MAX_UNITS, cellGrid, cellKeyOf, cellResultSize, pointsSpanOk } from '../../lib/map-cells.js';
 import { kstToIso } from './parking-live.service.js';
 import { ParkingServiceError } from './parking.service.js';
 
-// 전기차 충전소 조회 — 로컬 SQLite(EvStation ~10만+, EvCharger ~52만). 점/셀 두 모드는 주차장과 같고, 셀 캐시는 짧게(상태
-// 폴러가 사용 가능 칸을 10분마다 바꾸므로 '사용 가능만' 필터 셀은 캐시하지 않는다).
+// 전기차 충전소 조회 — 로컬 SQLite(EvStation ~10만+, EvCharger ~52만). 점/셀 두 모드는 주차장과 같다. 셀 캐시 키에는
+// '사용 가능만' 필터일 때 마지막 상태 반영 시각(statusAt)을 넣는다 — 상태 폴러가 사용 가능 칸을 10분마다 바꾸므로
+// 폴링 사이에는 같은 결과를 재사용하고 폴링 뒤엔 키가 갈린다. 필터 셀 집계는 좌표+필터 커버링 인덱스를 탄다(E-5).
 
-const POINTS_MAX_SPAN_DEG = 1.5;
 const CELL_CACHE_TTL_MS = 10 * 60_000;
 const CELL_CACHE_MAX = 300;
 const STATUS_AT_TTL_MS = 60_000;
@@ -82,7 +83,12 @@ export interface EvServiceDeps {
 }
 
 export class EvService {
-  private readonly cellCache = new LRUCache<string, EvPointsResultType>({ max: CELL_CACHE_MAX, ttl: CELL_CACHE_TTL_MS });
+  private readonly cellCache = new LRUCache<string, EvPointsResultType>({
+    max: CELL_CACHE_MAX,
+    maxSize: CELL_CACHE_MAX_UNITS,
+    sizeCalculation: cellResultSize,
+    ttl: CELL_CACHE_TTL_MS,
+  });
 
   constructor(private readonly deps: EvServiceDeps) {}
 
@@ -92,15 +98,21 @@ export class EvService {
     return sync;
   }
 
-  // 마지막 상태 반영 시각 — 10만 행 MAX 스캔이라 1분 메모이즈(폴러가 10분마다 바꾼다).
+  // 마지막 상태 반영 시각 — 10만 행 MAX 스캔이라 1분 메모이즈. 같은 프로세스의 상태 폴러는 반영 직후 noteStatusAt 으로
+  // 바로 갱신하고, 주차 status(ParkingService)도 이 값을 같이 쓴다(E-9). 다른 프로세스의 재적재는 1분 안에 따라온다.
   private statusAtCache: { value: string | null; at: number } | null = null;
-  private async statusAt(): Promise<string | null> {
+  async getStatusAt(): Promise<string | null> {
     const now = Date.now();
     if (this.statusAtCache && now - this.statusAtCache.at < STATUS_AT_TTL_MS) return this.statusAtCache.value;
     const agg = await this.deps.prisma.evStation.aggregate({ _max: { statusAt: true } });
     const value = agg._max.statusAt?.toISOString() ?? null;
     this.statusAtCache = { value, at: now };
     return value;
+  }
+
+  // 상태 폴러가 충전소 칸을 at 시각으로 고친 직후 — 그 시각이 곧 새 MAX(statusAt).
+  noteStatusAt(at: Date): void {
+    this.statusAtCache = { value: at.toISOString(), at: Date.now() };
   }
 
   private where(b: Bbox, f: EvFilters): Prisma.EvStationWhereInput {
@@ -119,10 +131,10 @@ export class EvService {
     const bbox = parseBbox(q.bbox);
     const f: EvFilters = { fastOnly: q.fastOnly, freeParkingOnly: q.freeParkingOnly, availableOnly: q.availableOnly, openOnly: q.openOnly };
     const zoom = Math.floor(q.zoom);
-    const narrow = bbox.maxLat - bbox.minLat <= POINTS_MAX_SPAN_DEG && bbox.maxLng - bbox.minLng <= POINTS_MAX_SPAN_DEG;
     const fetchedAt = sync.loadedAt.toISOString();
-    const statusAt = await this.statusAt();
-    if (zoom >= EV_POINT_MIN_ZOOM && narrow) {
+    const statusAt = await this.getStatusAt();
+    // 점 모드는 그 줌의 화면 크기 안 bbox 만(lib/map-cells) — 넘는 bbox 는 셀.
+    if (zoom >= EV_POINT_MIN_ZOOM && pointsSpanOk(zoom, bbox)) {
       const where = this.where(bbox, f);
       const rows = await this.deps.prisma.evStation.findMany({
         where,
@@ -144,20 +156,14 @@ export class EvService {
     return this.cells(zoom, bbox, f, sync.id, fetchedAt, statusAt);
   }
 
+  // 셀 수가 상한을 넘으면 셀을 키운다(cellGrid — 캐시 키도 실제 쓴 줌).
   private async cells(zoom: number, bbox: Bbox, f: EvFilters, syncId: number, fetchedAt: string, statusAt: string | null): Promise<EvPointsResultType> {
-    const { dLng, dLat } = lifeCellSizeDeg(zoom);
+    const grid = cellGrid(zoom, bbox);
+    const { dLng, dLat, q } = grid;
     const o = LIFE_CELL_ORIGIN;
-    const q: Bbox = {
-      minLng: o.lng + Math.floor((bbox.minLng - o.lng) / dLng) * dLng,
-      maxLng: o.lng + Math.ceil((bbox.maxLng - o.lng) / dLng) * dLng,
-      minLat: o.lat + Math.floor((bbox.minLat - o.lat) / dLat) * dLat,
-      maxLat: o.lat + Math.ceil((bbox.maxLat - o.lat) / dLat) * dLat,
-    };
-    const key = `${zoom}|${q.minLng.toFixed(6)},${q.minLat.toFixed(6)},${q.maxLng.toFixed(6)},${q.maxLat.toFixed(6)}|${Number(f.fastOnly)}${Number(f.freeParkingOnly)}${Number(f.openOnly)}|${syncId}`;
-    if (!f.availableOnly) {
-      const hit = this.cellCache.get(key);
-      if (hit) return { ...hit, statusAt };
-    }
+    const key = `${cellKeyOf(grid)}|${Number(f.fastOnly)}${Number(f.freeParkingOnly)}${Number(f.openOnly)}${Number(f.availableOnly)}|${syncId}${f.availableOnly ? `|${statusAt ?? '-'}` : ''}`;
+    const hit = this.cellCache.get(key);
+    if (hit) return { ...hit, statusAt };
     const conds: Prisma.Sql[] = [
       Prisma.sql`"lat" >= ${q.minLat}`,
       Prisma.sql`"lat" <= ${q.maxLat}`,
@@ -200,26 +206,36 @@ export class EvService {
       fetchedAt,
       statusAt,
     };
-    if (!f.availableOnly) this.cellCache.set(key, result);
+    this.cellCache.set(key, result);
     return result;
   }
 
+  // 좌표 기준 거리순 — 1단계는 박스 안 id·좌표만 읽어 거리 상위 limit 개를 고르고, 2단계에서 그 id 만 전 컬럼으로 읽는다
+  // (도심 r=3km 는 박스 안 1,200행 전 컬럼을 매번 읽고 30건만 썼다, E-10). 같은 거리는 1단계 행 순서(안정 정렬).
   async getNearby(q: EvNearbyQueryType): Promise<EvNearbyResultType> {
     const sync = await this.requireLoaded();
     const center = { lat: q.lat, lng: q.lng };
     const degLat = q.radius / 111_320;
     const degLng = q.radius / (111_320 * Math.cos((q.lat * Math.PI) / 180));
-    const rows = await this.deps.prisma.evStation.findMany({
+    const coords = await this.deps.prisma.evStation.findMany({
       where: this.where(
         { minLat: q.lat - degLat, maxLat: q.lat + degLat, minLng: q.lng - degLng, maxLng: q.lng + degLng },
         { fastOnly: q.fastOnly, freeParkingOnly: q.freeParkingOnly, availableOnly: q.availableOnly, openOnly: q.openOnly },
       ),
+      select: { id: true, lat: true, lng: true },
     });
-    const withDist = rows
-      .map((r) => ({ ...toEvStationItem(r), dist: Math.round(haversineM(center, { lat: r.lat, lng: r.lng })) }))
+    const inRadius = coords
+      .map((r) => ({ id: r.id, dist: Math.round(haversineM(center, { lat: r.lat, lng: r.lng })) }))
       .filter((it) => it.dist <= q.radius)
       .sort((a, b) => a.dist - b.dist);
-    return { center, items: withDist.slice(0, q.limit), total: withDist.length, fetchedAt: sync.loadedAt.toISOString(), statusAt: await this.statusAt() };
+    const page = inRadius.slice(0, q.limit);
+    const rows = page.length > 0 ? await this.deps.prisma.evStation.findMany({ where: { id: { in: page.map((p) => p.id) } } }) : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const items = page.flatMap((p) => {
+      const r = byId.get(p.id);
+      return r ? [{ ...toEvStationItem(r), dist: p.dist }] : [];
+    });
+    return { center, items, total: inRadius.length, fetchedAt: sync.loadedAt.toISOString(), statusAt: await this.getStatusAt() };
   }
 
   async getDetail(id: string): Promise<EvStationDetailType> {
