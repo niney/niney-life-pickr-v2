@@ -160,7 +160,9 @@ describe('matchRestaurantTour (격리 DB)', () => {
       where: { typeShort: { in: ['식당', '상업', '상점'] }, lat: { gte: O.lat - 0.003, lte: O.lat + 0.003 }, lng: { gte: O.lng - 0.0035, lte: O.lng + 0.0035 } },
       select: { id: true },
     });
-    expect(near).toEqual(old.map((p) => p.id));
+    // 예전 조회는 ORDER BY 가 없어 순서가 플래너 통계(ANALYZE 유무)에 따라 바뀐다 — 같은 장소인지만 비교하고,
+    // 순서는 아래 명시 순서로 고정한다.
+    expect([...near].sort()).toEqual(old.map((p) => p.id).sort());
     // 상업 < 상점 < 식당(바이트 순) → 방문자 수 → 적재 순. bbox 경계(정확히 +0.003)는 포함, 그 밖·숙소는 빠진다.
     expect(near).toEqual(['G-mall', 'G-shop', 'G-rest-b', 'G-rest-a', 'G-edge']);
   });
