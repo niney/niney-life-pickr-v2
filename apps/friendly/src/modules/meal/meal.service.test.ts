@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { decodeMealEntryCursor, encodeMealEntryCursor, medianSlotTime } from './meal.service.js';
+import { parseTimeOfDay } from '@repo/utils';
+import {
+  decodeMealEntryCursor,
+  encodeMealEntryCursor,
+  medianSlotTime,
+  minutesOfDayInSeoul,
+} from './meal.service.js';
+
+describe('minutesOfDayInSeoul', () => {
+  it('+9시간 산술이 Asia/Seoul 포매터(예전 구현)와 같은 분을 낸다 — 자정 경계·초 절삭 포함', () => {
+    const viaIntl = (d: Date): number =>
+      parseTimeOfDay(
+        d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }),
+      ) ?? 0;
+    const samples = [
+      '2026-10-04T14:59:59.999Z', // 23:59 KST
+      '2026-10-04T15:00:00.000Z', // 00:00 KST
+      '2026-10-04T15:00:59.000Z',
+      '2026-03-29T01:30:00.000Z', // 유럽 일광절약 전환일 — 서울과 무관
+      '2024-02-29T23:45:30.000Z',
+      '1999-12-31T15:00:00.000Z',
+    ].map((iso) => new Date(iso));
+    // 2년치 37분 간격 표본도 함께 대조한다.
+    for (let t = Date.UTC(2025, 0, 1); t < Date.UTC(2027, 0, 1); t += 37 * 60_000 * 97) samples.push(new Date(t));
+    for (const d of samples) expect(minutesOfDayInSeoul(d)).toBe(viaIntl(d));
+  });
+});
 
 // 시간 입력 프리셋의 핵심 계산 — 평균이 아니라 중앙값이고, 야식은 자정을 걸친다.
 const at = (h: number, m = 0): number => h * 60 + m;

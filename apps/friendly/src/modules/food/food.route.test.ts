@@ -10,6 +10,7 @@ import type {
   FoodRestaurantsResultType,
   FoodSearchResultType,
 } from '@repo/api-contract';
+import { Routes } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
@@ -309,6 +310,34 @@ describe('food routes (격리 DB)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/event-stream');
     expect(res.body).toContain('event: snapshot');
+  });
+
+  // 공개 메뉴 칼로리 — 판정이 끝난 응답만 공용 캐시(Cloudflare·브라우저)가 10분 흡수한다. 판정 중(llmPending)
+  // 응답의 헤더 제외는 서비스 테스트의 백그라운드 흐름이 보장한다(여기서는 LLM 을 부르지 않게 메뉴 없는 식당).
+  it('공개 메뉴 칼로리 — 판정이 끝난 응답에는 public 캐시 헤더, 없는 식당은 404', async () => {
+    const canonical = await app.prisma.canonicalRestaurant.create({
+      data: { id: 'canonical-mn', name: '메뉴없는집', primaryCategory: '한식', latitude: 37.5, longitude: 127 },
+    });
+    await app.prisma.restaurant.create({
+      data: {
+        id: 'restaurant-mn',
+        source: 'naver',
+        sourceId: 'place-mn',
+        placeId: 'place-mn',
+        canonicalId: canonical.id,
+        name: '메뉴없는집',
+        rawSourceUrl: 'https://example.test/place-mn',
+        snapshotJson: JSON.stringify({ menus: [], menuGroups: [] }),
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: Routes.Restaurant.publicMenuNutrition('place-mn') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ placeId: 'place-mn', items: [], llmPending: false });
+    expect(res.headers['cache-control']).toBe('public, max-age=600');
+
+    const missing = await app.inject({ method: 'GET', url: Routes.Restaurant.publicMenuNutrition('no-such-place') });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers['cache-control']).toBeUndefined();
   });
 });
 

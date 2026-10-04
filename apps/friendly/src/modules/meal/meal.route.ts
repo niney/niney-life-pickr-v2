@@ -24,13 +24,23 @@ import {
   RecentMealItemQuery,
   RecentMealItemResult,
   RestoreMealDataResult,
+  MEAL_DATA_BACKUP_MAX_ENTRIES,
   MEAL_DATA_BACKUP_MAX_JSON_BYTES,
+  MEAL_DATA_BACKUP_MAX_PHOTOS,
+  MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS,
+  MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES,
+  MEAL_MAX_ENTRIES_PER_DAY,
+  MEAL_MAX_ENTRIES_PER_USER,
+  MEAL_STATS_MAX_DAYS,
   MealStatsResult,
   Routes,
   UpdateMealEntryInput,
   UpdateMealPreferenceInput,
   UploadMealPhotoResult,
+  type MealDataBackupType,
+  type MealDataExportType,
 } from '@repo/api-contract';
+import { daysBetween } from '@repo/utils';
 import { RATE } from '../../plugins/rate-limit.js';
 import { MealDataError, MealDataService } from './meal-data.service.js';
 import { MealPhotoError, isValidMealPhotoToken } from './meal-photo.service.js';
@@ -57,12 +67,15 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     if (e instanceof MealServiceError) {
       if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);
       if (e.code === 'photo_not_found') throw app.httpErrors.notFound(e.message);
+      if (e.code === 'limit') throw app.httpErrors.conflict(e.message);
       throw app.httpErrors.badRequest(e.message);
     }
     if (e instanceof MealPhotoError) {
       if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);
       if (e.code === 'forbidden') throw app.httpErrors.forbidden(e.message);
       if (e.code === 'quota' || e.code === 'attached') throw app.httpErrors.conflict(e.message);
+      if (e.code === 'too_large') throw app.httpErrors.payloadTooLarge(e.message);
+      if (e.code === 'busy') throw app.httpErrors.serviceUnavailable(e.message);
       throw app.httpErrors.badRequest(e.message);
     }
     throw e;
@@ -71,6 +84,8 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
   const throwMealDataAsHttp = (e: unknown): never => {
     if (e instanceof MealDataError) {
       if (e.code === 'backup_too_large') throw app.httpErrors.payloadTooLarge(e.message);
+      if (e.code === 'limit_exceeded') throw app.httpErrors.conflict(e.message);
+      if (e.code === 'busy') throw app.httpErrors.serviceUnavailable(e.message);
       throw app.httpErrors.badRequest(e.message);
     }
     if (e instanceof MealPhotoError) return throwAsHttp(e);
@@ -97,7 +112,8 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
       summary: '식단 기록 생성 — 음식 항목 1~20개·사진 토큰 최대 5장, 영양값은 서버가 채움',
       description:
         '사진은 먼저 POST /api/v1/meals/photos 로 올려 받은 token 을 photoTokens 에 순서대로 넣는다. ' +
-        '항목의 칼로리·단백질·나트륨은 클라이언트가 보내지 않고 서버가 음식 카탈로그 매칭으로 스냅샷한다.',
+        '항목의 칼로리·단백질·나트륨은 클라이언트가 보내지 않고 서버가 음식 카탈로그 매칭으로 스냅샷한다. ' +
+        `기록은 계정당 ${MEAL_MAX_ENTRIES_PER_USER.toLocaleString('ko-KR')}건·하루 ${MEAL_MAX_ENTRIES_PER_DAY}끼까지이며 넘으면 409.`,
       security: [{ bearerAuth: [] }],
       body: CreateMealEntryInput,
       response: { 201: MealEntry },
@@ -176,6 +192,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['meal'],
       summary: '기간 식단 통계 — 분류별 분포·자주 먹은 음식·연속 기록·영양 평균·인사이트',
+      description: `기간은 from~to(포함) 최대 ${MEAL_STATS_MAX_DAYS}일 — 넘으면 400.`,
       security: [{ bearerAuth: [] }],
       querystring: MealStatsQuery,
       response: { 200: MealStatsResult },
@@ -183,6 +200,11 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => {
       if (req.query.from > req.query.to) {
         throw app.httpErrors.badRequest('from 이 to 보다 뒤입니다.');
+      }
+      // 범위 행을 모두 읽어 집계하므로 기간을 묶는다(하루 끼니 상한과 함께 최대 행 수가 정해진다).
+      const span = daysBetween(req.query.from, req.query.to);
+      if (span === null || span + 1 > MEAL_STATS_MAX_DAYS) {
+        throw app.httpErrors.badRequest(`통계 기간은 최대 ${MEAL_STATS_MAX_DAYS}일입니다.`);
       }
       // '오늘'은 서버 시간대(Asia/Seoul 배포)를 기준으로 잡는다 — 연속 일수 계산에만 쓰인다.
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
@@ -192,15 +214,24 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
 
   // 내보내기·전체 삭제는 /meals/:id 보다 먼저 등록한다. 특히 DELETE /meals/data 가
   // 단건 id='data' 삭제로 해석되면 안 된다.
+  // 내보내기·백업은 응답을 조각으로 흘린다(스트림은 직렬화를 건너뛰므로 서비스가 같은 Zod 스키마로 조각마다
+  // 검증해 이어 붙인다 — 바이트는 한 덩어리 응답과 같다). response 스키마는 문서용으로 그대로 둔다.
   typed.get(Routes.Meal.dataExport, {
     onRequest: [app.authenticate],
+    config: { rateLimit: RATE.mealDataArchive },
     schema: {
       tags: ['meal'],
       summary: '내 식단 데이터 JSON 내보내기 — 기록·선호·추천 이력, 사진 바이너리 제외',
+      description: 'IP당 시간당 10회. 응답은 스트림(chunked)으로 내려간다.',
       security: [{ bearerAuth: [] }],
       response: { 200: MealDataExport },
     },
-    handler: async (req) => mealData.export(req.user.userId),
+    handler: async (req, reply) => {
+      const stream = await mealData.exportStream(req.user.userId);
+      return reply
+        .type('application/json; charset=utf-8')
+        .send(stream as unknown as MealDataExportType);
+    },
   });
 
   typed.get(Routes.Meal.dataBackup, {
@@ -211,13 +242,18 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
       summary: '사진 포함 식단 백업 아카이브 생성 — JSON+base64, IP당 시간당 10회',
       description:
         '기록에 연결된 사진만 base64 로 담고 연결 안 된 업로드는 건너뛴다. ' +
-        '기록 5,000건·추천 1,000건·사진 100장(합계 50MB)을 넘으면 413.',
+        `기록 ${MEAL_DATA_BACKUP_MAX_ENTRIES.toLocaleString('ko-KR')}건·추천 ${MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS.toLocaleString('ko-KR')}건·` +
+        `사진 ${MEAL_DATA_BACKUP_MAX_PHOTOS}장(합계 ${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / 1024 / 1024}MB)을 넘으면 413. ` +
+        '백업·복원은 서버 전체에서 한 번에 1건씩 처리하며 대기가 길면 503. 응답은 스트림(chunked)으로 내려간다.',
       security: [{ bearerAuth: [] }],
       response: { 200: MealDataBackup },
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
       try {
-        return await mealData.backup(req.user.userId);
+        const stream = await mealData.backupStream(req.user.userId);
+        return reply
+          .type('application/json; charset=utf-8')
+          .send(stream as unknown as MealDataBackupType);
       } catch (e) {
         return throwMealDataAsHttp(e);
       }
@@ -227,14 +263,16 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
   typed.post(Routes.Meal.dataRestore, {
     onRequest: [app.authenticate],
     config: { rateLimit: RATE.mealDataArchive },
-    // base64 사진 50MiB + JSON 오버헤드 상한. 전역 body limit을 넓히지 않는다.
+    // base64 사진 + JSON 오버헤드 상한. 전역 body limit을 넓히지 않는다.
     bodyLimit: MEAL_DATA_BACKUP_MAX_JSON_BYTES,
     schema: {
       tags: ['meal'],
       summary: '식단 백업 아카이브 복원 — 기존 기록에 추가, 같은 archiveId 재요청은 멱등',
       description:
         '본문은 GET /api/v1/meals/data/backup 응답 그대로(JSON 최대 75MB, IP당 시간당 10회). ' +
-        '선호 설정은 기존 값이 있으면 유지하고 없을 때만 아카이브 값으로 만든다.',
+        `사진 합계가 ${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / 1024 / 1024}MB 를 넘으면 413, 복원 뒤 기록이 계정 ` +
+        `${MEAL_MAX_ENTRIES_PER_USER.toLocaleString('ko-KR')}건·하루 ${MEAL_MAX_ENTRIES_PER_DAY}끼를 넘으면 409, ` +
+        '다른 백업·복원 대기가 길면 503. 선호 설정은 기존 값이 있으면 유지하고 없을 때만 아카이브 값으로 만든다.',
       security: [{ bearerAuth: [] }],
       body: MealDataBackup,
       response: { 200: RestoreMealDataResult },
@@ -366,7 +404,8 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
       summary: '식단 사진 업로드 — multipart 파일 1개(최대 5MB), 사진 토큰 발급',
       description:
         'multipart/form-data 파일 1개(필드명 무관, 공식 클라이언트는 file). HEIC 도 받으며 긴 변 최대 1600px JPEG 로 ' +
-        '재인코딩하고 EXIF 는 버린다. 24시간 안에 기록에 연결되지 않으면 자동 정리되고, 사용자당 3,000장 초과 시 409.',
+        '재인코딩하고 EXIF 는 버린다. 24시간 안에 기록에 연결되지 않으면 자동 정리되고, 사용자당 3,000장 초과 시 409. ' +
+        'HEIC 는 약 2,500만 화소를 넘으면 413, 변환 대기열이 가득하면 503.',
       security: [{ bearerAuth: [] }],
     },
     handler: async (req) => {

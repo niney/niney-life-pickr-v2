@@ -83,7 +83,8 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
       description:
         '같은 날짜·끼니·프로필이면 저장된 추천을 그대로 주고 force=true 면 새로 만든다. 캐시 미스마다 ' +
         '일일 한도(MEAL_RECOMMEND_DAILY_LIMIT, 기본 20회)를 1회 차감하며 초과 시 429. ' +
-        'lat·lng 를 주면 날씨를 반영하고, LLM 이 없거나 실패하면 점수 기반 폴백(status=fallback)을 돌려준다.',
+        'lat·lng 를 주면 날씨를 반영하고, LLM 이 없거나 실패하면 점수 기반 폴백(status=fallback)을 돌려준다. ' +
+        '만드는 동안 식단 데이터·추천을 전체 삭제하면 결과를 저장하지 않고 409.',
       security: [{ bearerAuth: [] }],
       body: CreateMealRecommendationInput,
       response: { 200: MealRecommendation },
@@ -100,6 +101,8 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
             );
           }
           if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);
+          // 계산 중 식단 데이터·추천이 삭제돼 결과를 버렸다.
+          if (e.code === 'conflict') throw app.httpErrors.conflict(e.message);
           throw app.httpErrors.badRequest(e.message);
         }
         throw e;

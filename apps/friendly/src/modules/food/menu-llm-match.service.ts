@@ -24,6 +24,7 @@ import {
   MENU_LLM_MATCH_VERSION,
   buildMenuLlmMatchPrompt,
 } from './menu-llm-match.prompts.js';
+import { FailureBackoff, MENU_FAILURE_GIVE_UP_AFTER } from './menu-failure-backoff.js';
 import { pickMenuCandidates } from './menu-nutrition-candidates.js';
 import { synonymVariants } from './menu-nutrition.js';
 
@@ -37,7 +38,11 @@ export interface MenuLlmMatchServiceOptions {
   model?: string;
   logger?: FastifyBaseLogger;
   cache?: AdapterCache;
+  // 실패한 이름의 재시도 간격(테스트 주입용). 기본 30분, 응답 해석 실패 3회면 '포기'를 저장한다.
+  failures?: FailureBackoff;
 }
+
+const NO_MATCH: MenuLlmMatchLookup = { hit: null, canonical: null };
 
 /** 캐시/판정 조회 결과 — hit 이 null 이면 "물어봤고 매칭 없음". canonical 은 웹 추정(food-web-estimate)의 질의어. */
 export interface MenuLlmMatchLookup {
@@ -118,15 +123,29 @@ export const decideLlmMatch = <T extends { name: string }>(
 export class MenuLlmMatchService {
   private catalogCache: { rows: CatalogRow[]; byNorm: Map<string, CatalogRow>; loadedAt: number } | null =
     null;
+  private readonly failures: FailureBackoff;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
     private readonly opts: MenuLlmMatchServiceOptions = {},
-  ) {}
+  ) {
+    this.failures = opts.failures ?? new FailureBackoff();
+  }
 
-  /** 캐시된 판정만 읽는다(LLM 호출 없음). 값 null = "물어봤고 매칭 없음", 키 없음 = 아직 안 물어봄. */
+  /**
+   * 캐시된 판정만 읽는다(LLM 호출 없음). 값 hit=null = "물어봤고 매칭 없음", 키 없음 = 아직 안 물어봄.
+   * 최근 실패해 재시도 간격 안인 이름도 "매칭 없음"으로 준다 — 다시 묻지 않고, 응답도 대기(llmPending)로 남지 않는다.
+   */
   async lookupCached(names: string[]): Promise<Map<string, MenuLlmMatchLookup>> {
+    const out = await this.lookupStored(names);
+    for (const n of names) {
+      if (!out.has(n) && this.failures.isBackingOff(normalizeTerm(n))) out.set(n, NO_MATCH);
+    }
+    return out;
+  }
+
+  private async lookupStored(names: string[]): Promise<Map<string, MenuLlmMatchLookup>> {
     const out = new Map<string, MenuLlmMatchLookup>();
     if (names.length === 0) return out;
     const normToNames = new Map<string, string[]>();
@@ -231,7 +250,16 @@ export class MenuLlmMatchService {
       const parsed = parseLlmMatchOutput(res.text);
       if (!parsed) {
         this.opts.logger?.warn({ name, text: res.text.slice(0, 120) }, '[menu-llm-match] 파싱 실패');
-        return undefined;
+        // 이름에 묶인 실패 — 간격을 두고, 거듭되면 '포기'(매칭 없음)로 저장해 다시 묻지 않는다.
+        if (this.failures.record(normalizeTerm(name), true) < MENU_FAILURE_GIVE_UP_AFTER) return undefined;
+        await this.saveVerdict(name, model, null, {
+          choice: null,
+          canonical: null,
+          confidence: null,
+          reason: `응답 해석 실패 ${MENU_FAILURE_GIVE_UP_AFTER}회 — 판정 포기`,
+        });
+        this.failures.clear(normalizeTerm(name));
+        return NO_MATCH;
       }
       const lookupByName = (n: string): CatalogRow | null => {
         const norm = normalizeTerm(n);
@@ -240,32 +268,8 @@ export class MenuLlmMatchService {
         return null;
       };
       const row = decideLlmMatch(parsed, candidates, lookupByName);
-      await this.prisma.menuLlmMatch.upsert({
-        where: { nameNorm: normalizeTerm(name) },
-        create: {
-          nameNorm: normalizeTerm(name),
-          menuName: name,
-          foodId: row?.id ?? null,
-          foodName: row?.name ?? null,
-          canonical: parsed.canonical,
-          choice: parsed.choice,
-          confidence: parsed.confidence,
-          reason: parsed.reason,
-          model,
-          version: MENU_LLM_MATCH_VERSION,
-        },
-        update: {
-          menuName: name,
-          foodId: row?.id ?? null,
-          foodName: row?.name ?? null,
-          canonical: parsed.canonical,
-          choice: parsed.choice,
-          confidence: parsed.confidence,
-          reason: parsed.reason,
-          model,
-          version: MENU_LLM_MATCH_VERSION,
-        },
-      });
+      await this.saveVerdict(name, model, row, parsed);
+      this.failures.clear(normalizeTerm(name));
       return {
         hit: row
           ? { foodId: row.id, foodName: row.name, kcalPer100g: row.kcalPer100g, nutritionFrom: row.nutritionFrom, dishType: row.dishType }
@@ -274,11 +278,37 @@ export class MenuLlmMatchService {
       };
     } catch (e) {
       this.opts.logger?.warn({ err: e instanceof Error ? e.message : String(e), name }, '[menu-llm-match] 호출 실패');
+      // 업스트림 장애(타임아웃·429·5xx) — 이름 탓이 아니므로 간격만 두고 포기하지 않는다(호출자 취소는 제외).
+      if (!outerSignal?.aborted) this.failures.record(normalizeTerm(name), false);
       return undefined;
     } finally {
       clearTimeout(timer);
       outerSignal?.removeEventListener('abort', onOuterAbort);
     }
+  }
+
+  private async saveVerdict(
+    name: string,
+    model: string,
+    row: CatalogRow | null,
+    parsed: LlmMatchOutput,
+  ): Promise<void> {
+    const data = {
+      menuName: name,
+      foodId: row?.id ?? null,
+      foodName: row?.name ?? null,
+      canonical: parsed.canonical,
+      choice: parsed.choice,
+      confidence: parsed.confidence,
+      reason: parsed.reason,
+      model,
+      version: MENU_LLM_MATCH_VERSION,
+    };
+    await this.prisma.menuLlmMatch.upsert({
+      where: { nameNorm: normalizeTerm(name) },
+      create: { nameNorm: normalizeTerm(name), ...data },
+      update: data,
+    });
   }
 
   // 카탈로그 전수(이름·별칭) — 후보 검색과 표준명 조회에 쓴다. 5분 캐시(적재는 월 1회).

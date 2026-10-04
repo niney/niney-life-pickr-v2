@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { FoodWebEstimateService, type WebFetcher } from './food-web-estimate.service.js';
 import { FOOD_WEB_ESTIMATE_VERSION } from './food-web-estimate.js';
+import { FailureBackoff, MENU_FAILURE_BACKOFF_MS } from './menu-failure-backoff.js';
 
 const PAGE_CARBONARA =
   '<html><body>94중 1에서 10 <a>베이컨 까르보나라 파스타 (쉐프엠)</a> 1개 (230g)당 - 칼로리: 485kcal | 지방: 28.00g 영양 정보 - 비슷한 ' +
@@ -41,7 +42,12 @@ const makeFakes = () => {
 describe('FoodWebEstimateService', () => {
   it('페이지를 받아 집계·저장하고, 미채택도 저장해 다시 조회하지 않으며, 오류는 저장하지 않는다', async () => {
     const f = makeFakes();
-    const svc = new FoodWebEstimateService(f.prisma, { fetcher: f.fetcher, intervalMs: 0 });
+    let clock = 1_000_000;
+    const svc = new FoodWebEstimateService(f.prisma, {
+      fetcher: f.fetcher,
+      intervalMs: 0,
+      failures: new FailureBackoff({ now: () => clock }),
+    });
 
     const first = await svc.estimateMany(['까르보나라', '항정살구이', '오류', '시샤모구이']);
     expect(first.get('까르보나라')).toEqual({ kcalPer100g: 191, agreeing: 3, basis: 'multi', source: 'fatsecret.kr' });
@@ -58,10 +64,34 @@ describe('FoodWebEstimateService', () => {
     const cached = await svc.lookupCached(['까르보나라', '항정살구이', '오류']);
     expect(cached.get('까르보나라')?.kcalPer100g).toBe(191);
     expect(cached.get('항정살구이')).toBeNull();
-    expect(cached.has('오류')).toBe(false);
+    // 실패(503)는 저장하지 않지만 재시도 간격 동안은 "결과 없음"으로 보여 공개 메뉴 탭 폴링마다 다시 두드리지 않는다.
+    expect(cached.get('오류')).toBeNull();
 
-    const second = await svc.estimateMany(['까르보나라', '항정살구이']);
+    const second = await svc.estimateMany(['까르보나라', '항정살구이', '오류']);
     expect(second.size).toBe(0);
     expect(f.urls).toHaveLength(6);
+
+    // 간격이 지나면 한 번 더 조회한다(여전히 저장은 하지 않는다).
+    clock += MENU_FAILURE_BACKOFF_MS + 1;
+    expect((await svc.lookupCached(['오류'])).has('오류')).toBe(false);
+    await svc.estimateMany(['오류']);
+    expect(f.urls).toHaveLength(7);
+    expect(f.store.has('오류')).toBe(false);
+  });
+
+  it('동시에 들어온 조회도 요청 간격을 지킨다(예약을 동기적으로 갱신)', async () => {
+    const f = makeFakes();
+    const at: number[] = [];
+    const fetcher: WebFetcher = async (url, signal) => {
+      at.push(Date.now());
+      return f.fetcher(url, signal);
+    };
+    const svc = new FoodWebEstimateService(f.prisma, { fetcher, intervalMs: 60 });
+    // 서로 다른 체인 셋이 동시에 조회 — 예전엔 같은 마지막 시각을 보고 한꺼번에 나갔다.
+    await Promise.all([svc.estimateMany(['까르보나라']), svc.estimateMany(['시샤모구이']), svc.estimateMany(['오류'])]);
+    const gaps = at.slice(1).map((t, i) => t - at[i]!);
+    expect(at).toHaveLength(4); // 시샤모구이는 어간 재질의까지 2번
+    // 타이머 해상도(Windows ~15ms) 여유를 두고 본다 — 예전엔 0ms 간격으로 한꺼번에 나갔다.
+    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(30);
   });
 });

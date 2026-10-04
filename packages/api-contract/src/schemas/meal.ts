@@ -47,6 +47,12 @@ export const MealPhotoToken = z
 
 export const MEAL_MAX_PHOTOS_PER_ENTRY = 5;
 export const MEAL_MAX_ITEMS_PER_ENTRY = 20;
+// 기록 수 상한 — 내보내기·통계·백업이 범위 행을 읽으므로 무한 적재를 막는다(초과 생성·복원은 409).
+// 하루 3~5끼 기준 10년치를 넘는 값이라 정상 사용은 닿지 않는다.
+export const MEAL_MAX_ENTRIES_PER_USER = 20_000;
+export const MEAL_MAX_ENTRIES_PER_DAY = 30;
+// 기간 통계 최대 일수(from~to 포함). 클라이언트는 최대 90일을 묻는다.
+export const MEAL_STATS_MAX_DAYS = 400;
 
 // 사진 인식이 내린 원본 항목. 인식 API 응답과 확정 기록의 품질
 // snapshot 이 같은 계약을 쓴다. 임의 JSON을 저장하지 못하게 하위 객체까지 strict.
@@ -1056,18 +1062,20 @@ export const MEAL_DATA_BACKUP_FORMAT = 'niney-life-pickr.meal-backup' as const;
 export const MEAL_DATA_BACKUP_VERSION = 1 as const;
 export const MEAL_DATA_BACKUP_MAX_PHOTOS = 100;
 export const MEAL_DATA_BACKUP_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-export const MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES = 50 * 1024 * 1024;
+// 사진 합계 — 백업·복원 1건의 메모리 피크가 이 값에 비례한다(2026-10 성능 감사로 50MB → 25MB).
+export const MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES = 25 * 1024 * 1024;
 export const MEAL_DATA_BACKUP_MAX_JSON_BYTES = 75 * 1024 * 1024;
 export const MEAL_DATA_BACKUP_MAX_ENTRIES = 5_000;
 export const MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS = 1_000;
 export const MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION = 200;
 
 const MealDataBackupRef = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+// 길이만 본다 — 문자 집합은 서버가 Buffer 왕복 비교·sha256 으로 검증한다. 장당 수 MB 문자열에 정규식을 돌리면
+// 직렬화·요청 검증이 이벤트 루프를 0.2초 넘게 막았다(사진 100장).
 const MealDataBackupBase64 = z
   .string()
   .min(4)
-  .max(Math.ceil((MEAL_DATA_BACKUP_MAX_PHOTO_BYTES * 4) / 3) + 4)
-  .regex(/^[A-Za-z0-9+/]+={0,2}$/);
+  .max(Math.ceil((MEAL_DATA_BACKUP_MAX_PHOTO_BYTES * 4) / 3) + 4);
 
 export const MealDataBackupPhoto = z
   .object({

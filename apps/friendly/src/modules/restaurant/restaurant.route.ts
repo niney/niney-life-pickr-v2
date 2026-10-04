@@ -166,9 +166,11 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantMenuNutrition },
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const result = await menuNutrition.forPlace(req.params.placeId);
       if (!result) throw app.httpErrors.notFound('Restaurant not found');
+      // 판정이 끝난 응답은 Cloudflare·브라우저가 10분 흡수한다(판정 중 응답은 폴링이 새 값을 받아야 해서 제외).
+      if (!result.llmPending) reply.header('Cache-Control', 'public, max-age=600');
       return result;
     },
   });

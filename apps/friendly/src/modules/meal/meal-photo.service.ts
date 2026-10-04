@@ -3,11 +3,19 @@ import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path';
 import type { MealPhoto, Prisma, PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
-import sharp from 'sharp';
-import heicConvert from 'heic-convert';
+import type { Sharp, SharpOptions } from 'sharp';
 import type { UploadMealPhotoResultType } from '@repo/api-contract';
 import { Routes } from '@repo/api-contract';
+import { HeicDecodeError, convertHeicToJpeg } from '../../lib/heic-worker.js';
 import { mealMutationBarrier } from './meal-mutation-barrier.js';
+
+// sharp 는 처음 쓸 때 불러온다(부팅 기저 메모리·시간에서 빠진다). HEIC 디코더(heic-convert)는 워커 안에서만 불러온다.
+type SharpFactory = (input?: Buffer, options?: SharpOptions) => Sharp;
+let sharpModule: Promise<SharpFactory> | null = null;
+const loadSharp = (): Promise<SharpFactory> => {
+  sharpModule ??= import('sharp').then((m) => m.default as unknown as SharpFactory);
+  return sharpModule;
+};
 
 // 식단 사진 저장 — 정산 영수증(settlement-extraction storeImage)의 골격을 이식하되 식단에서
 // 달라지는 3가지를 더한다:
@@ -34,7 +42,15 @@ const PHOTO_FILE_PATTERN = /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a
 
 export class MealPhotoError extends Error {
   constructor(
-    readonly code: 'invalid_token' | 'invalid_image' | 'not_found' | 'forbidden' | 'quota' | 'attached',
+    readonly code:
+      | 'invalid_token'
+      | 'invalid_image'
+      | 'not_found'
+      | 'forbidden'
+      | 'quota'
+      | 'attached'
+      | 'too_large'
+      | 'busy',
     message: string,
   ) {
     super(message);
@@ -84,6 +100,7 @@ export class MealPhotoService {
   }
 
   private async normalize(buffer: Buffer, dimension: number, quality: number): Promise<Buffer> {
+    const sharp = await loadSharp();
     return sharp(buffer, { failOn: 'none' })
       .rotate()
       .resize({ width: dimension, height: dimension, fit: 'inside', withoutEnlargement: true })
@@ -161,10 +178,16 @@ export class MealPhotoService {
     } catch (e) {
       if (looksLikeHeif(buffer)) {
         try {
-          const jpeg = await heicConvert({ buffer, format: 'JPEG', quality: 0.92 });
-          source = Buffer.from(jpeg);
+          // 워커에서 변환한다(요청 스레드를 막지 않고, 끝나면 wasm 메모리를 돌려준다). 해상도는 디코드 전에 본다.
+          source = await convertHeicToJpeg(buffer, { quality: 0.92 });
           processed = await this.normalize(source, MAX_DIMENSION, JPEG_QUALITY);
         } catch (heicErr) {
+          if (heicErr instanceof HeicDecodeError && heicErr.code === 'too_large') {
+            throw new MealPhotoError('too_large', heicErr.message);
+          }
+          if (heicErr instanceof HeicDecodeError && heicErr.code === 'busy') {
+            throw new MealPhotoError('busy', heicErr.message);
+          }
           this.log?.warn(
             { error: heicErr instanceof Error ? heicErr.message : String(heicErr) },
             '[meal-photo] HEIC convert failed',
@@ -180,7 +203,7 @@ export class MealPhotoService {
       }
     }
 
-    const meta = await sharp(processed).metadata();
+    const meta = await (await loadSharp())(processed).metadata();
     const thumb = await this.normalize(source, THUMB_DIMENSION, THUMB_QUALITY);
     return this.persistNewPhoto(userId, {
       full: processed,
@@ -205,6 +228,33 @@ export class MealPhotoService {
       throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
     }
     return readFile(path);
+  }
+
+  /**
+   * 백업 스트림 전용 — 호출자가 같은 사용자 장벽 안에서 그 사용자 행으로 소유를 이미 확인한 토큰의 원본
+   * 크기·바이트. 사진마다 DB 를 다시 조회하지 않는다. 파일이 없으면 not_found.
+   */
+  async ownedFileSize(userId: string, token: string): Promise<number> {
+    const path = this.ownedFilePath(userId, token);
+    try {
+      return (await stat(path)).size;
+    } catch {
+      throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
+    }
+  }
+
+  async readOwnedFile(userId: string, token: string): Promise<Buffer> {
+    const path = this.ownedFilePath(userId, token);
+    try {
+      return await readFile(path);
+    } catch {
+      throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
+    }
+  }
+
+  private ownedFilePath(userId: string, token: string): string {
+    if (!isValidMealPhotoToken(token)) throw new MealPhotoError('invalid_token', '토큰 형식이 올바르지 않습니다.');
+    return join(this.userDir(userId), `${token}.jpg`);
   }
 
   /**

@@ -2037,7 +2037,9 @@ model MealItem {
   entry MealEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
   @@index([entryId])
-  @@index([nameNorm])
+  // (nameNorm, entryId) — 최근 섭취 조회가 내 기록마다 "이 끼니에 그 음식이 있나"를 인덱스만으로 확인한다.
+  // nameNorm 접두 조회도 그대로 쓴다(단일 nameNorm 인덱스를 대체, 인덱스 수는 같다).
+  @@index([nameNorm, entryId])
   @@map("meal_items")
 }
 

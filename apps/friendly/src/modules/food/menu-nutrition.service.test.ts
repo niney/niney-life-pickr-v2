@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { MENU_NUTRITION_NOTICE } from '@repo/api-contract';
+import { AsyncGate } from '../../lib/async-gate.js';
 import { MenuNutritionEngine, buildCatalogIndex, catalogRow } from './engine/index.js';
 import { MenuNutritionService } from './menu-nutrition.service.js';
 
@@ -161,6 +162,58 @@ describe('MenuNutritionService', () => {
       loadMenuNames: async () => null,
     });
     expect(await svc.forPlace('missing')).toBeNull();
+  });
+
+  it('백그라운드 체인은 전역 상한까지만 돌고(나머지는 대기), 판정 중 응답은 짧게 캐시했다가 끝나면 지운다', async () => {
+    let loads = 0;
+    let active = 0;
+    let maxActive = 0;
+    const releases: Array<() => void> = [];
+    const known = new Set<string>();
+    const svc = new MenuNutritionService({
+      prisma: fakePrisma,
+      engine,
+      backgroundGate: new AsyncGate(1, { maxQueue: 1 }),
+      loadMenuNames: async (placeId) => {
+        loads += 1;
+        return [`${placeId}의메뉴`];
+      },
+      llm: {
+        lookupCached: async (names) =>
+          new Map(names.filter((n) => known.has(n)).map((n) => [n, { hit: null, canonical: null }])),
+        matchMany: async (names) => {
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await new Promise<void>((resolve) => releases.push(resolve));
+          for (const n of names) known.add(n);
+          active -= 1;
+          return new Map();
+        },
+      },
+    });
+
+    expect((await svc.forPlace('a'))!.llmPending).toBe(true);
+    expect((await svc.forPlace('b'))!.llmPending).toBe(true); // 대기열 1칸
+    expect((await svc.forPlace('c'))!.llmPending).toBe(true); // 대기열이 차서 이번엔 기동하지 않는다
+    // 판정 중 응답은 캐시에서 준다 — 폴링이 메뉴·판정을 다시 계산하지 않는다.
+    expect((await svc.forPlace('a'))!.llmPending).toBe(true);
+    expect(loads).toBe(3);
+    expect(releases).toHaveLength(1);
+    expect(maxActive).toBe(1);
+
+    releases.shift()!();
+    await svc.waitForLlm('a');
+    // a 가 끝나면 대기하던 b 가 자리를 받는다(동시 1).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(releases).toHaveLength(1);
+    releases.shift()!();
+    await svc.waitForLlm('b');
+    expect(maxActive).toBe(1);
+
+    // 끝난 곳은 판정 중 캐시가 지워져 다음 조회가 채워진 결과(판정 완료)를 받는다.
+    expect((await svc.forPlace('a'))!.llmPending).toBe(false);
+    expect((await svc.forPlace('b'))!.llmPending).toBe(false);
+    expect(loads).toBe(5);
   });
 });
 

@@ -1,6 +1,11 @@
+import type { PrismaClient } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { MealNutrientResultType, MealNutritionAnalysisType } from '@repo/api-contract';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  MEAL_DATA_DELETE_CONFIRMATION,
+  type MealNutrientResultType,
+  type MealNutritionAnalysisType,
+} from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
@@ -13,6 +18,8 @@ import type {
 } from '../ai/adapters/llm-provider.js';
 import { serializeNutrientsPer100g, type NutrientsPer100g } from '../food/food-nutrients.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
+import { MealDataService } from '../meal/meal-data.service.js';
+import { mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
 import { shiftDate } from '../meal-recommendation/meal-pattern.service.js';
 import { ageGroupFor, energyRequirement, nutrientReference } from './kdri.js';
 import {
@@ -664,6 +671,78 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
     // 김치찌개 니아신 160mg/1인분 > 상한 35mg — 원자료 오류로 보고 뺀다.
     const niacin = new Map([['niacin' as const, { reference: 14, upperLimit: 35 }]]);
     expect((await svc.foodSuggestions(niacin, [], [])).get('niacin')).toEqual(['고등어구이']);
+  });
+
+  it('음식 제안 후보(카탈로그 파생)는 10분 동안 한 번만 읽고, 결과는 새로 계산한 것과 같다', async () => {
+    let catalogLoads = 0;
+    const counting = new Proxy(app.prisma, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown;
+        if (prop !== 'foodItem') return value;
+        return new Proxy(value as object, {
+          get(delegate, method, r) {
+            const fn = Reflect.get(delegate, method, r) as unknown;
+            if (method !== 'findMany' || typeof fn !== 'function') return fn;
+            return (...args: unknown[]) => {
+              catalogLoads += 1;
+              return (fn as (...a: unknown[]) => unknown).apply(delegate, args);
+            };
+          },
+        });
+      },
+    }) as PrismaClient;
+    const svc = new MealNutritionService(counting);
+    const calcium = new Map([['calcium' as const, { reference: 700, upperLimit: 2500 }]]);
+    const niacin = new Map([['niacin' as const, { reference: 14, upperLimit: 35 }]]);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const first = await svc.foodSuggestions(calcium, [], []);
+      expect(catalogLoads).toBe(1);
+      // 사용자 조건이 달라도 카탈로그는 다시 읽지 않는다(알레르기·제외·나트륨 필터만 요청마다).
+      expect((await svc.foodSuggestions(calcium, [], [], { sodiumHigh: true })).get('calcium')).toEqual(['고등어구이']);
+      expect((await svc.foodSuggestions(niacin, [], ['고등어'])).get('niacin')).toEqual([]);
+      expect(catalogLoads).toBe(1);
+      expect(first).toEqual(await new MealNutritionService(app.prisma).foodSuggestions(calcium, [], []));
+      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+      await svc.foodSuggestions(calcium, [], []);
+      expect(catalogLoads).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('조언 LLM 을 기다리는 동안 같은 사용자 쓰기가 막히지 않고, 그 사이 전체 삭제되면 저장하지 않는다(conflict)', async () => {
+    await seedAuthUsers(app, [{ id: 'nut-conflict', role: 'USER' }]);
+    await seedDays('nut-conflict', '2026-08-22', 5);
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const slow: LLMProvider = {
+      complete: async (opts) => {
+        entered();
+        await released;
+        return { text: '{"summary":"","items":[]}', model: opts.model, promptTokens: 1, completionTokens: 1 };
+      },
+    };
+    const svc = new MealNutritionAdviceService(app.prisma, new AiConfigService(app.prisma, envBlock('kimi-k3')), {
+      cache: { get: () => slow } as unknown as AdapterCache,
+    });
+    const pending = svc.create('nut-conflict', { days: 14, force: true }, '2026-08-22');
+    await started;
+    const write = mealMutationBarrier.runExclusive('nut-conflict', async () => 'saved');
+    expect(await Promise.race([write, new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))])).toBe('saved');
+    await new MealDataService(app.prisma, {
+      photos: app.mealPhotos,
+      purgeRecognitionDebugForUser: vi.fn().mockResolvedValue(undefined),
+    }).deleteAll('nut-conflict', { confirmation: MEAL_DATA_DELETE_CONFIRMATION });
+    release();
+    await expect(pending).rejects.toMatchObject({ code: 'conflict' });
+    expect(await app.prisma.mealNutritionAdvice.count({ where: { userId: 'nut-conflict' } })).toBe(0);
   });
 
   it('라우트 — 점검·조언 생성·최근 조언, 로그인 필요, 일일 한도 429', async () => {

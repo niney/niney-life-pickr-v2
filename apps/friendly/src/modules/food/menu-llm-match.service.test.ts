@@ -9,6 +9,7 @@ import {
   parseLlmMatchOutput,
 } from './menu-llm-match.service.js';
 import { MENU_LLM_MATCH_VERSION } from './menu-llm-match.prompts.js';
+import { FailureBackoff, MENU_FAILURE_BACKOFF_MS } from './menu-failure-backoff.js';
 
 describe('parseLlmMatchOutput', () => {
   it('JSON 을 풀고 "null" 문자열·빈 값은 null 로', () => {
@@ -124,5 +125,66 @@ describe('MenuLlmMatchService', () => {
     );
     expect((await svc.matchMany(['북경간짜장'])).size).toBe(0);
     expect(f.calls).toHaveLength(0);
+  });
+
+  it('응답 해석 실패는 재시도 간격 동안 "매칭 없음"으로 보고, 세 번 쌓이면 포기를 저장한다', async () => {
+    const f = makeFakes();
+    let clock = 1_000_000;
+    let calls = 0;
+    const broken: LLMProvider = {
+      complete: async () => {
+        calls += 1;
+        return { text: '이건 JSON 이 아니다', model: 'm', promptTokens: null, completionTokens: null };
+      },
+    };
+    const svc = new MenuLlmMatchService(f.prisma, f.aiConfig, {
+      cache: { get: () => broken } as unknown as AdapterCache,
+      failures: new FailureBackoff({ now: () => clock }),
+    });
+
+    expect((await svc.matchMany(['깨지는메뉴'])).size).toBe(0);
+    expect(calls).toBe(1);
+    // 간격 안에서는 다시 묻지 않고, 공개 응답이 대기(llmPending)로 남지 않게 "매칭 없음"으로 준다.
+    expect((await svc.lookupCached(['깨지는메뉴'])).get('깨지는메뉴')).toEqual({ hit: null, canonical: null });
+    await svc.matchMany(['깨지는메뉴']);
+    expect(calls).toBe(1);
+    expect(f.store.has('깨지는메뉴')).toBe(false);
+
+    clock += MENU_FAILURE_BACKOFF_MS + 1;
+    await svc.matchMany(['깨지는메뉴']);
+    expect(calls).toBe(2);
+    expect(f.store.has('깨지는메뉴')).toBe(false);
+
+    clock += MENU_FAILURE_BACKOFF_MS + 1;
+    await svc.matchMany(['깨지는메뉴']);
+    expect(calls).toBe(3);
+    // 세 번째 해석 실패 — 부정 결과(포기)로 저장해 이후 영구히 묻지 않는다.
+    expect(f.store.get('깨지는메뉴')).toMatchObject({ foodId: null, canonical: null, version: MENU_LLM_MATCH_VERSION });
+    clock += MENU_FAILURE_BACKOFF_MS + 1;
+    await svc.matchMany(['깨지는메뉴']);
+    expect(calls).toBe(3);
+  });
+
+  it('업스트림 장애는 간격만 두고 포기하지 않는다', async () => {
+    const f = makeFakes();
+    let clock = 1_000_000;
+    let calls = 0;
+    const down: LLMProvider = {
+      complete: async () => {
+        calls += 1;
+        throw new Error('upstream 503');
+      },
+    };
+    const svc = new MenuLlmMatchService(f.prisma, f.aiConfig, {
+      cache: { get: () => down } as unknown as AdapterCache,
+      failures: new FailureBackoff({ now: () => clock }),
+    });
+    for (let i = 0; i < 4; i += 1) {
+      await svc.matchMany(['장애메뉴']);
+      await svc.matchMany(['장애메뉴']); // 간격 안 — 다시 묻지 않는다
+      clock += MENU_FAILURE_BACKOFF_MS + 1;
+    }
+    expect(calls).toBe(4);
+    expect(f.store.has('장애메뉴')).toBe(false);
   });
 });

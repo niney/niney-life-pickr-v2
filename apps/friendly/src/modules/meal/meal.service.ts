@@ -9,6 +9,8 @@ import {
   FoodCuisine,
   FoodDishType,
   FoodMainIngredient,
+  MEAL_MAX_ENTRIES_PER_DAY,
+  MEAL_MAX_ENTRIES_PER_USER,
   MEAL_MAX_ITEMS_PER_ENTRY,
   MealEntrySource,
   MealItemSource,
@@ -42,7 +44,6 @@ import {
   formatTimeOfDay,
   mealPortionFactor,
   monthRange,
-  parseTimeOfDay,
 } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { FoodService } from '../food/food.service.js';
@@ -62,7 +63,7 @@ import type { MealPhotoFileRef, MealPhotoService } from './meal-photo.service.js
 
 export class MealServiceError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid' | 'photo_not_found',
+    readonly code: 'not_found' | 'invalid' | 'photo_not_found' | 'limit',
     message: string,
   ) {
     super(message);
@@ -87,14 +88,17 @@ const PRESET_MIN_SAMPLES = 3;
 // 빠른 추가 집계의 행 상한 — 90일치 항목이 이보다 많으면 최근 것만 본다.
 const FREQUENT_MAX_ROWS = 3000;
 
-/** UTC Date → Asia/Seoul 기준 자정으로부터의 분. 서버 시간대와 무관하게 계산한다. */
+const MINUTES_PER_DAY = 1440;
+const SEOUL_OFFSET_MINUTES = 9 * 60;
+
+/**
+ * UTC Date → Asia/Seoul 기준 자정으로부터의 분. 서버 시간대와 무관하게 계산한다.
+ * 한국은 1988년 이후 일광절약시간이 없어 +9시간 산술이 Intl 포매터와 같다 — 행마다
+ * toLocaleTimeString 이 ICU 포매터를 새로 만들어 1만 행에 0.4초가 걸리던 것을 없앤다.
+ */
 export const minutesOfDayInSeoul = (d: Date): number => {
-  const hhmm = d.toLocaleTimeString('en-GB', {
-    timeZone: 'Asia/Seoul',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  return parseTimeOfDay(hhmm) ?? 0;
+  const minutes = Math.floor(d.getTime() / 60_000) + SEOUL_OFFSET_MINUTES;
+  return ((minutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
 };
 
 /**
@@ -317,17 +321,24 @@ export class MealService {
     const nameNorm = normalizeTerm(name);
     if (!nameNorm) return empty;
 
-    const item = await this.prisma.mealItem.findFirst({
-      where: { nameNorm, entry: { userId } },
-      orderBy: { entry: { eatenAt: 'desc' } },
-      include: { entry: { include: { photos: { orderBy: { sortOrder: 'asc' }, take: 1 } } } },
+    // 내 기록(userId+eatenAt 인덱스)에서 최신순으로 훑고 끼니마다 (nameNorm, entryId) 인덱스로 존재만 확인한다.
+    // 항목 쪽(nameNorm)에서 시작하면 그 음식을 먹은 전체 사용자의 행을 다 읽은 뒤에야 내 것을 고른다.
+    const entry = await this.prisma.mealEntry.findFirst({
+      where: { userId, items: { some: { nameNorm } } },
+      orderBy: { eatenAt: 'desc' },
+      select: {
+        eatenDate: true,
+        items: { where: { nameNorm }, orderBy: { sortOrder: 'asc' }, take: 1 },
+        photos: { orderBy: { sortOrder: 'asc' }, take: 1, select: { token: true } },
+      },
     });
-    if (!item) return empty;
+    const item = entry?.items[0];
+    if (!entry || !item) return empty;
 
     return {
       found: true,
       name: item.name,
-      lastEatenDate: item.entry.eatenDate,
+      lastEatenDate: entry.eatenDate,
       portion: enumOrNull(MealPortion, item.portion),
       servings: item.servings,
       portionSource: enumOrNull(MealPortionSource, item.portionSource),
@@ -335,8 +346,37 @@ export class MealService {
       dishType: enumOrNull<FoodDishTypeType>(FoodDishType, item.dishType),
       mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, item.mainIngredient),
       cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, item.cuisine),
-      photoToken: item.entry.photos[0]?.token ?? null,
+      photoToken: entry.photos[0]?.token ?? null,
     };
+  }
+
+  /**
+   * 기록 수 상한 — 계정당 MEAL_MAX_ENTRIES_PER_USER, 하루 MEAL_MAX_ENTRIES_PER_DAY. 같은 사용자 장벽 안에서
+   * 부르므로 센 뒤 쓰기 사이에 다른 쓰기가 끼지 않는다. excludeId 는 날짜를 옮기는 수정 자신을 빼고 센다.
+   */
+  private async assertEntryCapacity(
+    userId: string,
+    eatenDate: string,
+    opts: { newEntry: boolean; excludeId?: string },
+  ): Promise<void> {
+    const [total, sameDay] = await Promise.all([
+      opts.newEntry ? this.prisma.mealEntry.count({ where: { userId } }) : Promise.resolve(0),
+      this.prisma.mealEntry.count({
+        where: { userId, eatenDate, ...(opts.excludeId ? { id: { not: opts.excludeId } } : {}) },
+      }),
+    ]);
+    if (opts.newEntry && total >= MEAL_MAX_ENTRIES_PER_USER) {
+      throw new MealServiceError(
+        'limit',
+        `식단 기록은 계정당 최대 ${MEAL_MAX_ENTRIES_PER_USER.toLocaleString('ko-KR')}건까지 저장할 수 있습니다. 오래된 기록을 정리한 뒤 다시 시도해 주세요.`,
+      );
+    }
+    if (sameDay >= MEAL_MAX_ENTRIES_PER_DAY) {
+      throw new MealServiceError(
+        'limit',
+        `하루에 기록할 수 있는 끼니는 최대 ${MEAL_MAX_ENTRIES_PER_DAY}개입니다(${eatenDate}).`,
+      );
+    }
   }
 
   /** 입력 화면 빠른 추가 — 최근 90일 자주 먹은 음식(끼니 우선) + 기본 목록(공기밥·김치…). */
@@ -515,6 +555,7 @@ export class MealService {
     if ((input.source === 'recommendation') !== (originRecommendationId !== null)) {
       throw new MealServiceError('invalid', '추천 출처와 원본 추천 id가 일치하지 않습니다.');
     }
+    await this.assertEntryCapacity(userId, input.eatenDate, { newEntry: true });
     // 토큰 오류가 기록 생성 뒤에 드러나 반쪽 기록이 남지 않도록 모든 DB 쓰기 전에 검증한다.
     if (input.photoTokens.length > 0) {
       await this.deps.photos.validateForEntry(userId, null, input.photoTokens);
@@ -648,9 +689,13 @@ export class MealService {
   ): Promise<MealEntryType> {
     const existing = await this.prisma.mealEntry.findFirst({
       where: { id, userId },
-      select: { id: true },
+      select: { id: true, eatenDate: true },
     });
     if (!existing) throw new MealServiceError('not_found', '기록을 찾을 수 없습니다.');
+    // 다른 날로 옮길 때만 그 날의 끼니 상한을 본다(같은 날 수정은 수가 늘지 않는다).
+    if (input.eatenDate !== undefined && input.eatenDate !== existing.eatenDate) {
+      await this.assertEntryCapacity(userId, input.eatenDate, { newEntry: false, excludeId: id });
+    }
 
     // 항목/기록을 바꾸기 전에 토큰 전체의 소유권·미사용 상태를 먼저 확인한다.
     if (input.photoTokens !== undefined) {

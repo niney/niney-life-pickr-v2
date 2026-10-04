@@ -11,11 +11,16 @@
 //   (3) LLM 도 카탈로그에서 못 찾은 이름 → 웹 실측 추정 캐시(food-web-estimate.service).
 //   (4) 구성이 이름에 없는 세트("모듬회") → LLM 분해 캐시(menu-llm-decompose.service) → 구성요소를 (1)~(2)로.
 //       추정 구성이라 `partsEstimated` 로 표시한다.
-// 진행 중이면 응답은 `llmPending: true` 로 나가고 LRU 에 넣지 않아 클라이언트가 다시 조회하면 채워진다.
+// 진행 중이면 응답은 `llmPending: true` 로 나가고 LRU 에 넣지 않아 클라이언트가 다시 조회하면 채워진다
+// (판정 중 응답은 30초짜리 캐시에만 두고, 백그라운드가 끝나면 지워 다음 조회가 바로 채워진 결과를 받는다).
+//
+// 백그라운드 체인은 프로세스 전역 2개까지만 돈다(대기열 16, 넘으면 이번엔 기동하지 않고 다음 조회 때 다시 본다) —
+// 무인증 공개 GET 이라 placeId 를 훑으면 체인(체인당 LLM 동시 4)이 무한히 겹쳤다.
 
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import { LRUCache } from 'lru-cache';
+import { AsyncGate } from '../../lib/async-gate.js';
 import {
   MENU_NUTRITION_NOTICE,
   type RestaurantMenuKcalItemType,
@@ -39,8 +44,13 @@ import { normalizeTerm } from '../../lib/text.js';
 // 식당 하나의 메뉴명은 수십 개 → 카탈로그 조회 수백 번. 재크롤은 드물어 10분 캐시면 충분.
 const CACHE_MAX = 500;
 const CACHE_TTL_MS = 10 * 60 * 1000;
+// 판정 중(llmPending) 응답 — 클라이언트 3초 폴링을 같은 계산 없이 받는다. 백그라운드가 끝나면 바로 지운다.
+const PENDING_TTL_MS = 30 * 1000;
 // 폭주 방지 — 메뉴가 비정상적으로 많은 스냅샷.
 const MAX_MENU_NAMES = 200;
+const BACKGROUND_CHAINS = 2;
+const BACKGROUND_QUEUE = 16;
+const defaultBackgroundGate = new AsyncGate(BACKGROUND_CHAINS, { maxQueue: BACKGROUND_QUEUE });
 
 export interface MenuNutritionServiceDeps {
   prisma: PrismaClient;
@@ -55,6 +65,8 @@ export interface MenuNutritionServiceDeps {
   /** 없으면 구성이 이름에 없는 세트는 미표시. */
   decompose?: Pick<MenuLlmDecomposeService, 'lookupCached' | 'decomposeMany'>;
   logger?: FastifyBaseLogger;
+  /** 백그라운드 체인 동시 상한(테스트 주입용). 기본은 프로세스 전역 2개·대기열 16. */
+  backgroundGate?: AsyncGate;
 }
 
 /** 웹 추정 질의어 — LLM 표준명이 있으면 그것, 없으면 전처리한 메뉴명(세트·빈 이름은 null). */
@@ -81,8 +93,12 @@ export class MenuNutritionService {
     max: CACHE_MAX,
     ttl: CACHE_TTL_MS,
   });
+  private readonly pendingCache = new LRUCache<string, RestaurantMenuNutritionType>({
+    max: CACHE_MAX,
+    ttl: PENDING_TTL_MS,
+  });
   private readonly resolver: Resolver;
-  // placeId → 진행 중인 백그라운드 판정(중복 기동 방지).
+  // placeId → 진행 중이거나 자리를 기다리는 백그라운드 판정(중복 기동 방지).
   private readonly inflight = new Map<string, Promise<void>>();
 
   constructor(private readonly deps: MenuNutritionServiceDeps) {
@@ -94,8 +110,12 @@ export class MenuNutritionService {
       : new MenuNutritionResolver(deps.prisma);
   }
 
+  private get backgroundGate(): AsyncGate {
+    return this.deps.backgroundGate ?? defaultBackgroundGate;
+  }
+
   async forPlace(placeId: string): Promise<RestaurantMenuNutritionType | null> {
-    const hit = this.cache.get(placeId);
+    const hit = this.cache.get(placeId) ?? this.pendingCache.get(placeId);
     if (hit) return hit;
 
     const names = await this.deps.loadMenuNames(placeId);
@@ -283,44 +303,59 @@ export class MenuNutritionService {
     items.sort((a, b) => (order.get(a.name) ?? 0) - (order.get(b.name) ?? 0));
 
     const result: RestaurantMenuNutritionType = { placeId, items, notice: MENU_NUTRITION_NOTICE, llmPending: pending };
-    // 판정 중인 결과는 캐시하지 않는다 — 다음 조회에서 캐시를 다시 읽어 채운다.
-    if (!pending) this.cache.set(placeId, result);
+    // 판정 중인 결과는 10분 캐시에 넣지 않는다 — 30초짜리에만 두고 백그라운드가 끝나면 지워 다음 조회가 다시 읽는다.
+    if (pending) this.pendingCache.set(placeId, result);
+    else this.cache.set(placeId, result);
     return result;
   }
 
   // 세트 분해 → (분해된 구성요소 포함) LLM 판정 → 그 결과로 웹 질의어를 정해 웹 추정 순으로 이어서 돈다.
   private kickBackground(placeId: string, llmNames: string[], webQueries: string[], decomposeNames: string[]): void {
     if (this.inflight.has(placeId)) return;
+    const gate = this.backgroundGate;
+    // 자리도 대기열도 꽉 찼으면 이번엔 기동하지 않는다 — 판정 중 응답이 30초 뒤 만료되면 다음 조회가 다시 시도한다.
+    const immediate = gate.tryAcquire();
+    if (!immediate && gate.queued >= BACKGROUND_QUEUE) return;
     const run = (async () => {
-      const toAsk = new Set(llmNames);
-      if (decomposeNames.length > 0 && this.deps.decompose) {
-        const parts = await this.deps.decompose.decomposeMany(decomposeNames);
-        const names = [...parts.values()].flatMap((p) => p ?? []);
-        if (names.length > 0) {
-          const results = await this.resolver.resolveMany(names);
-          for (const [n, r] of results) if (!r.basis) toAsk.add(n);
-        }
+      const release = immediate ?? (await gate.acquire());
+      try {
+        await this.runBackground(llmNames, webQueries, decomposeNames);
+      } finally {
+        release();
       }
-      const queries = new Set(webQueries);
-      if (toAsk.size > 0 && this.deps.llm) {
-        const verdicts = await this.deps.llm.matchMany([...toAsk]);
-        if (this.deps.web) {
-          for (const [name, v] of verdicts) {
-            if (v.hit) continue;
-            const q = webQueryFor(name, v.canonical);
-            if (q) queries.add(q);
-          }
-        }
-      }
-      if (queries.size > 0 && this.deps.web) await this.deps.web.estimateMany([...queries]);
     })()
       .catch((e: unknown) => {
         this.deps.logger?.warn({ err: e instanceof Error ? e.message : String(e), placeId }, '[menu-nutrition] 백그라운드 판정 실패');
       })
       .finally(() => {
         this.inflight.delete(placeId);
+        this.pendingCache.delete(placeId);
       });
     this.inflight.set(placeId, run);
+  }
+
+  private async runBackground(llmNames: string[], webQueries: string[], decomposeNames: string[]): Promise<void> {
+    const toAsk = new Set(llmNames);
+    if (decomposeNames.length > 0 && this.deps.decompose) {
+      const parts = await this.deps.decompose.decomposeMany(decomposeNames);
+      const names = [...parts.values()].flatMap((p) => p ?? []);
+      if (names.length > 0) {
+        const results = await this.resolver.resolveMany(names);
+        for (const [n, r] of results) if (!r.basis) toAsk.add(n);
+      }
+    }
+    const queries = new Set(webQueries);
+    if (toAsk.size > 0 && this.deps.llm) {
+      const verdicts = await this.deps.llm.matchMany([...toAsk]);
+      if (this.deps.web) {
+        for (const [name, v] of verdicts) {
+          if (v.hit) continue;
+          const q = webQueryFor(name, v.canonical);
+          if (q) queries.add(q);
+        }
+      }
+    }
+    if (queries.size > 0 && this.deps.web) await this.deps.web.estimateMany([...queries]);
   }
 
   /** 테스트·관리용 — 진행 중인 백그라운드 판정이 끝날 때까지 기다린다. */
@@ -330,7 +365,12 @@ export class MenuNutritionService {
 
   /** 재크롤·카탈로그 재적재 뒤 호출용. placeId 없이 부르면 전체 비움. */
   invalidate(placeId?: string): void {
-    if (placeId) this.cache.delete(placeId);
-    else this.cache.clear();
+    if (placeId) {
+      this.cache.delete(placeId);
+      this.pendingCache.delete(placeId);
+    } else {
+      this.cache.clear();
+      this.pendingCache.clear();
+    }
   }
 }

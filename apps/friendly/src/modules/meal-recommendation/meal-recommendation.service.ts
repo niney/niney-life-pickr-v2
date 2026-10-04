@@ -29,7 +29,7 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
 import { MealPreferenceService } from '../meal/meal-preference.service.js';
-import { mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
+import { mealDataGeneration, mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
 import {
   MealPatternService,
   buildProfile,
@@ -77,7 +77,7 @@ const LlmOutput = z.object({
 
 export class MealRecommendationError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid' | 'quota',
+    readonly code: 'not_found' | 'invalid' | 'quota' | 'conflict',
     message: string,
   ) {
     super(message);
@@ -184,15 +184,17 @@ export class MealRecommendationService {
   }
 
   async removeAll(userId: string): Promise<DeleteMealRecommendationsResultType> {
-    return mealMutationBarrier.runExclusive(userId, () =>
-      this.prisma.$transaction(async (tx) => {
+    return mealMutationBarrier.runExclusive(userId, () => {
+      // 장벽 밖에서 계산 중인 추천이 이 삭제 뒤에 저장되지 않게 세대를 올린다.
+      mealDataGeneration.bump(userId, 'recommendations');
+      return this.prisma.$transaction(async (tx) => {
         const events = await tx.mealRecommendationEvent.deleteMany({ where: { userId } });
         const recommendations = await tx.mealRecommendation.deleteMany({ where: { userId } });
         return {
           deleted: { recommendations: recommendations.count, recommendationEvents: events.count },
         };
-      }),
-    );
+      });
+    });
   }
 
   async create(
@@ -216,12 +218,11 @@ export class MealRecommendationService {
     const existing = this.inFlight.get(inFlightKey);
     if (existing) return existing;
 
-    // 동일 요청 합류 Map은 장벽 바깥에 둔다. 첫 Promise만 사용자 FIFO에 들어가므로 quota/LLM도
-    // 한 번이고, 전체 삭제는 이 Promise(LLM과 저장 포함)가 끝난 뒤 실행된다. 즉 장기 LLM 중
-    // 들어온 삭제도 기다린다. 그래야 삭제 응답 뒤 이전 추천 저장이 다시 생기는 창이 없다.
-    const pending = mealMutationBarrier.runExclusive(userId, () =>
-      this.createOnce(userId, input, today),
-    );
+    // 동일 요청은 첫 Promise 에 합류한다(quota/LLM 1회). 날씨·후보 계산·LLM(최대 60초)은 사용자 쓰기 장벽
+    // 밖에서 하고 저장 직전에만 장벽을 잡는다 — 그동안 같은 사용자의 기록 저장·사진 업로드가 막히지 않는다.
+    // 삭제와의 경합은 데이터 세대로 막는다: 전체 삭제·추천 전체 삭제가 장벽 안에서 세대를 올리고, 계산 전에
+    // 읽은 세대가 저장 시점에 바뀌었으면 결과를 버린다(삭제 응답 뒤 지운 추천이 다시 생기지 않는다).
+    const pending = this.createOnce(userId, input, today);
     this.inFlight.set(inFlightKey, pending);
     try {
       return await pending;
@@ -235,6 +236,8 @@ export class MealRecommendationService {
     input: CreateMealRecommendationInputType,
     today: string,
   ): Promise<{ recommendation: MealRecommendationType; cached: boolean }> {
+    // 계산 근거를 읽기 전에 세대를 잡는다 — 이후 삭제가 끼면 저장 시점에 알아챈다.
+    const generation = mealDataGeneration.read(userId, 'recommendations');
     const preference = await this.preferences.get(userId);
     // mealType을 생략한 호출(홈 카드·구버전 클라이언트)은 저장한 주 식사 유형을 실제 점수에
     // 사용한다. null은 사용자가 명시적으로 "상황 무관"을 고른 값이라 덮어쓰지 않는다.
@@ -333,7 +336,7 @@ export class MealRecommendationService {
 
     if (scored.length === 0) {
       // 카탈로그가 비었고 기록도 없다 — 추천할 재료가 없다.
-      const saved = await this.save(userId, effectiveInput, hash, {
+      const saved = await this.save(userId, effectiveInput, hash, generation, {
         items: [],
         summary: '추천할 음식 정보가 아직 없어요. 음식 카탈로그를 먼저 적재해 주세요.',
         status: 'fallback',
@@ -446,14 +449,27 @@ export class MealRecommendationService {
     }
     items = items.slice(0, PICK_MAX);
 
-    const saved = await this.save(userId, effectiveInput, hash, {
-      items,
-      summary,
-      status,
-      model: status === 'done' ? model : null,
-      notice,
-      profileText: describeProfile(profile, input.targetSlot),
-    });
+    let saved: MealRecommendationType;
+    try {
+      saved = await this.save(userId, effectiveInput, hash, generation, {
+        items,
+        summary,
+        status,
+        model: status === 'done' ? model : null,
+        notice,
+        profileText: describeProfile(profile, input.targetSlot),
+      });
+    } catch (e) {
+      // 계산 중 삭제로 버린 결과(conflict)는 실패가 아니라 취소로 남긴다.
+      if (oplog && opRunId) {
+        await oplog.finishRun(opRunId, {
+          status: e instanceof MealRecommendationError && e.code === 'conflict' ? 'cancelled' : 'failed',
+          errorCode: e instanceof MealRecommendationError ? e.code : 'save_failed',
+          meta: { durationMs: Date.now() - started },
+        });
+      }
+      throw e;
+    }
 
     if (oplog && opRunId) {
       await oplog.finishRun(opRunId, {
@@ -674,6 +690,7 @@ export class MealRecommendationService {
     userId: string,
     input: CreateMealRecommendationInputType,
     hash: string,
+    generation: number,
     out: {
       items: MealRecommendationItemType[];
       summary: string;
@@ -683,36 +700,44 @@ export class MealRecommendationService {
       profileText: string;
     },
   ): Promise<MealRecommendationType> {
-    // 반응이 없는 캐시 이력만 최근 HISTORY_LIMIT 개로 정리한다. 노출·선택·기록·
-    // 평가 등 불변 이벤트가 하나라도 있는 행은 학습·통계 근거이므로 보존한다.
-    const old = await this.prisma.mealRecommendation.findMany({
-      where: { userId, feedbackJson: null, events: { none: {} } },
-      orderBy: { createdAt: 'desc' },
-      skip: HISTORY_LIMIT - 1,
-      select: { id: true },
-    });
-    if (old.length > 0) {
-      await this.prisma.mealRecommendation.deleteMany({
-        where: { id: { in: old.map((o) => o.id) } },
+    return mealMutationBarrier.runExclusive(userId, async () => {
+      if (mealDataGeneration.read(userId, 'recommendations') !== generation) {
+        throw new MealRecommendationError(
+          'conflict',
+          '추천을 만드는 동안 식단 데이터가 삭제되어 저장하지 않았습니다. 다시 시도해 주세요.',
+        );
+      }
+      // 반응이 없는 캐시 이력만 최근 HISTORY_LIMIT 개로 정리한다. 노출·선택·기록·
+      // 평가 등 불변 이벤트가 하나라도 있는 행은 학습·통계 근거이므로 보존한다.
+      const old = await this.prisma.mealRecommendation.findMany({
+        where: { userId, feedbackJson: null, events: { none: {} } },
+        orderBy: { createdAt: 'desc' },
+        skip: HISTORY_LIMIT - 1,
+        select: { id: true },
       });
-    }
-    const row = await this.prisma.mealRecommendation.create({
-      data: {
-        userId,
-        targetDate: input.targetDate,
-        targetSlot: input.targetSlot,
-        contextJson: JSON.stringify({ mealType: input.mealType ?? null, note: input.note ?? null }),
-        profileJson: JSON.stringify({ text: out.profileText }),
-        itemsJson: JSON.stringify(out.items),
-        summary: out.summary,
-        notice: out.notice,
-        status: out.status,
-        model: out.model,
-        promptVersion: MEAL_RECOMMENDATION_VERSION,
-        profileHash: hash,
-      },
+      if (old.length > 0) {
+        await this.prisma.mealRecommendation.deleteMany({
+          where: { id: { in: old.map((o) => o.id) } },
+        });
+      }
+      const row = await this.prisma.mealRecommendation.create({
+        data: {
+          userId,
+          targetDate: input.targetDate,
+          targetSlot: input.targetSlot,
+          contextJson: JSON.stringify({ mealType: input.mealType ?? null, note: input.note ?? null }),
+          profileJson: JSON.stringify({ text: out.profileText }),
+          itemsJson: JSON.stringify(out.items),
+          summary: out.summary,
+          notice: out.notice,
+          status: out.status,
+          model: out.model,
+          promptVersion: MEAL_RECOMMENDATION_VERSION,
+          profileHash: hash,
+        },
+      });
+      return toRecommendation(row);
     });
-    return toRecommendation(row);
   }
 }
 

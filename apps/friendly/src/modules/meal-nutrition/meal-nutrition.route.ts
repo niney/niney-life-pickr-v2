@@ -75,7 +75,8 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
         '영양소 점검 결과에서 열량을 채워 봐도 모자란 영양소만 조언한다(제품명 없음). 같은 날·같은 점검 결과면 ' +
         '저장된 조언을 주고 force=true 면 새로 만든다. 새로 만들 때마다 일일 한도(MEAL_SUPPLEMENT_DAILY_LIMIT, ' +
         '기본 10회)를 1회 차감하며 초과 시 429. 기록이 모자라거나 조언할 영양소가 없으면 LLM 없이 답한다. ' +
-        'LLM 이 없거나 실패하면 서버 문장만으로 쓴 조언(status=fallback)을 돌려준다.',
+        'LLM 이 없거나 실패하면 서버 문장만으로 쓴 조언(status=fallback)을 돌려준다. 만드는 동안 식단 데이터를 ' +
+        '전체 삭제하면 결과를 저장하지 않고 409.',
       security: [{ bearerAuth: [] }],
       body: CreateMealNutritionAdviceInput,
       response: { 200: MealNutritionAdvice },
@@ -89,6 +90,10 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
           throw app.httpErrors.tooManyRequests(
             `오늘 영양제 조언 한도(${env.MEAL_SUPPLEMENT_DAILY_LIMIT}회)를 모두 썼습니다. 내일 다시 시도해 주세요.`,
           );
+        }
+        // 계산 중 식단 데이터가 전체 삭제돼 결과를 버렸다.
+        if (e instanceof MealNutritionAdviceError && e.code === 'conflict') {
+          throw app.httpErrors.conflict(e.message);
         }
         throw e;
       }

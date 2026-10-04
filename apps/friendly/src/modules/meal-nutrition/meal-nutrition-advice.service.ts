@@ -26,7 +26,7 @@ import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
-import { mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
+import { mealDataGeneration, mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
 import { NUTRIENT_DEFS, NUTRITION_DISCLAIMER, type NutrientDef } from './meal-nutrition.defs.js';
 import {
   MEAL_NUTRITION_ADVICE_SYSTEM_PROMPT,
@@ -73,7 +73,7 @@ type LlmOutputType = z.infer<typeof LlmOutput>;
 
 export class MealNutritionAdviceError extends Error {
   constructor(
-    readonly code: 'quota',
+    readonly code: 'quota' | 'conflict',
     message: string,
   ) {
     super(message);
@@ -126,14 +126,13 @@ export class MealNutritionAdviceService {
     input: CreateMealNutritionAdviceInputType,
     today: string,
   ): Promise<{ advice: MealNutritionAdviceType; cached: boolean }> {
-    // 연타는 첫 Promise 에 합류한다(LLM·한도 1회). 전체 삭제와 엇갈리지 않게 식단 쓰기 장벽 안에서 만든다 —
-    // 장벽 밖에서 LLM 을 기다리면 삭제 응답 뒤에 지운 기록의 분석이 다시 저장될 수 있다.
+    // 연타는 첫 Promise 에 합류한다(LLM·한도 1회). 점검·LLM(최대 90~180초)은 사용자 쓰기 장벽 밖에서 하고
+    // 저장할 때만 장벽을 잡는다 — 그동안 같은 사용자의 기록 저장이 막히지 않는다. 전체 삭제와의 경합은 데이터
+    // 세대로 막는다(계산 전에 읽은 세대가 저장 시점에 바뀌었으면 버린다 — 지운 기록의 분석이 다시 생기지 않는다).
     const key = JSON.stringify([userId, today, input.days, input.force]);
     const existing = this.inFlight.get(key);
     if (existing) return existing;
-    const pending = mealMutationBarrier.runExclusive(userId, () =>
-      this.createOnce(userId, input, today),
-    );
+    const pending = this.createOnce(userId, input, today);
     this.inFlight.set(key, pending);
     try {
       return await pending;
@@ -162,6 +161,8 @@ export class MealNutritionAdviceService {
     input: CreateMealNutritionAdviceInputType,
     today: string,
   ): Promise<{ advice: MealNutritionAdviceType; cached: boolean }> {
+    // 점검 근거를 읽기 전에 세대를 잡는다 — 이후 전체 삭제가 끼면 저장 시점에 알아챈다.
+    const generation = mealDataGeneration.read(userId, 'all');
     const analysis = await this.nutrition.analyze(userId, today, input.days);
     const candidates = adviceCandidates(analysis);
     const hash = adviceHash(input.days, analysis);
@@ -184,7 +185,7 @@ export class MealNutritionAdviceService {
 
     // 기록이 모자라거나 조언할 영양소가 없으면 모델을 부르지 않는다(한도 미차감).
     if (analysis.status !== 'ok' || candidates.length === 0) {
-      const advice = await this.save(userId, today, hash, {
+      const advice = await this.save(userId, today, hash, generation, {
         analysis,
         items: [],
         summary: fallbackSummary(analysis, candidates),
@@ -294,13 +295,26 @@ export class MealNutritionAdviceService {
       }
     }
 
-    const advice = await this.save(userId, today, hash, {
-      analysis,
-      items,
-      summary,
-      status,
-      model: status === 'done' ? model : null,
-    });
+    let advice: MealNutritionAdviceType;
+    try {
+      advice = await this.save(userId, today, hash, generation, {
+        analysis,
+        items,
+        summary,
+        status,
+        model: status === 'done' ? model : null,
+      });
+    } catch (e) {
+      // 계산 중 전체 삭제로 버린 결과(conflict)는 실패가 아니라 취소로 남긴다.
+      if (oplog && opRunId) {
+        await oplog.finishRun(opRunId, {
+          status: e instanceof MealNutritionAdviceError && e.code === 'conflict' ? 'cancelled' : 'failed',
+          errorCode: e instanceof MealNutritionAdviceError ? e.code : 'save_failed',
+          meta: { durationMs: Date.now() - started },
+        });
+      }
+      throw e;
+    }
     if (oplog && opRunId) {
       await oplog.finishRun(opRunId, {
         status: 'done',
@@ -323,6 +337,7 @@ export class MealNutritionAdviceService {
     userId: string,
     today: string,
     hash: string,
+    generation: number,
     out: {
       analysis: MealNutritionAnalysisType;
       items: MealSupplementAdviceItemType[];
@@ -331,31 +346,39 @@ export class MealNutritionAdviceService {
       model: string | null;
     },
   ): Promise<MealNutritionAdviceType> {
-    const old = await this.prisma.mealNutritionAdvice.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      skip: HISTORY_LIMIT - 1,
-      select: { id: true },
-    });
-    if (old.length > 0) {
-      await this.prisma.mealNutritionAdvice.deleteMany({
-        where: { id: { in: old.map((o) => o.id) } },
+    return mealMutationBarrier.runExclusive(userId, async () => {
+      if (mealDataGeneration.read(userId, 'all') !== generation) {
+        throw new MealNutritionAdviceError(
+          'conflict',
+          '조언을 만드는 동안 식단 데이터가 삭제되어 저장하지 않았습니다. 다시 시도해 주세요.',
+        );
+      }
+      const old = await this.prisma.mealNutritionAdvice.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip: HISTORY_LIMIT - 1,
+        select: { id: true },
       });
-    }
-    const row = await this.prisma.mealNutritionAdvice.create({
-      data: {
-        userId,
-        targetDate: today,
-        analysisJson: JSON.stringify(out.analysis),
-        itemsJson: JSON.stringify(out.items),
-        summary: out.summary,
-        status: out.status,
-        model: out.model,
-        promptVersion: MEAL_NUTRITION_ADVICE_VERSION,
-        inputHash: hash,
-      },
+      if (old.length > 0) {
+        await this.prisma.mealNutritionAdvice.deleteMany({
+          where: { id: { in: old.map((o) => o.id) } },
+        });
+      }
+      const row = await this.prisma.mealNutritionAdvice.create({
+        data: {
+          userId,
+          targetDate: today,
+          analysisJson: JSON.stringify(out.analysis),
+          itemsJson: JSON.stringify(out.items),
+          summary: out.summary,
+          status: out.status,
+          model: out.model,
+          promptVersion: MEAL_NUTRITION_ADVICE_VERSION,
+          inputHash: hash,
+        },
+      });
+      return toAdvice(row, out.analysis)!;
     });
-    return toAdvice(row, out.analysis)!;
   }
 }
 

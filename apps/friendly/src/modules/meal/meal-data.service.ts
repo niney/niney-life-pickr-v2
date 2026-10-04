@@ -1,5 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
-import type { PrismaClient } from '@prisma/client';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   MEAL_DATA_BACKUP_FORMAT,
   MEAL_DATA_BACKUP_MAX_ENTRIES,
@@ -13,7 +14,16 @@ import {
   MEAL_DATA_DELETE_CONFIRMATION,
   MEAL_DATA_EXPORT_FORMAT,
   MEAL_DATA_EXPORT_VERSION,
+  MEAL_MAX_ENTRIES_PER_DAY,
+  MEAL_MAX_ENTRIES_PER_USER,
   MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
+  MealDataBackup,
+  MealDataBackupPhoto,
+  MealDataExport,
+  MealDataExportEntry,
+  MealDataExportPhoto,
+  MealDataExportRecommendation,
+  MealPreference,
   type DeleteMealPhotosInputType,
   type DeleteMealPhotosResultType,
   type DeleteMealDataInputType,
@@ -25,12 +35,14 @@ import {
   type MealPhotoRetentionQueryType,
   type RestoreMealDataResultType,
 } from '@repo/api-contract';
+import { chunk } from '../../lib/array.js';
+import { AsyncGate, GateBusyError } from '../../lib/async-gate.js';
 import { normalizeTerm } from '../../lib/text.js';
 import {
   toRecommendation,
   toRecommendationEvent,
 } from '../meal-recommendation/meal-recommendation.service.js';
-import { mealMutationBarrier } from './meal-mutation-barrier.js';
+import { mealDataGeneration, mealMutationBarrier } from './meal-mutation-barrier.js';
 import { purgeMealRecognitionDebugDumpsForUser } from './meal-recognition-debug.store.js';
 import type { MealPhotoService } from './meal-photo.service.js';
 import { toMealPreference } from './meal-preference.service.js';
@@ -39,9 +51,38 @@ import { toMealEntry } from './meal.service.js';
 export const MEAL_DATA_EXPORT_PHOTO_NOTICE =
   '사진 바이너리는 이 JSON에 포함되지 않습니다. 토큰·크기·용량·정렬·생성 시각 메타데이터만 포함됩니다.';
 
+// 사진 포함 백업·복원은 전역 1건씩 — 1건이 사진 합계에 비례하는 메모리·sharp CPU 를 쓴다(2건 동시 RSS +500MB 실측).
+// 자리를 못 잡으면 대기열(8)·대기 시간(60초) 안에서만 기다리고 넘으면 503.
+const ARCHIVE_GATE_WAIT_MS = 60_000;
+const defaultArchiveGate = new AsyncGate(1, { maxQueue: 8 });
+// 응답을 끝까지 읽지 않는 클라이언트가 전역 자리·사용자 장벽을 계속 붙잡지 못하게 하는 상한.
+const STREAM_DEADLINE_MS = 10 * 60_000;
+// 내보내기는 이 단위로 읽어 흘린다 — 메모리·이벤트 루프 블록이 전체 기록 수가 아니라 페이지 크기에 묶인다.
+const EXPORT_PAGE_SIZE = 500;
+// 사진 base64 를 잘라 흘리는 단위(3의 배수라 이어 붙이면 한 덩어리 base64 와 같다).
+const BASE64_SLICE_BYTES = 3 * 256 * 1024;
+// 복원 쓰기는 이 단위 트랜잭션으로 나눈다 — 청크당 쓰기 락 ~0.2초(1,000건 한 트랜잭션은 1~2초).
+const RESTORE_ENTRY_CHUNK = 500;
+// 락 시간은 항목(행) 수에 비례한다 — 기록당 항목이 많으면 청크의 기록 수를 줄인다.
+const RESTORE_ITEM_CHUNK = 1_500;
+const RESTORE_RECOMMENDATION_CHUNK = 200;
+const RESTORE_EVENT_CHUNK = 5_000;
+// 청크 사이 쉼 — 청크를 쉬지 않고 이어 쓰면 SQLite busy 핸들러(재시도 간격 최대 100ms)로 기다리는 다른 쓰기가
+// 틈을 못 잡아 복원 내내 밀린다(측정: 대기 최대 = 복원 전체 시간). 재시도 간격보다 길게 쉰다.
+const RESTORE_CHUNK_PAUSE_MS = 110;
+const CLEANUP_CHUNK = 500;
+
+const MB = 1024 * 1024;
+const PHOTO_LIMIT_TEXT = `장당 ${MEAL_DATA_BACKUP_MAX_PHOTO_BYTES / MB}MB, 합계 ${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / MB}MB`;
+
 export class MealDataError extends Error {
   constructor(
-    readonly code: 'invalid_confirmation' | 'backup_too_large' | 'invalid_backup',
+    readonly code:
+      | 'invalid_confirmation'
+      | 'backup_too_large'
+      | 'invalid_backup'
+      | 'busy'
+      | 'limit_exceeded',
     message: string,
   ) {
     super(message);
@@ -53,6 +94,10 @@ export interface MealDataServiceDeps {
   photos: MealPhotoService;
   now?: () => Date;
   purgeRecognitionDebugForUser?: (userId: string, legacyPhotoTokens: string[]) => Promise<unknown>;
+  // 테스트에서 전역 동시 1건 대기·거절을 검증할 때만 주입한다.
+  archiveGate?: AsyncGate;
+  archiveGateWaitMs?: number;
+  streamDeadlineMs?: number;
 }
 
 const parseObject = (json: string): Record<string, unknown> => {
@@ -126,9 +171,87 @@ const duplicateResult = (row: {
   },
 });
 
+const base64Length = (byteLength: number): number => Math.ceil(byteLength / 3) * 4;
+
+/** 순서를 지킨 청크 — 한 청크는 최대 maxRows 행, 하위 행(weight 합)은 maxWeight 를 넘지 않는다(한 행이 넘으면 단독). */
+const chunkByBudget = <T>(
+  rows: readonly T[],
+  maxRows: number,
+  maxWeight: number,
+  weight: (row: T) => number,
+): T[][] => {
+  const out: T[][] = [];
+  let current: T[] = [];
+  let currentWeight = 0;
+  for (const row of rows) {
+    const w = weight(row);
+    if (current.length > 0 && (current.length >= maxRows || currentWeight + w > maxWeight)) {
+      out.push(current);
+      current = [];
+      currentWeight = 0;
+    }
+    current.push(row);
+    currentWeight += w;
+  }
+  if (current.length > 0) out.push(current);
+  return out;
+};
+
+let rowIdSeq = 0;
+/** cuid 와 같은 꼴(c + 시각 + 순번 + 난수, 25자). 복원이 createMany 전에 기록·추천 관계를 잇는 데 쓴다. */
+const newRowId = (): string => {
+  rowIdSeq = (rowIdSeq + 1) % 1_679_616;
+  const rand = randomBytes(8).readBigUInt64BE().toString(36).padStart(12, '0').slice(-12);
+  return `c${Date.now().toString(36).padStart(8, '0')}${rowIdSeq.toString(36).padStart(4, '0')}${rand}`;
+};
+
+/** 응답 스트림 — 끝나거나(정상·오류·클라이언트 이탈) 기한을 넘기면 release 를 한 번 부른다. */
+const guardedStream = (
+  chunks: AsyncGenerator<string>,
+  release: () => void,
+  deadlineMs: number,
+): Readable => {
+  let released = false;
+  const done = (): void => {
+    if (released) return;
+    released = true;
+    clearTimeout(timer);
+    release();
+  };
+  const stream = Readable.from(
+    (async function* () {
+      try {
+        yield* chunks;
+      } finally {
+        done();
+      }
+    })(),
+    { objectMode: false },
+  );
+  const timer = setTimeout(() => {
+    stream.destroy(new Error('meal data stream deadline exceeded'));
+  }, deadlineMs);
+  timer.unref?.();
+  // 한 번도 읽히지 않고 파괴돼도(제너레이터 finally 가 안 돎) 잠금이 남지 않게 close 에서도 푼다.
+  stream.once('close', done);
+  // 오류는 소비자(fastify 응답 파이프·for await)가 따로 받는다 — 리스너 없는 'error' 로 프로세스가 죽지 않게만 한다.
+  stream.on('error', () => undefined);
+  return stream;
+};
+
+const readJson = async <T>(stream: Readable): Promise<T> => {
+  const parts: Buffer[] = [];
+  for await (const part of stream) parts.push(Buffer.isBuffer(part) ? part : Buffer.from(String(part)));
+  return JSON.parse(Buffer.concat(parts).toString('utf8')) as T;
+};
+
 /**
  * 내 식단 데이터 portability/삭제 경계. 모든 쿼리는 userId 로 한정하고 전체 삭제는 한 DB
  * 트랜잭션으로 커밋한 뒤 사진 파일만 멱등 제거한다(파일 삭제는 DB 롤백 대상이 될 수 없다).
+ *
+ * 내보내기·백업은 사용자 장벽 안에서 읽어 응답으로 흘린다(스트림). Prisma 대화형 트랜잭션은 SQLite 에서
+ * BEGIN IMMEDIATE 라 읽기만 해도 DB 전체 쓰기 락을 잡으므로 스냅샷용 트랜잭션을 쓰지 않는다 — 같은 사용자의
+ * 쓰기는 모두 장벽을 지나므로 장벽 안의 연속 조회가 그 사용자에 대해 일관된다.
  */
 export class MealDataService {
   constructor(
@@ -136,52 +259,140 @@ export class MealDataService {
     private readonly deps: MealDataServiceDeps,
   ) {}
 
+  private get archiveGate(): AsyncGate {
+    return this.deps.archiveGate ?? defaultArchiveGate;
+  }
+
+  private async acquireArchiveGate(): Promise<() => void> {
+    try {
+      return await this.archiveGate.acquire(this.deps.archiveGateWaitMs ?? ARCHIVE_GATE_WAIT_MS);
+    } catch (e) {
+      if (e instanceof GateBusyError) {
+        throw new MealDataError(
+          'busy',
+          '다른 사진 포함 백업·복원이 진행 중입니다. 잠시 뒤 다시 시도해 주세요.',
+        );
+      }
+      throw e;
+    }
+  }
+
+  private now(): Date {
+    return this.deps.now?.() ?? new Date();
+  }
+
+  /** 프로그램 호출용(테스트·스크립트) — 스트림을 끝까지 읽어 객체로 돌려준다. 라우트는 exportStream 을 쓴다. */
   async export(userId: string): Promise<MealDataExportType> {
-    const snapshot = await this.prisma.$transaction(async (tx) => {
-      const [entries, preference, recommendations, orphanPhotos] = await Promise.all([
-        tx.mealEntry.findMany({
-          where: { userId },
+    return readJson<MealDataExportType>(await this.exportStream(userId));
+  }
+
+  /**
+   * 내보내기 JSON 을 기록 500건 단위로 읽어 흘린다. 바이트는 예전 한 덩어리 응답(MealDataExport 직렬화)과 같다 —
+   * 같은 순서([eatenAt, id]·[createdAt, id])로 읽고 조각마다 같은 Zod 스키마로 검증·정리한 뒤 이어 붙인다.
+   */
+  async exportStream(userId: string): Promise<Readable> {
+    const release = await mealMutationBarrier.acquire(userId);
+    try {
+      const head = MealDataExport.pick({
+        format: true,
+        version: true,
+        exportedAt: true,
+        notice: true,
+      }).parse({
+        format: MEAL_DATA_EXPORT_FORMAT,
+        version: MEAL_DATA_EXPORT_VERSION,
+        exportedAt: this.now().toISOString(),
+        notice: { photoBinariesIncluded: false, message: MEAL_DATA_EXPORT_PHOTO_NOTICE },
+      });
+      return guardedStream(this.exportChunks(userId, head), release, this.deps.streamDeadlineMs ?? STREAM_DEADLINE_MS);
+    } catch (e) {
+      release();
+      throw e;
+    }
+  }
+
+  private async *exportChunks(userId: string, head: object): AsyncGenerator<string> {
+    yield `${JSON.stringify(head).slice(0, -1)},"entries":[`;
+    let first = true;
+    let cursor: { eatenAt: Date; id: string } | null = null;
+    for (;;) {
+      const page: Array<Prisma.MealEntryGetPayload<{ include: { items: true; photos: true } }>> =
+        await this.prisma.mealEntry.findMany({
+          where: {
+            userId,
+            ...(cursor
+              ? {
+                  eatenAt: { gte: cursor.eatenAt },
+                  NOT: { eatenAt: cursor.eatenAt, id: { lte: cursor.id } },
+                }
+              : {}),
+          },
           include: { items: true, photos: true },
           orderBy: [{ eatenAt: 'asc' }, { id: 'asc' }],
-        }),
-        tx.mealPreference.findUnique({ where: { userId } }),
-        tx.mealRecommendation.findMany({
-          where: { userId },
+          take: EXPORT_PAGE_SIZE,
+        });
+      let out = '';
+      for (const row of page) {
+        const entry = MealDataExportEntry.parse({
+          ...toMealEntry(row, { withRecognition: true, withPhotos: true }),
+          photos: [...row.photos].sort((a, b) => a.sortOrder - b.sortOrder).map(toExportPhoto),
+        });
+        out += `${first ? '' : ','}${JSON.stringify(entry)}`;
+        first = false;
+      }
+      if (out) yield out;
+      const last = page[page.length - 1];
+      if (!last || page.length < EXPORT_PAGE_SIZE) break;
+      cursor = { eatenAt: last.eatenAt, id: last.id };
+    }
+
+    const [orphanPhotos, preference] = await Promise.all([
+      this.prisma.mealPhoto.findMany({
+        where: { userId, entryId: null },
+        orderBy: [{ createdAt: 'asc' }, { token: 'asc' }],
+      }),
+      this.prisma.mealPreference.findUnique({ where: { userId } }),
+    ]);
+    const orphans = orphanPhotos.map((photo) => MealDataExportPhoto.parse(toExportPhoto(photo)));
+    const pref = MealPreference.nullable().parse(preference ? toMealPreference(preference) : null);
+    yield `],"orphanPhotos":${JSON.stringify(orphans)},"preference":${JSON.stringify(pref)},"recommendations":[`;
+
+    first = true;
+    let recCursor: { createdAt: Date; id: string } | null = null;
+    for (;;) {
+      const page: Array<Prisma.MealRecommendationGetPayload<{ include: { events: true } }>> =
+        await this.prisma.mealRecommendation.findMany({
+          where: {
+            userId,
+            ...(recCursor
+              ? {
+                  createdAt: { gte: recCursor.createdAt },
+                  NOT: { createdAt: recCursor.createdAt, id: { lte: recCursor.id } },
+                }
+              : {}),
+          },
           include: { events: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        }),
-        tx.mealPhoto.findMany({
-          where: { userId, entryId: null },
-          orderBy: [{ createdAt: 'asc' }, { token: 'asc' }],
-        }),
-      ]);
-      return { entries, preference, recommendations, orphanPhotos };
-    });
-
-    return {
-      format: MEAL_DATA_EXPORT_FORMAT,
-      version: MEAL_DATA_EXPORT_VERSION,
-      exportedAt: (this.deps.now?.() ?? new Date()).toISOString(),
-      notice: {
-        photoBinariesIncluded: false,
-        message: MEAL_DATA_EXPORT_PHOTO_NOTICE,
-      },
-      entries: snapshot.entries.map((row) => ({
-        ...toMealEntry(row, { withRecognition: true, withPhotos: true }),
-        photos: [...row.photos]
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map(toExportPhoto),
-      })),
-      orphanPhotos: snapshot.orphanPhotos.map(toExportPhoto),
-      preference: snapshot.preference ? toMealPreference(snapshot.preference) : null,
-      recommendations: snapshot.recommendations.map((row) => ({
-        ...toRecommendation(row),
-        context: parseObject(row.contextJson),
-        profile: parseObject(row.profileJson),
-        profileHash: row.profileHash,
-        events: row.events.map(toRecommendationEvent),
-      })),
-    };
+          take: EXPORT_PAGE_SIZE,
+        });
+      let out = '';
+      for (const row of page) {
+        const recommendation = MealDataExportRecommendation.parse({
+          ...toRecommendation(row),
+          context: parseObject(row.contextJson),
+          profile: parseObject(row.profileJson),
+          profileHash: row.profileHash,
+          events: row.events.map(toRecommendationEvent),
+        });
+        out += `${first ? '' : ','}${JSON.stringify(recommendation)}`;
+        first = false;
+      }
+      if (out) yield out;
+      const last = page[page.length - 1];
+      if (!last || page.length < EXPORT_PAGE_SIZE) break;
+      recCursor = { createdAt: last.createdAt, id: last.id };
+    }
+    yield ']}';
   }
 
   /**
@@ -194,26 +405,25 @@ export class MealDataService {
     query: MealPhotoRetentionQueryType,
   ): Promise<MealPhotoRetentionPreviewType> {
     const before = query.before ?? null;
-    const [entries, orphans] = await this.prisma.$transaction(async (tx) =>
-      Promise.all([
-        tx.mealEntry.findMany({
-          where: {
-            userId,
-            ...(before ? { eatenDate: { lt: before } } : {}),
-            photos: { some: {} },
-          },
-          select: { id: true, photos: { select: { byteSize: true } } },
-        }),
-        tx.mealPhoto.findMany({
-          where: {
-            userId,
-            entryId: null,
-            ...(before ? { createdAt: { lt: toSeoulDayStart(before) } } : {}),
-          },
-          select: { byteSize: true },
-        }),
-      ]),
-    );
+    // 미리보기라 트랜잭션으로 묶지 않는다(SQLite 대화형 트랜잭션은 읽기만 해도 전역 쓰기 락을 잡는다).
+    const [entries, orphans] = await Promise.all([
+      this.prisma.mealEntry.findMany({
+        where: {
+          userId,
+          ...(before ? { eatenDate: { lt: before } } : {}),
+          photos: { some: {} },
+        },
+        select: { id: true, photos: { select: { byteSize: true } } },
+      }),
+      this.prisma.mealPhoto.findMany({
+        where: {
+          userId,
+          entryId: null,
+          ...(before ? { createdAt: { lt: toSeoulDayStart(before) } } : {}),
+        },
+        select: { byteSize: true },
+      }),
+    ]);
     const attachedPhotos = entries.reduce((sum, entry) => sum + entry.photos.length, 0);
     const totalBytes = [...entries.flatMap((entry) => entry.photos), ...orphans].reduce(
       (sum, photo) => sum + photo.byteSize,
@@ -309,161 +519,254 @@ export class MealDataService {
     });
   }
 
+  /** 프로그램 호출용(테스트·스크립트) — 스트림을 끝까지 읽어 객체로 돌려준다. 라우트는 backupStream 을 쓴다. */
   async backup(userId: string): Promise<MealDataBackupType> {
-    return mealMutationBarrier.runExclusive(userId, async () => {
-      const snapshot = await this.prisma.$transaction(async (tx) => {
-        const [entryCount, recommendationCount, photoAggregate, orphanCount] = await Promise.all([
-          tx.mealEntry.count({ where: { userId } }),
-          tx.mealRecommendation.count({ where: { userId } }),
-          tx.mealPhoto.aggregate({
-            where: { userId, entryId: { not: null } },
-            _count: { _all: true },
-            _sum: { byteSize: true },
-          }),
-          tx.mealPhoto.count({ where: { userId, entryId: null } }),
-        ]);
-        const photoCount = photoAggregate._count._all;
-        const photoBytes = photoAggregate._sum.byteSize ?? 0;
-        if (
-          entryCount > MEAL_DATA_BACKUP_MAX_ENTRIES ||
-          recommendationCount > MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS ||
-          photoCount > MEAL_DATA_BACKUP_MAX_PHOTOS ||
-          photoBytes > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES
-        ) {
-          throw new MealDataError(
-            'backup_too_large',
-            `사진 포함 백업 한도(기록 ${MEAL_DATA_BACKUP_MAX_ENTRIES}개, 추천 ${MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS}개, 사진 ${MEAL_DATA_BACKUP_MAX_PHOTOS}개/50MB)를 넘었습니다. 오래된 사진을 먼저 정리해 주세요.`,
-          );
-        }
+    return readJson<MealDataBackupType>(await this.backupStream(userId));
+  }
 
-        const [entries, preference, recommendations] = await Promise.all([
-          tx.mealEntry.findMany({
-            where: { userId },
-            include: { items: true, photos: true },
-            orderBy: [{ eatenAt: 'asc' }, { id: 'asc' }],
-          }),
-          tx.mealPreference.findUnique({ where: { userId } }),
-          tx.mealRecommendation.findMany({
-            where: { userId },
-            include: { events: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
-            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-          }),
-        ]);
-        return { entries, preference, recommendations, orphanCount };
-      });
-
-      const entryRefs = new Map(
-        snapshot.entries.map((entry, index) => [entry.id, `entry-${String(index + 1).padStart(6, '0')}`]),
-      );
-      const recommendationRefs = new Map(
-        snapshot.recommendations.map((recommendation, index) => [
-          recommendation.id,
-          `recommendation-${String(index + 1).padStart(6, '0')}`,
-        ]),
-      );
-      const orderedPhotos = snapshot.entries.flatMap((entry) =>
-        [...entry.photos]
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((photo) => ({ entryId: entry.id, photo })),
-      );
-      const photoRefs = new Map(
-        orderedPhotos.map(({ photo }, index) => [photo.token, `photo-${String(index + 1).padStart(6, '0')}`]),
-      );
-
-      let actualPhotoBytes = 0;
-      const photos: MealDataBackupType['photos'] = [];
-      for (const { photo } of orderedPhotos) {
-        const bytes = await this.deps.photos.read(userId, photo.token, 'full');
-        actualPhotoBytes += bytes.byteLength;
-        if (
-          bytes.byteLength <= 0 ||
-          bytes.byteLength > MEAL_DATA_BACKUP_MAX_PHOTO_BYTES ||
-          actualPhotoBytes > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES
-        ) {
-          throw new MealDataError(
-            'backup_too_large',
-            '사진 파일의 실제 크기가 백업 한도(장당 5MB, 합계 50MB)를 넘었습니다.',
-          );
-        }
-        photos.push({
-          ref: photoRefs.get(photo.token)!,
-          contentType: 'image/jpeg',
-          dataBase64: bytes.toString('base64'),
-          sha256: createHash('sha256').update(bytes).digest('hex'),
-          byteSize: bytes.byteLength,
-          width: photo.width,
-          height: photo.height,
-        });
-      }
-
-      const entries: MealDataBackupType['entries'] = snapshot.entries.map((row) => {
-        const converted = toMealEntry(row, { withRecognition: true, withPhotos: true });
-        const entry = omitKeys(converted, ['id', 'originRecommendationId', 'items', 'photos']);
-        return {
-          ...entry,
-          ref: entryRefs.get(row.id)!,
-          originRecommendationRef: row.originRecommendationId
-            ? (recommendationRefs.get(row.originRecommendationId) ?? null)
-            : null,
-          items: converted.items.map((item) => omitKeys(item, ['id'])),
-          photoRefs: [...row.photos]
-            .sort((a, b) => a.sortOrder - b.sortOrder)
-            .map((photo) => photoRefs.get(photo.token)!),
-        };
-      });
-
-      const recommendations: MealDataBackupType['recommendations'] = snapshot.recommendations.map((row) => {
-        if (row.events.length > MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION) {
-          throw new MealDataError(
-            'backup_too_large',
-            `추천 1건의 행동 이력이 백업 한도(${MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION}개)를 넘었습니다.`,
-          );
-        }
-        const projected = toRecommendation(row);
-        const recommendation = omitKeys(projected, ['id', 'feedback', 'candidateRatings']);
-        const { feedback } = projected;
-        return {
-          ...recommendation,
-          ref: recommendationRefs.get(row.id)!,
-          context: parseObject(row.contextJson),
-          profile: parseObject(row.profileJson),
-          profileHash: row.profileHash,
-          feedback: feedback
-            ? {
-                pickedName: feedback.pickedName,
-                rating: feedback.rating,
-                eatenEntryRef: feedback.eatenEntryId
-                  ? (entryRefs.get(feedback.eatenEntryId) ?? null)
-                  : null,
-              }
-            : null,
-          events: row.events.map((eventRow) => {
-            return omitKeys(toRecommendationEvent(eventRow), ['id', 'recommendationId']);
-          }),
-        };
-      });
-
-      const backup: MealDataBackupType = {
-        format: MEAL_DATA_BACKUP_FORMAT,
-        version: MEAL_DATA_BACKUP_VERSION,
-        archiveId: randomUUID(),
-        exportedAt: (this.deps.now?.() ?? new Date()).toISOString(),
-        notice: {
-          encoding: 'json-base64',
-          orphanPhotosSkipped: snapshot.orphanCount,
-          duplicatePolicy: 'same-archive-id-is-idempotent',
-          mergePolicy: 'append-records-keep-existing-preference',
+  /**
+   * 사진 포함 백업. 기록·추천 메타는 한 번에 만들고(Zod 검증), 사진은 파일에서 한 장씩 읽어 base64 조각으로
+   * 흘린다 — 응답 바이트는 예전 한 덩어리 직렬화와 같고, 메모리는 사진 한 장 수준이다. 크기 한도(사진·JSON)는
+   * 파일 크기와 메타 길이로 정확히 계산해 응답을 시작하기 전에 판정한다. 전역 1건·사용자 장벽은 스트림이
+   * 끝날 때(정상·오류·이탈·기한) 푼다.
+   */
+  async backupStream(userId: string): Promise<Readable> {
+    const releaseGate = await this.acquireArchiveGate();
+    let releaseUser: (() => void) | null = null;
+    try {
+      releaseUser = await mealMutationBarrier.acquire(userId);
+      const plan = await this.planBackup(userId);
+      const unlockUser = releaseUser;
+      return guardedStream(
+        this.backupChunks(userId, plan),
+        () => {
+          unlockUser();
+          releaseGate();
         },
-        entries,
-        photos,
-        preference: snapshot.preference ? toMealPreference(snapshot.preference) : null,
-        recommendations,
-      };
-      if (Buffer.byteLength(JSON.stringify(backup), 'utf8') > MEAL_DATA_BACKUP_MAX_JSON_BYTES) {
-        throw new MealDataError('backup_too_large', '백업 파일이 전체 크기 한도(75MB)를 넘었습니다.');
+        this.deps.streamDeadlineMs ?? STREAM_DEADLINE_MS,
+      );
+    } catch (e) {
+      releaseUser?.();
+      releaseGate();
+      throw e;
+    }
+  }
+
+  private async planBackup(userId: string): Promise<{
+    head: string;
+    tail: string;
+    photos: Array<{
+      token: string;
+      size: number;
+      shell: { ref: string; width: number | null; height: number | null };
+    }>;
+  }> {
+    const [entryCount, recommendationCount, photoAggregate, orphanCount] = await Promise.all([
+      this.prisma.mealEntry.count({ where: { userId } }),
+      this.prisma.mealRecommendation.count({ where: { userId } }),
+      this.prisma.mealPhoto.aggregate({
+        where: { userId, entryId: { not: null } },
+        _count: { _all: true },
+        _sum: { byteSize: true },
+      }),
+      this.prisma.mealPhoto.count({ where: { userId, entryId: null } }),
+    ]);
+    const photoCount = photoAggregate._count._all;
+    const photoBytes = photoAggregate._sum.byteSize ?? 0;
+    if (
+      entryCount > MEAL_DATA_BACKUP_MAX_ENTRIES ||
+      recommendationCount > MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS ||
+      photoCount > MEAL_DATA_BACKUP_MAX_PHOTOS ||
+      photoBytes > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES
+    ) {
+      throw new MealDataError(
+        'backup_too_large',
+        `사진 포함 백업 한도(기록 ${MEAL_DATA_BACKUP_MAX_ENTRIES}개, 추천 ${MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS}개, 사진 ${MEAL_DATA_BACKUP_MAX_PHOTOS}개/${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / MB}MB)를 넘었습니다. 오래된 사진을 먼저 정리해 주세요.`,
+      );
+    }
+
+    const [entryRows, preferenceRow, recommendationRows] = await Promise.all([
+      this.prisma.mealEntry.findMany({
+        where: { userId },
+        include: { items: true, photos: true },
+        orderBy: [{ eatenAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.mealPreference.findUnique({ where: { userId } }),
+      this.prisma.mealRecommendation.findMany({
+        where: { userId },
+        include: { events: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+    ]);
+
+    const entryRefs = new Map(
+      entryRows.map((entry, index) => [entry.id, `entry-${String(index + 1).padStart(6, '0')}`]),
+    );
+    const recommendationRefs = new Map(
+      recommendationRows.map((recommendation, index) => [
+        recommendation.id,
+        `recommendation-${String(index + 1).padStart(6, '0')}`,
+      ]),
+    );
+    const orderedPhotos = entryRows.flatMap((entry) =>
+      [...entry.photos].sort((a, b) => a.sortOrder - b.sortOrder),
+    );
+    const photoRefs = new Map(
+      orderedPhotos.map((photo, index) => [photo.token, `photo-${String(index + 1).padStart(6, '0')}`]),
+    );
+
+    // 실제 파일 크기로 한도를 다시 본다(DB byteSize 와 다를 수 있다) — 응답을 시작하기 전에 413 을 낸다.
+    const photos: Array<{
+      token: string;
+      size: number;
+      shell: { ref: string; width: number | null; height: number | null };
+    }> = [];
+    let actualPhotoBytes = 0;
+    for (const photo of orderedPhotos) {
+      const size = await this.deps.photos.ownedFileSize(userId, photo.token);
+      actualPhotoBytes += size;
+      if (size <= 0 || size > MEAL_DATA_BACKUP_MAX_PHOTO_BYTES || actualPhotoBytes > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES) {
+        throw new MealDataError(
+          'backup_too_large',
+          `사진 파일의 실제 크기가 백업 한도(${PHOTO_LIMIT_TEXT})를 넘었습니다.`,
+        );
       }
-      return backup;
+      photos.push({
+        token: photo.token,
+        size,
+        shell: { ref: photoRefs.get(photo.token)!, width: photo.width, height: photo.height },
+      });
+    }
+
+    const entries: MealDataBackupType['entries'] = entryRows.map((row) => {
+      const converted = toMealEntry(row, { withRecognition: true, withPhotos: true });
+      const entry = omitKeys(converted, ['id', 'originRecommendationId', 'items', 'photos']);
+      return {
+        ...entry,
+        ref: entryRefs.get(row.id)!,
+        originRecommendationRef: row.originRecommendationId
+          ? (recommendationRefs.get(row.originRecommendationId) ?? null)
+          : null,
+        items: converted.items.map((item) => omitKeys(item, ['id'])),
+        photoRefs: [...row.photos]
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((photo) => photoRefs.get(photo.token)!),
+      };
     });
+
+    const recommendations: MealDataBackupType['recommendations'] = recommendationRows.map((row) => {
+      if (row.events.length > MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION) {
+        throw new MealDataError(
+          'backup_too_large',
+          `추천 1건의 행동 이력이 백업 한도(${MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION}개)를 넘었습니다.`,
+        );
+      }
+      const projected = toRecommendation(row);
+      const recommendation = omitKeys(projected, ['id', 'feedback', 'candidateRatings']);
+      const { feedback } = projected;
+      return {
+        ...recommendation,
+        ref: recommendationRefs.get(row.id)!,
+        context: parseObject(row.contextJson),
+        profile: parseObject(row.profileJson),
+        profileHash: row.profileHash,
+        feedback: feedback
+          ? {
+              pickedName: feedback.pickedName,
+              rating: feedback.rating,
+              eatenEntryRef: feedback.eatenEntryId
+                ? (entryRefs.get(feedback.eatenEntryId) ?? null)
+                : null,
+            }
+          : null,
+        events: row.events.map((eventRow) => {
+          return omitKeys(toRecommendationEvent(eventRow), ['id', 'recommendationId']);
+        }),
+      };
+    });
+
+    // 사진을 뺀 아카이브를 응답 스키마로 검증·정리한다(응답 직렬화가 하던 일). 사진 메타는 길이만 맞는 자리표시
+    // 값으로 미리 검증해, 흘리는 도중에 스키마 오류가 날 일이 없게 한다.
+    const meta = MealDataBackup.parse({
+      format: MEAL_DATA_BACKUP_FORMAT,
+      version: MEAL_DATA_BACKUP_VERSION,
+      archiveId: randomUUID(),
+      exportedAt: this.now().toISOString(),
+      notice: {
+        encoding: 'json-base64',
+        orphanPhotosSkipped: orphanCount,
+        duplicatePolicy: 'same-archive-id-is-idempotent',
+        mergePolicy: 'append-records-keep-existing-preference',
+      },
+      entries,
+      photos: [],
+      preference: preferenceRow ? toMealPreference(preferenceRow) : null,
+      recommendations,
+    });
+    const { photos: _none, preference, recommendations: parsedRecommendations, ...headFields } = meta;
+    void _none;
+    const head = `${JSON.stringify(headFields).slice(0, -1)},"photos":[`;
+    const tail = `],"preference":${JSON.stringify(preference)},"recommendations":${JSON.stringify(parsedRecommendations)}}`;
+
+    let photoJsonBytes = Math.max(0, photos.length - 1); // 사진 사이 쉼표
+    for (const photo of photos) {
+      // base64 길이 상한은 위 장당 크기 검사가 보장한다 — 나머지 필드만 자리표시 값으로 검증한다.
+      const shell = MealDataBackupPhoto.parse(this.photoFields(photo.shell, 'AAAA', photo.size));
+      // 해시 자리표시는 실제와 길이가 같고, base64·hex 는 JSON 이스케이프가 없어 바이트 수가 정확하다.
+      photoJsonBytes += Buffer.byteLength(JSON.stringify({ ...shell, dataBase64: '' })) + base64Length(photo.size);
+    }
+    if (Buffer.byteLength(head) + Buffer.byteLength(tail) + photoJsonBytes > MEAL_DATA_BACKUP_MAX_JSON_BYTES) {
+      throw new MealDataError(
+        'backup_too_large',
+        `백업 파일이 전체 크기 한도(${MEAL_DATA_BACKUP_MAX_JSON_BYTES / MB}MB)를 넘었습니다.`,
+      );
+    }
+    return { head, tail, photos };
+  }
+
+  /** 백업 사진 한 장의 필드 — 스키마(MealDataBackupPhoto) 키 순서 그대로. */
+  private photoFields(
+    shell: { ref: string; width: number | null; height: number | null },
+    dataBase64: string,
+    byteSize: number,
+    sha256 = '0'.repeat(64),
+  ) {
+    return {
+      ref: shell.ref,
+      contentType: 'image/jpeg' as const,
+      dataBase64,
+      sha256,
+      byteSize,
+      width: shell.width,
+      height: shell.height,
+    };
+  }
+
+  private async *backupChunks(
+    userId: string,
+    plan: Awaited<ReturnType<MealDataService['planBackup']>>,
+  ): AsyncGenerator<string> {
+    yield plan.head;
+    const MARK = '"dataBase64":"__PHOTO__"';
+    for (const [index, photo] of plan.photos.entries()) {
+      const bytes = await this.deps.photos.readOwnedFile(userId, photo.token);
+      if (bytes.byteLength !== photo.size) {
+        // 장벽 안이라 바뀔 수 없는 파일이 바뀌었다 — 잘린 JSON 이 되도록 스트림을 실패시킨다.
+        throw new Error('meal backup photo changed while streaming');
+      }
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+      const fields = MealDataBackupPhoto.parse(
+        this.photoFields(photo.shell, 'AAAA', bytes.byteLength, sha256),
+      );
+      const json = JSON.stringify({ ...fields, dataBase64: '__PHOTO__' });
+      const at = json.indexOf(MARK);
+      yield `${index > 0 ? ',' : ''}${json.slice(0, at)}"dataBase64":"`;
+      for (let offset = 0; offset < bytes.byteLength; offset += BASE64_SLICE_BYTES) {
+        yield bytes.subarray(offset, offset + BASE64_SLICE_BYTES).toString('base64');
+      }
+      yield `"${json.slice(at + MARK.length)}`;
+    }
+    yield plan.tail;
   }
 
   async restore(userId: string, archive: MealDataBackupType): Promise<RestoreMealDataResultType> {
@@ -516,229 +819,323 @@ export class MealDataService {
         throw new MealDataError('invalid_backup', '추천의 식단 기록 참조가 올바르지 않습니다.');
       }
       safeDate(recommendation.createdAt, 'recommendation.createdAt');
+      for (const event of recommendation.events) safeDate(event.createdAt, 'event.createdAt');
+    }
+    // 선언 크기로 먼저 거른다(디코드 전) — 한도를 넘는 옛 50MB 아카이브도 여기서 413.
+    const declaredBytes = archive.photos.reduce((sum, photo) => sum + photo.byteSize, 0);
+    if (declaredBytes > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES) {
+      throw new MealDataError(
+        'backup_too_large',
+        `사진 합계가 복원 한도(${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / MB}MB)를 넘습니다.`,
+      );
     }
 
-    let totalBytes = 0;
-    const decoded = archive.photos.map((photo) => {
-      const bytes = Buffer.from(photo.dataBase64, 'base64');
-      totalBytes += bytes.byteLength;
-      if (
-        bytes.byteLength !== photo.byteSize ||
-        bytes.byteLength <= 0 ||
-        bytes.byteLength > MEAL_DATA_BACKUP_MAX_PHOTO_BYTES ||
-        totalBytes > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES ||
-        bytes.toString('base64') !== photo.dataBase64 ||
-        createHash('sha256').update(bytes).digest('hex') !== photo.sha256
-      ) {
-        throw new MealDataError('invalid_backup', '사진 payload의 크기 또는 무결성 값이 일치하지 않습니다.');
-      }
-      return { ref: photo.ref, bytes };
-    });
+    const releaseGate = await this.acquireArchiveGate();
+    try {
+      // 사진은 한 장씩 디코드·검증하고 버린다(전부 Buffer 로 들고 있지 않는다). 저장 단계에서 다시 디코드한다.
+      let totalBytes = 0;
+      for (const photo of archive.photos) totalBytes += this.decodePhoto(photo, totalBytes).byteLength;
 
-    return mealMutationBarrier.runExclusive(userId, async () => {
-      // 구조·해시 검증은 lock 밖에서 끝내되, 멱등 재확인부터 사진 저장·메타데이터 커밋·실패
-      // 정리까지는 같은 사용자 lock 안에 둔다. deleteAll/기록 쓰기가 사진 사이에 끼지 않는다.
-      const lockedPrevious = await this.prisma.mealDataImport.findUnique({
-        where: { userId_archiveId: { userId, archiveId: archive.archiveId } },
-      });
-      if (lockedPrevious) return duplicateResult(lockedPrevious);
-
-      const stored: Array<{ ref: string; userId: string; token: string }> = [];
-      const cleanupStored = async (): Promise<void> => {
-        if (stored.length === 0) return;
-        await this.prisma.mealPhoto.deleteMany({
-          where: { userId, entryId: null, token: { in: stored.map((photo) => photo.token) } },
+      return await mealMutationBarrier.runExclusive(userId, async () => {
+        // 구조·해시 검증은 장벽 밖에서 끝내되, 멱등 재확인부터 사진 저장·메타데이터 커밋·실패
+        // 정리까지는 같은 사용자 장벽 안에 둔다. deleteAll/기록 쓰기가 사진 사이에 끼지 않는다.
+        const lockedPrevious = await this.prisma.mealDataImport.findUnique({
+          where: { userId_archiveId: { userId, archiveId: archive.archiveId } },
         });
-        await this.deps.photos.removeFiles(stored);
+        if (lockedPrevious) return duplicateResult(lockedPrevious);
+        await this.assertRestoreFits(userId, archive);
+        return this.restoreLocked(userId, archive);
+      });
+    } finally {
+      releaseGate();
+    }
+  }
+
+  /** base64 → 바이트 + 크기·정규형·sha256 검증. running 은 앞 사진들의 합계. */
+  private decodePhoto(photo: MealDataBackupType['photos'][number], running: number): Buffer {
+    const bytes = Buffer.from(photo.dataBase64, 'base64');
+    if (
+      bytes.byteLength !== photo.byteSize ||
+      bytes.byteLength <= 0 ||
+      bytes.byteLength > MEAL_DATA_BACKUP_MAX_PHOTO_BYTES ||
+      running + bytes.byteLength > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES ||
+      bytes.toString('base64') !== photo.dataBase64 ||
+      createHash('sha256').update(bytes).digest('hex') !== photo.sha256
+    ) {
+      throw new MealDataError('invalid_backup', '사진 payload의 크기 또는 무결성 값이 일치하지 않습니다.');
+    }
+    return bytes;
+  }
+
+  /** 복원 뒤 기록 수가 계정·하루 상한을 넘지 않는지(장벽 안에서). 아카이브에 있는 날짜만 하루 상한을 본다. */
+  private async assertRestoreFits(userId: string, archive: MealDataBackupType): Promise<void> {
+    if (archive.entries.length === 0) return;
+    const [existing, perDay] = await Promise.all([
+      this.prisma.mealEntry.count({ where: { userId } }),
+      this.prisma.mealEntry.groupBy({
+        by: ['eatenDate'],
+        where: { userId, eatenDate: { in: [...new Set(archive.entries.map((entry) => entry.eatenDate))] } },
+        _count: { _all: true },
+      }),
+    ]);
+    if (existing + archive.entries.length > MEAL_MAX_ENTRIES_PER_USER) {
+      throw new MealDataError(
+        'limit_exceeded',
+        `복원하면 식단 기록이 계정 상한(${MEAL_MAX_ENTRIES_PER_USER.toLocaleString('ko-KR')}건)을 넘습니다(현재 ${existing.toLocaleString('ko-KR')}건 + 백업 ${archive.entries.length.toLocaleString('ko-KR')}건).`,
+      );
+    }
+    const counts = new Map(perDay.map((row) => [row.eatenDate, row._count._all]));
+    for (const entry of archive.entries) counts.set(entry.eatenDate, (counts.get(entry.eatenDate) ?? 0) + 1);
+    for (const [date, count] of counts) {
+      if (count > MEAL_MAX_ENTRIES_PER_DAY) {
+        throw new MealDataError(
+          'limit_exceeded',
+          `복원하면 ${date} 기록이 하루 상한(${MEAL_MAX_ENTRIES_PER_DAY}끼)을 넘습니다.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * 장벽 안의 실제 복원. 사진 파일·행을 먼저 만들고, 기록·추천은 id 를 미리 만들어 createMany 로 청크마다
+   * 짧은 트랜잭션에 쓴다(한 트랜잭션에 수천 건을 행 단위로 넣으면 쓰기 락이 수 초, 5,000건은 5초 타임아웃).
+   * 중간에 실패하면 만든 id 로 지우고 사진도 정리한다 — 원장(mealDataImport)은 마지막 트랜잭션에서만 쓴다.
+   */
+  private async restoreLocked(
+    userId: string,
+    archive: MealDataBackupType,
+  ): Promise<RestoreMealDataResultType> {
+    const stored: Array<{ ref: string; userId: string; token: string }> = [];
+    const createdEntryIds: string[] = [];
+    const createdRecommendationIds: string[] = [];
+    const cleanup = async (): Promise<void> => {
+      for (const ids of chunk(createdEntryIds, CLEANUP_CHUNK)) {
+        // 기록을 지우면 항목·붙은 사진 행이 cascade 로 함께 지워진다.
+        await this.prisma.mealEntry.deleteMany({ where: { userId, id: { in: ids } } });
+      }
+      for (const ids of chunk(createdRecommendationIds, CLEANUP_CHUNK)) {
+        await this.prisma.mealRecommendation.deleteMany({ where: { userId, id: { in: ids } } });
+      }
+      if (stored.length === 0) return;
+      await this.prisma.mealPhoto.deleteMany({
+        where: { userId, entryId: null, token: { in: stored.map((photo) => photo.token) } },
+      });
+      await this.deps.photos.removeFiles(stored);
+    };
+
+    try {
+      let running = 0;
+      for (const photo of archive.photos) {
+        const bytes = this.decodePhoto(photo, running);
+        running += bytes.byteLength;
+        const created = await this.deps.photos.storeWhileMutationLocked(userId, bytes);
+        stored.push({ ref: photo.ref, userId, token: created.token });
+      }
+      const storedByRef = new Map(stored.map((photo) => [photo.ref, photo.token]));
+      const recommendationIds = new Map(archive.recommendations.map((r) => [r.ref, newRowId()]));
+      const entryIds = new Map(archive.entries.map((entry) => [entry.ref, newRowId()]));
+
+      // 추천은 행동 이력 수까지(추천 1건당 이벤트 최대 200개), 기록은 항목 수까지 고려해 청크로 나눈다.
+      const recommendationChunks = chunkByBudget(
+        archive.recommendations,
+        RESTORE_RECOMMENDATION_CHUNK,
+        RESTORE_EVENT_CHUNK,
+        (recommendation) => recommendation.events.length,
+      );
+      const entryChunks = chunkByBudget(
+        archive.entries,
+        RESTORE_ENTRY_CHUNK,
+        RESTORE_ITEM_CHUNK,
+        (entry) => entry.items.length,
+      );
+
+      let wroteChunk = false;
+      const beforeChunk = async (): Promise<void> => {
+        if (wroteChunk) await new Promise((resolve) => setTimeout(resolve, RESTORE_CHUNK_PAUSE_MS));
+        wroteChunk = true;
       };
 
-      try {
-        for (const photo of decoded) {
-          const created = await this.deps.photos.storeWhileMutationLocked(userId, photo.bytes);
-          stored.push({ ref: photo.ref, userId, token: created.token });
-        }
-        const storedByRef = new Map(stored.map((photo) => [photo.ref, photo.token]));
+      for (const part of recommendationChunks) {
+        const ids = part.map((recommendation) => recommendationIds.get(recommendation.ref)!);
+        await beforeChunk();
+        await this.prisma.$transaction(async (tx) => {
+          await tx.mealRecommendation.createMany({
+            data: part.map((recommendation) => ({
+              id: recommendationIds.get(recommendation.ref)!,
+              userId,
+              targetDate: recommendation.targetDate,
+              targetSlot: recommendation.targetSlot,
+              contextJson: JSON.stringify(recommendation.context),
+              profileJson: JSON.stringify(recommendation.profile),
+              profileHash: recommendation.profileHash,
+              itemsJson: JSON.stringify(recommendation.items),
+              summary: recommendation.summary,
+              notice: recommendation.notice,
+              status: recommendation.status,
+              model: recommendation.model,
+              promptVersion: recommendation.promptVersion,
+              // 기록 id 를 미리 알고 있으므로 연결까지 한 번에 쓴다(예전: 만든 뒤 update).
+              feedbackJson: recommendation.feedback
+                ? JSON.stringify({
+                    pickedName: recommendation.feedback.pickedName,
+                    rating: recommendation.feedback.rating,
+                    eatenEntryId: recommendation.feedback.eatenEntryRef
+                      ? (entryIds.get(recommendation.feedback.eatenEntryRef) ?? null)
+                      : null,
+                  })
+                : null,
+              createdAt: safeDate(recommendation.createdAt, 'recommendation.createdAt'),
+            })),
+          });
+          const events = part.flatMap((recommendation) =>
+            recommendation.events.map((event) => ({
+              recommendationId: recommendationIds.get(recommendation.ref)!,
+              userId,
+              kind: event.kind,
+              candidateName: event.candidateName,
+              candidateFoodId: event.candidateFoodId,
+              candidateRank: event.candidateRank,
+              rating: event.rating,
+              platform: event.platform,
+              rankingVersion: event.rankingVersion,
+              createdAt: safeDate(event.createdAt, 'event.createdAt'),
+            })),
+          );
+          if (events.length > 0) await tx.mealRecommendationEvent.createMany({ data: events });
+        });
+        createdRecommendationIds.push(...ids);
+      }
 
-        const result = await this.prisma.$transaction(async (tx) => {
-          const recommendationIds = new Map<string, string>();
-          for (const recommendation of archive.recommendations) {
-            const created = await tx.mealRecommendation.create({
-              data: {
-                userId,
-                targetDate: recommendation.targetDate,
-                targetSlot: recommendation.targetSlot,
-                contextJson: JSON.stringify(recommendation.context),
-                profileJson: JSON.stringify(recommendation.profile),
-                profileHash: recommendation.profileHash,
-                itemsJson: JSON.stringify(recommendation.items),
-                summary: recommendation.summary,
-                notice: recommendation.notice,
-                status: recommendation.status,
-                model: recommendation.model,
-                promptVersion: recommendation.promptVersion,
-                feedbackJson: null,
-                createdAt: safeDate(recommendation.createdAt, 'recommendation.createdAt'),
-              },
-            });
-            recommendationIds.set(recommendation.ref, created.id);
-            if (recommendation.events.length > 0) {
-              await tx.mealRecommendationEvent.createMany({
-                data: recommendation.events.map((event) => ({
-                  recommendationId: created.id,
-                  userId,
-                  kind: event.kind,
-                  candidateName: event.candidateName,
-                  candidateFoodId: event.candidateFoodId,
-                  candidateRank: event.candidateRank,
-                  rating: event.rating,
-                  platform: event.platform,
-                  rankingVersion: event.rankingVersion,
-                  createdAt: safeDate(event.createdAt, 'event.createdAt'),
-                })),
-              });
-            }
-          }
-
-          const restoredEntryIds = new Map<string, string>();
-          let itemCount = 0;
-          for (const entry of archive.entries) {
-            const created = await tx.mealEntry.create({
-              data: {
-                userId,
-                eatenAt: safeDate(entry.eatenAt, 'eatenAt'),
-                eatenDate: entry.eatenDate,
-                slot: entry.slot,
-                mealType: entry.mealType,
-                placeId: entry.placeId,
-                placeName: entry.placeName,
-                memo: entry.memo,
-                source: entry.source,
-                originRecommendationId: entry.originRecommendationRef
-                  ? (recommendationIds.get(entry.originRecommendationRef) ?? null)
-                  : null,
-                recognitionJson: entry.recognition ? JSON.stringify(entry.recognition) : null,
-                photoPurgedAt: entry.photoPurgedAt
-                  ? safeDate(entry.photoPurgedAt, 'photoPurgedAt')
-                  : null,
-                createdAt: safeDate(entry.createdAt, 'createdAt'),
-                updatedAt: safeDate(entry.updatedAt, 'updatedAt'),
-                items: {
-                  create: entry.items.map((item, index) => ({
-                    name: item.name,
-                    nameNorm: normalizeTerm(item.name),
-                    foodId: item.foodId,
-                    dishType: item.dishType,
-                    mainIngredient: item.mainIngredient,
-                    cuisine: item.cuisine,
-                    portion: item.portion,
-                    servings: item.servings,
-                    portionSource: item.portionSource,
-                    isMain: item.isMain,
-                    confidence: item.confidence,
-                    recognitionDishId: item.recognitionDishId,
-                    selectedCandidateRank: item.selectedCandidateRank,
-                    catalogMatchedBy: item.catalogMatchedBy,
-                    catalogMatchScore: item.catalogMatchScore,
-                    source: item.source,
-                    sortOrder: index,
-                    kcal: item.kcal,
-                    proteinG: item.proteinG,
-                    sodiumMg: item.sodiumMg,
-                    nutritionFrom: item.nutritionFrom,
-                    nutritionBasis: item.nutritionBasis,
-                  })),
-                },
-              },
-            });
-            restoredEntryIds.set(entry.ref, created.id);
-            itemCount += entry.items.length;
+      let itemCount = 0;
+      for (const part of entryChunks) {
+        const ids = part.map((entry) => entryIds.get(entry.ref)!);
+        await beforeChunk();
+        await this.prisma.$transaction(async (tx) => {
+          await tx.mealEntry.createMany({
+            data: part.map((entry) => ({
+              id: entryIds.get(entry.ref)!,
+              userId,
+              eatenAt: safeDate(entry.eatenAt, 'eatenAt'),
+              eatenDate: entry.eatenDate,
+              slot: entry.slot,
+              mealType: entry.mealType,
+              placeId: entry.placeId,
+              placeName: entry.placeName,
+              memo: entry.memo,
+              source: entry.source,
+              originRecommendationId: entry.originRecommendationRef
+                ? (recommendationIds.get(entry.originRecommendationRef) ?? null)
+                : null,
+              recognitionJson: entry.recognition ? JSON.stringify(entry.recognition) : null,
+              photoPurgedAt: entry.photoPurgedAt ? safeDate(entry.photoPurgedAt, 'photoPurgedAt') : null,
+              createdAt: safeDate(entry.createdAt, 'createdAt'),
+              updatedAt: safeDate(entry.updatedAt, 'updatedAt'),
+            })),
+          });
+          await tx.mealItem.createMany({
+            data: part.flatMap((entry) =>
+              entry.items.map((item, index) => ({
+                entryId: entryIds.get(entry.ref)!,
+                name: item.name,
+                nameNorm: normalizeTerm(item.name),
+                foodId: item.foodId,
+                dishType: item.dishType,
+                mainIngredient: item.mainIngredient,
+                cuisine: item.cuisine,
+                portion: item.portion,
+                servings: item.servings,
+                portionSource: item.portionSource,
+                isMain: item.isMain,
+                confidence: item.confidence,
+                recognitionDishId: item.recognitionDishId,
+                selectedCandidateRank: item.selectedCandidateRank,
+                catalogMatchedBy: item.catalogMatchedBy,
+                catalogMatchScore: item.catalogMatchScore,
+                source: item.source,
+                sortOrder: index,
+                kcal: item.kcal,
+                proteinG: item.proteinG,
+                sodiumMg: item.sodiumMg,
+                nutritionFrom: item.nutritionFrom,
+                nutritionBasis: item.nutritionBasis,
+              })),
+            ),
+          });
+          for (const entry of part) {
             for (const [sortOrder, photoRef] of entry.photoRefs.entries()) {
               const token = storedByRef.get(photoRef);
               if (!token) throw new MealDataError('invalid_backup', '복원할 사진을 찾을 수 없습니다.');
               const attached = await tx.mealPhoto.updateMany({
                 where: { userId, token, entryId: null },
-                data: { entryId: created.id, sortOrder },
+                data: { entryId: entryIds.get(entry.ref)!, sortOrder },
               });
               if (attached.count !== 1) {
                 throw new MealDataError('invalid_backup', '복원 사진 소유권 검증에 실패했습니다.');
               }
             }
           }
+        });
+        createdEntryIds.push(...ids);
+        itemCount += part.reduce((sum, entry) => sum + entry.items.length, 0);
+      }
 
-          for (const recommendation of archive.recommendations) {
-            if (!recommendation.feedback) continue;
-            const id = recommendationIds.get(recommendation.ref)!;
-            await tx.mealRecommendation.update({
-              where: { id },
+      await beforeChunk();
+      return await this.prisma.$transaction(async (tx) => {
+        let preference: RestoreMealDataResultType['restored']['preference'] = 'none';
+        if (archive.preference) {
+          const existing = await tx.mealPreference.findUnique({ where: { userId }, select: { userId: true } });
+          if (existing) {
+            preference = 'kept_existing';
+          } else {
+            await tx.mealPreference.create({
               data: {
-                feedbackJson: JSON.stringify({
-                  pickedName: recommendation.feedback.pickedName,
-                  rating: recommendation.feedback.rating,
-                  eatenEntryId: recommendation.feedback.eatenEntryRef
-                    ? (restoredEntryIds.get(recommendation.feedback.eatenEntryRef) ?? null)
-                    : null,
-                }),
+                userId,
+                weightsJson: JSON.stringify(archive.preference.weights),
+                excludedFoodsJson: JSON.stringify(archive.preference.excludedFoods),
+                allergensJson: JSON.stringify(archive.preference.allergens),
+                dislikedFoodsJson: JSON.stringify(archive.preference.dislikedFoods),
+                likedFoodsJson: JSON.stringify(archive.preference.likedFoods),
+                mealTypesJson: JSON.stringify(archive.preference.mealTypes),
+                slotsJson: JSON.stringify(archive.preference.slots),
+                // 영양소 점검 기준(선택) — 이 필드가 없던 백업은 비운다.
+                sex: archive.preference.sex ?? null,
+                birthYear: archive.preference.birthYear ?? null,
+                onboarded: archive.preference.onboarded,
               },
             });
+            preference = 'restored';
           }
+        }
 
-          let preference: RestoreMealDataResultType['restored']['preference'] = 'none';
-          if (archive.preference) {
-            const current = await tx.mealPreference.findUnique({ where: { userId }, select: { userId: true } });
-            if (current) {
-              preference = 'kept_existing';
-            } else {
-              await tx.mealPreference.create({
-                data: {
-                  userId,
-                  weightsJson: JSON.stringify(archive.preference.weights),
-                  excludedFoodsJson: JSON.stringify(archive.preference.excludedFoods),
-                  allergensJson: JSON.stringify(archive.preference.allergens),
-                  dislikedFoodsJson: JSON.stringify(archive.preference.dislikedFoods),
-                  likedFoodsJson: JSON.stringify(archive.preference.likedFoods),
-                  mealTypesJson: JSON.stringify(archive.preference.mealTypes),
-                  slotsJson: JSON.stringify(archive.preference.slots),
-                  // 영양소 점검 기준(선택) — 이 필드가 없던 백업은 비운다.
-                  sex: archive.preference.sex ?? null,
-                  birthYear: archive.preference.birthYear ?? null,
-                  onboarded: archive.preference.onboarded,
-                },
-              });
-              preference = 'restored';
-            }
-          }
-
-          const counts = {
-            entries: archive.entries.length,
-            items: itemCount,
-            photos: stored.length,
-            recommendations: archive.recommendations.length,
-            recommendationEvents: archive.recommendations.reduce(
-              (sum, recommendation) => sum + recommendation.events.length,
-              0,
-            ),
-            preference,
-          };
-          await tx.mealDataImport.create({
-            data: {
-              userId,
-              archiveId: archive.archiveId,
-              entries: counts.entries,
-              items: counts.items,
-              photos: counts.photos,
-              recommendations: counts.recommendations,
-              recommendationEvents: counts.recommendationEvents,
-              preferenceResult: counts.preference,
-            },
-          });
-          return { archiveId: archive.archiveId, duplicate: false as const, restored: counts };
+        const counts = {
+          entries: archive.entries.length,
+          items: itemCount,
+          photos: stored.length,
+          recommendations: archive.recommendations.length,
+          recommendationEvents: archive.recommendations.reduce(
+            (sum, recommendation) => sum + recommendation.events.length,
+            0,
+          ),
+          preference,
+        };
+        await tx.mealDataImport.create({
+          data: {
+            userId,
+            archiveId: archive.archiveId,
+            entries: counts.entries,
+            items: counts.items,
+            photos: counts.photos,
+            recommendations: counts.recommendations,
+            recommendationEvents: counts.recommendationEvents,
+            preferenceResult: counts.preference,
+          },
         });
-        return result;
-      } catch (error) {
-        await cleanupStored();
-        throw error;
-      }
-    });
+        return { archiveId: archive.archiveId, duplicate: false as const, restored: counts };
+      });
+    } catch (error) {
+      await cleanup();
+      throw error;
+    }
   }
 
   async deleteAll(
@@ -751,6 +1148,8 @@ export class MealDataService {
     }
 
     return mealMutationBarrier.runExclusive(userId, async () => {
+      // 장벽 밖에서 계산 중인 추천·영양제 조언이 이 삭제 뒤에 저장되지 않게 세대를 먼저 올린다.
+      mealDataGeneration.bump(userId, 'all');
       const committed = await this.prisma.$transaction(async (tx) => {
         const [photoRows, entryRows] = await Promise.all([
           // 붙은 사진과 고아 사진 모두 userId 소유 기준으로 수집한다.

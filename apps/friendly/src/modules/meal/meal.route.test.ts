@@ -1,17 +1,19 @@
-import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
-import type {
-  ListMealEntriesResultType,
-  MealCalendarResultType,
-  MealEntryType,
-  MealPreferenceType,
-  RecognizedDishType,
-  MealStatsResultType,
-  UploadMealPhotoResultType,
+import {
+  MEAL_MAX_ENTRIES_PER_DAY,
+  MEAL_MAX_ENTRIES_PER_USER,
+  type ListMealEntriesResultType,
+  type MealCalendarResultType,
+  type MealEntryType,
+  type MealPreferenceType,
+  type RecognizedDishType,
+  type MealStatsResultType,
+  type UploadMealPhotoResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
@@ -562,6 +564,90 @@ describe('meal routes (격리 DB)', () => {
     ).toBe(400);
   });
 
+  it('통계 기간은 최대 400일 — 넘으면 400(범위 행을 전부 읽는 집계라 묶는다)', async () => {
+    const stats = (from: string, to: string) =>
+      app.inject({ method: 'GET', url: `${ENTRIES}/stats?from=${from}&to=${to}`, headers: auth });
+    expect((await stats('2025-07-19', '2026-08-22')).statusCode).toBe(200); // 400일
+    expect((await stats('2025-07-18', '2026-08-22')).statusCode).toBe(400); // 401일
+    expect((await stats('2000-01-01', '2026-08-22')).statusCode).toBe(400);
+  });
+
+  it('하루 끼니 상한(30)을 넘는 생성·날짜 이동은 409, 다른 날은 그대로 저장된다', async () => {
+    await seedAuthUsers(app, [{ id: 'meal-cap', role: 'USER' }]);
+    const capAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId: 'meal-cap', email: 'cap@x.com', role: 'USER' })}`,
+    };
+    await app.prisma.mealEntry.createMany({
+      data: Array.from({ length: MEAL_MAX_ENTRIES_PER_DAY }, (_, i) => ({
+        userId: 'meal-cap',
+        eatenAt: new Date(Date.UTC(2026, 5, 1, 0, i)),
+        eatenDate: '2026-06-01',
+        slot: 'snack',
+      })),
+    });
+    const post = (date: string) =>
+      app.inject({
+        method: 'POST',
+        url: ENTRIES,
+        headers: capAuth,
+        payload: {
+          eatenAt: `${date}T03:00:00.000Z`,
+          eatenDate: date,
+          slot: 'lunch',
+          items: [{ name: '상한확인밥', isMain: true }],
+        },
+      });
+    const full = await post('2026-06-01');
+    expect(full.statusCode).toBe(409);
+    expect(full.json<{ message: string }>().message).toContain('하루에 기록할 수 있는 끼니');
+    const other = await post('2026-06-02');
+    expect(other.statusCode).toBe(201);
+    // 다른 날 기록을 꽉 찬 날로 옮기는 수정도 막는다. 같은 날 안의 수정은 그대로 된다.
+    const moved = await app.inject({
+      method: 'PATCH',
+      url: `${ENTRIES}/${other.json<MealEntryType>().id}`,
+      headers: capAuth,
+      payload: { eatenDate: '2026-06-01' },
+    });
+    expect(moved.statusCode).toBe(409);
+    const memo = await app.inject({
+      method: 'PATCH',
+      url: `${ENTRIES}/${other.json<MealEntryType>().id}`,
+      headers: capAuth,
+      payload: { memo: '같은 날 수정' },
+    });
+    expect(memo.statusCode).toBe(200);
+  });
+
+  it('계정당 기록 상한(20,000)에 닿으면 새 기록은 409', async () => {
+    await seedAuthUsers(app, [{ id: 'meal-cap-total', role: 'USER' }]);
+    const capAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId: 'meal-cap-total', email: 'cap2@x.com', role: 'USER' })}`,
+    };
+    await app.prisma.mealEntry.createMany({
+      data: Array.from({ length: MEAL_MAX_ENTRIES_PER_USER }, (_, i) => ({
+        userId: 'meal-cap-total',
+        eatenAt: new Date(Date.UTC(2020, 0, 1) + i * 3_600_000),
+        eatenDate: new Date(Date.UTC(2020, 0, 1) + i * 3_600_000).toISOString().slice(0, 10),
+        slot: 'snack',
+      })),
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: ENTRIES,
+      headers: capAuth,
+      payload: {
+        eatenAt: '2026-06-02T03:00:00.000Z',
+        eatenDate: '2026-06-02',
+        slot: 'lunch',
+        items: [{ name: '상한확인밥', isMain: true }],
+      },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ message: string }>().message).toContain('20,000');
+    await app.prisma.mealEntry.deleteMany({ where: { userId: 'meal-cap-total' } });
+  });
+
   it('추천 통계는 legacy feedback이 없는 노출·닫기 이벤트도 분모에 포함한다', async () => {
     const recommendation = await app.prisma.mealRecommendation.create({
       data: {
@@ -756,6 +842,24 @@ describe('meal routes (격리 DB)', () => {
         })
       ).statusCode,
     ).toBe(400);
+  });
+
+  it('HEIC 업로드는 워커에서 JPEG 로 바꿔 저장한다(요청 스레드를 막지 않는다)', async () => {
+    const heic = await readFile(
+      new URL('../settlement-extraction/__fixtures__/sample.heic', import.meta.url),
+    );
+    const up = await app.inject({
+      method: 'POST',
+      url: PHOTOS,
+      headers: { ...auth, ...multipart(heic, 'meal.heic').headers },
+      payload: multipart(heic, 'meal.heic').payload,
+    });
+    expect(up.statusCode).toBe(200);
+    const photo = up.json<UploadMealPhotoResultType>();
+    expect(photo).toMatchObject({ width: 120, height: 90 });
+    const full = await app.inject({ method: 'GET', url: `${PHOTOS}/${photo.token}`, headers: auth });
+    expect(full.headers['content-type']).toBe('image/jpeg');
+    await app.inject({ method: 'DELETE', url: `${PHOTOS}/${photo.token}`, headers: auth });
   });
 
   it('기록에 연결된 사진은 단독 DELETE를 거절하고 기록 PATCH로만 제거한다', async () => {
@@ -1093,6 +1197,40 @@ describe('meal routes (격리 DB)', () => {
     expect(body.found).toBe(true);
     expect(body.portion).toBe('large');
     expect(body.photoToken).toBe(photo.token);
+  });
+
+  it('지난번 기록 조회 — 같은 음식을 여러 번 먹었으면 가장 최근 끼니의 양을 준다', async () => {
+    for (const [date, portion] of [
+      ['2026-07-01', 'large'],
+      ['2026-07-20', 'small'],
+      ['2026-07-10', 'normal'],
+    ] as const) {
+      const res = await app.inject({
+        method: 'POST',
+        url: ENTRIES,
+        headers: auth,
+        payload: {
+          eatenAt: `${date}T03:00:00.000Z`,
+          eatenDate: date,
+          slot: 'lunch',
+          items: [
+            { name: '반찬', isMain: false },
+            { name: '최근확인국수', portion, isMain: true },
+          ],
+        },
+      });
+      expect(res.statusCode).toBe(201);
+    }
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/items/recent?name=최근확인국수',
+      headers: auth,
+    });
+    expect(res.json<{ found: boolean; lastEatenDate: string; portion: string }>()).toMatchObject({
+      found: true,
+      lastEatenDate: '2026-07-20',
+      portion: 'small',
+    });
   });
 
   it('먹은 적 없는 음식은 found=false — 화면이 아무것도 안 그린다', async () => {

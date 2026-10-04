@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MealMutationBarrier } from './meal-mutation-barrier.js';
+import { MealDataGeneration, MealMutationBarrier } from './meal-mutation-barrier.js';
 
 const deferred = () => {
   let resolve!: () => void;
@@ -49,5 +49,37 @@ describe('MealMutationBarrier', () => {
 
     await expect(barrier.runExclusive('user', async () => 'continued')).resolves.toBe('continued');
     expect(barrier.pendingUserCount()).toBe(0);
+  });
+
+  it('acquire 는 같은 FIFO 에서 잡고, release 를 부를 때까지 다음 작업을 막는다(여러 번 불러도 한 번)', async () => {
+    const barrier = new MealMutationBarrier();
+    const order: string[] = [];
+    const release = await barrier.acquire('user');
+    const next = barrier.runExclusive('user', async () => {
+      order.push('next');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual([]);
+    release();
+    release();
+    await next;
+    expect(order).toEqual(['next']);
+    expect(barrier.pendingUserCount()).toBe(0);
+  });
+});
+
+describe('MealDataGeneration', () => {
+  it('전체 삭제는 두 범위를, 추천 전체 삭제는 추천 범위만 바꾼다', () => {
+    const generation = new MealDataGeneration();
+    const all0 = generation.read('u', 'all');
+    const rec0 = generation.read('u', 'recommendations');
+    generation.bump('u', 'recommendations');
+    expect(generation.read('u', 'all')).toBe(all0);
+    expect(generation.read('u', 'recommendations')).not.toBe(rec0);
+    const rec1 = generation.read('u', 'recommendations');
+    generation.bump('u', 'all');
+    expect(generation.read('u', 'all')).not.toBe(all0);
+    expect(generation.read('u', 'recommendations')).not.toBe(rec1);
+    expect(generation.read('other', 'all')).toBe(0);
   });
 });

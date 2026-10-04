@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { access, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,8 +7,14 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import {
+  MEAL_DATA_BACKUP_FORMAT,
+  MEAL_DATA_BACKUP_MAX_PHOTO_BYTES,
+  MEAL_DATA_BACKUP_VERSION,
+  MEAL_MAX_ENTRIES_PER_DAY,
   MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
   MEAL_DATA_DELETE_CONFIRMATION,
+  MealDataBackup,
+  MealDataExport,
   type CreateMealEntryInputType,
   type DeleteMealPhotosResultType,
   type DeleteMealDataResultType,
@@ -18,12 +25,79 @@ import {
   type RecognizedDishType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
+import { AsyncGate } from '../../lib/async-gate.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { DEFAULT_LEXICON } from '../food/engine/index.js';
 import type { FoodService } from '../food/food.service.js';
 import { MealDataService } from './meal-data.service.js';
+import { mealMutationBarrier } from './meal-mutation-barrier.js';
 import { MealService } from './meal.service.js';
+
+// 사진 포함 백업·내보내기 스트림, 복원 청크·상한, 전역 1건(성능 감사 2차) — 아래 '스트림·복원 청크·상한' describe.
+const BACKUP = '/api/v1/meals/data/backup';
+const RESTORE = '/api/v1/meals/data/backup/restore';
+const STREAM_USERS = ['stream-a', 'stream-b', 'stream-c', 'stream-d', 'stream-e', 'stream-f', 'stream-g'];
+
+const emptyArchive = (archiveId: string): MealDataBackupType => ({
+  format: MEAL_DATA_BACKUP_FORMAT,
+  version: MEAL_DATA_BACKUP_VERSION,
+  archiveId,
+  exportedAt: '2026-10-05T00:00:00.000Z',
+  notice: {
+    encoding: 'json-base64',
+    orphanPhotosSkipped: 0,
+    duplicatePolicy: 'same-archive-id-is-idempotent',
+    mergePolicy: 'append-records-keep-existing-preference',
+  },
+  entries: [],
+  photos: [],
+  preference: null,
+  recommendations: [],
+});
+
+const archiveEntry = (ref: string, date: string, photoRefs: string[] = []): MealDataBackupType['entries'][number] => ({
+  ref,
+  originRecommendationRef: null,
+  eatenAt: `${date}T03:00:00.000Z`,
+  eatenDate: date,
+  slot: 'lunch',
+  mealType: null,
+  placeId: null,
+  placeName: null,
+  memo: null,
+  source: 'manual',
+  recognition: null,
+  photoPurgedAt: null,
+  createdAt: `${date}T03:00:00.000Z`,
+  updatedAt: `${date}T03:00:00.000Z`,
+  photoRefs,
+  items: [
+    {
+      name: '복원 비빔밥',
+      foodId: null,
+      dishType: null,
+      mainIngredient: null,
+      cuisine: null,
+      portion: null,
+      servings: null,
+      portionSource: null,
+      isMain: true,
+      confidence: null,
+      recognitionDishId: null,
+      selectedCandidateRank: null,
+      catalogMatchedBy: 'none',
+      catalogMatchScore: null,
+      source: 'manual',
+      sortOrder: 0,
+      kcal: 500,
+      proteinG: 10,
+      sodiumMg: 800,
+      nutritionFrom: null,
+      nutritionBasis: 'direct',
+    },
+  ],
+});
 
 const DATA = '/api/v1/meals/data';
 const EXPORT = `${DATA}/export`;
@@ -864,5 +938,240 @@ describe('meal data export/delete routes (격리 DB)', () => {
     } finally {
       removeAll.mockRestore();
     }
+  });
+
+  describe('스트림·복원 청크·상한 (성능 감사 2차 C-1·C-2·C-4)', () => {
+    const authOf = (userId: string) => ({
+      authorization: `Bearer ${app.jwt.sign({ userId, email: `${userId}@x.com`, role: 'USER' })}`,
+    });
+
+    beforeAll(async () => {
+      await seedAuthUsers(app, STREAM_USERS.map((id) => ({ id, role: 'USER' as const })));
+    });
+
+    afterAll(async () => {
+      for (const userId of STREAM_USERS) {
+        await rm(join(tmpdir(), 'lifepickr-test-meal-photos', userId), { recursive: true, force: true });
+      }
+    });
+
+    it('백업은 조각으로 흘려도 응답 스키마 직렬화와 바이트가 같고, 큰 사진도 base64 조각이 이어져 무결하게 복원된다', async () => {
+      // 노이즈 사진 — 재인코딩 뒤에도 base64 조각(768KB 원본 단위) 여러 개로 나뉘는 크기.
+      const noisy = await sharp(randomBytes(1600 * 1200 * 3), { raw: { width: 1600, height: 1200, channels: 3 } })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+      const big = await app.mealPhotos.store('stream-a', noisy);
+      expect(big.byteSize).toBeGreaterThan(768 * 1024);
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/v1/meals',
+        headers: authOf('stream-a'),
+        payload: {
+          eatenAt: '2026-09-01T03:00:00.000Z',
+          eatenDate: '2026-09-01',
+          slot: 'lunch',
+          memo: '  따옴표 "와" 역슬래시 \\ 와 이모지 🍜  ',
+          items: [{ name: ' 국수 ', isMain: true }],
+          photoTokens: [big.token],
+        },
+      });
+      expect(created.statusCode).toBe(201);
+
+      const res = await app.inject({ method: 'GET', url: BACKUP, headers: authOf('stream-a') });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('application/json');
+      // 조각으로 이어 붙인 본문이 스키마 직렬화(예전 응답 경로)와 한 바이트도 다르지 않다.
+      const parsed = MealDataBackup.parse(JSON.parse(res.body));
+      expect(JSON.stringify(parsed)).toBe(res.body);
+      const photo = parsed.photos[0]!;
+      const bytes = Buffer.from(photo.dataBase64, 'base64');
+      expect(bytes.byteLength).toBe(photo.byteSize);
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(photo.sha256);
+
+      const restored = await app.inject({
+        method: 'POST',
+        url: RESTORE,
+        headers: { ...authOf('stream-b'), 'content-type': 'application/json' },
+        payload: res.body,
+      });
+      expect(restored.statusCode).toBe(200);
+      expect(restored.json<RestoreMealDataResultType>().restored).toMatchObject({ entries: 1, photos: 1 });
+      // 백업·복원이 끝나면 전역 자리와 사용자 장벽이 모두 풀린다.
+      expect(mealMutationBarrier.pendingUserCount()).toBe(0);
+    });
+
+    it('내보내기는 500건 단위로 읽어도 같은 시각 기록까지 빠짐·중복 없이 [eatenAt, id] 순서이고 스키마 직렬화와 같다', async () => {
+      const same = new Date('2026-05-05T03:00:00.000Z');
+      await app.prisma.mealEntry.createMany({
+        data: [
+          // 페이지 경계에 같은 eatenAt 이 걸리게 600건을 한 시각에 몰아 넣는다.
+          ...Array.from({ length: 600 }, () => ({ userId: 'stream-c', eatenAt: same, eatenDate: '2026-05-05', slot: 'lunch' })),
+          ...Array.from({ length: 550 }, (_, i) => ({
+            userId: 'stream-c',
+            eatenAt: new Date(Date.UTC(2026, 0, 1) + i * 3_600_000),
+            eatenDate: new Date(Date.UTC(2026, 0, 1) + i * 3_600_000).toISOString().slice(0, 10),
+            slot: 'dinner',
+            memo: `메모 ${i}`,
+          })),
+        ],
+      });
+      const res = await app.inject({ method: 'GET', url: EXPORT, headers: authOf('stream-c') });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<MealDataExportType>();
+      expect(JSON.stringify(MealDataExport.parse(body))).toBe(res.body);
+      const expected = await app.prisma.mealEntry.findMany({
+        where: { userId: 'stream-c' },
+        orderBy: [{ eatenAt: 'asc' }, { id: 'asc' }],
+        select: { id: true },
+      });
+      expect(body.entries.map((entry) => entry.id)).toEqual(expected.map((row) => row.id));
+      expect(new Set(body.entries.map((entry) => entry.id)).size).toBe(1150);
+    });
+
+    it('사진 합계가 25MB 를 넘는 아카이브는 디코드 전에 413, 정규식 없이도 깨진 base64 는 400', async () => {
+      const tooBig = emptyArchive('33333333-3333-4333-8333-333333333333');
+      tooBig.photos = Array.from({ length: 6 }, (_, i) => ({
+        ref: `photo-${i}`,
+        contentType: 'image/jpeg' as const,
+        dataBase64: 'AAAA',
+        sha256: '0'.repeat(64),
+        byteSize: MEAL_DATA_BACKUP_MAX_PHOTO_BYTES,
+        width: null,
+        height: null,
+      }));
+      tooBig.entries = [archiveEntry('entry-1', '2026-04-01', tooBig.photos.map((photo) => photo.ref).slice(0, 5)), archiveEntry('entry-2', '2026-04-02', ['photo-5'])];
+      const big = await app.inject({ method: 'POST', url: RESTORE, headers: authOf('stream-d'), payload: tooBig });
+      expect(big.statusCode).toBe(413);
+
+      const broken = emptyArchive('44444444-4444-4444-8444-444444444444');
+      broken.photos = [{ ref: 'p', contentType: 'image/jpeg', dataBase64: '@@@@', sha256: '0'.repeat(64), byteSize: 3, width: null, height: null }];
+      broken.entries = [archiveEntry('e', '2026-04-03', ['p'])];
+      const bad = await app.inject({ method: 'POST', url: RESTORE, headers: authOf('stream-d'), payload: broken });
+      expect(bad.statusCode).toBe(400);
+      expect(await app.prisma.mealEntry.count({ where: { userId: 'stream-d' } })).toBe(0);
+    });
+
+    it('DB 사진 합계가 한도를 넘으면 백업은 파일을 읽기 전에 413', async () => {
+      const entry = await app.prisma.mealEntry.create({
+        data: { userId: 'stream-e', eatenAt: new Date('2026-04-01T03:00:00Z'), eatenDate: '2026-04-01', slot: 'lunch' },
+      });
+      await app.prisma.mealPhoto.createMany({
+        data: Array.from({ length: 6 }, (_, i) => ({
+          token: `00000000-0000-4000-8000-0000000000${String(10 + i)}`,
+          userId: 'stream-e',
+          entryId: entry.id,
+          byteSize: MEAL_DATA_BACKUP_MAX_PHOTO_BYTES,
+          sortOrder: i,
+        })),
+      });
+      const res = await app.inject({ method: 'GET', url: BACKUP, headers: authOf('stream-e') });
+      expect(res.statusCode).toBe(413);
+      expect(res.json<{ message: string }>().message).toContain('25MB');
+    });
+
+    it('복원 뒤 하루 끼니 상한을 넘으면 409 이고 아무것도 쓰지 않는다', async () => {
+      await app.prisma.mealEntry.createMany({
+        data: Array.from({ length: MEAL_MAX_ENTRIES_PER_DAY }, (_, i) => ({
+          userId: 'stream-f',
+          eatenAt: new Date(Date.UTC(2026, 3, 10, 0, i)),
+          eatenDate: '2026-04-10',
+          slot: 'snack',
+        })),
+      });
+      const archive = emptyArchive('55555555-5555-4555-8555-555555555555');
+      archive.entries = [archiveEntry('entry-1', '2026-04-10'), archiveEntry('entry-2', '2026-04-11')];
+      const res = await app.inject({ method: 'POST', url: RESTORE, headers: authOf('stream-f'), payload: archive });
+      expect(res.statusCode).toBe(409);
+      expect(await app.prisma.mealEntry.count({ where: { userId: 'stream-f' } })).toBe(MEAL_MAX_ENTRIES_PER_DAY);
+      expect(await app.prisma.mealDataImport.count({ where: { userId: 'stream-f' } })).toBe(0);
+    });
+
+    it('여러 청크로 나눠 쓰다 중간 청크가 실패하면 앞서 쓴 기록·추천·사진을 모두 정리하고 원장을 남기지 않는다', async () => {
+      const archive = emptyArchive('66666666-6666-4666-8666-666666666666');
+      const jpeg = await sharp({ create: { width: 30, height: 20, channels: 3, background: '#468' } }).jpeg().toBuffer();
+      archive.photos = [
+        {
+          ref: 'photo-1',
+          contentType: 'image/jpeg',
+          dataBase64: jpeg.toString('base64'),
+          sha256: createHash('sha256').update(jpeg).digest('hex'),
+          byteSize: jpeg.byteLength,
+          width: 30,
+          height: 20,
+        },
+      ];
+      archive.entries = Array.from({ length: 1_200 }, (_, i) =>
+        archiveEntry(`entry-${i}`, new Date(Date.UTC(2024, 0, 1) + Math.floor(i / 3) * 86_400_000).toISOString().slice(0, 10), i === 0 ? ['photo-1'] : []),
+      );
+      archive.recommendations = [
+        {
+          ref: 'rec-1',
+          targetDate: '2024-01-02',
+          targetSlot: 'lunch',
+          items: [],
+          summary: '요약',
+          status: 'fallback',
+          model: null,
+          promptVersion: 1,
+          notice: null,
+          context: {},
+          profile: {},
+          profileHash: 'h',
+          createdAt: '2024-01-02T00:00:00.000Z',
+          feedback: { pickedName: null, rating: 1, eatenEntryRef: 'entry-5' },
+          events: [{ kind: 'shown', candidateName: null, candidateFoodId: null, candidateRank: null, rating: null, platform: 'mobile', rankingVersion: 1, createdAt: '2024-01-02T00:00:00.000Z' }],
+        },
+      ];
+
+      // 세 번째 트랜잭션(두 번째 기록 청크)에서 실패시킨다.
+      let transactions = 0;
+      const failing = new Proxy(app.prisma, {
+        get(target, prop, receiver) {
+          if (prop === '$transaction') {
+            return (fn: Parameters<PrismaClient['$transaction']>[0]) => {
+              transactions += 1;
+              if (transactions === 3) return Promise.reject(new Error('forced chunk failure'));
+              return (target.$transaction as (f: typeof fn) => Promise<unknown>)(fn);
+            };
+          }
+          return Reflect.get(target, prop, receiver) as unknown;
+        },
+      }) as PrismaClient;
+      const data = new MealDataService(failing, { photos: app.mealPhotos });
+      await expect(data.restore('stream-g', archive)).rejects.toThrow('forced chunk failure');
+      expect(transactions).toBe(3);
+      expect(await app.prisma.mealEntry.count({ where: { userId: 'stream-g' } })).toBe(0);
+      expect(await app.prisma.mealRecommendation.count({ where: { userId: 'stream-g' } })).toBe(0);
+      expect(await app.prisma.mealRecommendationEvent.count({ where: { userId: 'stream-g' } })).toBe(0);
+      expect(await app.prisma.mealPhoto.count({ where: { userId: 'stream-g' } })).toBe(0);
+      expect(await app.prisma.mealDataImport.count({ where: { userId: 'stream-g' } })).toBe(0);
+
+      // 같은 아카이브를 다시 보내면 정상 복원된다(실패가 원장을 남기지 않아 멱등 키를 막지 않는다).
+      const ok = await new MealDataService(app.prisma, { photos: app.mealPhotos }).restore('stream-g', archive);
+      expect(ok.restored).toMatchObject({ entries: 1_200, items: 1_200, photos: 1, recommendations: 1, recommendationEvents: 1 });
+      const rec = await app.prisma.mealRecommendation.findFirst({ where: { userId: 'stream-g' } });
+      const linked = await app.prisma.mealEntry.findMany({ where: { userId: 'stream-g' }, orderBy: [{ eatenAt: 'asc' }, { id: 'asc' }], take: 6 });
+      // 추천 피드백의 기록 연결은 미리 만든 기록 id 로 한 번에 써진다.
+      expect(JSON.parse(rec!.feedbackJson!)).toMatchObject({ rating: 1 });
+      expect(linked.map((row) => row.id)).toContain(JSON.parse(rec!.feedbackJson!).eatenEntryId);
+      expect(await app.prisma.mealPhoto.count({ where: { userId: 'stream-g', entryId: { not: null } } })).toBe(1);
+    });
+
+    it('백업·복원은 전역 1건 — 자리가 없으면 busy, 스트림을 버리면 전역 자리와 사용자 장벽을 바로 푼다', async () => {
+      const gate = new AsyncGate(1, { maxQueue: 0 });
+      const data = new MealDataService(app.prisma, { photos: app.mealPhotos, archiveGate: gate });
+      const stream = await data.backupStream('stream-b');
+      // 스트림이 열려 있는 동안 전역 자리를 잡고 있다 — 대기열 0 이라 다른 복원은 바로 거절된다.
+      expect(gate.active).toBe(1);
+      const archive = emptyArchive('88888888-8888-4888-8888-888888888888');
+      archive.entries = [archiveEntry('entry-1', '2026-03-01')];
+      await expect(data.restore('stream-d', archive)).rejects.toMatchObject({ code: 'busy' });
+
+      stream.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(gate.active).toBe(0);
+      expect(mealMutationBarrier.pendingUserCount()).toBe(0);
+      await expect(data.restore('stream-d', archive)).resolves.toMatchObject({ duplicate: false });
+    });
   });
 });

@@ -12,6 +12,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { thinkOptionForModel } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { DEFAULT_LEXICON } from './engine/lexicon.js';
+import { FailureBackoff, MENU_FAILURE_GIVE_UP_AFTER } from './menu-failure-backoff.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
@@ -96,17 +97,33 @@ export interface MenuLlmDecomposeServiceOptions {
   model?: string;
   logger?: FastifyBaseLogger;
   cache?: AdapterCache;
+  // 실패한 이름의 재시도 간격(테스트 주입용). 기본 30분, 응답 해석 실패 3회면 '포기'를 저장한다.
+  failures?: FailureBackoff;
 }
 
 export class MenuLlmDecomposeService {
+  private readonly failures: FailureBackoff;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
     private readonly opts: MenuLlmDecomposeServiceOptions = {},
-  ) {}
+  ) {
+    this.failures = opts.failures ?? new FailureBackoff();
+  }
 
-  /** 캐시만. 값 null = "물어봤고 분해 안 됨", 키 없음 = 아직 안 물어봄. */
+  /**
+   * 캐시만. 값 null = "물어봤고 분해 안 됨", 키 없음 = 아직 안 물어봄. 최근 실패해 재시도 간격 안인 이름도 null 로 준다.
+   */
   async lookupCached(names: string[]): Promise<Map<string, string[] | null>> {
+    const out = await this.lookupStored(names);
+    for (const n of names) {
+      if (!out.has(n) && this.failures.isBackingOff(normalizeTerm(n))) out.set(n, null);
+    }
+    return out;
+  }
+
+  private async lookupStored(names: string[]): Promise<Map<string, string[] | null>> {
     const out = new Map<string, string[] | null>();
     if (names.length === 0) return out;
     const byNorm = new Map<string, string[]>();
@@ -177,28 +194,46 @@ export class MenuLlmDecomposeService {
         signal: ac.signal,
       });
       const parsed = parseDecomposeOutput(res.text);
+      const norm = normalizeTerm(name);
       if (!parsed) {
         this.opts.logger?.warn({ name, text: res.text.slice(0, 120) }, '[menu-llm-decompose] 파싱 실패');
-        return undefined;
+        // 이름에 묶인 실패 — 간격을 두고, 거듭되면 '포기'(분해 없음)로 저장해 다시 묻지 않는다.
+        if (this.failures.record(norm, true) < MENU_FAILURE_GIVE_UP_AFTER) return undefined;
+        await this.saveVerdict(name, model, null, 'low', `응답 해석 실패 ${MENU_FAILURE_GIVE_UP_AFTER}회 — 판정 포기`);
+        this.failures.clear(norm);
+        return null;
       }
       const parts = decideDecomposition(parsed);
-      const norm = normalizeTerm(name);
-      const data = {
-        menuName: name,
-        componentsJson: JSON.stringify(parts ?? []),
-        confidence: parsed.confidence,
-        reason: parsed.reason,
-        model,
-        version: MENU_LLM_DECOMPOSE_VERSION,
-      };
-      await this.prisma.menuLlmDecomposition.upsert({ where: { nameNorm: norm }, create: { nameNorm: norm, ...data }, update: data });
+      await this.saveVerdict(name, model, parts, parsed.confidence, parsed.reason);
+      this.failures.clear(norm);
       return parts;
     } catch (e) {
       this.opts.logger?.warn({ err: e instanceof Error ? e.message : String(e), name }, '[menu-llm-decompose] 호출 실패');
+      // 업스트림 장애 — 간격만 두고 포기하지 않는다(호출자 취소는 제외).
+      if (!outerSignal?.aborted) this.failures.record(normalizeTerm(name), false);
       return undefined;
     } finally {
       clearTimeout(timer);
       outerSignal?.removeEventListener('abort', onAbort);
     }
+  }
+
+  private async saveVerdict(
+    name: string,
+    model: string,
+    parts: string[] | null,
+    confidence: DecomposeOutput['confidence'],
+    reason: string | null,
+  ): Promise<void> {
+    const norm = normalizeTerm(name);
+    const data = {
+      menuName: name,
+      componentsJson: JSON.stringify(parts ?? []),
+      confidence,
+      reason,
+      model,
+      version: MENU_LLM_DECOMPOSE_VERSION,
+    };
+    await this.prisma.menuLlmDecomposition.upsert({ where: { nameNorm: norm }, create: { nameNorm: norm, ...data }, update: data });
   }
 }

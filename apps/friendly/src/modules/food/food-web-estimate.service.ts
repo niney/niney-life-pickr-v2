@@ -7,6 +7,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import { normalizeTerm } from '../../lib/text.js';
+import { FailureBackoff } from './menu-failure-backoff.js';
 import {
   FOOD_WEB_ESTIMATE_SOURCE,
   FOOD_WEB_ESTIMATE_VERSION,
@@ -45,19 +46,48 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 export class FoodWebEstimateService {
   private readonly fetcher: WebFetcher;
-  private lastFetchAt = 0;
+  // 다음 요청을 보낼 수 있는 가장 이른 시각. 예약을 동기적으로 갱신해야 동시에 들어온 체인들이 같은 시각을 보고
+  // 한꺼번에 fetch 하지 않는다(예전: 마지막 fetch 시각만 보고 기다려 4체인이 1초마다 4건씩 동시에 나갔다).
+  private nextFetchAt = 0;
   private readonly intervalMs: number;
+  private readonly failures: FailureBackoff;
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly opts: { logger?: FastifyBaseLogger; fetcher?: WebFetcher; intervalMs?: number } = {},
+    private readonly opts: {
+      logger?: FastifyBaseLogger;
+      fetcher?: WebFetcher;
+      intervalMs?: number;
+      // 조회 실패(비200·네트워크) 이름의 재시도 간격(테스트 주입용). 기본 30분.
+      failures?: FailureBackoff;
+    } = {},
   ) {
     this.fetcher = opts.fetcher ?? defaultFetcher;
     this.intervalMs = opts.intervalMs ?? FETCH_INTERVAL_MS;
+    this.failures = opts.failures ?? new FailureBackoff();
   }
 
-  /** 캐시만 읽는다. 값 null = "조회했고 미채택", 키 없음 = 아직 안 조회. */
+  /** 다음 fetch 자리를 예약하고 기다릴 시간(ms)을 돌려준다. */
+  private reserveFetchSlot(): number {
+    const now = Date.now();
+    const at = Math.max(now, this.nextFetchAt);
+    this.nextFetchAt = at + this.intervalMs;
+    return at - now;
+  }
+
+  /**
+   * 캐시만 읽는다. 값 null = "조회했고 미채택", 키 없음 = 아직 안 조회. 최근 조회에 실패해 재시도 간격 안인 이름도
+   * null 로 준다 — 공개 메뉴 탭 폴링마다 같은 이름으로 외부 사이트를 다시 두드리지 않는다.
+   */
   async lookupCached(names: string[]): Promise<Map<string, WebEstimateHit | null>> {
+    const out = await this.lookupStored(names);
+    for (const n of names) {
+      if (!out.has(n) && this.failures.isBackingOff(normalizeTerm(n))) out.set(n, null);
+    }
+    return out;
+  }
+
+  private async lookupStored(names: string[]): Promise<Map<string, WebEstimateHit | null>> {
     const out = new Map<string, WebEstimateHit | null>();
     const normToNames = new Map<string, string[]>();
     for (const n of names) {
@@ -110,9 +140,8 @@ export class FoodWebEstimateService {
 
   /** undefined = 조회 실패(저장 안 함), null = 미채택(저장), 객체 = 채택(저장). */
   private async fetchOne(name: string, outerSignal?: AbortSignal): Promise<WebEstimate | null | undefined> {
-    const wait = this.lastFetchAt + this.intervalMs - Date.now();
+    const wait = this.reserveFetchSlot();
     if (wait > 0) await sleep(wait);
-    this.lastFetchAt = Date.now();
 
     const url = buildFatsecretSearchUrl(name);
     const ac = new AbortController();
@@ -123,6 +152,8 @@ export class FoodWebEstimateService {
       const res = await this.fetcher(url, ac.signal);
       if (res.status !== 200) {
         this.opts.logger?.warn({ name, status: res.status }, '[food-web-estimate] 조회 실패');
+        // 저장하지 않되 재시도 간격을 둔다(차단·장애 중에 같은 이름으로 다시 두드리지 않게).
+        this.failures.record(normalizeTerm(name), false);
         return undefined;
       }
       let samples = parseFatsecretSearch(htmlToText(res.text), name);
@@ -131,8 +162,8 @@ export class FoodWebEstimateService {
         // 조리법 접미를 뗀 어간으로 한 번 더 — "항정살구이" 는 없어도 "항정살" 은 있다.
         const stem = webQueryStem(name);
         if (stem) {
-          await sleep(this.intervalMs);
-          this.lastFetchAt = Date.now();
+          const stemWait = this.reserveFetchSlot();
+          if (stemWait > 0) await sleep(stemWait);
           const stemUrl = buildFatsecretSearchUrl(stem);
           const res2 = await this.fetcher(stemUrl, ac.signal);
           if (res2.status === 200) {
@@ -155,9 +186,11 @@ export class FoodWebEstimateService {
         fetchedAt: new Date(),
       };
       await this.prisma.foodWebEstimate.upsert({ where: { nameNorm: norm }, create: { nameNorm: norm, ...data }, update: data });
+      this.failures.clear(norm);
       return est;
     } catch (e) {
       this.opts.logger?.warn({ err: e instanceof Error ? e.message : String(e), name }, '[food-web-estimate] 오류');
+      if (!outerSignal?.aborted) this.failures.record(normalizeTerm(name), false);
       return undefined;
     } finally {
       clearTimeout(timer);

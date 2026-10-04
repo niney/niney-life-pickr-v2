@@ -371,8 +371,25 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
   };
 };
 
+/** 음식 제안 후보 한 행 — 카탈로그·어휘에서만 정해지는 값(파싱·1인분 환산)을 미리 계산해 둔다. */
+interface SuggestionCandidate {
+  name: string;
+  nameNorm: string;
+  // isExcluded 는 저장된 nameNorm 이 아니라 이름을 다시 정규화한 값으로 비교해 왔다.
+  excludeKey: { nameNorm: string; ingredients: string[] };
+  allergen: ReturnType<typeof allergenData>;
+  dishType: string | null;
+  serving: ReturnType<typeof mealServingNutrition>;
+  grams: number | null;
+  per100: NutrientsPer100g;
+}
+
 export class MealNutritionService {
   private lexiconCache: { value: Lexicon; at: number } | null = null;
+  // 카탈로그 파생 제안 후보(사용자와 무관) — 어휘와 같은 10분 TTL. 요청마다 1,200여 행(영양 JSON 포함)을
+  // 읽고 영양소마다 JSON 을 다시 파싱하던 것을 없앤다. 요청에서는 사용자 알레르기·제외·나트륨 필터와 정렬만 한다.
+  private suggestionCache: { at: number; lexicon: Lexicon; list: SuggestionCandidate[] } | null = null;
+  private suggestionLoading: Promise<SuggestionCandidate[]> | null = null;
 
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -383,6 +400,63 @@ export class MealNutritionService {
     const value = await loadLexicon(this.prisma);
     this.lexiconCache = { value, at: Date.now() };
     return value;
+  }
+
+  private async suggestionCandidates(): Promise<SuggestionCandidate[]> {
+    const lex = await this.lexicon();
+    const cached = this.suggestionCache;
+    if (cached && cached.lexicon === lex && Date.now() - cached.at < LEXICON_TTL_MS) return cached.list;
+    // 동시에 들어온 첫 요청들은 한 번만 읽는다.
+    this.suggestionLoading ??= (async () => {
+      try {
+        const list = await this.loadSuggestionCandidates(lex);
+        this.suggestionCache = { at: Date.now(), lexicon: lex, list };
+        return list;
+      } finally {
+        this.suggestionLoading = null;
+      }
+    })();
+    return this.suggestionLoading;
+  }
+
+  private async loadSuggestionCandidates(lex: Lexicon): Promise<SuggestionCandidate[]> {
+    const commonNorms = commonMealNorms(lex);
+    const rows = await this.prisma.foodItem.findMany({
+      where: { active: true, nutrientsPer100gJson: { not: null } },
+      select: {
+        ...CATALOG_SELECT,
+        nameNorm: true,
+        aliasNormsJson: true,
+        mainIngredient: true,
+        ingredientsJson: true,
+        allergensJson: true,
+        allergenEvidenceJson: true,
+        allergenStatus: true,
+      },
+    });
+    const out: SuggestionCandidate[] = [];
+    for (const r of rows) {
+      if (
+        !(commonNorms.has(r.nameNorm) || parseJsonStringArray(r.aliasNormsJson).some((a) => commonNorms.has(a))) ||
+        !isExplorableCatalogRow(r)
+      ) {
+        continue;
+      }
+      const serving = mealServingNutrition(r, { isMain: true }, lex);
+      const kcal100 = kcalPer100gOf(r);
+      if (serving.kcal === null || serving.kcal <= 0 || (kcal100 ?? 0) >= SUGGESTION_MAX_KCAL_PER_100G) continue;
+      out.push({
+        name: r.name,
+        nameNorm: r.nameNorm,
+        excludeKey: { nameNorm: normalizeTerm(r.name), ingredients: parseJsonStringArray(r.ingredientsJson) },
+        allergen: allergenData(r.name, r.ingredientsJson, r.allergensJson, r.allergenEvidenceJson, r.allergenStatus),
+        dishType: r.dishType,
+        serving,
+        grams: kcal100 ? (serving.kcal / kcal100) * 100 : null,
+        per100: parseNutrientsPer100g(r.nutrientsPer100gJson),
+      });
+    }
+    return out;
   }
 
   async analyze(userId: string, today: string, days: number): Promise<MealNutritionAnalysisType> {
@@ -462,67 +536,27 @@ export class MealNutritionService {
     opts: { sodiumHigh: boolean } = { sodiumHigh: false },
   ): Promise<Map<KdriNutrient, string[]>> {
     const sodiumCap = opts.sodiumHigh ? SUGGESTION_MAX_SODIUM_MG_WHEN_HIGH : SUGGESTION_MAX_SODIUM_MG;
-    const lex = await this.lexicon();
-    const commonNorms = commonMealNorms(lex);
-    const rows = await this.prisma.foodItem.findMany({
-      where: { active: true, nutrientsPer100gJson: { not: null } },
-      select: {
-        ...CATALOG_SELECT,
-        nameNorm: true,
-        aliasNormsJson: true,
-        mainIngredient: true,
-        ingredientsJson: true,
-        allergensJson: true,
-        allergenEvidenceJson: true,
-        allergenStatus: true,
-      },
-    });
-    const usable = rows.filter(
-      (r) =>
-        (commonNorms.has(r.nameNorm) ||
-          parseJsonStringArray(r.aliasNormsJson).some((a) => commonNorms.has(a))) &&
-        isExplorableCatalogRow(r) &&
-        !hitsUserAllergen(
-          allergenData(r.name, r.ingredientsJson, r.allergensJson, r.allergenEvidenceJson, r.allergenStatus),
-          allergens,
-        ) &&
-        !isExcluded(
-          { nameNorm: normalizeTerm(r.name), ingredients: parseJsonStringArray(r.ingredientsJson) },
-          avoid,
-        ),
+    const servings = (await this.suggestionCandidates()).filter(
+      (c) =>
+        !hitsUserAllergen(c.allergen, allergens) &&
+        !isExcluded(c.excludeKey, avoid) &&
+        (c.serving.sodiumMg ?? 0) < sodiumCap &&
+        !(opts.sodiumHigh && (SOUP_DISH_TYPES.has(c.dishType ?? '') || SOUP_NAME_RE.test(c.nameNorm))),
     );
-    const servings = usable
-      .map((r) => {
-        const serving = mealServingNutrition(r, { isMain: true }, lex);
-        const kcal100 = kcalPer100gOf(r);
-        const grams = serving.kcal !== null && kcal100 ? (serving.kcal / kcal100) * 100 : null;
-        return { row: r, serving, grams, kcal100 };
-      })
-      .filter(
-        (s) =>
-          s.serving.kcal !== null &&
-          s.serving.kcal > 0 &&
-          (s.serving.sodiumMg ?? 0) < sodiumCap &&
-          !(
-            opts.sodiumHigh &&
-            (SOUP_DISH_TYPES.has(s.row.dishType ?? '') || SOUP_NAME_RE.test(s.row.nameNorm))
-          ) &&
-          (s.kcal100 ?? 0) < SUGGESTION_MAX_KCAL_PER_100G,
-      );
     const out = new Map<KdriNutrient, string[]>();
     for (const [key, { reference, upperLimit }] of targets) {
       const def = NUTRIENT_DEFS.find((d) => d.key === key)!;
       if (def.key === 'sodium') continue;
       const scored = servings
-        .map(({ row, serving, grams }) => {
+        .map(({ name, serving, grams, per100 }) => {
           let amount = 0;
           if ('snapshot' in def.from) {
             amount = def.from.snapshot === 'proteinG' ? (serving.proteinG ?? 0) : 0;
           } else if (grams !== null) {
-            const per100 = parseNutrientsPer100g(row.nutrientsPer100gJson)[def.from.per100];
-            amount = per100 !== undefined ? (per100 * grams) / 100 : 0;
+            const value = per100[def.from.per100];
+            amount = value !== undefined ? (value * grams) / 100 : 0;
           }
-          return { name: row.name, amount, density: amount / serving.kcal! };
+          return { name, amount, density: amount / serving.kcal! };
         })
         .filter(
           (s) =>

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  MEAL_DATA_DELETE_CONFIRMATION,
   MEAL_DEFAULT_WEIGHTS,
   MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
   type MealPreferenceType,
@@ -19,6 +20,8 @@ import type {
 import { DEFAULT_LEXICON } from '../food/engine/index.js';
 import { allergensInFoodName } from '../food/food-allergen.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
+import { MealDataService } from '../meal/meal-data.service.js';
+import { mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
 import {
   MealPatternService,
   allergenData,
@@ -1143,6 +1146,80 @@ describe('MealRecommendationService (격리 DB)', () => {
     expect(first.recommendation.id).toBe(joined.recommendation.id);
     expect(consumeQuota).toHaveBeenCalledTimes(1);
     expect(provider.calls).toHaveLength(1);
+  });
+
+  describe('LLM 은 사용자 쓰기 장벽 밖 — 저장 직전에만 장벽, 삭제 경합은 데이터 세대로', () => {
+    const slowProvider = () => {
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let entered!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const slow: LLMProvider = {
+        complete: async (opts) => {
+          entered();
+          await released;
+          return {
+            text: JSON.stringify({ items: [{ name: '연어초밥', reason: 'r' }], summary: 's' }),
+            model: opts.model,
+            promptTokens: 1,
+            completionTokens: 1,
+          };
+        },
+      };
+      return { slow, started, release };
+    };
+    const buildWith = (llm: LLMProvider) =>
+      new MealRecommendationService(app.prisma, new AiConfigService(app.prisma, envBlock('gpt-oss:120b')), {
+        cache: { get: () => llm } as unknown as AdapterCache,
+      });
+    const input = { targetDate: '2099-03-01', targetSlot: 'dinner' as const, force: true };
+
+    it('LLM 을 기다리는 동안 같은 사용자의 쓰기(기록 저장·설정)가 막히지 않는다', async () => {
+      await seedAuthUsers(app, [{ id: 'rec-barrier-u', role: 'USER' }]);
+      const { slow, started, release } = slowProvider();
+      const pending = buildWith(slow).create('rec-barrier-u', input, TODAY);
+      await started;
+      // 예전에는 LLM 이 끝날 때까지 같은 사용자 FIFO 가 막혔다.
+      const write = mealMutationBarrier.runExclusive('rec-barrier-u', async () => 'saved');
+      const blocked = new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000));
+      expect(await Promise.race([write, blocked])).toBe('saved');
+      release();
+      const { recommendation } = await pending;
+      expect(recommendation.status).toBe('done');
+      expect(await app.prisma.mealRecommendation.count({ where: { userId: 'rec-barrier-u' } })).toBe(1);
+    });
+
+    it('LLM 을 기다리는 사이 추천 전체 삭제·식단 전체 삭제가 끝나면 결과를 저장하지 않는다(conflict)', async () => {
+      await seedAuthUsers(app, [{ id: 'rec-barrier-del-u', role: 'USER' }]);
+      const first = slowProvider();
+      const svc = buildWith(first.slow);
+      const pending = svc.create('rec-barrier-del-u', input, TODAY);
+      await first.started;
+      await svc.removeAll('rec-barrier-del-u');
+      first.release();
+      await expect(pending).rejects.toMatchObject({ code: 'conflict' });
+      expect(await app.prisma.mealRecommendation.count({ where: { userId: 'rec-barrier-del-u' } })).toBe(0);
+
+      const second = slowProvider();
+      const pendingAgain = buildWith(second.slow).create('rec-barrier-del-u', input, TODAY);
+      await second.started;
+      await new MealDataService(app.prisma, {
+        photos: app.mealPhotos,
+        purgeRecognitionDebugForUser: vi.fn().mockResolvedValue(undefined),
+      }).deleteAll('rec-barrier-del-u', { confirmation: MEAL_DATA_DELETE_CONFIRMATION });
+      second.release();
+      await expect(pendingAgain).rejects.toMatchObject({ code: 'conflict' });
+      expect(await app.prisma.mealRecommendation.count({ where: { userId: 'rec-barrier-del-u' } })).toBe(0);
+
+      // 삭제 뒤 새로 시작한 요청은 정상 저장된다.
+      provider.responses = [JSON.stringify({ items: [{ name: '연어초밥', reason: 'r' }], summary: 's' })];
+      await expect(build().create('rec-barrier-del-u', input, TODAY)).resolves.toMatchObject({ cached: false });
+      expect(await app.prisma.mealRecommendation.count({ where: { userId: 'rec-barrier-del-u' } })).toBe(1);
+    });
   });
 
   describe('추천 삭제', () => {
