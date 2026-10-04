@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 199개 — 공개 84 · 선택 인증 15 · 로그인 100. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 200개 — 공개 83 · 선택 인증 16 · 로그인 101. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -21,14 +21,14 @@
 
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
-| GET | `/api/v1/air/bad-stations` | 공개 | 60/분 |  | 통합대기환경지수 나쁨 이상 측정소 목록 — 에어코리아 프록시, 10분 캐시 |
-| GET | `/api/v1/air/forecast` | 공개 | 60/분 | `date` | 대기질 예보통보(PM10·PM2.5·O3) — 에어코리아 프록시, 20분 캐시 |
-| GET | `/api/v1/air/forecast/weekly` | 공개 | 60/분 | `date` | 초미세먼지 주간예보(권역별 등급) — 에어코리아 프록시, 60분 캐시 |
-| GET | `/api/v1/air/sido/:sidoName` | 공개 | 60/분 |  | 시도별 실시간 대기오염 측정값 — 에어코리아 프록시, 10분 캐시 |
+| GET | `/api/v1/air/bad-stations` | 공개 | 60/분 |  | 통합대기환경지수 나쁨 이상 측정소 목록 — 전국 실시간 측정값에서 파생, 매시 갱신 캐시 |
+| GET | `/api/v1/air/forecast` | 공개 | 60/분 | `date` | 대기질 예보통보(PM10·PM2.5·O3) — 에어코리아 프록시, 다음 발표까지 캐시 |
+| GET | `/api/v1/air/forecast/weekly` | 공개 | 60/분 | `date` | 초미세먼지 주간예보(권역별 등급) — 에어코리아 프록시, 발표 주기 캐시 |
+| GET | `/api/v1/air/sido/:sidoName` | 공개 | 60/분 |  | 시도별 실시간 대기오염 측정값 — 에어코리아 프록시, 매시 갱신 캐시 |
 | GET | `/api/v1/air/stations` | 공개 | 60/분 |  | 전국 대기 측정소 목록(좌표·주소·측정항목) — 에어코리아 측정소정보, 24시간 캐시 |
 | GET | `/api/v1/air/stations/nearby` | 공개 | 60/분 | `lat`*, `lng`*, `radius`, `limit` | 좌표 기준 가까운 대기 측정소와 현재 측정값 — 거리순 |
 | GET | `/api/v1/air/stations/search` | 공개 | 60/분 | `q`* | 대기 측정소 이름·주소 검색 — 캐시 목록 로컬 검색, 상위 30건 |
-| GET | `/api/v1/air/stations/:stationName/history` | 공개 | 60/분 | `term` | 측정소별 대기오염 시계열(24시간·1개월·3개월) — 에어코리아 프록시, 10분 캐시 |
+| GET | `/api/v1/air/stations/:stationName/history` | 공개 | 60/분 | `term` | 측정소별 대기오염 시계열(24시간·1개월·3개월) — 에어코리아 프록시, 매시 갱신 캐시 |
 
 ## auth
 
@@ -43,10 +43,10 @@
 
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
-| GET | `/api/v1/bus/routes/:busRouteId/detail` | 공개 |  |  | 버스 노선 상세(경로 형상·경유 정류소·기본정보) — 서울시 버스 API, DB 30일 캐시 |
+| GET | `/api/v1/bus/routes/:busRouteId/detail` | 공개 | 60/분 |  | 버스 노선 상세(경로 형상·경유 정류소·기본정보) — 서울시 버스 API, DB 30일 캐시 |
 | GET | `/api/v1/bus/routes/:busRouteId/positions` | 공개 | 60/분 | `startOrd`, `endOrd` | 노선 실시간 버스 위치 — 서울시 버스 API 프록시, 15초 캐시 |
 | GET | `/api/v1/bus/stations/nearby` | 공개 |  | `lat`*, `lng`*, `radius` | 좌표 기준 주변 버스 정류장 — 로컬 정류소 마스터, 거리순 |
-| GET | `/api/v1/bus/stations/search` | 공개 |  | `q`*, `force` | 서울 버스 정류장 이름 검색 — 서울시 버스 API, 키워드별 DB 30일 캐시 |
+| GET | `/api/v1/bus/stations/search` | 공개 | 60/분 | `q`*, `force` | 서울 버스 정류장 이름 검색 — 서울시 버스 API, 키워드별 DB 30일 캐시 |
 | GET | `/api/v1/bus/stations/:arsId/arrivals` | 공개 | 60/분 |  | 정류소 실시간 버스 도착정보 — 서울시 버스 API 프록시, 15초 캐시 |
 
 ## bus-favorite
@@ -82,7 +82,7 @@
 | GET | `/api/v1/housing/nearby` | 공개 | 240/분 | `lat`*, `lng`*, `radius`, `limit`, `dealType`, `band` | 좌표 기준 주변 아파트 단지와 최근 거래가 — 로컬 실거래가 DB, 거리순 |
 | GET | `/api/v1/housing/points` | 공개 | 240/분 | `bbox`*, `zoom`*, `dealType`, `band` | 지도 영역 안 아파트 단지 가격 배지 또는 집계 셀 — 로컬 실거래가 DB |
 | GET | `/api/v1/housing/search` | 공개 | 120/분 | `q`*, `limit` | 아파트 단지명 검색(이전·별칭 이름 포함) — 로컬 DB, 세대수 큰 순 |
-| GET | `/api/v1/housing/status` | 공개 |  |  | 집값 데이터 적재 현황(단지·유형별 거래 건수·기간·적재 시각) — 로컬 DB |
+| GET | `/api/v1/housing/status` | 공개 | 120/분 |  | 집값 데이터 적재 현황(단지·유형별 거래 건수·기간·적재 시각) — 로컬 DB |
 
 ## life-map
 
@@ -105,7 +105,7 @@
 | DELETE | `/api/v1/meals/data` | 로그인 |  | body | 내 식단 데이터 전체 삭제 — 기록·사진·추천·선호 설정, 확인 문구 필수 |
 | GET | `/api/v1/meals/data/backup` | 로그인 | 10/시간 |  | 사진 포함 식단 백업 아카이브 생성 — JSON+base64, IP당 시간당 10회 |
 | POST | `/api/v1/meals/data/backup/restore` | 로그인 | 10/시간 | body | 식단 백업 아카이브 복원 — 기존 기록에 추가, 같은 archiveId 재요청은 멱등 |
-| GET | `/api/v1/meals/data/export` | 로그인 |  |  | 내 식단 데이터 JSON 내보내기 — 기록·선호·추천 이력, 사진 바이너리 제외 |
+| GET | `/api/v1/meals/data/export` | 로그인 | 10/시간 |  | 내 식단 데이터 JSON 내보내기 — 기록·선호·추천 이력, 사진 바이너리 제외 |
 | GET | `/api/v1/meals/data/photos/retention` | 로그인 |  | `before` | 사진 정리 대상 미리보기 — before 이전 기록 사진·미연결 업로드 수와 용량 |
 | DELETE | `/api/v1/meals/data/photos/retention` | 로그인 |  | body | 오래된 식단 사진 일괄 삭제 — 텍스트 기록은 유지, 확인 문구 필수 |
 | GET | `/api/v1/meals/items/frequent` | 로그인 |  | `slot`, `limit` | 빠른 추가용 자주 먹은 음식 — 최근 90일 끼니 우선 순위 + 기본 목록(공기밥·김치 등) |
@@ -179,7 +179,7 @@
 | GET | `/api/v1/restaurants/public/:placeId/reviews` | 공개 |  | `offset`, `limit`, `sentiment`, `sort`, `tip`, `menu` | 공개 맛집 방문자 리뷰 페이지 — 감성·팁·메뉴 필터, 최신/평점 정렬 |
 | GET | `/api/v1/restaurants/ranking` | 공개 |  | `sort`, `excludeNeutral`, `minMentions`, `limit`, `offset` | 공개 맛집 랭킹 — AI 분석 리뷰의 긍정·부정 비율순, 최소 언급 수 컷오프 |
 | GET | `/api/v1/restaurants/:placeId/clusters` | 공개 |  |  | 맛집 리뷰 주제별 군집 조회 — 사전 계산된 결과만, 없으면 ready=false |
-| POST | `/api/v1/restaurants/:placeId/qa` | 공개 | 15/분 | body | 맛집 리뷰 기반 질문 답변(RAG) — 근거 리뷰 인용, 매 요청 LLM 최대 3콜, 분당 15회 |
+| POST | `/api/v1/restaurants/:placeId/qa` | 선택 | 설정값/분 | body | 맛집 리뷰 기반 질문 답변(RAG) — 근거 리뷰 인용, 선택 인증, 같은 질문 20분 캐시, 일일 한도 |
 | GET | `/api/v1/restaurants/:placeId/qa/ready` | 공개 |  |  | 맛집 리뷰 Q&A 준비 여부 — 검색 가능(임베딩 완료) 리뷰 수, LLM 호출 없음 |
 | GET | `/api/v1/settings/map/public` | 공개 |  |  | 지도 타일(VWorld WMTS) 공개 설정·API 키 조회 — 키 미등록이면 404 |
 
@@ -247,9 +247,9 @@
 
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
-| POST | `/api/v1/settlement-extraction/extract` | 로그인 |  | body | 영수증 항목 추출 — 비전 LLM 1콜, 식당 메뉴를 힌트로 품목·금액·분류 반환 |
+| POST | `/api/v1/settlement-extraction/extract` | 로그인 | 20/분 | body | 영수증 항목 추출 — 비전 LLM 1콜, 식당 메뉴를 힌트로 품목·금액·분류 반환 |
 | GET | `/api/v1/settlement-extraction/preview/:token` | 로그인 |  |  | 업로드한 영수증 사진 미리보기(image/jpeg) — JWT 필요 |
-| POST | `/api/v1/settlement-extraction/upload` | 로그인 |  |  | 영수증 사진 업로드 — multipart 파일 1개(최대 5MB), imageToken 발급 |
+| POST | `/api/v1/settlement-extraction/upload` | 로그인 | 20/분 |  | 영수증 사진 업로드 — multipart 파일 1개(최대 5MB), imageToken 발급 |
 | GET | `/api/v1/settlements` | 로그인 |  | `placeId`, `offset`, `limit` | 내 정산 목록 — 1차 식당 placeId 필터, offset 페이지네이션, 최신순 |
 | POST | `/api/v1/settlements` | 로그인 |  | body | 정산 생성 — 차수·참여자·항목으로 1인당 분담액 계산 후 저장 |
 | GET | `/api/v1/settlements/:id` | 로그인 |  |  | 내 정산 상세 — 차수·항목·참여자별 분담액, 영수증 미리보기 URL 포함 |
@@ -271,8 +271,9 @@
 
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
-| GET | `/api/v1/settlement-drafts` | 로그인 |  |  | 내 정산 임시저장 목록 — 최근 수정순 |
-| PUT | `/api/v1/settlement-drafts` | 로그인 |  | body | 정산 임시저장 upsert — 사용자·placeId 당 1개, 사용자당 최대 50개 |
+| GET | `/api/v1/settlement-drafts` | 로그인 |  |  | 내 정산 임시저장 목록 — 최근 수정순, 메타만(payload 제외) |
+| PUT | `/api/v1/settlement-drafts` | 로그인 |  | body | 정산 임시저장 upsert — 사용자·placeId 당 1개, 사용자당 최대 50개·합계 2MB |
+| GET | `/api/v1/settlement-drafts/by-place` | 로그인 |  | `placeId` | 정산 임시저장 단건(이어쓰기) — placeId 슬롯의 payload 포함, 없으면 draft null |
 | DELETE | `/api/v1/settlement-drafts/:id` | 로그인 |  |  | 정산 임시저장 삭제 |
 
 ## subway
@@ -316,7 +317,7 @@
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
 | GET | `/api/v1/restaurants/public/:placeId/tour-stats` | 공개 | 120/분 |  | 맛집 여행자 방문 통계("여행자" 탭) — 집계만, 여행로그 매칭 없는 식당은 404 |
-| GET | `/api/v1/tour/public/density` | 공개 | 120/분 | `kind`, `bbox` | 여행자 방문 밀도 격자(0.02°) — 여행 5건 미만 칸 제외, bbox 선택 |
+| GET | `/api/v1/tour/public/density` | 공개 | 120/분 | `kind`, `bbox` | 여행자 방문 밀도 격자(0.02°) — 여행 5건 미만 칸 제외, bbox 선택(bbox 와 겹치는 칸만, 칸 값은 칸 전체 기준) |
 | GET | `/api/v1/tour/public/insights` | 공개 | 120/분 | `region`, `ageGrp`, `gender`, `accompany`, `month`, `nights` | 여행 인사이트 집계 — 지역·연령·성별·동반·월·박수 필터, 여행 20건 미만이면 insufficient |
 | GET | `/api/v1/tour/public/lodging` | 공개 | 120/분 | `region`, `ageGrp`, `gender`, `accompany`, `month`, `nights` | 여행 숙소 유형별 통계 — 결제액·1박 추정·예약률·만족도, 지역·연령 등 필터 |
 | POST | `/api/v1/tour/public/plan` | 공개 | 120/분 | body | 비슷한 여행자 기반 코스 추천 — 추천 장소 + 일정표('전체' 를 뺀 모든 지역), 조건 부족 시 월→성별→박수→연령 순 완화 |
