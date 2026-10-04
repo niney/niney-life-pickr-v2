@@ -179,6 +179,15 @@ export const TOUR_RESTAURANT_TYPE_SHORTS = ['식당', '상업', '상점'] as con
 export const TOUR_K_MIN = 5;
 export const TOUR_RATING_MIN_N = 3;
 
+// ── 10차 코스 일정표 ──────────────────────────────────────────────────────────
+// 일정표(일차·순서·시각)를 합성해 주는 지역과 하루 권역 반경(km). 표본이 두껍고 하루 동선이 지역 안에서 닫히는 곳부터 연다 —
+// 그 밖의 지역은 장소 추천만 나간다(itinerary null). 권역(여러 시도 합)은 하루 동선이 닫히지 않아 넣지 않는다.
+export const TOUR_ITINERARY_REGIONS: Partial<Record<TourRegionKey, { zoneKm: number }>> = { jeju: { zoneKm: 12 } };
+export const isTourItineraryRegion = (key: TourRegionKey): boolean => key in TOUR_ITINERARY_REGIONS;
+// 일정표 일수 = 박수 + 1(당일은 하루), 4박 이상은 5일로 묶는다(박수 필터의 "4박 이상" 과 같은 상한).
+export const TOUR_ITINERARY_MAX_DAYS = 5;
+export const tourItineraryDays = (nights: number): number => Math.max(1, Math.min(TOUR_ITINERARY_MAX_DAYS, Math.round(nights) + 1));
+
 // 출처 표기(AI 허브 이용정책 — NIA 사업결과·데이터명·aihub.or.kr 필수). 집계를 쓰는 모든 섹션 하단에 그대로.
 // 세트를 합쳐 집계하므로 데이터명은 적재 가능한 세트 전부를 적는다(TOUR_DATASETS 순서).
 export const TOUR_DATASET_NAMES: readonly string[] = TOUR_DATASET_KEYS.map((k) => TOUR_DATASETS[k].name);

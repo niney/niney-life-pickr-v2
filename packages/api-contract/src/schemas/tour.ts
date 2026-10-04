@@ -557,6 +557,7 @@ export const TourInsightsResult = z.object({
 export type TourInsightsResultType = z.infer<typeof TourInsightsResult>;
 
 // 코스 추천 입력 — 조건이 맞는 여행이 20건 미만이면 month → gender → nights → ageGrp 순으로 풀며(relaxed 에 기록) 찾는다.
+// nights 는 비슷한 여행을 고르는 조건이면서 일정표의 일수(박수 + 1, 4박 이상은 5일)다 — 안 주면 비슷한 여행의 박수 중앙값.
 export const TourPlanBody = z.object({
   region: TourRegion.default('jeju'),
   ageGrp: TourAgeGrp.optional(),
@@ -567,19 +568,87 @@ export const TourPlanBody = z.object({
 });
 export type TourPlanBodyType = z.infer<typeof TourPlanBody>;
 
+// 추천 장소(10차) — 공개 가능 여부와 표시 숫자는 **지역 표본 전체** 기준이고(여행 5건·평가 3건 이상), 내 조건(비슷한 여행)은
+// 정렬 가중치로만 쓴다. 그래서 조건을 좁혀도 장소가 사라지지 않는다. 장소 좌표와 여행로그 장소 id 는 싣지 않는다.
 export const TourPlanPlace = z.object({
   name: z.string(),
   kind: z.string(),
   sigungu: z.string().nullable(),
   emd: z.string().nullable(),
-  // 방문 여행 수(≥5) · 평균 만족도 · 점수 = n × (mean − 3.3).
+  // 이 장소를 다녀간 여행 수(≥5) · 보정 만족도(bayes) · 점수 = (보정 만족도 − 3.3) × √n × 비슷한 여행자 선호.
   n: z.number().int(),
   mean: z.number().nullable(),
   score: z.number(),
+  // 비슷한 여행 중 이 장소를 간 여행 수 — 5건 미만(또는 조건 없이 전체가 대상)이면 null. lift = 지역 평균 대비 배수(similarN 이 있을 때만).
+  similarN: z.number().int().nullable(),
+  lift: z.number().nullable(),
+  // 주 방문 시간대(오전·점심·오후·저녁·밤 — 쏠림이 약하면 null) · 체류 중앙(분) · 1인 지출 중앙(원, 결제 3건 미만이면 null).
+  peak: z.string().nullable(),
+  stayMin: z.number().nullable(),
+  spendPp: z.number().nullable(),
   // 등록된 맛집이면 네이버 placeId(상세 링크·그룹투표 후보), 아니면 null.
   placeId: z.string().nullable(),
 });
 export type TourPlanPlaceType = z.infer<typeof TourPlanPlace>;
+
+// ── 10차: 일정표 — 집계값으로 합성한 예시 일정(개별 여행의 하루 동선을 옮긴 것이 아니다) ──────────────────────
+// 일차 뼈대는 식사 자리와 볼거리 자리의 순서(여행 5건 이상에서 나온 것), 장소는 추천 후보(여행 5건 이상), 이동은 구간 기록을
+// 거리별로 집계한 추정.
+export const TourPlanAlt = z.object({
+  name: z.string(),
+  kind: z.string(),
+  n: z.number().int(),
+  mean: z.number().nullable(),
+  placeId: z.string().nullable(),
+});
+export type TourPlanAltType = z.infer<typeof TourPlanAlt>;
+
+export const TourPlanStop = z.object({
+  name: z.string(),
+  kind: z.string(),
+  sigungu: z.string().nullable(),
+  emd: z.string().nullable(),
+  n: z.number().int(),
+  mean: z.number().nullable(),
+  placeId: z.string().nullable(),
+  // 도착(자정부터 분, 10분 단위) · 머무는 시간(분).
+  arriveMin: z.number().int(),
+  stayMin: z.number().int(),
+  // 앞 장소에서의 이동(분, 추정) · 직선거리(km) — 그날 첫 장소는 null.
+  moveMin: z.number().int().nullable(),
+  moveKm: z.number().nullable(),
+  spendPp: z.number().nullable(),
+  // 같은 자리에 넣을 만한 다른 후보(최대 2).
+  alternatives: z.array(TourPlanAlt),
+});
+export type TourPlanStopType = z.infer<typeof TourPlanStop>;
+
+// 뼈대 근거 — similar(비슷한 여행에서 흔한 순서) | region(지역 전체에서 흔한 순서) | default(표본이 없어 기본 순서).
+export const TourPlanPatternBasis = z.enum(['similar', 'region', 'default']);
+export type TourPlanPatternBasisType = z.infer<typeof TourPlanPatternBasis>;
+
+export const TourPlanDay = z.object({
+  day: z.number().int(),
+  // 그날 도는 동네("제주시 애월읍·한림읍").
+  area: z.string(),
+  // 그날 들르는 곳의 유형 순서("자연>식당>상업>식당") — 뼈대(식사·볼거리 자리의 순서)에 장소를 채운 결과 — 와 뼈대의 근거.
+  pattern: z.string(),
+  patternBasis: TourPlanPatternBasis,
+  stops: z.array(TourPlanStop),
+  // 하루 합계 — 이동(분)·직선거리(km)·머무는 시간(분)·1인 지출(값이 있는 장소만 합, 하나도 없으면 null).
+  moveMin: z.number().int(),
+  moveKm: z.number(),
+  stayMin: z.number().int(),
+  spendPp: z.number().nullable(),
+});
+export type TourPlanDayType = z.infer<typeof TourPlanDay>;
+
+export const TourPlanItinerary = z.object({
+  days: z.array(TourPlanDay),
+  // 이동시간 근거 — observed(구간 기록을 거리 구간별 평균으로 집계) | default(기록이 모자라 기본 속도).
+  legBasis: z.enum(['observed', 'default']),
+});
+export type TourPlanItineraryType = z.infer<typeof TourPlanItinerary>;
 
 export const TourPlanResult = z.object({
   matchedTrips: z.number().int(),
@@ -587,6 +656,10 @@ export const TourPlanResult = z.object({
   insufficient: z.boolean(),
   places: z.array(TourPlanPlace),
   templates: z.array(TourCount),
+  // 일정표 — 지원 지역(utils TOUR_ITINERARY_REGIONS)이 아니거나 후보가 모자라면 null.
+  itinerary: TourPlanItinerary.nullable(),
+  // 폐업·휴업으로 확인돼 후보에서 뺀 장소 수(국세청 조회 결과가 있는 곳만).
+  excludedClosed: z.number().int(),
   sampleLabel: z.string(),
   sourceNote: z.string(),
 });

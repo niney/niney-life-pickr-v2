@@ -44,6 +44,7 @@
     "probe:meal-nutrition": "tsx --env-file=.env scripts/probe-meal-nutrition.ts",
     "check:common-meals": "tsx --env-file=.env scripts/check-common-meals.ts",
     "e2e:tour": "tsx scripts/e2e-tour.ts",
+    "probe:tour-plan": "tsx --env-file=.env scripts/probe-tour-plan.ts",
     "backfill:meal-nutrition": "tsx --env-file=.env scripts/backfill-meal-nutrition.ts",
     "fix:food-labels": "tsx --env-file=.env scripts/fix-food-catalog-labels.ts",
     "seed:meal-samples": "tsx --env-file=.env scripts/seed-meal-samples.ts",

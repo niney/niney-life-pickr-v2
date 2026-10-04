@@ -16,10 +16,11 @@ import {
 } from '@repo/api-contract';
 import { RATE } from '../../plugins/rate-limit.js';
 import { TourInsightsService } from './tour-insights.service.js';
+import { TourPlanService } from './tour-plan.service.js';
 import { getRestaurantTourStats } from './tour-public.service.js';
 import { TourRegionService } from './tour-region.service.js';
 
-// 여행로그 공개 라우트(4~6차) — 맛집 상세 "여행자" 탭 집계, 인사이트(필터), 코스 추천, 밀도 격자·숙소·지역 비교. 인증 없음,
+// 여행로그 공개 라우트(4~6차·10차) — 맛집 상세 "여행자" 탭 집계, 인사이트(필터), 코스 추천(+일정표), 밀도 격자·숙소·지역 비교. 인증 없음,
 // 로컬 DB 뿐. 응답 스키마에 여행·방문·여행자 식별자가 없고 집단 분해는 소셀 억제(서비스). 매칭 없는 식당의 tour-stats 는 404.
 
 const PlaceParams = z.object({ placeId: z.string().min(1).max(64) });
@@ -27,6 +28,7 @@ const PlaceParams = z.object({ placeId: z.string().min(1).max(64) });
 const tourPublicRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const insights = new TourInsightsService(app.prisma);
+  const plans = new TourPlanService(app.prisma);
   const regions = new TourRegionService(app.prisma);
 
   // 6차 — 일상지도 배경 레이어(격자) / 인사이트 페이지 숙소·지역 비교 섹션.
@@ -94,11 +96,17 @@ const tourPublicRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.tourRead },
     schema: {
       tags: ['tour'],
-      summary: '비슷한 여행자 기반 코스 추천 — 조건 부족 시 월→성별→박수→연령 순 완화',
+      summary: '비슷한 여행자 기반 코스 추천 — 추천 장소 + 일정표(제주), 조건 부족 시 월→성별→박수→연령 순 완화',
+      description:
+        'AI 허브 여행로그(2023년 4~9월 여행자 표본) 가공 집계. 장소는 지역 표본 전체에서 여행 5건·평가 3건 이상인 곳만 나오고 ' +
+        '(n·mean 도 지역 전체 기준), 조건이 같은 "비슷한 여행" 은 정렬 가중치로만 쓴다 — similarN·lift 는 비슷한 여행 5건 이상이 간 곳에만 채워진다. ' +
+        '국세청 조회에서 폐업·휴업으로 확인된 곳은 뺀다(excludedClosed). itinerary 는 일정표를 지원하는 지역(지금은 제주)에서만 채워지며, ' +
+        '흔한 하루 흐름(식사 자리와 볼거리 자리의 순서)에 추천 장소를 끼워 넣어 합성한 예시다(개별 여행의 동선이 아니다). 일수는 nights + 1(최대 5일), ' +
+        '이동 분·거리는 직선거리 기준 추정이고 장소 좌표는 응답에 없다.',
       body: TourPlanBody,
       response: { 200: TourPlanResult },
     },
-    handler: async (req) => insights.plan(req.body),
+    handler: async (req) => plans.plan(req.body),
   });
 };
 

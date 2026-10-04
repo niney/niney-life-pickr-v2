@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { TourInsightsResultType, TourPlanResultType } from '@repo/api-contract';
+import type { TourInsightsResultType } from '@repo/api-contract';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import sensiblePlugin from '../../plugins/sensible.js';
@@ -9,9 +9,9 @@ import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/tem
 import { TourInsightsService } from './tour-insights.service.js';
 import tourPublicRoutes from './tour-public.route.js';
 
-// 여행로그 인사이트·코스 추천(5차) — 격리 DB 에 여행 25건(주 세그먼트 20 + 소수 5)을 심고 ① 필터 없는 집계 ② 소수
-// 세그먼트 필터(20건 미만 → insufficient, 5명 셀은 남음) ③ 빈 결과 ④ 코스 추천 점수·등록 맛집 링크 ⑤ 완화 사다리
-// ⑥ 라우트 응답에 식별자 없음.
+// 여행로그 인사이트(5차) — 격리 DB 에 여행 25건(주 세그먼트 20 + 소수 5)을 심고 ① 필터 없는 집계 ② 소수
+// 세그먼트 필터(20건 미만 → insufficient, 5명 셀은 남음) ③ 빈 결과 ④ 라우트 응답에 식별자 없음.
+// 코스 추천은 tour-plan.service.test.ts(10차에 분리).
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId)$/;
 const scanKeys = (v: unknown, path: string[] = [], out: string[] = []): string[] => {
@@ -28,7 +28,7 @@ const scanKeys = (v: unknown, path: string[] = [], out: string[] = []): string[]
 const MAIN = { ageGrp: '30', gender: '여', accompany: '2인 여행(가족 외)', nights: 2, month: 6 };
 const MINOR = { ageGrp: '50', gender: '남', accompany: '나홀로 여행', nights: 1, month: 8 };
 
-describe('tour insights + plan (격리 DB)', () => {
+describe('tour insights (격리 DB)', () => {
   let isolated: IsolatedDatabase;
   let app: FastifyInstance;
   let service: TourInsightsService;
@@ -200,37 +200,12 @@ describe('tour insights + plan (격리 DB)', () => {
     expect(none.tripSpend).toBeNull();
   });
 
-  it('코스 추천 — 세그먼트 일치 20건, 점수 = n × (mean − 3.3), 등록 맛집은 placeId, 교통·숙소 제외', async () => {
-    const r = await service.plan({ region: 'jeju', ageGrp: '30', gender: '여', accompany: '2인 여행(가족 외)', nights: 2, month: 6 });
-    expect(r).toMatchObject({ matchedTrips: 20, relaxed: [], insufficient: false });
-    expect(r.places).toEqual([
-      { name: '우진해장국', kind: '식당', sigungu: '제주시', emd: '삼도이동', n: 20, mean: 5, score: 34, placeId: 'n-ujin' },
-      { name: '함덕해수욕장', kind: '자연', sigungu: '제주시', emd: '조천읍', n: 20, mean: 4, score: 14, placeId: null },
-    ]);
-    expect(r.templates).toEqual([{ label: '교통>식당>자연', n: 20 }]);
-    expect(scanKeys(r)).toEqual([]);
-  });
-
-  it('완화 사다리 — 표본이 20건 미만이면 month → gender → nights → ageGrp 순으로 풀고 기록한다', async () => {
-    const r = await service.plan({ region: 'jeju', ageGrp: '50', gender: '남', accompany: '나홀로 여행', nights: 1, month: 8 });
-    expect(r.relaxed).toEqual(['month', 'gender', 'nights', 'ageGrp']);
-    expect(r).toMatchObject({ matchedTrips: 5, insufficient: true });
-    expect(r.places).toEqual([{ name: '올래국수', kind: '식당', sigungu: '제주시', emd: '연동', n: 5, mean: 4, score: 3.5, placeId: null }]);
-  });
-
-  it('라우트 — GET insights / POST plan 200, 잘못된 필터 400', async () => {
+  it('라우트 — GET insights 200, 잘못된 필터 400', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/tour/public/insights?ageGrp=30&nights=2' });
     expect(res.statusCode).toBe(200);
     const d = res.json() as TourInsightsResultType;
     expect(d.scale.trips).toBe(20);
     expect(scanKeys(d)).toEqual([]);
     expect((await app.inject({ method: 'GET', url: '/api/v1/tour/public/insights?ageGrp=70' })).statusCode).toBe(400);
-
-    const plan = await app.inject({ method: 'POST', url: '/api/v1/tour/public/plan', payload: { ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 } });
-    expect(plan.statusCode).toBe(200);
-    const pr = plan.json() as TourPlanResultType;
-    expect(pr.matchedTrips).toBe(20);
-    expect(pr.places[0]!.placeId).toBe('n-ujin');
-    expect((await app.inject({ method: 'POST', url: '/api/v1/tour/public/plan', payload: { nights: 9 } })).statusCode).toBe(400);
   });
 });

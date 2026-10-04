@@ -1,7 +1,7 @@
 // 여행로그 공개 화면 e2e — 미리 띄운 friendly(3000) + Vite 웹(5173)에 헤드리스 크로미움으로 붙어 실동작을 본다.
 //   ① 공개 API 계약·소셀 억제(여행자 5명 미만 셀 없음, 응답 키에 식별자 없음) · 관리자 라우트 무인증 차단
 //   ② /travel/jeju — 필터 칩 → URL 쿼리 → 집계 갱신 → 초기화, 지역 비교·숙소 섹션, 출처 문구, 모바일 폭 가로 넘침 없음
-//   ③ /travel/plan — 제출 → 추천 카드·완화 안내, 식당만 토글, 그룹투표 버튼(미선택 → 비활성)
+//   ③ /travel/plan — 제출 → 일정표(일차·시각·이동)·추천 카드·완화 안내, 식당만 토글, 그룹투표 버튼(미선택 → 비활성), 미지원 지역 안내
 //   ④ /life-map — 배경 "여행자 밀도" 토글 → 제주로 이동·요약 카드·푸터 출처, 칸 클릭 → 선택 칸 카드, 종류 칩, 범죄 통계와 배타
 // 페이지 JS 오류·콘솔 error 는 전부 모아 마지막에 보고한다(리소스 404 는 따로).
 //
@@ -90,20 +90,56 @@ const apiChecks = async (): Promise<void> => {
     const { status } = await getJson('/api/v1/tour/public/insights?ageGrp=70');
     if (status !== 400) throw new Error(`status ${status}`);
   });
-  await step('API plan — 추천 장소 n ≥ 5·식별자 없음', async () => {
-    const res = await fetch(`${API}/api/v1/tour/public/plan`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 }),
-    });
-    const body = (await res.json()) as { matchedTrips: number; relaxed: string[]; places: Array<{ n: number; kind: string }>; templates: unknown[] };
-    if (res.status !== 200) throw new Error(`status ${res.status}`);
+  interface PlanStop {
+    name: string;
+    kind: string;
+    n: number;
+    arriveMin: number;
+    moveMin: number | null;
+    alternatives: Array<{ n: number }>;
+  }
+  interface Plan {
+    matchedTrips: number;
+    relaxed: string[];
+    places: Array<{ n: number; kind: string; similarN: number | null }>;
+    templates: unknown[];
+    itinerary: { legBasis: string; days: Array<{ day: number; area: string; pattern: string; stops: PlanStop[] }> } | null;
+  }
+  const postPlan = async (payload: object): Promise<{ status: number; body: Plan }> => {
+    const res = await fetch(`${API}/api/v1/tour/public/plan`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    return { status: res.status, body: (await res.json()) as Plan };
+  };
+  await step('API plan — 추천 장소 n ≥ 5·비슷한 여행 5건 미만은 null·식별자·좌표 없음', async () => {
+    const { status, body } = await postPlan({ ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 });
+    if (status !== 200) throw new Error(`status ${status}`);
     if (body.places.length === 0) throw new Error('places 0');
     if (body.places.some((p) => p.n < 5)) throw new Error('n<5 장소');
+    if (body.places.some((p) => p.similarN !== null && p.similarN < 5)) throw new Error('similarN<5');
     if (body.places.some((p) => p.kind === '교통' || p.kind === '숙소')) throw new Error('교통·숙소 포함');
-    const leaked = scanKeys(body);
-    if (leaked.length) throw new Error(`식별자 키 ${leaked.join(',')}`);
-    return `matched ${body.matchedTrips} · relaxed [${body.relaxed.join(',')}] · places ${body.places.length} · templates ${body.templates.length}`;
+    const leaked = [...scanKeys(body), ...(/"(lat|lng|latitude|longitude)"/.test(JSON.stringify(body)) ? ['좌표 키'] : [])];
+    if (leaked.length) throw new Error(`식별자·좌표 키 ${leaked.join(',')}`);
+    return `matched ${body.matchedTrips} · relaxed [${body.relaxed.join(',')}] · places ${body.places.length}(식당 ${body.places.filter((p) => p.kind === '식당').length}) · templates ${body.templates.length}`;
+  });
+  await step('API plan 일정표(10차) — 제주 2박은 3일·장소 중복 없음·시각 오름차순·첫 장소 이동 null', async () => {
+    const { body } = await postPlan({ ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 });
+    const it = body.itinerary;
+    if (!it) throw new Error('itinerary null');
+    if (it.days.length !== 3) throw new Error(`days ${it.days.length}`);
+    const names = it.days.flatMap((d) => d.stops.map((s) => s.name));
+    if (new Set(names).size !== names.length) throw new Error('장소 중복');
+    for (const d of it.days) {
+      if (d.stops.length < 2) throw new Error(`${d.day}일차 장소 ${d.stops.length}`);
+      if (d.stops[0]!.moveMin !== null) throw new Error('첫 장소 이동');
+      if (d.stops.some((s, i) => i > 0 && (s.arriveMin < d.stops[i - 1]!.arriveMin || s.moveMin === null))) throw new Error(`${d.day}일차 시각·이동`);
+      if (d.stops.some((s) => s.n < 5 || ['교통', '숙소', '상점'].includes(s.kind) || s.alternatives.some((a) => a.n < 5))) throw new Error(`${d.day}일차 후보 규칙`);
+    }
+    return `${it.days.map((d) => `${d.day}일차 ${d.area} ${d.pattern}`).join(' / ')} · 이동 ${it.legBasis}`;
+  });
+  await step('API plan — 일정표 미지원 지역(부산)은 itinerary null', async () => {
+    const { status, body } = await postPlan({ region: 'busan', nights: 2 });
+    if (status !== 200) throw new Error(`status ${status}`);
+    if (body.itinerary !== null) throw new Error('itinerary 있음');
+    return `places ${body.places.length}`;
   });
   let allCells = 0;
   await step('API density — 칸 여행자 ≥ 5·경계 4개·kind=restaurant 부분집합·bbox 절단', async () => {
@@ -280,6 +316,19 @@ const planPage = async (page: Page): Promise<void> => {
     const notice = (await page.getByText(/같은 조건의 여행/).textContent())?.replace(/\s+/g, ' ').trim();
     return `${cards}곳 · ${notice}`;
   });
+  await step('/travel/plan 일정표 — 기본(제주 2박)은 3일, 일차마다 시각·이동 줄', async () => {
+    await page.getByRole('heading', { name: '추천 일정' }).waitFor({ timeout: 5000 });
+    const days = page.getByRole('article', { name: /일차$/ });
+    const n = await days.count();
+    if (n !== 3) throw new Error(`일차 ${n}`);
+    for (let i = 0; i < n; i += 1) {
+      const day = days.nth(i);
+      if ((await day.locator('time').count()) < 2) throw new Error(`${i + 1}일차 시각`);
+      if ((await day.getByText(/이동 약 \d/).count()) < 1) throw new Error(`${i + 1}일차 이동 줄`);
+    }
+    if ((await page.getByText(/누군가의 실제 일정이 아닙니다/).count()) !== 1) throw new Error('합성 안내 문구');
+    return (await days.allTextContents()).map((t) => t.replace(/\s+/g, ' ').slice(0, 24)).join(' | ');
+  });
   await shot(page, '03-travel-plan');
   await step('/travel/plan 식당만 토글 → 식당 카드만', async () => {
     await page.getByRole('button', { name: '식당만', exact: true }).click();
@@ -304,6 +353,15 @@ const planPage = async (page: Page): Promise<void> => {
     await page.getByText(/같은 조건의 여행/).waitFor({ timeout: 30_000 });
     const notice = (await page.getByText(/같은 조건의 여행/).textContent())?.replace(/\s+/g, ' ').trim();
     return notice ?? '';
+  });
+  await step('/travel/plan 미지원 지역(동부권) → 일정표 대신 안내, 장소 추천은 그대로', async () => {
+    await page.getByRole('button', { name: '동부권', exact: true }).click();
+    await page.getByRole('button', { name: '비슷한 여행 찾기' }).click();
+    await page.getByText(/일정표는 지금 제주만 만들어 드립니다/).waitFor({ timeout: 30_000 });
+    if ((await page.getByRole('heading', { name: '추천 일정' }).count()) !== 0) throw new Error('일정표가 남아 있음');
+    const cards = await page.locator('li:has-text("팀 · 만족")').count();
+    if (cards === 0) throw new Error('추천 0');
+    return `${cards}곳`;
   });
 };
 

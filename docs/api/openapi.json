@@ -52764,10 +52764,11 @@
     },
     "/api/v1/tour/public/plan": {
       "post": {
-        "summary": "비슷한 여행자 기반 코스 추천 — 조건 부족 시 월→성별→박수→연령 순 완화",
+        "summary": "비슷한 여행자 기반 코스 추천 — 추천 장소 + 일정표(제주), 조건 부족 시 월→성별→박수→연령 순 완화",
         "tags": [
           "tour"
         ],
+        "description": "AI 허브 여행로그(2023년 4~9월 여행자 표본) 가공 집계. 장소는 지역 표본 전체에서 여행 5건·평가 3건 이상인 곳만 나오고 (n·mean 도 지역 전체 기준), 조건이 같은 \"비슷한 여행\" 은 정렬 가중치로만 쓴다 — similarN·lift 는 비슷한 여행 5건 이상이 간 곳에만 채워진다. 국세청 조회에서 폐업·휴업으로 확인된 곳은 뺀다(excludedClosed). itinerary 는 일정표를 지원하는 지역(지금은 제주)에서만 채워지며, 흔한 하루 흐름(식사 자리와 볼거리 자리의 순서)에 추천 장소를 끼워 넣어 합성한 예시다(개별 여행의 동선이 아니다). 일수는 nights + 1(최대 5일), 이동 분·거리는 직선거리 기준 추정이고 장소 좌표는 응답에 없다.",
         "requestBody": {
           "required": true,
           "content": {
@@ -52894,6 +52895,26 @@
                           "score": {
                             "type": "number"
                           },
+                          "similarN": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "lift": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "peak": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "stayMin": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "spendPp": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "placeId": {
                             "type": "string",
                             "nullable": true
@@ -52907,6 +52928,11 @@
                           "n",
                           "mean",
                           "score",
+                          "similarN",
+                          "lift",
+                          "peak",
+                          "stayMin",
+                          "spendPp",
                           "placeId"
                         ],
                         "additionalProperties": false
@@ -52931,6 +52957,177 @@
                         "additionalProperties": false
                       }
                     },
+                    "itinerary": {
+                      "type": "object",
+                      "properties": {
+                        "days": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "integer"
+                              },
+                              "area": {
+                                "type": "string"
+                              },
+                              "pattern": {
+                                "type": "string"
+                              },
+                              "patternBasis": {
+                                "type": "string",
+                                "enum": [
+                                  "similar",
+                                  "region",
+                                  "default"
+                                ]
+                              },
+                              "stops": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "sigungu": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "emd": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "n": {
+                                      "type": "integer"
+                                    },
+                                    "mean": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
+                                    "placeId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "arriveMin": {
+                                      "type": "integer"
+                                    },
+                                    "stayMin": {
+                                      "type": "integer"
+                                    },
+                                    "moveMin": {
+                                      "type": "integer",
+                                      "nullable": true
+                                    },
+                                    "moveKm": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
+                                    "spendPp": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
+                                    "alternatives": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "kind": {
+                                            "type": "string"
+                                          },
+                                          "n": {
+                                            "type": "integer"
+                                          },
+                                          "mean": {
+                                            "type": "number",
+                                            "nullable": true
+                                          },
+                                          "placeId": {
+                                            "type": "string",
+                                            "nullable": true
+                                          }
+                                        },
+                                        "required": [
+                                          "name",
+                                          "kind",
+                                          "n",
+                                          "mean",
+                                          "placeId"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "kind",
+                                    "sigungu",
+                                    "emd",
+                                    "n",
+                                    "mean",
+                                    "placeId",
+                                    "arriveMin",
+                                    "stayMin",
+                                    "moveMin",
+                                    "moveKm",
+                                    "spendPp",
+                                    "alternatives"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "moveMin": {
+                                "type": "integer"
+                              },
+                              "moveKm": {
+                                "type": "number"
+                              },
+                              "stayMin": {
+                                "type": "integer"
+                              },
+                              "spendPp": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "area",
+                              "pattern",
+                              "patternBasis",
+                              "stops",
+                              "moveMin",
+                              "moveKm",
+                              "stayMin",
+                              "spendPp"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "legBasis": {
+                          "type": "string",
+                          "enum": [
+                            "observed",
+                            "default"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "days",
+                        "legBasis"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "excludedClosed": {
+                      "type": "integer"
+                    },
                     "sampleLabel": {
                       "type": "string"
                     },
@@ -52944,6 +53141,8 @@
                     "insufficient",
                     "places",
                     "templates",
+                    "itinerary",
+                    "excludedClosed",
                     "sampleLabel",
                     "sourceNote"
                   ],

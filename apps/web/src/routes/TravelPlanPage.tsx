@@ -3,15 +3,18 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BarChart3, Loader2, Vote } from 'lucide-react';
 import { useTourPlan, type TourInsightsParams } from '@repo/shared';
 import type { TourPlanPlaceType, VoteOptionInputType } from '@repo/api-contract';
+import { isTourItineraryRegion, isTourRegionKey, tourItineraryDays } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { TourFilterBar } from '~/components/tour/TourFilterBar';
+import { TourItinerary, TourMapLink } from '~/components/tour/TourItinerary';
 import { TourSourceNote } from '~/components/tour/TourSourceNote';
 import { KindDot, Section, SeqChips } from '~/components/tour/charts';
-import { nightsLabel, shortAccompany, tourRegionLabel } from '~/components/tour/tourFormat';
+import { durationLabel, nightsLabel, shortAccompany, tourRegionLabel, tripLengthLabel, won } from '~/components/tour/tourFormat';
 import { cn } from '~/lib/utils';
 
 // 코스 추천 — "나와 비슷한 여행자(연령·성별·동반·박수·월)가 만족한 곳" 을 여행로그에서 고른다. 서버가 비슷한 여행을 세그먼트
-// 일치로 찾고(20건 미만이면 month→gender→nights→ageGrp 순으로 풀며 알려줌) 장소를 n × (만족도 − 3.3) 으로 점수화한다.
+// 일치로 찾고(20건 미만이면 month→gender→nights→ageGrp 순으로 풀며 알려줌), 장소는 지역 표본 전체에서 5건 이상인 곳을
+// (보정 만족도 − 3.3) × √여행 수 × 비슷한 여행자 선호로 줄 세운다. 제주는 일정표(일차·시각·이동)까지 합성해 준다(10차).
 // 등록된 맛집(placeId)은 상세로 이어지고, 2곳 이상 고르면 그룹투표 후보로 넘긴다(/vote/new state 프리필).
 
 const LADDER_LABEL: Record<string, string> = { month: '월', gender: '성별', nights: '박수', ageGrp: '연령' };
@@ -37,6 +40,12 @@ export const TravelPlanPage = () => {
   };
 
   const r = plan.data;
+  // 결과 표시는 "물어본 조건" 기준 — 폼을 고치는 중에도 결과의 지역·박수 라벨이 따라 바뀌지 않게.
+  const asked = plan.variables;
+  const askedRegion = asked?.region ?? 'jeju';
+  const itineraryRegion = isTourItineraryRegion(askedRegion);
+  const formItineraryRegion = isTourItineraryRegion(isTourRegionKey(filters.region) ? filters.region : 'jeju');
+  const wantedDays = asked?.nights !== undefined ? tourItineraryDays(asked.nights) : null;
   const places = r ? r.places.filter((p) => !onlyRestaurants || p.kind === '식당') : [];
   const maxScore = Math.max(1, ...places.map((p) => p.score));
   const pickedList = Object.values(picked);
@@ -51,7 +60,7 @@ export const TravelPlanPage = () => {
   };
   const toVote = () => {
     const options: VoteOptionInputType[] = pickedList.map((p) => ({ placeId: p.placeId!, name: p.name, category: p.kind, thumbnailUrl: null }));
-    navigate('/vote/new', { state: { presetTitle: `${tourRegionLabel(filters.region)}에서 뭐 먹지?`, presetOptions: options } });
+    navigate('/vote/new', { state: { presetTitle: `${tourRegionLabel(askedRegion)}에서 뭐 먹지?`, presetOptions: options } });
   };
 
   return (
@@ -61,7 +70,8 @@ export const TravelPlanPage = () => {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">코스 추천</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              2023년 {tourRegionLabel(filters.region)} 여행자 표본에서 나와 비슷한 사람들이 만족한 곳을 골라 드립니다. 개별 여행자는 보이지 않고 5명 미만 장소는 빠집니다.
+              2023년 {tourRegionLabel(filters.region)} 여행자 표본에서 나와 비슷한 사람들이 만족한 곳을 골라 드립니다.
+              {formItineraryRegion && ' 박수를 고르면 하루 흐름대로 일정표도 짜 드립니다.'} 개별 여행자는 보이지 않고 5명 미만 장소는 빠집니다.
             </p>
           </div>
           <Button asChild variant="outline" size="sm">
@@ -73,12 +83,12 @@ export const TravelPlanPage = () => {
 
         <form onSubmit={onSubmit} className="space-y-3">
           <TourFilterBar value={filters} onChange={setFilters} />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" disabled={plan.isPending} className="bg-teal-600 text-white hover:bg-teal-700">
               {plan.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               비슷한 여행 찾기
             </Button>
-            <span className="text-xs text-muted-foreground">추천 점수 = 방문 여행 수 × (평균 만족도 − 3.3)</span>
+            <span className="text-xs text-muted-foreground">추천 점수 = (보정 만족도 − 3.3) × √여행 수 × 비슷한 여행자 선호</span>
           </div>
         </form>
 
@@ -92,7 +102,20 @@ export const TravelPlanPage = () => {
               {r.insufficient && ' · 그래도 20건 미만이라 참고만 하세요'}
             </div>
 
-            <Section title="비슷한 여행자가 만족한 곳" hint={`${filters.ageGrp ? `${filters.ageGrp}대` : ''} ${filters.accompany ? shortAccompany(filters.accompany) : ''} ${nightsLabel(filters.nights)}`.trim()}>
+            {r.itinerary ? (
+              <Section title="추천 일정" hint={`${tourRegionLabel(askedRegion)} · ${tripLengthLabel(r.itinerary.days.length)}`}>
+                {wantedDays !== null && r.itinerary.days.length < wantedDays && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300">후보가 모자라 {wantedDays}일 중 {r.itinerary.days.length}일만 채웠습니다.</p>
+                )}
+                <TourItinerary itinerary={r.itinerary} />
+              </Section>
+            ) : (
+              <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                {itineraryRegion ? '일정표를 짤 만큼 후보가 모이지 않았습니다. 아래 추천 장소를 참고하세요.' : '일정표는 지금 제주만 만들어 드립니다. 다른 지역은 아래 추천 장소를 참고하세요.'}
+              </p>
+            )}
+
+            <Section title="비슷한 여행자가 만족한 곳" hint={`${asked?.ageGrp ? `${asked.ageGrp}대` : ''} ${asked?.accompany ? shortAccompany(asked.accompany) : ''} ${nightsLabel(asked?.nights)}`.trim()}>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <button type="button" className={cn('rounded-full border px-2.5 py-1', !onlyRestaurants ? 'border-teal-600 bg-teal-600/10 font-semibold' : 'text-muted-foreground')} onClick={() => setOnlyRestaurants(false)}>
                   전체
@@ -103,17 +126,18 @@ export const TravelPlanPage = () => {
                 <span className="ml-auto text-muted-foreground">등록된 맛집은 체크해 그룹투표로 보낼 수 있어요</span>
               </div>
               {places.length === 0 ? (
-                <p className="text-sm text-muted-foreground">조건에 맞는 장소가 없습니다. 조건을 줄여 보세요.</p>
+                <p className="text-sm text-muted-foreground">{r.places.length > 0 ? '추천 목록에 식당이 없습니다.' : '추천할 장소가 없습니다. 이 지역은 표본이 모자랍니다.'}</p>
               ) : (
                 <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {places.map((p) => {
                     const checked = p.placeId ? Boolean(picked[p.placeId]) : false;
+                    const facts = [p.peak && `주로 ${p.peak}`, p.stayMin !== null && `${durationLabel(p.stayMin)} 머묾`, p.spendPp !== null && `1인 ${won(p.spendPp)}`].filter(Boolean);
                     return (
                       <li key={`${p.name}-${p.sigungu}-${p.kind}`} className={cn('rounded-md border p-2.5', checked && 'border-teal-600 bg-teal-600/5')}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 text-sm font-semibold">
-                              <KindDot kind={p.kind} />
+                              <KindDot kind={p.kind} className="flex-none" />
                               {p.placeId ? (
                                 <Link to={`/restaurants-v2/${p.placeId}`} className="truncate underline-offset-2 hover:underline">
                                   {p.name}
@@ -121,10 +145,17 @@ export const TravelPlanPage = () => {
                               ) : (
                                 <span className="truncate">{p.name}</span>
                               )}
+                              <TourMapLink name={p.name} sigungu={p.sigungu} />
                             </div>
                             <div className="text-[11px] text-muted-foreground">
                               {p.kind} · {[p.sigungu, p.emd].filter(Boolean).join(' ')} · {p.n}팀 · 만족 {p.mean !== null ? p.mean.toFixed(1) : '–'}
                             </div>
+                            {facts.length > 0 && <div className="text-[11px] text-muted-foreground">{facts.join(' · ')}</div>}
+                            {p.similarN !== null && (
+                              <div className="text-[11px] font-medium text-teal-700 dark:text-teal-300">
+                                비슷한 여행 {p.similarN}건{p.lift !== null && p.lift >= 1.2 && ` · 평균의 ${p.lift.toFixed(1)}배`}
+                              </div>
+                            )}
                           </div>
                           {p.placeId ? (
                             <label className="flex flex-none items-center gap-1 text-[11px]">
@@ -148,6 +179,7 @@ export const TravelPlanPage = () => {
                   <Vote className="size-4" /> 그룹투표 만들기{pickedList.length > 0 ? ` (${pickedList.length})` : ''}
                 </Button>
                 <span className="text-[11px] text-muted-foreground">2~8곳 · 로그인 필요</span>
+                {r.excludedClosed > 0 && <span className="ml-auto text-[11px] text-muted-foreground">폐업·휴업이 확인된 {r.excludedClosed}곳은 뺐습니다</span>}
               </div>
             </Section>
 
@@ -161,7 +193,9 @@ export const TravelPlanPage = () => {
                     </li>
                   ))}
                 </ul>
-                <p className="text-[11px] text-muted-foreground">식당 자리는 홈의 골라주기("여행자 만족 기준")로, 자연·상업 자리는 위 추천으로 채워 보세요.</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {r.itinerary ? '일정표는 이런 하루에서 이동·숙소를 빼고, 식사 자리와 볼거리 자리가 놓이는 순서를 따라 짰습니다.' : '식당 자리는 홈의 골라주기("여행자 만족 기준")로, 자연·상업 자리는 위 추천으로 채워 보세요.'}
+                </p>
               </Section>
             )}
 

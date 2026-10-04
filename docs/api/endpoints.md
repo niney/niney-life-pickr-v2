@@ -319,7 +319,7 @@
 | GET | `/api/v1/tour/public/density` | 공개 | 120/분 | `kind`, `bbox` | 여행자 방문 밀도 격자(0.02°) — 여행 5건 미만 칸 제외, bbox 선택 |
 | GET | `/api/v1/tour/public/insights` | 공개 | 120/분 | `region`, `ageGrp`, `gender`, `accompany`, `month`, `nights` | 여행 인사이트 집계 — 지역·연령·성별·동반·월·박수 필터, 여행 20건 미만이면 insufficient |
 | GET | `/api/v1/tour/public/lodging` | 공개 | 120/분 | `region`, `ageGrp`, `gender`, `accompany`, `month`, `nights` | 여행 숙소 유형별 통계 — 결제액·1박 추정·예약률·만족도, 지역·연령 등 필터 |
-| POST | `/api/v1/tour/public/plan` | 공개 | 120/분 | body | 비슷한 여행자 기반 코스 추천 — 조건 부족 시 월→성별→박수→연령 순 완화 |
+| POST | `/api/v1/tour/public/plan` | 공개 | 120/분 | body | 비슷한 여행자 기반 코스 추천 — 추천 장소 + 일정표(제주), 조건 부족 시 월→성별→박수→연령 순 완화 |
 | GET | `/api/v1/tour/public/regions` | 공개 | 120/분 | `region`, `ageGrp`, `gender`, `accompany`, `month`, `nights` | 여행 지역 비교 — 시군구(제주는 제주시·서귀포·부속섬) 집단·읍면동 상위 통계 |
 
 ## vote

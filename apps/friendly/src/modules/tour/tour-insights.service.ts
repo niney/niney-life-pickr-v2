@@ -1,13 +1,12 @@
-// 여행로그 공개 인사이트·코스 추천(5차) — 필터(지역·연령·성별·동반·월·박수)를 걸어 여행·방문·전이·하루 코스·소비를
+// 여행로그 공개 인사이트(5차) — 필터(지역·연령·성별·동반·월·박수)를 걸어 여행·방문·전이·하루 코스·소비를
 // 집계한다. 공개 층이라 응답에 식별자가 없고(계약), 집단 셀은 TOUR_K_MIN 미만이면 뺀다. 필터 후 여행이 20건 미만이면
 // insufficient — 화면은 "표본 부족" 을 붙인다. 여행 속성(gender·ageGrp·accompany·nights·month)이 방문·전이·일차·소비
 // 표에 비정규화돼 있어 대부분 한 표 조회로 끝나고, 결과는 필터 키로 10분 캐시한다(재적재는 배포 단위).
 //
-// 코스 추천은 "나와 비슷한 여행" 을 세그먼트 일치로 고르고(부족하면 month→gender→nights→ageGrp 순으로 풀며 기록),
-// 그 여행들이 만족한 장소를 n × (mean − 3.3) 으로 점수화한다(tour-c PlanPage 산식). docs/PLAN-tour-log.md §공개 API.
+// 코스 추천은 tour-plan.service.ts(10차에 분리) — 여기의 필터 조각(attrWhere)·통계 함수·표본 하한을 같이 쓴다.
 
 import type { Prisma, PrismaClient } from '@prisma/client';
-import type { TourInsightsQueryType, TourInsightsResultType, TourPlanBodyType, TourPlanResultType, TourPlaceRefType } from '@repo/api-contract';
+import type { TourInsightsQueryType, TourInsightsResultType, TourPlaceRefType } from '@repo/api-contract';
 import { TOUR_K_MIN, TOUR_RATING_MIN_N, TOUR_SAMPLE_LABEL, TOUR_SOURCE_NOTE } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
 import { registeredNaverIds } from './tour-public.service.js';
@@ -15,11 +14,7 @@ import { tourRegionDayWhere, tourRegionHubLabel, tourRegionHubs, tourRegionTrans
 
 export const TOUR_INSIGHTS_MIN_TRIPS = 20;
 const CACHE_TTL_MS = 10 * 60_000;
-const IN_CHUNK = 500;
 const HOUR_TYPES = ['식당', '자연', '숙소', '상업'] as const;
-// 코스 추천에서 제외하는 유형(이동·잠자리·비공개).
-const PLAN_EXCLUDED_TYPES = new Set(['교통', '숙소', '집', '친지', '사무실']);
-const PLAN_BASELINE = 3.3;
 
 export const median = (xs: number[]): number | null => {
   if (xs.length === 0) return null;
@@ -242,80 +237,6 @@ export class TourInsightsService {
         .map(([key, n]) => ({ ageGrp: key.split('|')[0]!, gender: key.split('|')[1]!, n }))
         .filter((x) => x.n >= k)
         .sort((a, b) => a.ageGrp.localeCompare(b.ageGrp) || a.gender.localeCompare(b.gender)),
-      sampleLabel: TOUR_SAMPLE_LABEL,
-      sourceNote: TOUR_SOURCE_NOTE,
-    };
-  }
-
-  // ── 코스 추천 ───────────────────────────────────────────────────────────────
-  async plan(body: TourPlanBodyType): Promise<TourPlanResultType> {
-    const visitWhere = tourRegionVisitWhere(body.region);
-    const dayWhere = tourRegionDayWhere(body.region);
-    // 완화 사다리 — 표본이 20건에 못 미치면 덜 중요한 조건부터 뺀다.
-    const ladder: Array<keyof TourPlanBodyType> = ['month', 'gender', 'nights', 'ageGrp'];
-    let current: TourInsightsQueryType = { region: body.region, ageGrp: body.ageGrp, gender: body.gender, accompany: body.accompany, month: body.month, nights: body.nights };
-    const relaxed: string[] = [];
-    const findTripIds = async (): Promise<string[]> => {
-      const rows = await this.prisma.tourTrip.findMany({
-        where: { ...attrWhere(current), ...tourRegionTripWhere(body.region) } as Prisma.TourTripWhereInput,
-        select: { id: true },
-      });
-      return rows.map((r) => r.id);
-    };
-    let tripIds = await findTripIds();
-    while (tripIds.length < TOUR_INSIGHTS_MIN_TRIPS) {
-      const next = ladder.find((f) => current[f] !== undefined);
-      if (!next) break;
-      relaxed.push(next);
-      current = { ...current, [next]: undefined };
-      tripIds = await findTripIds();
-    }
-
-    const placeAgg = new Map<string, { name: string; kind: string; sigungu: string | null; emd: string | null; travelers: Set<string>; sum: number; rated: number }>();
-    const templateMap = new Map<string, number>();
-    for (let i = 0; i < tripIds.length; i += IN_CHUNK) {
-      const chunk = tripIds.slice(i, i + IN_CHUNK);
-      const [visits, days] = await Promise.all([
-        this.prisma.tourVisit.findMany({
-          where: { travelId: { in: chunk }, isPrivate: false, placeId: { not: null }, ...visitWhere } as Prisma.TourVisitWhereInput,
-          select: { travelId: true, placeId: true, name: true, typeShort: true, sigungu: true, emd: true, dgstfn: true },
-        }),
-        this.prisma.tourDaySequence.findMany({ where: { travelId: { in: chunk }, ...dayWhere, nStops: { gte: 3, lte: 7 } } as Prisma.TourDaySequenceWhereInput, select: { typeSeq: true } }),
-      ]);
-      for (const v of visits) {
-        if (PLAN_EXCLUDED_TYPES.has(v.typeShort)) continue;
-        const a = placeAgg.get(v.placeId!) ?? { name: v.name ?? '', kind: v.typeShort, sigungu: v.sigungu, emd: v.emd, travelers: new Set<string>(), sum: 0, rated: 0 };
-        a.travelers.add(v.travelId);
-        if (v.dgstfn !== null) {
-          a.sum += v.dgstfn;
-          a.rated += 1;
-        }
-        placeAgg.set(v.placeId!, a);
-      }
-      for (const d of days) countMap(templateMap, d.typeSeq);
-    }
-
-    const scored = [...placeAgg.entries()]
-      .filter(([, a]) => a.travelers.size >= TOUR_K_MIN && a.rated >= TOUR_RATING_MIN_N)
-      .map(([placeId, a]) => {
-        const mean = a.sum / a.rated;
-        return { tourPlaceId: placeId, name: a.name, kind: a.kind, sigungu: a.sigungu, emd: a.emd, n: a.travelers.size, mean: round2(mean), score: Math.round(a.travelers.size * (mean - PLAN_BASELINE) * 10) / 10 };
-      })
-      .filter((p) => p.score > 0)
-      .sort((a, b) => b.score - a.score || b.n - a.n || a.name.localeCompare(b.name))
-      .slice(0, 24);
-    const registered = await registeredNaverIds(this.prisma, scored.map((p) => p.tourPlaceId));
-
-    return {
-      matchedTrips: tripIds.length,
-      relaxed,
-      insufficient: tripIds.length < TOUR_INSIGHTS_MIN_TRIPS,
-      places: scored.map((p) => ({ name: p.name, kind: p.kind, sigungu: p.sigungu, emd: p.emd, n: p.n, mean: p.mean, score: p.score, placeId: registered.get(p.tourPlaceId) ?? null })),
-      templates: [...templateMap.entries()]
-        .map(([label, n]) => ({ label, n }))
-        .filter((x) => x.n >= 2)
-        .sort((a, b) => b.n - a.n || a.label.localeCompare(b.label))
-        .slice(0, 8),
       sampleLabel: TOUR_SAMPLE_LABEL,
       sourceNote: TOUR_SOURCE_NOTE,
     };

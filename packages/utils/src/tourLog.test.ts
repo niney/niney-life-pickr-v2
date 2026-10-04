@@ -8,12 +8,14 @@ import {
   TOUR_REGION_KEYS,
   TOUR_SOURCE_NOTE,
   isNearJeju,
+  isTourItineraryRegion,
   nearestTourSampleRegion,
   parseTourDensityCellKey,
   tourDensityCellBbox,
   tourDensityCellKey,
   tourDensityGrade,
   tourDensityQuantileBreaks,
+  tourItineraryDays,
   tourRegionGroupOf,
   tourSampleRegionAt,
 } from './tourLog.js';
@@ -92,5 +94,12 @@ describe('tourLog — 밀도 격자', () => {
   it('제주 근방 판정', () => {
     expect(isNearJeju(33.5, 126.5)).toBe(true);
     expect(isNearJeju(37.5665, 126.978)).toBe(false);
+  });
+});
+
+describe('tourLog — 코스 일정표(10차)', () => {
+  it('일정표는 제주만 열려 있고, 일수는 박수 + 1(당일 1일 · 4박 이상 5일)', () => {
+    expect(TOUR_REGION_KEYS.filter(isTourItineraryRegion)).toEqual(['jeju']);
+    expect([0, 1, 2, 3, 4, 9].map(tourItineraryDays)).toEqual([1, 2, 3, 4, 5, 5]);
   });
 });

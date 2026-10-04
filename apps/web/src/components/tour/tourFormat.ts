@@ -50,4 +50,13 @@ export const TOUR_NIGHTS_OPTIONS: Array<{ value: number; label: string }> = [
   { value: 4, label: '4박+' },
 ];
 export const shortAccompany = (a: string): string => a.replace('(가족 외)', '').replace('(친척 포함)', '');
+
+// ── 코스 일정표(10차) ──
+// 자정부터 분 → "10:00" / 분 → "1시간 30분".
+export const clockLabel = (min: number): string => `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+export const durationLabel = (min: number): string => (min < 60 ? `${min}분` : min % 60 === 0 ? `${min / 60}시간` : `${Math.floor(min / 60)}시간 ${min % 60}분`);
+// 응답에 장소 좌표가 없어(여행로그 장소 자체는 공개하지 않는다) 지도는 이름 검색으로 잇는다.
+export const naverMapSearchUrl = (name: string, sigungu?: string | null): string => `https://map.naver.com/p/search/${encodeURIComponent([name, sigungu].filter(Boolean).join(' '))}`;
+// 일수 → "당일" · "2박 3일".
+export const tripLengthLabel = (days: number): string => (days <= 1 ? '당일' : `${days - 1}박 ${days}일`);
 export const nightsLabel = (n: number | undefined): string => (n === undefined ? '' : (TOUR_NIGHTS_OPTIONS.find((o) => o.value === n)?.label ?? `${n}박`));
