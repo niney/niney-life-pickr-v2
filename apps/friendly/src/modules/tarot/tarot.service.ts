@@ -31,6 +31,7 @@ import {
   type TarotMenuSelection,
   type TarotSpread,
 } from '@repo/utils';
+import { GuestShareLedger } from '../../lib/guest-share.js';
 import { extractFirstJsonObject } from '../../lib/json.js';
 import { normalizeTerm } from '../../lib/text.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
@@ -246,12 +247,16 @@ interface PreparedReading {
 
 export class TarotService {
   private readonly cache = new LRUCache<string, TarotReadingBody>({ max: CACHE_MAX, ttl: CACHE_TTL_MS });
+  // 게스트 공유 재사용·IP 하루 발급 상한(perf-2 F-6) — 값은 공유 토큰.
+  private readonly guestShares: GuestShareLedger<string>;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
     private readonly deps: TarotServiceDeps,
-  ) {}
+  ) {
+    this.guestShares = new GuestShareLedger<string>(() => this.deps.quota.today());
+  }
 
   get cacheSize(): number {
     return this.cache.size;
@@ -311,6 +316,20 @@ export class TarotService {
       const reading = normalizeTarotInput(input.reading);
       const prepared = this.prepare(reading, actor);
       const { body } = await this.resolveBody(reading, prepared, actor);
+      // 게스트가 같은 리딩(본문·질문 공개까지 같음)을 다시 공유하면 앞서 만든 링크를 돌려준다.
+      const reuseKey = actor.userId
+        ? null
+        : GuestShareLedger.keyOf([actor.guestKey ?? `ip:${actor.ip}`, reading, input.includeQuestion, body]);
+      const known = reuseKey ? this.guestShares.find(reuseKey) : undefined;
+      if (reuseKey && known) {
+        const alive = await this.prisma.tarotReading.findUnique({
+          where: { shareToken: known },
+          select: { shareQuestion: true },
+        });
+        if (alive) return { token: known, path: Routes.Tarot.sharePage(known), includeQuestion: alive.shareQuestion };
+        this.guestShares.forget(reuseKey);
+      }
+      if (reuseKey) this.guestShares.claim(actor.ip);
       row = await this.persist({
         userId: actor.userId,
         guestKey: actor.userId ? null : actor.guestKey,
@@ -325,6 +344,7 @@ export class TarotService {
         // 공유용 행은 오늘의 카드 잠금에 끼지 않는다(회원의 오늘 카드는 createReading 이 이미 잠갔다).
         skipDailyLock: true,
       });
+      if (reuseKey && row.shareToken) this.guestShares.remember(reuseKey, row.shareToken);
     }
     if (!row?.shareToken) throw new TarotError('not_found', '공유할 리딩이 없습니다.');
     return { token: row.shareToken, path: Routes.Tarot.sharePage(row.shareToken), includeQuestion: row.shareQuestion };
@@ -356,7 +376,14 @@ export class TarotService {
   // OG 미리보기용 요약 — 없는 토큰이면 null(프리렌더가 일반 OG 로 폴백).
   async getSharePreviewMeta(
     token: string,
-  ): Promise<{ spreadName: string; keyword: string; cardNames: string[]; summary: string; updatedAt: string } | null> {
+  ): Promise<{
+    spreadName: string;
+    keyword: string;
+    cardNames: string[];
+    summary: string;
+    updatedAt: string;
+    includeQuestion: boolean;
+  } | null> {
     try {
       const shared = await this.getShared(token);
       return {
@@ -365,6 +392,8 @@ export class TarotService {
         cardNames: shared.cards.map((c) => `${c.nameKo}${c.reversed ? '(역)' : ''}`),
         summary: shared.summary,
         updatedAt: shared.createdAt,
+        // og:image 버전(질문 공개 토글) — 이미지 주소가 플래그마다 달라야 긴 캐시가 안전하다.
+        includeQuestion: shared.includeQuestion,
       };
     } catch (e) {
       if (e instanceof TarotError) return null;

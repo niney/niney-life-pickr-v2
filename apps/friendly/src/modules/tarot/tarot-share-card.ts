@@ -1,11 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import satori from 'satori';
-import { Resvg } from '@resvg/resvg-js';
-import sharp from 'sharp';
 import type { SharedTarotReadingType, TarotShareImageFormatType } from '@repo/api-contract';
 import { TAROT_TOPIC_LABEL, getTarotSpread, tarotCardImagePath } from '@repo/utils';
 import { loadShareFallbackAsset, loadShareFonts } from '../../lib/share-fonts.js';
+import { loadSatori, svgToPng, type SatoriNode } from '../../lib/share-render.js';
 import { candidateWebAssetRoots } from '../../lib/web-index.js';
 
 // 타로 공유 이미지 — satori(레이아웃→SVG) + resvg(SVG→PNG). WebGL 캡처가 아니라 2D 합성이라
@@ -62,6 +60,8 @@ export function cardImageDataUri(cardId: string): Promise<string | null> {
     hit = (async () => {
       const file = await findCardFile(cardId);
       if (!file) return null;
+      // sharp 는 쓸 때 불러온다(부팅 메모리, perf-2 X-3).
+      const { default: sharp } = await import('sharp');
       const buf = await sharp(file).resize(360).jpeg({ quality: 82 }).toBuffer();
       return `data:image/jpeg;base64,${buf.toString('base64')}`;
     })().catch(() => null);
@@ -224,7 +224,7 @@ export async function renderTarotShareCardPng(
   const fonts = await loadShareFonts();
   const node = await buildTree(reading, format);
   const { w, h: hh } = SIZE[format];
-  const svg = await satori(node as never, { width: w, height: hh, fonts, loadAdditionalAsset: loadShareFallbackAsset });
-  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: w }, background: C.bg });
-  return Buffer.from(resvg.render().asPng());
+  const satori = await loadSatori();
+  const svg = await satori(node as SatoriNode, { width: w, height: hh, fonts, loadAdditionalAsset: loadShareFallbackAsset });
+  return svgToPng(svg, { fitTo: { mode: 'width', value: w }, background: C.bg });
 }

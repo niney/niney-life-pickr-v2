@@ -354,6 +354,42 @@ describe('사주 서비스·라우트 (새 임시 DB)', () => {
       await app.prisma.$executeRawUnsafe('DROP TRIGGER share_insert_failure');
     }
   });
+  // perf-2 F-6 — 게스트가 같은 결과를 다시 공유하면 같은 링크·같은 취소 토큰(새 행 없음). 취소한 공유는 되살리지 않는다.
+  it('게스트 공유 재사용 — 같은 결과면 같은 링크·취소 토큰, 다른 기기·취소 뒤에는 새 공유', async () => {
+    const a = await service.createShare({ birth: input.birth }, guest);
+    const b = await service.createShare({ birth: input.birth }, guest);
+    expect(b).toEqual(a);
+    expect(await app.prisma.sajuGShare.count()).toBe(1);
+    const other = await service.createShare(
+      { birth: input.birth },
+      { ...guest, guestKey: 'saju-g-test-guest-9' },
+    );
+    expect(other.token).not.toBe(a.token);
+    await service.revokeShare(a.token, a.revokeToken);
+    const c = await service.createShare({ birth: input.birth }, guest);
+    expect(c.token).not.toBe(a.token);
+    expect(await service.getShared(c.token)).toBeTruthy();
+  });
+  // perf-2 F-7 — 공유 이미지·OG 는 짧은 공개 캐시(취소 반영 최대 5분·60초 지연), 없는 공유는 캐시하지 않는다.
+  it('공유 이미지·OG 캐시 헤더', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: Routes.SajuG.shares,
+      headers: { 'x-guest-key': 'saju-g-cache-guest' },
+      payload: { birth: input.birth },
+    });
+    expect(created.statusCode).toBe(200);
+    const shareToken = created.json().token as string;
+    const image = await app.inject({ url: Routes.SajuG.shareImage(shareToken) });
+    expect(image.statusCode).toBe(200);
+    expect(image.headers['cache-control']).toBe('public, max-age=300');
+    const page = await app.inject({ url: Routes.SajuG.sharePage(shareToken) });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers['cache-control']).toBe('public, max-age=60');
+    const missing = await app.inject({ url: Routes.SajuG.sharePage('Zz00000000') });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers['cache-control']).toBe('no-store');
+  });
   it('기기에 보관한 출생정보는 생성 영수증 없이 다시 계산해 공유할 수 있다', async () => {
     const share = await service.createShare({ birth: input.birth }, guest);
     const result = await service.getShared(share.token);

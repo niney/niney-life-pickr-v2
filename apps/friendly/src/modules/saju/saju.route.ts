@@ -36,8 +36,9 @@ import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { SajuRecordsService } from './saju-records.service.js';
 import { SAJU_QUOTA_FEATURE, SajuError, SajuService, type SajuActor } from './saju.service.js';
 import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
+import { MEMBER_LIMIT_LABEL } from '../usage-quota/usage-quota.service.js';
 
-// 사주 — 풀이·오늘·궁합·택일·음식은 무인증 공개(옵셔널 인증이면 회원: 한도 면제 + 자동 저장).
+// 사주 — 풀이·오늘·궁합·택일·음식은 무인증 공개(옵셔널 인증이면 회원: IP·기기 한도 대신 회원 일일 상한 + 자동 저장).
 // 분당 IP 버스트는 어드민 설정(ipPerMinute)을 읽는 함수 max 로, 일일 한도는 서비스가 usageQuota 로.
 // 회원 프로필·기록·공유 라우트는 4차.
 
@@ -98,7 +99,7 @@ const sajuRoutes: FastifyPluginAsync = async (app) => {
       summary: '사주(C) 전체 풀이 생성 — 정적 본문 즉시 + LLM 4섹션 병렬 비동기 잡(jobId), 한도 1회',
       description:
         'jobId 가 있으면 GET /api/v1/saju-c/readings/jobs/{jobId}?after={version} 을 done 이 될 때까지 long-poll 해 섹션을 받는다' +
-        '(전부 캐시·한도 초과·LLM 미설정이면 jobId null 로 즉시 완결). 선택 인증 — 회원은 개인 한도 없이 자동 저장(readingId 는 잡 완료 후 poll 결과에), ' +
+        `(전부 캐시·한도 초과·LLM 미설정이면 jobId null 로 즉시 완결). 선택 인증 — 회원은 자동 저장(${MEMBER_LIMIT_LABEL}, readingId 는 잡 완료 후 poll 결과에), ` +
         '게스트는 x-guest-key 기기 키(없으면 IP) 단위 일일 한도.',
       security: OPTIONAL_BEARER,
       body: CreateSajuReadingInput,

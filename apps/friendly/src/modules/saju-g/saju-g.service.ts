@@ -11,6 +11,7 @@ import {
   type PublicSajuGShareType,
   type SajuGReadingResultType,
 } from '@repo/api-contract';
+import { GuestShareLedger } from '../../lib/guest-share.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { UsageQuotaActor, UsageQuotaService } from '../usage-quota/usage-quota.service.js';
@@ -53,11 +54,15 @@ export class SajuGService {
   });
   private readonly receipts = new LRUCache<string, Receipt>({ max: 1000, ttl: 24 * 60 * 60_000 });
   private readonly pending = new Map<string, Promise<SajuGReadingResultType>>();
+  // 게스트 공유 재사용·IP 하루 발급 상한(perf-2 F-6) — 값은 발급 응답 그대로(취소용 revokeToken 포함).
+  private readonly guestShares: GuestShareLedger<{ token: string; path: string; revokeToken: string }>;
   constructor(
     private readonly prisma: PrismaClient,
     private readonly ai: AiConfigService,
     private readonly deps: Deps,
-  ) {}
+  ) {
+    this.guestShares = new GuestShareLedger(() => this.deps.quota.today());
+  }
 
   async createReading(
     input: CreateSajuGReadingInputType,
@@ -287,12 +292,24 @@ export class SajuGService {
         connection: pair.connection,
       };
     }
+    const publicJson = JSON.stringify(publicResult);
+    // 게스트가 같은 결과를 다시 공유하면 앞서 만든 링크(같은 revokeToken)를 돌려준다. 취소된 공유는 되살리지 않는다.
+    const reuseKey = actor.userId
+      ? null
+      : GuestShareLedger.keyOf([ownerOf(actor), publicJson, result?.readingId ?? null]);
+    const known = reuseKey ? this.guestShares.find(reuseKey) : undefined;
+    if (reuseKey && known) {
+      const alive = await this.prisma.sajuGShare.findUnique({ where: { token: known.token }, select: { token: true } });
+      if (alive) return known;
+      this.guestShares.forget(reuseKey);
+    }
+    if (reuseKey) this.guestShares.claim(actor.ip);
     const revokeToken = randomPrivateToken();
     const data = {
       ownerHash: ownerOf(actor),
       revokeHash: hash(revokeToken),
       readingId: result?.readingId ?? null,
-      publicJson: JSON.stringify(publicResult),
+      publicJson,
     };
     // 공개 조회 주소만 타로와 같은 7바이트 base64url(10자)로 만든다.
     // DB 기본 키 제약으로 저장 시점의 동시 충돌까지 감지한다.
@@ -300,7 +317,9 @@ export class SajuGService {
       const token = this.deps.shareToken?.() ?? randomBytes(7).toString('base64url');
       try {
         await this.prisma.sajuGShare.create({ data: { ...data, token } });
-        return { token, path: Routes.SajuG.sharePage(token), revokeToken };
+        const issued = { token, path: Routes.SajuG.sharePage(token), revokeToken };
+        if (reuseKey) this.guestShares.remember(reuseKey, issued);
+        return issued;
       } catch (error) {
         if (
           !(

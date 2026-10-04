@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { LRUCache } from 'lru-cache';
 import {
   CreateSajuGPairInput,
   SajuGPairChart,
@@ -25,6 +24,7 @@ import {
   SajuGShareToken,
   SajuGShareError,
 } from '@repo/api-contract';
+import { MB, SharePngCache, ShareRenderBusyError } from '../../lib/share-render.js';
 import { RATE, clientKey } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
@@ -35,6 +35,7 @@ import { calculateSajuGPair } from './saju-g-pair.engine.js';
 import { SajuGPairService } from './saju-g-pair.service.js';
 import { SajuGProfileService, SajuGProfileConflict } from './saju-g-profile.service.js';
 import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
+import { MEMBER_LIMIT_LABEL } from '../usage-quota/usage-quota.service.js';
 
 const sajuGRoutes: FastifyPluginAsync = async (app) => {
   const api = app.withTypeProvider<ZodTypeProvider>();
@@ -43,7 +44,8 @@ const sajuGRoutes: FastifyPluginAsync = async (app) => {
     new AiConfigService(app.prisma, buildLlmProviderEnv()),
     { quota: app.usageQuota },
   );
-  const images = new LRUCache<string, Buffer>({ max: 50 });
+  // 공유 카드 PNG(장당 60~80KB) — 바이트 상한 + 1시간. 취소하면 바로 지운다.
+  const images = new SharePngCache({ maxBytes: 2 * MB, ttlMs: 60 * 60_000 });
   const profiles = new SajuGProfileService(app.prisma);
   const pairs = new SajuGPairService(new AiConfigService(app.prisma, buildLlmProviderEnv()), {
     quota: app.usageQuota,
@@ -174,7 +176,7 @@ const sajuGRoutes: FastifyPluginAsync = async (app) => {
       tags: ['saju-g'],
       summary: '사주(G) 풀이 생성(원국·올해·오늘) — LLM 1콜, 선택 인증, 한도 초과·실패 시 기본 풀이',
       description:
-        'Authorization Bearer 가 유효하면 회원(개인 일일 한도 없음), 없거나 무효면 게스트(x-guest-key 기기 키, 없으면 IP 단위 일일 한도). ' +
+        `Authorization Bearer 가 유효하면 회원(${MEMBER_LIMIT_LABEL}), 없거나 무효면 게스트(x-guest-key 기기 키, 없으면 IP 단위 일일 한도). ` +
         '자동 저장은 없고 응답의 receipt(발급자 본인·서버 메모리 최대 24시간)로 POST /api/v1/saju-g/me/readings 보관·POST /api/v1/saju-g/shares 공유를 한다. ' +
         '한도 초과·LLM 실패여도 200 에 source "basic" 과 fallbackReason 을 돌려준다.',
       security: OPTIONAL_BEARER,
@@ -290,16 +292,21 @@ const sajuGRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: ['saju-g'], summary: '사주(G) 공유 카드 PNG 이미지', params: tokens },
     handler: async (req, reply) => {
       const shared = await run(() => service.getShared(req.params.token)); // 캐시보다 먼저 삭제 여부 확인
-      let png = images.get(req.params.token);
-      if (!png) {
-        png = await renderSajuGSharePng(shared);
-        images.set(req.params.token, png);
+      let png: Buffer;
+      try {
+        png = await images.get(req.params.token, () => renderSajuGSharePng(shared));
+      } catch (error) {
+        if (!(error instanceof ShareRenderBusyError)) throw error;
+        throw app.httpErrors.serviceUnavailable(error.message);
       }
-      return reply
-        .type('image/png')
-        .header('cache-control', 'no-store')
-        .header('cross-origin-resource-policy', 'cross-origin')
-        .send(png);
+      return (
+        reply
+          .type('image/png')
+          // 짧은 공개 캐시 — 엣지·크롤러가 반복 요청을 흡수한다. 취소는 최대 5분 늦게 반영된다(perf-2 F-7 결정).
+          .header('cache-control', 'public, max-age=300')
+          .header('cross-origin-resource-policy', 'cross-origin')
+          .send(png)
+      );
     },
   });
 };

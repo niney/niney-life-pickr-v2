@@ -4,15 +4,16 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { env } from '../../config/env.js';
 import { escapeHtml, formatThousands } from '../../lib/html.js';
+import { MB, SharePngCache, ShareRenderBusyError } from '../../lib/share-render.js';
+import { RATE } from '../../plugins/rate-limit.js';
 import { SettlementError, SettlementService } from './settlement.service.js';
-import { LRUCache } from 'lru-cache';
-import { renderSettlementCardPng } from './settlement-card.js';
+import { isCardTruncated, renderSettlementCardPng } from './settlement-card.js';
 
-// 렌더된 정산 카드 PNG 캐시 — satori 레이아웃 + resvg(동기 네이티브 render)는 요청
-// 마다 이벤트 루프를 점유한다. (token, updatedAt) 키로 캐시해 편집 전까지 재렌더를
-// 회피. 편집되면 updatedAt 이 바뀌어 새 키 → 미스 → 재렌더(즉시 반영). PNG 는 수십 KB
-// 라 max 200 이면 메모리 부담이 작다.
-const pngCache = new LRUCache<string, Buffer>({ max: 200 });
+// 렌더된 정산 카드 PNG 캐시 — satori 레이아웃(메인 스레드) + resvg 래스터는 미스마다
+// 수백 ms 다. (token, updatedAt) 키로 캐시해 편집 전까지 재렌더를 회피. 편집되면
+// updatedAt 이 바뀌어 새 키 → 미스 → 재렌더(즉시 반영). 바이트 상한(보통 장당 0.1MB,
+// 큰 표는 1MB 안팎) + 30분 — 편집 전 키는 TTL·LRU 로 빠진다.
+const pngCache = new SharePngCache({ maxBytes: 6 * MB, ttlMs: 30 * 60_000 });
 
 // 정산 공유 링크의 SNS 미리보기(Open Graph) 처리.
 //
@@ -152,12 +153,18 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
       // 식당 사진 기본의 이점: 참가자 이름이 미리보기/크롤러 캐시에 안 박힌다.
       // (정산표 미리보기는 이름이 노출 — 공유 페이지를 열면 어차피 보이지만,
       //  크롤러 캐시 박제를 피하려면 식당 사진이 낫다.)
+      //
+      // 큰 정산(카드가 참여자를 '외 n명' 으로 접는 크기)은 정산표 대신 기본 이미지 — 링크
+      // 미리보기 크기에선 어차피 읽히지 않는다(perf-2 F-V2). '이미지로 보내기'는 그대로 카드.
       og = {
         title: `${meta.restaurantName} 정산`,
         description: `총 ${formatThousands(meta.grandTotal)}원 · ${meta.participantCount}명`,
         url: pageUrl,
         image:
-          meta.ogImageUrl ?? `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`,
+          meta.ogImageUrl ??
+          (isCardTruncated(meta.participantCount)
+            ? fallbackImage
+            : `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`),
       };
     } else {
       // 만료/없는 토큰 — 일반 OG 로 폴백. SPA 가 자체 에러 화면을 띄운다.
@@ -183,22 +190,22 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
     reply: FastifyReply,
   ) => {
     const { token } = req.params;
-    let session;
-    try {
-      session = await service.getBySharedToken(token);
-    } catch (e) {
-      if (!(e instanceof SettlementError)) throw e;
+    // 캐시 키(updatedAt)·만료만 가볍게 읽는다 — 풀 로우(차수·항목·참석)는 미스일 때만.
+    // 상한 세션이면 히트마다 풀 로드가 55ms 였다(perf-2 G-2).
+    const head = await app.prisma.settlementSession.findUnique({
+      where: { shareToken: token },
+      select: { updatedAt: true, shareExpiresAt: true },
+    });
+    if (!head || (head.shareExpiresAt && head.shareExpiresAt.getTime() < Date.now())) {
       return reply.code(404).type('text/plain; charset=utf-8').send('not found');
     }
     try {
       // (token, updatedAt) 캐시 — 미편집 세션의 반복 요청(og:image 크롤러·이미지 공유)은
-      // satori+resvg 재실행 없이 캐시 버퍼로 응답.
-      const key = `${token}:${session.updatedAt}`;
-      let png = pngCache.get(key);
-      if (!png) {
-        png = await renderSettlementCardPng(session);
-        pngCache.set(key, png);
-      }
+      // satori+resvg 재실행 없이 캐시 버퍼로 응답. 같은 키 동시 미스는 렌더 1번에 합류.
+      const key = `${token}:${head.updatedAt.toISOString()}`;
+      const png = await pngCache.get(key, async () =>
+        renderSettlementCardPng(await service.getBySharedToken(token)),
+      );
       return (
         reply
           .code(200)
@@ -209,6 +216,13 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
           .send(png)
       );
     } catch (err) {
+      // 가벼운 조회와 풀 로드 사이에 만료·공유 해제된 경우.
+      if (err instanceof SettlementError) {
+        return reply.code(404).type('text/plain; charset=utf-8').send('not found');
+      }
+      if (err instanceof ShareRenderBusyError) {
+        return reply.code(503).header('retry-after', '5').header('cache-control', 'no-store').type('text/plain; charset=utf-8').send('busy');
+      }
       app.log.error({ err, token }, 'settlement card 렌더 실패');
       return reply.code(500).type('text/plain; charset=utf-8').send('render error');
     }
@@ -216,6 +230,7 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
 
   app.get('/share/settlements/:token', handler);
   app.get('/s/:token', handler);
-  app.get('/share/settlements/:token/image.png', imageHandler);
-  app.get('/s/:token/image.png', imageHandler);
+  // 카드 PNG 는 미스마다 렌더라 공개 공유 이미지(타로·사주)와 같은 IP 한도를 건다(전역 1000/분만 걸려 있었다).
+  app.get('/share/settlements/:token/image.png', { config: { rateLimit: RATE.publicShare } }, imageHandler);
+  app.get('/s/:token/image.png', { config: { rateLimit: RATE.publicShare } }, imageHandler);
 }

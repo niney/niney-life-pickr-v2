@@ -11,9 +11,9 @@ import {
 // 카운터. MealDailyQuotaService 의 "INSERT ... ON CONFLICT 조건부 UPDATE 한 문장" 원자 카운터를
 // scope(global / ip / guest / user) 로 일반화했다. 기존 meal_daily_quotas 는 옮기지 않는다.
 //
-// 소비 순서: 전역(게스트는 guestCutoffPct % 에서 컷) → [게스트만] IP 일일 → 게스트 키 일일.
+// 소비 순서: 전역(게스트는 guestCutoffPct % 에서 컷) → [게스트만] IP 일일 → 게스트 키 일일 / [회원만] 회원 일일.
 // 뒤 단계가 막히면 앞 단계 증가분을 되돌린다(best effort — 단일 인스턴스 SQLite 라 경합은 작다).
-// 회원은 전역 예산만 소비하고 user scope 에 통계용으로만 센다(한도 없음 — 사용자 결정 2026-09-02).
+// 회원은 IP·기기 일일 한도 없이 전역 예산과 user scope 의 회원 일일 상한(MEMBER_PER_DAY)만 본다.
 //
 // 설정은 feature 당 1행(UsageQuotaSetting), 없으면 USAGE_QUOTA_DEFAULTS. 매 요청 DB 를 읽지
 // 않게 30초 캐시하고 어드민 저장 시 즉시 무효화한다.
@@ -66,6 +66,14 @@ export const USAGE_QUOTA_DEFAULTS: Record<UsageQuotaFeatureType, UsageQuotaDefau
   },
 };
 
+// 회원 1인 기능별 일일 상한 — 무료 가입 계정 하나로 전역 예산(사주 3,000/일)을 약 21분에 태워 그날 모든 게스트를
+// 정적 폴백으로 밀어낼 수 있었다(perf-2 F-4). 2026-09-02 '회원 한도 없음' 결정을 2026-10-05 에 바꾼 값이다.
+// 어드민 설정·스키마 없이 이 상수 하나로 켜고 끈다 — null 이면 예전처럼 무제한(user scope 는 통계로만 센다).
+export const MEMBER_PER_DAY: number | null = 100;
+/** 라우트 설명(외부 API 문서)용 — 상수를 바꾸면 문서도 따라간다. */
+export const MEMBER_LIMIT_LABEL =
+  MEMBER_PER_DAY === null ? '개인 일일 한도 없음' : `개인 일일 한도 기능별 ${MEMBER_PER_DAY}회`;
+
 export type UsageQuotaScope = 'global' | 'ip' | 'guest' | 'user';
 
 export interface UsageQuotaActor {
@@ -80,7 +88,8 @@ export type UsageQuotaDenyReason =
   | 'global_budget'
   | 'guest_cutoff'
   | 'ip_daily'
-  | 'guest_daily';
+  | 'guest_daily'
+  | 'member_daily';
 
 export interface UsageQuotaDecision {
   allowed: boolean;
@@ -177,7 +186,11 @@ export class UsageQuotaService {
     }
 
     if (!isGuest) {
-      await this.consumeOne(feature, 'user', actor.userId!, date, null);
+      // 회원 잔여 횟수는 화면에 내지 않는다(remainingToday null 유지) — 막히면 게스트처럼 정적 폴백.
+      if (!(await this.consumeOne(feature, 'user', actor.userId!, date, MEMBER_PER_DAY))) {
+        await this.release(feature, 'global', GLOBAL_KEY, date);
+        return { allowed: false, reason: 'member_daily', remainingToday: null };
+      }
       return { allowed: true, reason: null, remainingToday: null };
     }
 

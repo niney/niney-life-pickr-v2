@@ -26,11 +26,15 @@ export async function registerSajuGPreview(app: FastifyInstance): Promise<void> 
         url: `${origin}${Routes.SajuG.sharePage(token)}`,
         image: shared ? `${origin}${Routes.SajuG.shareImage(token)}` : defaultOgImage(origin),
       });
-      return reply
-        .code(shared ? 200 : 404)
-        .type('text/html; charset=utf-8')
-        .header('cache-control', 'no-store')
-        .send(html);
+      return (
+        reply
+          .code(shared ? 200 : 404)
+          .type('text/html; charset=utf-8')
+          // 살아 있는 공유는 짧은 공개 캐시(타로·사주 OG 와 같은 60초, 취소 반영도 그만큼 늦다 — perf-2 F-7),
+          // 없거나 취소된 공유는 캐시하지 않는다.
+          .header('cache-control', shared ? 'public, max-age=60' : 'no-store')
+          .send(html)
+      );
     },
   );
 }

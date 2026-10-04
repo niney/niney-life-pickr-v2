@@ -1,12 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import satori from 'satori';
-import { Resvg } from '@resvg/resvg-js';
-import sharp from 'sharp';
 import type { SharedSajuReadingType } from '@repo/api-contract';
 import { SAJU_WUXING_META, sajuBranchImageId, sajuImagePath, sajuStemImageId } from '@repo/utils';
 import { loadShareFallbackAsset, loadShareFonts } from '../../lib/share-fonts.js';
+import { loadSatori, svgToPng, type SatoriNode } from '../../lib/share-render.js';
 import { candidateWebAssetRoots } from '../../lib/web-index.js';
 
 // 사주 공유 이미지 — satori + resvg 2D 합성(타로와 같은 파이프라인). 팔레트는 먹·한지·주사·금.
@@ -72,6 +70,8 @@ const imageDataUri = (id: string): Promise<string | null> => {
   if (!hit) {
     hit = (async () => {
       const rel = sajuImagePath(id, 512).replace(/^\//, '');
+      // sharp 는 쓸 때 불러온다(부팅 메모리, perf-2 X-3).
+      const { default: sharp } = await import('sharp');
       for (const root of candidateWebAssetRoots()) {
         try {
           const buf = await sharp(resolve(root, rel)).resize(420).jpeg({ quality: 82 }).toBuffer();
@@ -195,7 +195,7 @@ export async function renderSajuShareCardPng(reading: SharedSajuReadingType, for
   const node = await buildTree(reading, format);
   const { w, h: hh } = SIZE[format];
   // 제목·본문(LLM·정적 문장) 속 한자는 Plex 에 없어 한자 대체 글꼴로 그린다.
-  const svg = await satori(node as never, { width: w, height: hh, fonts, loadAdditionalAsset: loadShareFallbackAsset });
-  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: w }, background: C.bg });
-  return Buffer.from(resvg.render().asPng());
+  const satori = await loadSatori();
+  const svg = await satori(node as SatoriNode, { width: w, height: hh, fonts, loadAdditionalAsset: loadShareFallbackAsset });
+  return svgToPng(svg, { fitTo: { mode: 'width', value: w }, background: C.bg });
 }

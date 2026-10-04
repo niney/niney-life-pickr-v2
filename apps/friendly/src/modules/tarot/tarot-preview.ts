@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { LRUCache } from 'lru-cache';
 import { TarotShareImageFormat } from '@repo/api-contract';
+import { MB, SharePngCache, ShareRenderBusyError } from '../../lib/share-render.js';
 import { defaultOgImage, getPublicOrigin, injectOg, loadWebIndex, type OgMeta } from '../../lib/web-index.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
@@ -15,9 +15,15 @@ import { TarotError, TarotService } from './tarot.service.js';
 // 운영(nginx): `location ^~ /tarot/s/` 를 friendly 로 프록시해야 OG·이미지가 산다. `^~` 가
 // 없으면 `.png` 정규식 location 이 이미지 요청을 가로채 404(docs/deploy-friendly.md).
 
-// (token, format) 캐시 — satori+resvg 는 동기 네이티브 렌더라 요청마다 이벤트 루프를 잡는다.
-// 공유 행은 불변이라 토큰만으로 충분. PNG 수십~수백 KB, 100개면 넉넉.
-const pngCache = new LRUCache<string, Buffer>({ max: 100 });
+// (token, format, 질문 공개) PNG 캐시 — 바이트 상한(story 1.2MB·og 0.5MB 라 토큰 7개 안팎) + 1시간.
+// 공유 행은 질문 공개 토글(includeQuestion) 말고는 불변이라 그 플래그까지가 키다.
+const pngCache = new SharePngCache({ maxBytes: 12 * MB, ttlMs: 60 * 60_000 });
+
+// og:image 버전(v) — 질문 공개 플래그. 이 값이 붙은 주소는 내용이 바뀌지 않아 하루 캐시해도 되고(Cloudflare 엣지가
+// 원 렌더를 흡수), 플래그를 바꾸면 OG 가 새 주소를 내놓는다. v 없는 주소(앱·웹의 '이미지로 보내기')는 예전처럼 5분.
+const imageVersion = (includeQuestion: boolean): string => (includeQuestion ? 'q1' : 'q0');
+const LONG_CACHE = 'public, max-age=86400';
+const SHORT_CACHE = 'public, max-age=300';
 
 export async function registerTarotPreview(app: FastifyInstance): Promise<void> {
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
@@ -41,7 +47,7 @@ export async function registerTarotPreview(app: FastifyInstance): Promise<void> 
           title: `[타로] ${meta.keyword} · ${meta.spreadName}`,
           description: `${meta.cardNames.join(' · ')} — ${meta.summary}`.slice(0, 160),
           url: pageUrl,
-          image: `${origin}/tarot/s/${encodeURIComponent(token)}/image.png`,
+          image: `${origin}/tarot/s/${encodeURIComponent(token)}/image.png?v=${imageVersion(meta.includeQuestion)}`,
         }
       : {
           title: 'Life Pickr 타로',
@@ -57,7 +63,7 @@ export async function registerTarotPreview(app: FastifyInstance): Promise<void> 
   };
 
   const imageHandler = async (
-    req: FastifyRequest<{ Params: { token: string }; Querystring: { format?: string } }>,
+    req: FastifyRequest<{ Params: { token: string }; Querystring: { format?: string; v?: string } }>,
     reply: FastifyReply,
   ) => {
     const token = req.params.token;
@@ -71,14 +77,17 @@ export async function registerTarotPreview(app: FastifyInstance): Promise<void> 
       return reply.code(404).type('text/plain; charset=utf-8').send('not found');
     }
     try {
-      const key = `${token}:${format}`;
-      let png = pngCache.get(key);
-      if (!png) {
-        png = await renderTarotShareCardPng(shared, format);
-        pngCache.set(key, png);
-      }
-      return reply.code(200).type('image/png').header('cache-control', 'public, max-age=300').send(png);
+      const version = imageVersion(shared.includeQuestion);
+      const png = await pngCache.get(`${token}:${format}:${version}`, () => renderTarotShareCardPng(shared, format));
+      return reply
+        .code(200)
+        .type('image/png')
+        .header('cache-control', req.query.v === version ? LONG_CACHE : SHORT_CACHE)
+        .send(png);
     } catch (err) {
+      if (err instanceof ShareRenderBusyError) {
+        return reply.code(503).header('retry-after', '5').header('cache-control', 'no-store').type('text/plain; charset=utf-8').send('busy');
+      }
       app.log.error({ err, token, format }, 'tarot share card 렌더 실패');
       return reply.code(500).type('text/plain; charset=utf-8').send('render error');
     }

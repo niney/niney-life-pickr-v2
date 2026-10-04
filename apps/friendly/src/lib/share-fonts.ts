@@ -75,6 +75,22 @@ export function loadShareFonts(): Promise<Font[]> {
   return shareFontsPromise;
 }
 
+let plexOnlyFontsPromise: Promise<Font[]> | null = null;
+/**
+ * Plex 만 든 satori `fonts` — 정산 카드용, 역시 늘 같은 배열이다(호출마다 새 배열이면 렌더마다 Plex 를 다시 파싱해
+ * satori 가 약 2배 느렸다, perf-2 G-2). loadShareFonts 와 다른 배열이라 한자 대체 글꼴이 보태지지 않는다 — 정산 카드는
+ * loadAdditionalAsset 을 쓰지 않으므로, 같은 배열을 나눠 쓰면 앞서 그린 타로·사주 카드에 따라 결과가 달라진다.
+ */
+export function loadPlexOnlyFonts(): Promise<Font[]> {
+  if (!plexOnlyFontsPromise) {
+    plexOnlyFontsPromise = loadPlexFonts().then(({ regular, bold }) => [
+      { name: 'Plex', data: regular, weight: 400, style: 'normal' },
+      { name: 'Plex', data: bold, weight: 700, style: 'normal' },
+    ]);
+  }
+  return plexOnlyFontsPromise;
+}
+
 // CJK 통합 한자(확장 A 포함)·호환 한자·보조 평면(확장 B~, 서로게이트 쌍).
 const HAN = /[㐀-䶿一-鿿豈-﫿]|[\ud840-\ud87f][\udc00-\udfff]/;
 

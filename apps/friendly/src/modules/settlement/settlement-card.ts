@@ -1,8 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-import satori from 'satori';
-import { Resvg } from '@resvg/resvg-js';
 import {
   SETTLEMENT_CATEGORY_LABEL,
   calculateMultiRoundShares,
@@ -13,6 +8,8 @@ import {
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
 import { formatThousands } from '../../lib/html.js';
+import { loadPlexOnlyFonts } from '../../lib/share-fonts.js';
+import { loadSatori, svgToPng, type SatoriNode } from '../../lib/share-render.js';
 
 // 공유 정산을 카카오톡 등에 '이미지'로 바로 보내기 위한 정산표 PNG 렌더.
 //
@@ -26,51 +23,21 @@ import { formatThousands } from '../../lib/html.js';
 // useMatrix 와 동일하게 calculateMultiRoundShares 로 재현한다.
 //
 // 폰트: 한글 글리프 커버를 위해 IBM Plex Sans KR(Regular/Bold) ttf 를 번들.
-// satori 는 system 폰트를 못 쓰므로 ttf 버퍼를 명시 주입해야 한다.
+// satori 는 system 폰트를 못 쓰므로 ttf 버퍼를 명시 주입해야 한다(lib/share-fonts 가
+// 프로세스 수명 동안 1회 읽는다).
+//
+// 카드 상한(perf-2 F-V2): 계약은 참여자 100·차수 10·차수당 항목 200 까지 받는데, 그대로
+// 그리면 100명×10차가 satori+래스터 5초·픽스맵 70MB 였고 받는 사람도 읽을 수 없다.
+// 참여자는 앞 CARD_MAX_PARTICIPANT_ROWS 명 + '외 n명' 합계 행, 카테고리 열까지 펼친 폭이
+// CARD_MAX_TABLE_WIDTH 를 넘으면 차수마다 소계 열만, 래스터는 CARD_MAX_PIXELS 면적까지.
+// 전체 정산표는 공유 페이지(웹·앱)에서 그대로 본다.
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// dev(tsx, src 직접 실행) 와 prod(tsup 번들, dist) 모두에서 assets/fonts 를
-// 찾도록 __dirname/cwd 에서 위로 올라가며 후보를 만든다. (share-preview 와 동일 전략)
-function fontCandidates(file: string): string[] {
-  const seen = new Set<string>();
-  for (const base of [__dirname, process.cwd()]) {
-    let cur = base;
-    for (let i = 0; i < 7; i += 1) {
-      seen.add(resolve(cur, 'apps/friendly/assets/fonts', file));
-      seen.add(resolve(cur, 'assets/fonts', file));
-      const up = dirname(cur);
-      if (up === cur) break;
-      cur = up;
-    }
-  }
-  return [...seen];
-}
-
-async function readFirst(file: string): Promise<Buffer> {
-  const tried = fontCandidates(file);
-  for (const p of tried) {
-    try {
-      return await readFile(p);
-    } catch {
-      // 다음 후보
-    }
-  }
-  throw new Error(`폰트를 찾지 못함: ${file} (tried ${tried.length} paths)`);
-}
-
-// 폰트는 프로세스 수명 동안 1회만 읽어 캐시.
-let fontsPromise: Promise<{ regular: Buffer; bold: Buffer }> | null = null;
-function loadFonts(): Promise<{ regular: Buffer; bold: Buffer }> {
-  if (!fontsPromise) {
-    fontsPromise = Promise.all([
-      readFirst('IBMPlexSansKR-Regular.ttf'),
-      readFirst('IBMPlexSansKR-Bold.ttf'),
-    ]).then(([regular, bold]) => ({ regular, bold }));
-  }
-  return fontsPromise;
-}
-
+/** 카드에 이름으로 그리는 참여자 수 — 넘으면 나머지는 '외 n명' 한 행으로 합친다. */
+export const CARD_MAX_PARTICIPANT_ROWS = 30;
+/** 카테고리 열까지 펼친 표 폭(px) 상한 — 넘으면 차수마다 소계 열만 그린다. */
+export const CARD_MAX_TABLE_WIDTH = 1600;
+/** 래스터 면적 상한(px²) — 넘으면 배율을 낮춘다. */
+export const CARD_MAX_PIXELS = 4_000_000;
 
 const participantLabel = (
   p: { name: string | null; nickname: string | null },
@@ -214,6 +181,14 @@ const HROW = 38; // 헤더 행 높이
 const ROW = 40; // 본문/합계 행 높이
 const PAD = 24;
 
+// 카드 상한 모드('외 n명'·소계만)에서만 쓰는 폭. 예전 크기 카드는 위 고정 폭 그대로(픽셀 동일).
+/** 소계만 그릴 때 소계 열 최소 폭 — 머리글 'N차 · 식당…' 이 말줄임으로라도 읽히게. */
+const COMPACT_SUB_W = 112;
+// 숫자 칸 폭 — 굵은 Plex 숫자·쉼표는 19px 에서 글자당 약 10.3px(0.54em, 실측). 오른쪽 정렬이라 오른쪽 여백 8 + 여유 4.
+// 합계 행 값이 그 열의 최댓값이라 그것으로 잰다.
+const fitNumW = (v: number, min: number): number =>
+  Math.max(min, Math.ceil(formatThousands(v).length * 19 * 0.56) + 12);
+
 type CellOpt = {
   h?: number;
   align?: 'left' | 'right' | 'center';
@@ -222,6 +197,8 @@ type CellOpt = {
   color?: string;
   bg?: string;
   borderLeft?: 1 | 2;
+  // 넘치는 글자를 '…' 로(satori 는 왼쪽 정렬일 때만 맞게 자른다).
+  ellipsis?: boolean;
 };
 
 const cell = (content: unknown, w: number, o: CellOpt = {}): Node =>
@@ -247,6 +224,7 @@ const cell = (content: unknown, w: number, o: CellOpt = {}): Node =>
       backgroundColor: o.bg ?? 'transparent',
       overflow: 'hidden',
       whiteSpace: 'nowrap',
+      ...(o.ellipsis ? { textOverflow: 'ellipsis' } : {}),
       ...(o.borderLeft
         ? {
             borderLeftWidth: o.borderLeft === 2 ? 2 : 1,
@@ -285,29 +263,49 @@ function buildTable(session: SharedSettlementSessionType): {
   const participants = [...session.participants].sort(
     (a, b) => a.orderIndex - b.orderIndex,
   );
+  // 분담 계산은 숨기는 참여자까지 전원으로 해야 금액이 화면 정산표와 같다.
   const m = computeMatrix(session, participants);
   const multi = m.rounds.length > 1;
 
-  const tableWidth =
+  // 이름으로 그릴 참여자(앞쪽 N명)와 '외 n명' 으로 합칠 나머지.
+  const shownCount = Math.min(participants.length, CARD_MAX_PARTICIPANT_ROWS);
+  const restIdx = participants.slice(shownCount).map((_, i) => shownCount + i);
+  const truncated = restIdx.length > 0;
+
+  // 열 폭 — 예전 크기 카드는 고정 폭, '외 n명' 카드는 합계 금액이 잘리지 않게 넓힌다.
+  const catW = (r: RoundMatrix, c: ReceiptItemCategoryType): number =>
+    truncated ? fitNumW(r.columnTotals[c] ?? 0, CAT_W) : CAT_W;
+  const fullSubW = (r: RoundMatrix): number => (truncated ? fitNumW(r.grandSubtotal, SUB_W) : SUB_W);
+  const fullTotalW = truncated ? fitNumW(m.grandTotal, TOTAL_W) : TOTAL_W;
+  const fullWidth =
     SEQ_W +
     NAME_W +
-    m.rounds.reduce((s, r) => s + r.categories.length * CAT_W + SUB_W, 0) +
-    TOTAL_W;
+    m.rounds.reduce((s, r) => s + r.categories.reduce((a, c) => a + catW(r, c), 0) + fullSubW(r), 0) +
+    fullTotalW;
+  // 너무 넓으면 카테고리 열을 접고 차수 소계만 — 소계 열이 차수 구분선(굵은 왼쪽 선)을 맡는다.
+  const compact = fullWidth > CARD_MAX_TABLE_WIDTH;
+  const catsOf = (r: RoundMatrix): ReceiptItemCategoryType[] => (compact ? [] : r.categories);
+  const subW = (r: RoundMatrix): number => (compact ? fitNumW(r.grandSubtotal, COMPACT_SUB_W) : fullSubW(r));
+  const totalW = compact ? fitNumW(m.grandTotal, TOTAL_W) : fullTotalW;
+  const subBorder = compact ? 2 : 1;
+  const groupW = (r: RoundMatrix): number => catsOf(r).reduce((a, c) => a + catW(r, c), 0) + subW(r);
+  const tableWidth = compact ? SEQ_W + NAME_W + m.rounds.reduce((s, r) => s + subW(r), 0) + totalW : fullWidth;
 
-  // 헤더 행 A — 차수 그룹(식당명) + 총계.
+  // 헤더 행 A — 차수 그룹(식당명) + 총계. 소계만 그리면 칸이 좁아 왼쪽 정렬 + 말줄임.
   const headA = rowBox([
     cell('', SEQ_W + NAME_W, { h: HROW, bg: C.head }),
     ...m.rounds.map((r, rIdx) =>
-      cell((multi ? `${rIdx + 1}차 · ` : '') + r.restaurantName, r.categories.length * CAT_W + SUB_W, {
+      cell((multi ? `${rIdx + 1}차 · ` : '') + r.restaurantName, groupW(r), {
         h: HROW,
-        align: 'center',
+        align: compact ? 'left' : 'center',
+        ellipsis: compact,
         bg: C.head,
         fw: 700,
         fs: 17,
         borderLeft: 2,
       }),
     ),
-    cell('총계', TOTAL_W, {
+    cell('총계', totalW, {
       h: HROW,
       align: 'center',
       bg: C.amountBg,
@@ -324,8 +322,8 @@ function buildTable(session: SharedSettlementSessionType): {
       cell('연번', SEQ_W, { h: HROW, align: 'center', color: C.sub, fs: 15 }),
       cell('이름', NAME_W, { h: HROW, color: C.sub, fs: 15 }),
       ...m.rounds.flatMap((r) => [
-        ...r.categories.map((c, j) =>
-          cell(SETTLEMENT_CATEGORY_LABEL[c], CAT_W, {
+        ...catsOf(r).map((c, j) =>
+          cell(SETTLEMENT_CATEGORY_LABEL[c], catW(r, c), {
             h: HROW,
             align: 'right',
             color: C.sub,
@@ -333,22 +331,22 @@ function buildTable(session: SharedSettlementSessionType): {
             borderLeft: j === 0 ? 2 : 1,
           }),
         ),
-        cell('소계', SUB_W, {
+        cell('소계', subW(r), {
           h: HROW,
           align: 'right',
           fw: 700,
           fs: 15,
           bg: C.subBg,
-          borderLeft: 1,
+          borderLeft: subBorder,
         }),
       ]),
-      cell('', TOTAL_W, { h: HROW, bg: C.amountBg, borderLeft: 2 }),
+      cell('', totalW, { h: HROW, bg: C.amountBg, borderLeft: 2 }),
     ],
     { borderBottom: true },
   );
 
-  // 본문 행 — 참여자별.
-  const bodyRows = participants.map((p, pIdx) =>
+  // 본문 행 — 참여자별(앞쪽 N명).
+  const bodyRows = participants.slice(0, shownCount).map((p, pIdx) =>
     rowBox(
       [
         cell(String(pIdx + 1), SEQ_W, { align: 'center', color: C.sub, fs: 17 }),
@@ -356,24 +354,24 @@ function buildTable(session: SharedSettlementSessionType): {
         ...m.rounds.flatMap((r) => {
           const attended = r.attendedMap[p.id] ?? false;
           return [
-            ...r.categories.map((c, j) => {
+            ...catsOf(r).map((c, j) => {
               const v = r.cells[pIdx]?.[c] ?? 0;
-              return cell(attended && v > 0 ? formatThousands(v) : '', CAT_W, {
+              return cell(attended && v > 0 ? formatThousands(v) : '', catW(r, c), {
                 align: 'right',
                 borderLeft: j === 0 ? 2 : 1,
                 color: v === 0 ? C.faint : C.text,
               });
             }),
-            cell(attended ? formatThousands(r.rowSubtotals[pIdx] ?? 0) : '—', SUB_W, {
+            cell(attended ? formatThousands(r.rowSubtotals[pIdx] ?? 0) : '—', subW(r), {
               align: 'right',
               fw: 700,
               bg: C.subBg,
-              borderLeft: 1,
+              borderLeft: subBorder,
               color: attended ? C.text : C.faint,
             }),
           ];
         }),
-        cell(formatThousands(p.shareAmount), TOTAL_W, {
+        cell(formatThousands(p.shareAmount), totalW, {
           align: 'right',
           fw: 700,
           bg: C.amountBg,
@@ -385,28 +383,67 @@ function buildTable(session: SharedSettlementSessionType): {
     ),
   );
 
+  // '외 n명' 행 — 숨긴 참여자의 칸별 합(비참석 칸은 계산기가 0 을 준다). 보이는 행 + 이 행 = 합계 행.
+  const sumRest = (pick: (pIdx: number) => number): number => restIdx.reduce((s, i) => s + pick(i), 0);
+  const attendedAt = (r: RoundMatrix, i: number): boolean => r.attendedMap[participants[i]!.id] ?? false;
+  const restRows = !truncated
+    ? []
+    : [
+        rowBox(
+          [
+            cell('', SEQ_W),
+            cell(`외 ${restIdx.length}명`, NAME_W, { fw: 600, color: C.sub }),
+            ...m.rounds.flatMap((r) => [
+              ...catsOf(r).map((c, j) => {
+                const v = sumRest((i) => (attendedAt(r, i) ? (r.cells[i]?.[c] ?? 0) : 0));
+                return cell(v > 0 ? formatThousands(v) : '', catW(r, c), {
+                  align: 'right',
+                  borderLeft: j === 0 ? 2 : 1,
+                  color: C.sub,
+                });
+              }),
+              cell(formatThousands(sumRest((i) => (attendedAt(r, i) ? (r.rowSubtotals[i] ?? 0) : 0))), subW(r), {
+                align: 'right',
+                fw: 700,
+                bg: C.subBg,
+                borderLeft: subBorder,
+                color: C.sub,
+              }),
+            ]),
+            cell(formatThousands(sumRest((i) => participants[i]!.shareAmount)), totalW, {
+              align: 'right',
+              fw: 700,
+              bg: C.amountBg,
+              color: C.amount,
+              borderLeft: 2,
+            }),
+          ],
+          { borderBottom: true },
+        ),
+      ];
+
   // 합계 행.
   const footRow = rowBox(
     [
       cell('', SEQ_W, { bg: C.head }),
       cell('계', NAME_W, { fw: 700, bg: C.head }),
       ...m.rounds.flatMap((r) => [
-        ...r.categories.map((c, j) =>
-          cell(formatThousands(r.columnTotals[c] ?? 0), CAT_W, {
+        ...catsOf(r).map((c, j) =>
+          cell(formatThousands(r.columnTotals[c] ?? 0), catW(r, c), {
             align: 'right',
             fw: 700,
             bg: C.head,
             borderLeft: j === 0 ? 2 : 1,
           }),
         ),
-        cell(formatThousands(r.grandSubtotal), SUB_W, {
+        cell(formatThousands(r.grandSubtotal), subW(r), {
           align: 'right',
           fw: 700,
           bg: C.subBg2,
-          borderLeft: 1,
+          borderLeft: subBorder,
         }),
       ]),
-      cell(formatThousands(m.grandTotal), TOTAL_W, {
+      cell(formatThousands(m.grandTotal), totalW, {
         align: 'right',
         fw: 700,
         bg: C.amountBg2,
@@ -429,21 +466,23 @@ function buildTable(session: SharedSettlementSessionType): {
       borderRadius: 8,
       overflow: 'hidden',
     },
-    [headA, headB, ...bodyRows, footRow],
+    [headA, headB, ...bodyRows, ...restRows, footRow],
   );
 
   // 기타 열 설명 — 웹·앱 정산표와 같은 규칙(열이 숨는 차수는 항목을 비워 넘긴다).
-  // 카톡으로 받는 사람은 이 이미지만 보므로 여기에 가장 필요하다.
+  // 카톡으로 받는 사람은 이 이미지만 보므로 여기에 가장 필요하다. 소계만 그리면 기타 열도 없다.
   const note = uncategorizedNote(
-    session.rounds.map((r, i) => ({
-      items: m.rounds[i]?.categories.includes('UNCATEGORIZED') ? r.items : [],
-    })),
+    session.rounds.map((r, i) => {
+      const mr = m.rounds[i];
+      return { items: mr && catsOf(mr).includes('UNCATEGORIZED') ? r.items : [] };
+    }),
   );
 
   return { node: table, width: tableWidth, note };
 }
 
-function buildTree(session: SharedSettlementSessionType): {
+/** 카드 VDOM(satori 입력) — 렌더와 같은 트리. 테스트가 행·열 구성을 확인할 때도 쓴다. */
+export function buildSettlementCardTree(session: SharedSettlementSessionType): {
   node: Node;
   width: number;
 } {
@@ -501,27 +540,36 @@ function buildTree(session: SharedSettlementSessionType): {
   return { node: root, width: contentWidth + PAD * 2 };
 }
 
-export async function renderSettlementCardPng(
-  session: SharedSettlementSessionType,
-): Promise<Buffer> {
-  const { regular, bold } = await loadFonts();
-  const { node, width } = buildTree(session);
+/** 카드가 정산 전체를 다 싣지 못하는지(참여자를 '외 n명' 으로 접는지) — 큰 정산은 og:image 를 기본 이미지로 돌린다. */
+export const isCardTruncated = (participantCount: number): boolean =>
+  participantCount > CARD_MAX_PARTICIPANT_ROWS;
 
-  // height 미지정 → satori 가 내용 높이를 자동 계산(참여자/차수 많아도 안 잘림).
-  const svg = await satori(node as never, {
-    width,
-    fonts: [
-      { name: 'Plex', data: regular, weight: 400, style: 'normal' },
-      { name: 'Plex', data: bold, weight: 700, style: 'normal' },
-    ],
-  });
-
+/** 폭 배율 — 넓은 표는 2x 가 과하고, 면적이 CARD_MAX_PIXELS 를 넘으면 그 안으로 낮춘다. */
+export const cardScale = (width: number, height: number): number => {
   // 표가 넓을수록 2x 는 과해진다 — 폭에 따라 스케일을 낮춰 PNG 크기를 억제하되
   // 좁은 표는 또렷하게.
   const scale = width > 900 ? 1 : width > 640 ? 1.5 : 2;
-  const resvg = new Resvg(svg, {
+  const area = width * scale * height * scale;
+  return area > CARD_MAX_PIXELS ? Math.sqrt(CARD_MAX_PIXELS / (width * height)) : scale;
+};
+
+// satori SVG 루트의 height(내용 높이) — `<svg width=".." height=".." ...>`.
+const svgHeight = (svg: string): number =>
+  Number(/\sheight="([\d.]+)"/.exec(svg.slice(0, svg.indexOf('>')))?.[1] ?? 0);
+
+export async function renderSettlementCardPng(
+  session: SharedSettlementSessionType,
+): Promise<Buffer> {
+  const fonts = await loadPlexOnlyFonts();
+  const satori = await loadSatori();
+  const { node, width } = buildSettlementCardTree(session);
+
+  // height 미지정 → satori 가 내용 높이를 자동 계산(참여자/차수 많아도 안 잘림).
+  const svg = await satori(node as unknown as SatoriNode, { width, fonts });
+
+  const scale = cardScale(width, svgHeight(svg));
+  return svgToPng(svg, {
     fitTo: { mode: 'width', value: Math.round(width * scale) },
     background: C.white,
   });
-  return Buffer.from(resvg.render().asPng());
 }

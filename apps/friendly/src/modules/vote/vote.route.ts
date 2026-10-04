@@ -9,7 +9,7 @@ import {
   SubmitBallotInput,
   VoteSession,
 } from '@repo/api-contract';
-import { VoteError, VoteService } from './vote.service.js';
+import { VOTE_VOTERS_MAX, VoteError, VoteService } from './vote.service.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
 
@@ -30,6 +30,9 @@ const throwAsHttp = (app: FastifyInstance, e: VoteError): never => {
       throw app.httpErrors.gone(e.message);
     case 'closed':
       // 409 — 마감 클레임 이후 도착한 투표. FE 가 최신 상태 재조회로 전환.
+      throw app.httpErrors.conflict(e.message);
+    case 'full':
+      // 409 — 투표자 상한(새 voterKey). 메시지로 마감과 구분한다.
       throw app.httpErrors.conflict(e.message);
     case 'invalid_option':
     default:
@@ -112,7 +115,8 @@ const voteRoutes: FastifyPluginAsync = async (app) => {
       tags: ['vote'],
       summary: '공유 링크로 투표 조회(인증 불필요) — 후보별 득표·투표자 이름, 만료 410',
       description:
-        'Authorization 헤더는 선택이다. 유효한 JWT 가 방장 본인이면 isOwner=true(마감 버튼 표시용)이며 접근 제어는 아니다.',
+        'Authorization 헤더는 선택이다. 유효한 JWT 가 방장 본인이면 isOwner=true(마감 버튼 표시용)이며 접근 제어는 아니다. ' +
+        `voters 는 후보마다 찬성한 순서로 앞 ${VOTE_VOTERS_MAX}명까지다(세션당 투표자 상한과 같아 보통은 전원).`,
       security: OPTIONAL_BEARER,
       params: TokenParams,
       response: { 200: SharedVoteSession },
@@ -137,7 +141,8 @@ const voteRoutes: FastifyPluginAsync = async (app) => {
       summary: '공유 링크로 투표 제출(인증 불필요) — voterKey 의 찬성 후보 목록 전체 교체',
       description:
         '같은 voterKey(클라이언트가 만든 기기별 UUID)로 다시 보내면 수정, optionIds 빈 배열이면 철회다. ' +
-        '마감 후 409, IP 당 분당 30회. 응답은 갱신된 투표 전체.',
+        `마감 후 409, 투표자가 세션당 ${VOTE_VOTERS_MAX}명으로 가득 차면 새 voterKey 의 투표도 409(이미 투표한 사람의 수정·철회는 된다), ` +
+        'IP 당 분당 30회. 응답은 갱신된 투표 전체.',
       security: OPTIONAL_BEARER,
       params: TokenParams,
       body: SubmitBallotInput,

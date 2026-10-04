@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   SajuChart as SajuChartSchema,
@@ -23,6 +25,7 @@ import {
   sajuAskOf,
 } from '@repo/utils';
 import { buildApp } from '../../app.js';
+import { env } from '../../config/env.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import type { IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { useSchemaDatabase } from '../../test-utils/schema-db.js';
@@ -581,6 +584,40 @@ describe('SajuRecordsService (격리 DB) — 공유·프로필·기록', () => {
     for (let i = 0; i < 9; i++) await records.createProfile('r-user', { label: `p${i}`, birth: { ...BIRTH, day: 1 + i }, isPrimary: false });
     await expect(records.createProfile('r-user', { label: 'over', birth: { ...BIRTH, day: 20 }, isPrimary: false })).rejects.toThrow(/10명/);
     await expect(records.createProfile('r-user', { label: 'bad', birth: { ...BIRTH, month: 2, day: 30 }, isPrimary: false })).rejects.toMatchObject({ code: 'invalid_input' });
+  });
+
+  // perf-2 F-6 — 게스트가 같은 생년월일을 다시 공유하면 같은 링크(새 행 없음).
+  it('게스트 공유 재사용 — 같은 입력·같은 공개 옵션이면 같은 토큰, 옵션·기기가 다르면 새 공유', async () => {
+    const a = await records.createShare({ birth: BIRTH, includeBirth: false }, guest);
+    const b = await records.createShare({ birth: BIRTH, includeBirth: false }, guest);
+    expect(b).toEqual(a);
+    expect(await app.prisma.sajuReading.count()).toBe(1);
+    expect((await records.createShare({ birth: BIRTH, includeBirth: true }, guest)).token).not.toBe(a.token);
+    expect((await records.createShare({ birth: BIRTH, includeBirth: false }, { ...guest, guestKey: 'guest-key-zzzzzz' })).token).not.toBe(a.token);
+    // 회원의 입력 공유는 예전처럼 매번 새 행(재사용은 게스트만).
+    const m1 = await records.createShare({ birth: BIRTH, includeBirth: false }, member);
+    const m2 = await records.createShare({ birth: BIRTH, includeBirth: false }, member);
+    expect(m2.token).not.toBe(m1.token);
+  });
+
+  // perf-2 X-4 — og:image 에 생년월일 공개 버전(v)을 붙여 그 주소만 하루 캐시.
+  it('공유 이미지 캐시 — OG 는 v 붙은 주소, v 가 맞으면 하루·없으면 5분', async () => {
+    const prev = env.WEB_INDEX_PATH;
+    env.WEB_INDEX_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../web/index.html');
+    try {
+      const share = await records.createShare({ birth: BIRTH, includeBirth: false }, guest);
+      const og = await app.inject({ method: 'GET', url: `/saju-c/s/${share.token}` });
+      expect(og.body).toContain(`/saju-c/s/${share.token}/image.png?v=b0`);
+      const versioned = await app.inject({ method: 'GET', url: `/saju-c/s/${share.token}/image.png?v=b0` });
+      expect(versioned.statusCode).toBe(200);
+      expect(versioned.headers['content-type']).toBe('image/png');
+      expect(versioned.headers['cache-control']).toBe('public, max-age=86400');
+      const plain = await app.inject({ method: 'GET', url: `/saju-c/s/${share.token}/image.png` });
+      expect(plain.headers['cache-control']).toBe('public, max-age=300');
+      expect((await app.inject({ method: 'GET', url: `/saju-c/s/${share.token}/image.png?v=b1` })).headers['cache-control']).toBe('public, max-age=300');
+    } finally {
+      env.WEB_INDEX_PATH = prev;
+    }
   });
 });
 

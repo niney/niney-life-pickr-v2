@@ -4,9 +4,9 @@ import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import type { IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { useSchemaDatabase } from '../../test-utils/schema-db.js';
-import { USAGE_QUOTA_DEFAULTS, UsageQuotaService, kstToday } from './usage-quota.service.js';
+import { MEMBER_PER_DAY, USAGE_QUOTA_DEFAULTS, UsageQuotaService, kstToday } from './usage-quota.service.js';
 
-// 공용 사용량 한도 — 소비 순서(전역 → IP → 게스트)·되돌리기·회원 면제·컷오프·어드민 라우트.
+// 공용 사용량 한도 — 소비 순서(전역 → IP → 게스트 / 회원 일일)·되돌리기·회원 상한·컷오프·어드민 라우트.
 
 const F = 'tarot-reading' as const;
 const guest = (key: string, ip = '10.0.0.1') => ({ userId: null, guestKey: key, ip });
@@ -79,7 +79,7 @@ describe('UsageQuotaService (격리 DB)', () => {
     });
   });
 
-  it('회원은 게스트·IP 한도를 건너뛰고 전역만 소비한다', async () => {
+  it('회원은 게스트·IP 한도를 건너뛰고 전역(+회원 일일)만 소비한다', async () => {
     await svc.updateSetting(F, { guestPerDay: 1, ipPerDay: 1 });
     for (let i = 0; i < 3; i++) {
       expect(await svc.consume(F, member('q-user'))).toEqual({ allowed: true, reason: null, remainingToday: null });
@@ -89,6 +89,22 @@ describe('UsageQuotaService (격리 DB)', () => {
     expect(await svc.count(F, 'global', '*', today)).toBe(3);
     expect(await svc.count(F, 'ip', '10.0.0.9', today)).toBe(0);
     expect(await svc.remainingForGuest(F, member('q-user'))).toBeNull();
+  });
+
+  // perf-2 F-4 — 회원도 기능별 하루 상한(MEMBER_PER_DAY). 막히면 전역 증가분을 되돌리고 잔여는 내지 않는다.
+  it.runIf(MEMBER_PER_DAY !== null)('회원 일일 상한: 다 쓰면 member_daily 로 거부, 다른 회원·다른 기능은 영향 없음', async () => {
+    const limit = MEMBER_PER_DAY!;
+    const today = svc.today();
+    await app.prisma.usageQuotaCounter.create({
+      data: { feature: F, scope: 'user', key: 'q-user', date: today, count: limit - 1 },
+    });
+    expect(await svc.consume(F, member('q-user'))).toEqual({ allowed: true, reason: null, remainingToday: null });
+    expect(await svc.consume(F, member('q-user'))).toEqual({ allowed: false, reason: 'member_daily', remainingToday: null });
+    expect(await svc.count(F, 'user', 'q-user', today)).toBe(limit);
+    // 거부된 호출의 전역 증가분은 되돌린다(허용 1회분만 남는다).
+    expect(await svc.count(F, 'global', '*', today)).toBe(1);
+    expect((await svc.consume(F, member('q-other'))).allowed).toBe(true);
+    expect((await svc.consume('saju-reading', member('q-user'))).allowed).toBe(true);
   });
 
   it('전역 예산: 게스트는 cutoff 에서 끊기고 회원은 100% 까지 쓴다', async () => {

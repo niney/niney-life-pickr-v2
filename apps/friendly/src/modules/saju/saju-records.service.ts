@@ -22,6 +22,8 @@ import {
   type SharedSajuReadingType,
 } from '@repo/api-contract';
 import { chartSignature, type SajuChart } from '@repo/utils';
+import { GuestShareLedger } from '../../lib/guest-share.js';
+import { kstToday } from '../usage-quota/usage-quota.service.js';
 import { sourceOf } from './saju-jobs.js';
 import { SAJU_PROMPT_VERSION } from './saju.prompts.js';
 import { SajuError, toChartDto, type SajuActor, type SajuService } from './saju.service.js';
@@ -35,6 +37,9 @@ import { SajuError, toChartDto, type SajuActor, type SajuService } from './saju.
 // - 프로필은 회원당 최대 10, primary 는 하나(서비스가 보장).
 
 export class SajuRecordsService {
+  // 게스트 공유 재사용·IP 하루 발급 상한(perf-2 F-6) — 값은 공유 토큰.
+  private readonly guestShares = new GuestShareLedger<string>(() => kstToday());
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly saju: SajuService,
@@ -58,6 +63,20 @@ export class SajuRecordsService {
       const sections = this.saju.sectionsForShare(chart);
       // 테마는 캐시된 것(게스트가 방금 본 것)만 LLM 문장, 아니면 정적 — 공유 페이지의 테마 카드가 비지 않게.
       const themes = this.saju.themesForShare(chart);
+      // 게스트가 같은 생년월일(본문·공개 옵션까지 같음)을 다시 공유하면 앞서 만든 링크를 돌려준다.
+      const reuseKey = actor.userId
+        ? null
+        : GuestShareLedger.keyOf([actor.guestKey ?? `ip:${actor.ip}`, input.birth, input.includeBirth, sections, themes]);
+      const known = reuseKey ? this.guestShares.find(reuseKey) : undefined;
+      if (reuseKey && known) {
+        const alive = await this.prisma.sajuReading.findUnique({
+          where: { shareToken: known },
+          select: { shareBirth: true },
+        });
+        if (alive) return { token: known, path: Routes.Saju.sharePage(known), includeBirth: alive.shareBirth };
+        this.guestShares.forget(reuseKey);
+      }
+      if (reuseKey) this.guestShares.claim(actor.ip);
       row = await this.prisma.sajuReading.create({
         data: {
           userId: actor.userId,
@@ -74,6 +93,7 @@ export class SajuRecordsService {
           dayKey: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }),
         },
       });
+      if (reuseKey && row.shareToken) this.guestShares.remember(reuseKey, row.shareToken);
     }
     if (!row?.shareToken) throw new SajuError('not_found', '공유할 풀이가 없습니다.');
     return { token: row.shareToken, path: Routes.Saju.sharePage(row.shareToken), includeBirth: row.shareBirth };
@@ -96,7 +116,9 @@ export class SajuRecordsService {
   }
 
   /** OG 미리보기용 요약 — 없는 토큰이면 null. */
-  async getSharePreviewMeta(token: string): Promise<{ title: string; description: string; dayMasterStem: number } | null> {
+  async getSharePreviewMeta(
+    token: string,
+  ): Promise<{ title: string; description: string; dayMasterStem: number; includeBirth: boolean } | null> {
     try {
       const shared = await this.getShared(token);
       const c = shared.chart;
@@ -105,6 +127,8 @@ export class SajuRecordsService {
         title: `[사주(C)] ${shared.sections.personality.headline} · ${c.dayMaster.ko}${c.dayMaster.hanja} 일간`,
         description: `${sig} — ${shared.sections.personality.body}`.slice(0, 160),
         dayMasterStem: c.dayMaster.index,
+        // og:image 버전(생년월일 공개 토글).
+        includeBirth: shared.includeBirth,
       };
     } catch (e) {
       if (e instanceof SajuError) return null;

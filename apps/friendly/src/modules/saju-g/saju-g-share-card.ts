@@ -1,11 +1,11 @@
-import satori from 'satori';
-import { Resvg } from '@resvg/resvg-js';
 import type { PublicSajuGShareType } from '@repo/api-contract';
 import { SAJU_G_ELEMENT_META } from '@repo/utils';
 import { loadShareFallbackAsset, loadShareFonts } from '../../lib/share-fonts.js';
+import { loadSatori, svgToPng, type SatoriNode } from '../../lib/share-render.js';
 
 export async function renderSajuGSharePng(data: PublicSajuGShareType): Promise<Buffer> {
   const fonts = await loadShareFonts();
+  const satori = await loadSatori();
   const h = (style: Record<string, unknown>, children: unknown) => ({
     type: 'div',
     props: { style: { display: 'flex', ...style }, children },
@@ -183,7 +183,7 @@ export async function renderSajuGSharePng(data: PublicSajuGShareType): Promise<B
           '전통의 상징으로 읽는 사주(G) · LIFE PICKR',
         ),
       ],
-    ) as unknown as Parameters<typeof satori>[0],
+    ) as unknown as SatoriNode,
     {
       width: 1080,
       height: 1440,
@@ -191,5 +191,5 @@ export async function renderSajuGSharePng(data: PublicSajuGShareType): Promise<B
       loadAdditionalAsset: loadShareFallbackAsset,
     },
   );
-  return new Resvg(svg).render().asPng();
+  return svgToPng(svg);
 }

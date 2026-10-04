@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { env } from '../../config/env.js';
+import { GuestShareLedger, GuestShareLimitError } from '../../lib/guest-share.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import type { IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { useSchemaDatabase } from '../../test-utils/schema-db.js';
@@ -135,6 +136,74 @@ describe('tarot share (격리 DB)', () => {
     const gone = await app.inject({ method: 'GET', url: '/tarot/s/nope-nope-1' });
     expect(gone.statusCode).toBe(200);
     expect(gone.body).toContain('Life Pickr 타로');
+  });
+
+  // perf-2 F-6 — 게스트가 같은 리딩을 다시 공유하면 같은 링크(새 행 없음), 하루 발급 상한은 429.
+  it('게스트 공유 재사용 — 같은 입력·같은 질문 공개면 같은 토큰, 옵션·기기가 다르면 새 공유', async () => {
+    const a = (await guestShare(false)).json();
+    const b = (await guestShare(false)).json();
+    expect(b.token).toBe(a.token);
+    expect(await app.prisma.tarotReading.count()).toBe(1);
+    const c = (await guestShare(true)).json();
+    expect(c.token).not.toBe(a.token);
+    const other = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tarot/shares',
+      headers: { 'x-guest-key': 'guest-key-00000010' },
+      payload: { reading, includeQuestion: false },
+    });
+    expect(other.json().token).not.toBe(a.token);
+    expect(await app.prisma.tarotReading.count()).toBe(3);
+  });
+
+  it('게스트 공유가 하루 상한을 넘으면 429', async () => {
+    vi.spyOn(GuestShareLedger.prototype, 'claim').mockImplementation(() => {
+      throw new GuestShareLimitError();
+    });
+    try {
+      const res = await guestShare(false);
+      expect(res.statusCode).toBe(429);
+      expect(res.json().message).toContain('공유 링크');
+      expect(await app.prisma.tarotReading.count()).toBe(0);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  // perf-2 X-4 — og:image 주소에 질문 공개 버전(v)을 붙여 그 주소만 하루 캐시. 토글하면 새 주소·새 그림.
+  it('공유 이미지 캐시 — v 가 맞으면 하루, 없거나 어긋나면 5분, 질문 공개를 바꾸면 그림도 바뀐다', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tarot/readings',
+      headers: { authorization: `Bearer ${token}` },
+      payload: reading,
+    });
+    const readingId = created.json().readingId as string;
+    const share = async (includeQuestion: boolean) =>
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/tarot/shares',
+          headers: { authorization: `Bearer ${token}` },
+          payload: { readingId, includeQuestion },
+        })
+      ).json();
+    const hidden = await share(false);
+    const og = await app.inject({ method: 'GET', url: `/tarot/s/${hidden.token}` });
+    expect(og.body).toContain(`/tarot/s/${hidden.token}/image.png?v=q0`);
+    const versioned = await app.inject({ method: 'GET', url: `/tarot/s/${hidden.token}/image.png?v=q0` });
+    expect(versioned.headers['cache-control']).toBe('public, max-age=86400');
+    const plain = await app.inject({ method: 'GET', url: `/tarot/s/${hidden.token}/image.png` });
+    expect(plain.headers['cache-control']).toBe('public, max-age=300');
+    expect(plain.rawPayload.equals(versioned.rawPayload)).toBe(true);
+
+    const shown = await share(true);
+    expect(shown.token).toBe(hidden.token);
+    expect((await app.inject({ method: 'GET', url: `/tarot/s/${shown.token}` })).body).toContain('image.png?v=q1');
+    const stale = await app.inject({ method: 'GET', url: `/tarot/s/${shown.token}/image.png?v=q0` });
+    expect(stale.headers['cache-control']).toBe('public, max-age=300');
+    // 질문이 실린 새 그림 — 같은 토큰이라도 프로세스 캐시가 예전 그림을 내주지 않는다.
+    expect(stale.rawPayload.equals(plain.rawPayload)).toBe(false);
   });
 
   it('공유 이미지 — og·story PNG, 없는 토큰은 404', async () => {

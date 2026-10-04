@@ -11,6 +11,7 @@ import jwtPlugin from '../../plugins/jwt.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import voteRoutes from './vote.route.js';
+import { VOTE_VOTERS_MAX } from './vote.service.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 
 const buildTestApp = async (): Promise<FastifyInstance> => {
@@ -340,6 +341,91 @@ describe('vote routes', () => {
         session.options[0]!.id,
       ]);
       expect(late.statusCode).toBe(409);
+    });
+  });
+
+  // perf-2 F-5 — 투표자 상한·만료 선판정·상한 이전에 넘친 세션의 집계.
+  describe('투표자 상한', () => {
+    // 표를 라우트 대신 바로 넣는다(100명 × PUT 은 느리고 레이트리밋과 무관한 검증이다).
+    const seedVoters = async (sessionId: string, optionIds: string[], voters: number) => {
+      const rows = [];
+      for (let v = 0; v < voters; v += 1) {
+        for (const optionId of optionIds) {
+          rows.push({
+            sessionId,
+            optionId,
+            voterKey: `seed-voter-${String(v).padStart(4, '0')}`,
+            voterLabel: `사람${v}`,
+            createdAt: new Date(Date.UTC(2026, 9, 1, 0, 0, 0, v)),
+          });
+        }
+      }
+      await app.prisma.voteBallot.createMany({ data: rows });
+    };
+
+    it(`${VOTE_VOTERS_MAX}명이 차면 새 voterKey 는 409, 기존 투표자의 수정·철회와 빈 투표는 된다`, async () => {
+      const session = await createVote(ownerId, 2);
+      const ids = session.options.map((o) => o.id);
+      await seedVoters(session.id, [ids[0]!], VOTE_VOTERS_MAX - 1);
+
+      // 100번째 사람까지는 들어간다.
+      const last = await putBallot(session.token, 'voter-last-0100', '막차', [ids[1]!]);
+      expect(last.statusCode).toBe(200);
+      expect((last.json() as SharedVoteSessionType).totalVoters).toBe(VOTE_VOTERS_MAX);
+
+      const over = await putBallot(session.token, 'voter-over-0101', '초과', [ids[0]!]);
+      expect(over.statusCode).toBe(409);
+      expect((over.json() as { message: string }).message).toContain(`${VOTE_VOTERS_MAX}명`);
+      expect(await app.prisma.voteBallot.count({ where: { sessionId: session.id, voterKey: 'voter-over-0101' } })).toBe(0);
+
+      // 기존 투표자는 바꿀 수 있다.
+      const edit = await putBallot(session.token, 'seed-voter-0000', '사람0', [ids[0]!, ids[1]!]);
+      expect(edit.statusCode).toBe(200);
+      // 새 사람의 빈 투표(철회)는 인원을 늘리지 않아 막지 않는다.
+      expect((await putBallot(session.token, 'voter-none-0102', '구경', [])).statusCode).toBe(200);
+      // 한 명이 철회하면 자리가 난다.
+      expect((await putBallot(session.token, 'seed-voter-0001', '사람1', [])).statusCode).toBe(200);
+      expect((await putBallot(session.token, 'voter-over-0101', '초과', [ids[0]!])).statusCode).toBe(200);
+    });
+
+    it('상한 이전에 넘친 세션 — 수는 정확히, 이름은 후보마다 앞쪽 상한까지만', async () => {
+      const session = await createVote(ownerId, 8);
+      const ids = session.options.map((o) => o.id);
+      const voters = VOTE_VOTERS_MAX + 20;
+      await seedVoters(session.id, ids, voters);
+
+      const res = await app.inject({ method: 'GET', url: sharedUrl(session.token) });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as SharedVoteSessionType;
+      expect(body.totalVoters).toBe(voters);
+      for (const o of body.options) {
+        expect(o.count).toBe(voters);
+        expect(o.voters.length).toBeLessThanOrEqual(VOTE_VOTERS_MAX);
+      }
+      // 앞쪽(찬성 시각순) 이름부터 싣는다.
+      expect(body.options[0]!.voters[0]).toBe('사람0');
+    });
+
+    it('만료 세션은 표를 읽기 전에 410 — 조회·제출 모두', async () => {
+      const session = await createVote(ownerId, 2);
+      await seedVoters(session.id, [session.options[0]!.id], 5);
+      await app.prisma.voteSession.update({
+        where: { id: session.id },
+        data: { shareExpiresAt: new Date(Date.now() - 1000) },
+      });
+      const ballotsRead = vi.spyOn(app.prisma.voteBallot, 'findMany');
+      expect((await app.inject({ method: 'GET', url: sharedUrl(session.token) })).statusCode).toBe(410);
+      const put = await putBallot(session.token, 'seed-voter-0000', '사람0', []);
+      expect(put.statusCode).toBe(410);
+      expect(ballotsRead).not.toHaveBeenCalled();
+      // 대조 — 살아 있는 세션이면 같은 스파이에 표 읽기가 잡힌다(통과 호출 대신 빈 결과).
+      ballotsRead.mockResolvedValue([] as never);
+      await app.prisma.voteSession.update({
+        where: { id: session.id },
+        data: { shareExpiresAt: new Date(Date.now() + 60_000) },
+      });
+      expect((await app.inject({ method: 'GET', url: sharedUrl(session.token) })).statusCode).toBe(200);
+      expect(ballotsRead).toHaveBeenCalled();
     });
   });
 

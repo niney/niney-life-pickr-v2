@@ -17,10 +17,11 @@ import { RATE, clientKey } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { renderTarotCardTexture } from './tarot-card-texture.js';
+import { MEMBER_LIMIT_LABEL } from '../usage-quota/usage-quota.service.js';
 import { TAROT_QUOTA_FEATURE, TarotError, TarotService, type TarotActor } from './tarot.service.js';
 import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
 
-// 타로 — 리딩은 무인증 공개(옵셔널 인증이면 회원: 한도 면제 + 자동 저장), 기록은 회원 전용.
+// 타로 — 리딩은 무인증 공개(옵셔널 인증이면 회원: IP·기기 한도 대신 회원 일일 상한 + 자동 저장), 기록은 회원 전용.
 // 분당 IP 버스트는 어드민 설정(ipPerMinute)을 읽는 함수 max 로, 일일 한도는 서비스가 usageQuota 로.
 
 const T = Routes.Tarot;
@@ -68,7 +69,7 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
       tags: ['tarot'],
       summary: '타로 리딩 생성 — LLM 해석, 선택 인증(회원 자동 저장), 한도 초과 시 정적 해석',
       description:
-        'Authorization Bearer 가 유효하면 회원(개인 일일 한도 없음·자동 저장·오늘의 카드 하루 1장 고정), 없거나 무효면 게스트다. ' +
+        `Authorization Bearer 가 유효하면 회원(${MEMBER_LIMIT_LABEL}·자동 저장·오늘의 카드 하루 1장 고정), 없거나 무효면 게스트다. ` +
         '게스트는 x-guest-key(영숫자·_·- 8~64자) 기기 키로 일일 한도를 세고(없으면 IP), 한도 초과·LLM 실패여도 200 에 source "static" 해석을 돌려준다.',
       security: OPTIONAL_BEARER,
       body: CreateTarotReadingInput,
