@@ -40,6 +40,8 @@
     "probe:meal-e2e": "tsx --env-file=.env scripts/probe-meal-e2e.ts",
     "probe:meal-recommend": "tsx --env-file=.env scripts/probe-meal-recommend.ts",
     "probe:meal-settings": "tsx --env-file=.env scripts/probe-meal-settings.ts",
+    "probe:meal-models": "tsx --env-file=.env scripts/probe-meal-models.ts",
+    "check:common-meals": "tsx --env-file=.env scripts/check-common-meals.ts",
     "e2e:tour": "tsx scripts/e2e-tour.ts",
     "backfill:meal-nutrition": "tsx --env-file=.env scripts/backfill-meal-nutrition.ts",
     "fix:food-labels": "tsx --env-file=.env scripts/fix-food-catalog-labels.ts",
