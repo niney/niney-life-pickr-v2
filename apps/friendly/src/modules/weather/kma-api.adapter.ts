@@ -28,13 +28,13 @@
 // 같아 toServiceKeyPart 를 그대로 쓴다.
 
 import { coerceStrOrNull, intOrNull, isObject, numOrNull } from '../../lib/narrow.js';
+import { UPSTREAM_MIN_RETRY_WINDOW_MS, UPSTREAM_REQUEST_BUDGET_MS } from '../../lib/upstream-guard.js';
 import { toServiceKeyPart } from '../bus/bus-api.adapter.js';
 
 export const KMA_VILAGE_BASE_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0';
 export const KMA_MID_BASE_URL = 'https://apis.data.go.kr/1360000/MidFcstInfoService';
-// 실측 응답은 수십~수백 ms(단기예보 798행 ≈1초). 게이트웨이 자체 타임아웃(~10초)을 받아
-// 재시도할 여지를 두기 위해 에어코리아와 같은 20초.
-const FETCH_TIMEOUT_MS = 20_000;
+// 실측 응답은 수십~수백 ms(단기예보 798행 ≈1초) — 시간 상한은 요청 1건(재시도 포함) 예산
+// UPSTREAM_REQUEST_BUDGET_MS(8초). 예전 20초 타임아웃은 업스트림이 매달리면 그대로 기다렸다.
 const RETRY_DELAY_MS = 700;
 // 단기예보 한 base 는 최대 14항목 × ~70시각 ≈ 900행 — 1000 이면 1페이지.
 export const KMA_PAGE_SIZE = 1000;
@@ -82,7 +82,12 @@ export class KmaApiAuthError extends KmaApiError {
 
 export interface KmaApiRequestOptions {
   serviceKey: string;
+  // 주어지면 타임아웃은 caller 책임 — 자체 AbortController·시간 예산을 쓰지 않는다(프로브).
   signal?: AbortSignal;
+  // 재시도 직전 호출 — 서비스가 재시도도 일일 쿼터에 센다(재시도도 업스트림 1콜이다).
+  onRetry?: () => void;
+  // 요청 1건(재시도 포함) 시간 예산 — 기본 UPSTREAM_REQUEST_BUDGET_MS. 테스트 주입용.
+  budgetMs?: number;
 }
 
 export interface KmaCallResult {
@@ -123,9 +128,10 @@ const httpGet = async (
   fetchUrl: string,
   requestUrl: string,
   opts: KmaApiRequestOptions,
+  timeoutMs: number,
 ): Promise<RawHttpResult> => {
   const ac = opts.signal ? null : new AbortController();
-  const timeoutId = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+  const timeoutId = ac ? setTimeout(() => ac.abort(), Math.max(1, timeoutMs)) : null;
   try {
     let res: Response;
     try {
@@ -264,7 +270,7 @@ const interpret = (
   return { result: { requestUrl, items: parsed.items, totalCount: parsed.totalCount, noData: false } };
 };
 
-// 단일 오퍼레이션 1페이지 호출 — 게이트웨이 타임아웃/5xx 1회 재시도.
+// 단일 오퍼레이션 1페이지 호출 — 게이트웨이 타임아웃/5xx 는 예산이 남으면 1회 재시도.
 export const callKmaApi = async (
   base: string,
   op: string,
@@ -272,10 +278,17 @@ export const callKmaApi = async (
   opts: KmaApiRequestOptions,
 ): Promise<KmaCallResult> => {
   const { fetchUrl, requestUrl } = buildUrls(base, op, params, opts.serviceKey);
+  const deadline = opts.signal
+    ? Number.POSITIVE_INFINITY
+    : Date.now() + (opts.budgetMs ?? UPSTREAM_REQUEST_BUDGET_MS);
   let lastError: KmaApiError | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await sleep(RETRY_DELAY_MS);
-    const http = await httpGet(fetchUrl, requestUrl, opts);
+    if (attempt > 0) {
+      if (deadline - Date.now() - RETRY_DELAY_MS < UPSTREAM_MIN_RETRY_WINDOW_MS) break;
+      opts.onRetry?.();
+      await sleep(RETRY_DELAY_MS);
+    }
+    const http = await httpGet(fetchUrl, requestUrl, opts, deadline - Date.now());
     const outcome = interpret(http, requestUrl);
     if ('result' in outcome) return outcome.result;
     lastError = outcome.error;

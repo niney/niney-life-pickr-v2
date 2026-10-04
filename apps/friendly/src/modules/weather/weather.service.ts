@@ -16,6 +16,10 @@ import type {
   WeatherVersionsResultType,
 } from '@repo/api-contract';
 import {
+  WEATHER_MID_LAND_REGIONS,
+  WEATHER_MID_NATION_STN_ID,
+  WEATHER_MID_SEA_REGIONS,
+  WEATHER_PLACES,
   kmaBaseToIso,
   kmaFcstTimeToIso,
   kmaMidTmFc,
@@ -32,8 +36,12 @@ import {
   type KmaBase,
   type KmaBaseKind,
 } from '@repo/utils';
+import { LRUCache } from 'lru-cache';
 import { intOrNull, numOrNull } from '../../lib/narrow.js';
+import { DailyQuota, UpstreamCooldown, retryAfterSec } from '../../lib/upstream-guard.js';
 import {
+  KmaApiAuthError,
+  KmaApiError,
   getFcstVersion,
   getMidFcst,
   getMidLandFcst,
@@ -49,9 +57,10 @@ import {
   type RawKmaMidRow,
 } from './kma-api.adapter.js';
 
-// 기상청 날씨 프록시 서비스 — DB 없음. 키 단위 메모리 캐시 + in-flight 합류 + last-known
-// stale 폴백 + 일일 쿼터 카운터(에어코리아 서비스의 골격을 그대로, TTL 만 "다음 발표
-// 시각까지" 로 동적). 단일 인스턴스 전제(CLAUDE.md).
+// 기상청 날씨 프록시 서비스 — DB 없음. 키 단위 메모리 캐시(LRU, 바이트 상한) + in-flight 합류 + last-known
+// stale 폴백 + 서비스별 일일 쿼터 + 실패 쿨다운(lib/upstream-guard, TTL 만 "다음 발표 시각까지" 로 동적).
+// 단일 인스턴스 전제(CLAUDE.md) — 앱에 하나만 두고(plugins/weather.ts 의 app.weather) 날씨·식단 추천 라우트가
+// 같은 캐시·쿼터를 쓴다(C-5: 인스턴스가 둘이면 쿼터 합계가 실한도를 넘었다).
 //
 // 발표 슬롯 규율: 기준 시각(base)은 서버가 KST 로 계산하고(@repo/utils), 새 슬롯이 아직
 // 업스트림에 없으면(NO_DATA) 한 슬롯 이전으로 1회 폴백한다(fallback=true). 폴백 응답은
@@ -66,16 +75,38 @@ const MIN_TTL_MS = 30_000;
 export const WEATHER_NOWCAST_STALE_MAX_MS = 3 * 60 * 60_000;
 export const WEATHER_FORECAST_STALE_MAX_MS = 6 * 60 * 60_000;
 export const WEATHER_MID_STALE_MAX_MS = 24 * 60 * 60_000;
-// 기상청 개발계정 일 10,000건(서비스별) — 여유를 둔 9,000 을 두 서비스 합산으로 센다.
-export const DEFAULT_DAILY_UPSTREAM_LIMIT = 9000;
+// 캐시 상한(바이트 근사 = JSON 길이 × 2) — 단기예보 엔트리 ≈40KB 라 격자 3.7만 곳을 바꿔 가며 부르면 쿼터
+// 범위 안에서만 ≈358MB 가 쌓였다(E-4). 정상 격자는 사용자 위치 수백 곳이라 32MB(단기 ≈800 + 실황) 안이다.
+export const WEATHER_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+// 일일 쿼터 — 기존 두 서비스 합산 9,000 을 서비스별로 나눈다(E-4, 업스트림 한도도 서비스별 10,000). 정상
+// 사용량은 단기(실황·초단기 격자당 시간 2콜 + 단기 발표 8회 + 버전)가 중기(화이트리스트 지점 ≈170곳 × 하루
+// 발표 2회 × 2~3콜)의 열 배 안팎이라 7,500 / 1,500. 중기를 남용해도 단기(상단바 칩·추천 날씨)는 멈추지 않는다.
+export const WEATHER_QUOTA_LIMITS = { vilage: 7_500, mid: 1_500 } as const;
+export type WeatherQuotaBucket = keyof typeof WEATHER_QUOTA_LIMITS;
+// 식단 추천의 날씨 대기 상한 — 캐시가 없을 때만 업스트림을 이만큼 기다리고 계절 추정으로 넘어간다(C-5).
+export const WEATHER_ADVICE_WAIT_MS = 1_500;
 
-const SEOUL_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Seoul',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-const seoulDateKey = (d: Date): string => SEOUL_DATE_FMT.format(d);
+// 중기 파라미터 화이트리스트(E-4) — utils 지점표(웹·앱이 고르는 값의 원천)에 있는 조합만 받는다. 형식만 맞는
+// 가짜 구역코드는 업스트림까지 가서 요청당 6콜(NO_DATA 폴백 포함)을 썼다. 육상 구역 ↔ 기온 지점은 같은 지점
+// 행의 짝이어야 하고, 전망 지점은 그 구역의 지점 또는 전국(108)만.
+const MID_LAND_BY_ID = new Map(WEATHER_MID_LAND_REGIONS.map((r) => [r.regId, r]));
+const MID_LAND_TA_PAIRS = new Set(WEATHER_PLACES.map((p) => `${p.landRegId}|${p.taRegId}`));
+const MID_SEA_IDS = new Set(WEATHER_MID_SEA_REGIONS.map((r) => r.regId));
+
+export const midQueryProblem = (land: string, ta: string, stn?: string): string | null => {
+  const region = MID_LAND_BY_ID.get(land);
+  if (!region) return `알 수 없는 중기육상예보 구역입니다(land=${land}).`;
+  if (!MID_LAND_TA_PAIRS.has(`${land}|${ta}`)) {
+    return `중기기온 지점(ta=${ta})이 구역(land=${land})에 속하지 않습니다.`;
+  }
+  if (stn !== undefined && stn !== region.stnId && stn !== WEATHER_MID_NATION_STN_ID) {
+    return `중기전망 지점(stn=${stn})은 권역(${region.stnId}) 또는 전국(${WEATHER_MID_NATION_STN_ID})만 받습니다.`;
+  }
+  return null;
+};
+
+export const midSeaQueryProblem = (regId: string): string | null =>
+  MID_SEA_IDS.has(regId) ? null : `알 수 없는 중기해상예보 해역입니다(regId=${regId}).`;
 
 export class WeatherServiceError extends Error {
   constructor(
@@ -101,7 +132,11 @@ export interface WeatherServiceDeps {
     getMidSeaFcst?: typeof getMidSeaFcst;
   };
   now?: () => Date;
+  // 테스트 주입용 — 모든 버킷에 같은 한도(dailyLimits 가 버킷별로 우선).
   dailyLimit?: number;
+  dailyLimits?: Partial<Record<WeatherQuotaBucket, number>>;
+  // 테스트 주입용 — 캐시 바이트 상한(기본 WEATHER_CACHE_MAX_BYTES).
+  cacheMaxBytes?: number;
 }
 
 interface CacheEntry {
@@ -109,6 +144,8 @@ interface CacheEntry {
   fetchedAt: Date;
   expiresAt: number;
   staleMaxMs: number;
+  // 바이트 근사(LRU maxSize 계산용) — 넣을 때 한 번 잰다.
+  bytes: number;
 }
 interface Cached<T> {
   data: T;
@@ -353,12 +390,43 @@ const versionToIso = (v: string | null): string | null => {
 
 // ── 서비스 ──────────────────────────────────────────────────────────────────
 
-export class WeatherService {
-  private readonly cache = new Map<string, CacheEntry>();
-  private readonly inflight = new Map<string, Promise<Cached<unknown>>>();
-  private quota = { dateKey: '', count: 0 };
+type WeatherUpstream = WeatherQuotaBucket;
+type NowcastData = Omit<WeatherNowcastResultType, 'fetchedAt' | 'stale'>;
+const nowcastKey = (nx: number, ny: number): string => `nowcast:${nx},${ny}`;
 
-  constructor(private readonly deps: WeatherServiceDeps) {}
+// stale 상한을 넘긴 엔트리 청소 — 만료 엔트리는 last-known 재료라 남기고, 상한을 넘긴 것만 지운다.
+const sweepStale = (cache: LRUCache<string, CacheEntry>, nowMs: number): void => {
+  const dead: string[] = [];
+  for (const [k, v] of cache.entries()) {
+    if (nowMs - v.fetchedAt.getTime() > v.staleMaxMs) dead.push(k);
+  }
+  for (const k of dead) cache.delete(k);
+};
+
+export class WeatherService {
+  private readonly cache: LRUCache<string, CacheEntry>;
+  private readonly inflight = new Map<string, Promise<Cached<unknown>>>();
+  private readonly quota: DailyQuota<WeatherQuotaBucket>;
+  private readonly cooldown = new UpstreamCooldown();
+
+  constructor(private readonly deps: WeatherServiceDeps) {
+    this.cache = new LRUCache<string, CacheEntry>({
+      maxSize: deps.cacheMaxBytes ?? WEATHER_CACHE_MAX_BYTES,
+      sizeCalculation: (e) => Math.max(1, e.bytes),
+    });
+    const limits = {} as Record<WeatherQuotaBucket, number>;
+    for (const b of Object.keys(WEATHER_QUOTA_LIMITS) as WeatherQuotaBucket[]) {
+      limits[b] = deps.dailyLimits?.[b] ?? deps.dailyLimit ?? WEATHER_QUOTA_LIMITS[b];
+    }
+    this.quota = new DailyQuota(
+      limits,
+      () =>
+        new WeatherServiceError(
+          '기상청 API 일일 호출 한도를 소진해 요청을 처리할 수 없습니다. 내일 다시 시도해주세요.',
+          503,
+        ),
+    );
+  }
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();
@@ -371,43 +439,81 @@ export class WeatherService {
     return { serviceKey: this.deps.serviceKey };
   }
 
-  private consumeQuota(now: Date, calls = 1): void {
-    const dateKey = seoulDateKey(now);
-    if (this.quota.dateKey !== dateKey) this.quota = { dateKey, count: 0 };
-    if (this.quota.count + calls > (this.deps.dailyLimit ?? DEFAULT_DAILY_UPSTREAM_LIMIT)) {
-      throw new WeatherServiceError('기상청 API 일일 호출 한도를 소진해 요청을 처리할 수 없습니다. 내일 다시 시도해주세요.', 503);
-    }
-    this.quota.count += calls;
+  // 버킷에서 calls 만큼 확보(초과 시 소비 없이 503 throw — 캐시 레이어가 stale 폴백)하고, 어댑터의 재시도도
+  // 같은 버킷에 세는 요청 옵션을 돌려준다.
+  private take(bucket: WeatherQuotaBucket, now: Date, calls = 1): KmaApiRequestOptions {
+    const opts = this.requireKey();
+    this.quota.consume(bucket, now, calls);
+    return { ...opts, onRetry: () => this.quota.record(bucket, now) };
   }
 
-  // 키 1개 — TTL 내 히트 / in-flight 합류 / 실패 시 staleMaxMs 내 last-known 을 stale 로.
-  // TTL 은 로더가 결과와 함께 정한다(다음 발표 시각까지, 폴백이면 짧게).
-  private cached<T>(key: string, staleMaxMs: number, load: (now: Date) => Promise<Loaded<T>>): Promise<Cached<T>> {
+  // 키 1개 — TTL 내 히트 / in-flight 합류 / 실패·쿨다운 시 staleMaxMs 내 last-known 을 stale 로(없으면 에러,
+  // 쿨다운은 503). TTL 은 로더가 결과와 함께 정한다(다음 발표 시각까지, 폴백이면 짧게).
+  private cached<T>(
+    key: string,
+    upstream: WeatherUpstream,
+    staleMaxMs: number,
+    load: (now: Date) => Promise<Loaded<T>>,
+  ): Promise<Cached<T>> {
     const now = this.now();
+    const nowMs = now.getTime();
     const hit = this.cache.get(key);
-    if (hit && now.getTime() <= hit.expiresAt) {
+    if (hit && nowMs <= hit.expiresAt) {
       return Promise.resolve({ data: hit.data as T, fetchedAt: hit.fetchedAt, stale: false });
-    }
-    for (const [k, v] of this.cache) {
-      if (now.getTime() - v.fetchedAt.getTime() > v.staleMaxMs) this.cache.delete(k);
     }
     const existing = this.inflight.get(key) as Promise<Cached<T>> | undefined;
     if (existing) return existing;
-    const task = this.loadInto(key, now, staleMaxMs, load).finally(() => {
+    sweepStale(this.cache, nowMs);
+
+    // 실패 쿨다운 — 업스트림·쿼터 없이 last-known 이나 503(E-V2).
+    const blockedUntil = this.cooldown.blockedUntil(upstream, key, nowMs);
+    if (blockedUntil !== null) {
+      const lastKnown = this.cache.get(key);
+      if (lastKnown) {
+        return Promise.resolve({ data: lastKnown.data as T, fetchedAt: lastKnown.fetchedAt, stale: true });
+      }
+      return Promise.reject(
+        new WeatherServiceError(
+          `기상청 API 가 응답하지 않아 잠시 조회를 멈췄습니다. ${retryAfterSec(blockedUntil, nowMs)}초 뒤 다시 시도해 주세요.`,
+          503,
+        ),
+      );
+    }
+
+    const task = this.loadInto(key, upstream, now, staleMaxMs, load).finally(() => {
       this.inflight.delete(key);
     });
     this.inflight.set(key, task as Promise<Cached<unknown>>);
     return task;
   }
 
-  private async loadInto<T>(key: string, now: Date, staleMaxMs: number, load: (now: Date) => Promise<Loaded<T>>): Promise<Cached<T>> {
+  private async loadInto<T>(
+    key: string,
+    upstream: WeatherUpstream,
+    now: Date,
+    staleMaxMs: number,
+    load: (now: Date) => Promise<Loaded<T>>,
+  ): Promise<Cached<T>> {
+    const nowMs = now.getTime();
     try {
       const { data, ttlMs } = await load(now);
-      this.cache.set(key, { data, fetchedAt: now, expiresAt: now.getTime() + Math.max(MIN_TTL_MS, ttlMs), staleMaxMs });
+      this.cooldown.success(upstream, key);
+      this.cache.set(key, {
+        data,
+        fetchedAt: now,
+        expiresAt: nowMs + Math.max(MIN_TTL_MS, ttlMs),
+        staleMaxMs,
+        bytes: JSON.stringify(data).length * 2,
+      });
       return { data, fetchedAt: now, stale: false };
     } catch (e) {
+      // 업스트림 실패만 쿨다운 — 쿼터 소진(우리 카운터)은 업스트림 탓이 아니다. 인증·일일한도(게이트웨이
+      // 20~33)는 어떤 키로 불러도 같은 답이라 그 서비스 전체를 막는다.
+      if (e instanceof KmaApiError) {
+        this.cooldown.failure(upstream, key, nowMs, e instanceof KmaApiAuthError);
+      }
       const lastKnown = this.cache.get(key);
-      if (lastKnown && now.getTime() - lastKnown.fetchedAt.getTime() <= lastKnown.staleMaxMs) {
+      if (lastKnown && nowMs - lastKnown.fetchedAt.getTime() <= lastKnown.staleMaxMs) {
         return { data: lastKnown.data as T, fetchedAt: lastKnown.fetchedAt, stale: true };
       }
       throw e;
@@ -421,16 +527,17 @@ export class WeatherService {
     nx: number,
     ny: number,
     now: Date,
-    fetchRows: (p: { baseDate: string; baseTime: string; nx: number; ny: number }) => Promise<KmaFcstCall>,
+    fetchRows: (
+      p: { baseDate: string; baseTime: string; nx: number; ny: number },
+      opts: KmaApiRequestOptions,
+    ) => Promise<KmaFcstCall>,
   ): Promise<{ base: KmaBase; rows: RawKmaFcstRow[]; fallback: boolean; noData: boolean }> {
-    this.consumeQuota(now);
-    const first = await fetchRows({ baseDate: base.date, baseTime: base.time, nx, ny });
+    const first = await fetchRows({ baseDate: base.date, baseTime: base.time, nx, ny }, this.take('vilage', now));
     if (!first.noData || first.rows.length > 0) {
       return { base: rowBase(first.rows) ?? base, rows: first.rows, fallback: false, noData: false };
     }
     const prev = kmaPrevBase(kind, base);
-    this.consumeQuota(now);
-    const second = await fetchRows({ baseDate: prev.date, baseTime: prev.time, nx, ny });
+    const second = await fetchRows({ baseDate: prev.date, baseTime: prev.time, nx, ny }, this.take('vilage', now));
     return {
       base: rowBase(second.rows) ?? prev,
       rows: second.rows,
@@ -441,16 +548,17 @@ export class WeatherService {
 
   // ── 초단기실황 + 초단기예보 ────────────────────────────────────────────────
   async getNowcast(nx: number, ny: number): Promise<WeatherNowcastResultType> {
-    const opts = this.requireKey();
+    this.requireKey();
     const fetchNcst = this.deps.adapter?.getUltraSrtNcst ?? getUltraSrtNcst;
     const fetchUltra = this.deps.adapter?.getUltraSrtFcst ?? getUltraSrtFcst;
-    const { data, fetchedAt, stale } = await this.cached(
-      `nowcast:${nx},${ny}`,
+    const { data, fetchedAt, stale } = await this.cached<NowcastData>(
+      nowcastKey(nx, ny),
+      'vilage',
       WEATHER_NOWCAST_STALE_MAX_MS,
       async (now) => {
         const [ncst, ultra] = await Promise.all([
-          this.fetchWithFallback('ncst', kmaUltraNcstBase(now), nx, ny, now, (p) => fetchNcst(p, opts)),
-          this.fetchWithFallback('ultra', kmaUltraFcstBase(now), nx, ny, now, (p) => fetchUltra(p, opts)),
+          this.fetchWithFallback('ncst', kmaUltraNcstBase(now), nx, ny, now, (p, o) => fetchNcst(p, o)),
+          this.fetchWithFallback('ultra', kmaUltraFcstBase(now), nx, ny, now, (p, o) => fetchUltra(p, o)),
         ]);
         const nextAt = Math.min(kmaNextBaseAvailableAt('ncst', now).getTime(), kmaNextBaseAvailableAt('ultra', now).getTime());
         const normalTtl = nextAt - now.getTime();
@@ -472,15 +580,43 @@ export class WeatherService {
     return { ...data, fetchedAt: fetchedAt.toISOString(), stale };
   }
 
+  // 업스트림을 부르지 않는 실황 조회 — 캐시(만료돼도 stale 상한 안)만 본다. 없으면 null. 만료분은 stale:true.
+  peekNowcast(nx: number, ny: number): WeatherNowcastResultType | null {
+    const hit = this.cache.get(nowcastKey(nx, ny));
+    if (!hit) return null;
+    const nowMs = this.now().getTime();
+    if (nowMs - hit.fetchedAt.getTime() > hit.staleMaxMs) return null;
+    return { ...(hit.data as NowcastData), fetchedAt: hit.fetchedAt.toISOString(), stale: nowMs > hit.expiresAt };
+  }
+
+  // 선택 보강용(식단 추천) — 캐시가 있으면 즉시, 없으면 업스트림을 waitMs 까지만 기다리고 null. 기다림을 넘긴
+  // 호출은 끊지 않고 캐시를 채우게 둔다(다음 요청부터 즉시). 실패·키 없음·쿼터 소진도 null — 추천은 날씨 없이도
+  // 계절 추정으로 나온다(C-5: 예전엔 캐시 히트 추천도 업스트림을 기다렸고, 그 대기가 사용자 쓰기 장벽 안이었다).
+  async nowcastForAdvice(nx: number, ny: number, waitMs = WEATHER_ADVICE_WAIT_MS): Promise<WeatherNowcastResultType | null> {
+    const peeked = this.peekNowcast(nx, ny);
+    if (peeked) return peeked;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const fetched = this.getNowcast(nx, ny).catch(() => null);
+    const waited = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), waitMs);
+    });
+    try {
+      return await Promise.race([fetched, waited]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // ── 단기예보 ─────────────────────────────────────────────────────────────
   async getForecast(nx: number, ny: number): Promise<WeatherForecastResultType> {
-    const opts = this.requireKey();
+    this.requireKey();
     const fetchVilage = this.deps.adapter?.getVilageFcst ?? getVilageFcst;
     const { data, fetchedAt, stale } = await this.cached(
       `forecast:${nx},${ny}`,
+      'vilage',
       WEATHER_FORECAST_STALE_MAX_MS,
       async (now) => {
-        const res = await this.fetchWithFallback('vilage', kmaVilageBase(now), nx, ny, now, (p) => fetchVilage(p, opts));
+        const res = await this.fetchWithFallback('vilage', kmaVilageBase(now), nx, ny, now, (p, o) => fetchVilage(p, o));
         const hours = toForecastHours(res.rows);
         const normalTtl = kmaNextBaseAvailableAt('vilage', now).getTime() - now.getTime();
         return {
@@ -501,15 +637,15 @@ export class WeatherService {
 
   // ── 예보 버전 ────────────────────────────────────────────────────────────
   async getVersions(): Promise<WeatherVersionsResultType> {
-    const opts = this.requireKey();
+    this.requireKey();
     const fetchVersion = this.deps.adapter?.getFcstVersion ?? getFcstVersion;
-    const { data, fetchedAt, stale } = await this.cached('versions', WEATHER_NOWCAST_STALE_MAX_MS, async (now) => {
+    const { data, fetchedAt, stale } = await this.cached('versions', 'vilage', WEATHER_NOWCAST_STALE_MAX_MS, async (now) => {
       const bases: Array<{ ftype: 'ODAM' | 'VSRT' | 'SHRT'; label: string; base: KmaBase; kind: KmaBaseKind }> = [
         { ftype: 'ODAM', label: '초단기실황', base: kmaUltraNcstBase(now), kind: 'ncst' },
         { ftype: 'VSRT', label: '초단기예보', base: kmaUltraFcstBase(now), kind: 'ultra' },
         { ftype: 'SHRT', label: '단기예보', base: kmaVilageBase(now), kind: 'vilage' },
       ];
-      this.consumeQuota(now, bases.length);
+      const opts = this.take('vilage', now, bases.length);
       const items: WeatherVersionItemType[] = await Promise.all(
         bases.map(async (b) => {
           const rows = await fetchVersion(b.ftype, `${b.base.date}${b.base.time}`, opts);
@@ -527,30 +663,31 @@ export class WeatherService {
   private async fetchMidWithFallback<R>(
     now: Date,
     calls: number,
-    fetchAt: (tmFc: string) => Promise<R>,
+    fetchAt: (tmFc: string, opts: KmaApiRequestOptions) => Promise<R>,
     isEmpty: (results: R) => boolean,
   ): Promise<{ tmFc: string; results: R; fallback: boolean }> {
     const tmFc = kmaMidTmFc(now);
-    this.consumeQuota(now, calls);
-    const first = await fetchAt(tmFc);
+    const first = await fetchAt(tmFc, this.take('mid', now, calls));
     if (!isEmpty(first)) return { tmFc, results: first, fallback: false };
     const prev = kmaPrevMidTmFc(tmFc);
-    this.consumeQuota(now, calls);
-    const second = await fetchAt(prev);
+    const second = await fetchAt(prev, this.take('mid', now, calls));
     return { tmFc: prev, results: second, fallback: true };
   }
 
   // ── 중기육상 + 중기기온 + 중기전망 ───────────────────────────────────────
+  // 파라미터는 utils 지점표 화이트리스트(midQueryProblem) — 가짜 구역은 400, 업스트림·쿼터 0.
   async getMid(land: string, ta: string, stn?: string): Promise<WeatherMidResultType> {
-    const opts = this.requireKey();
+    this.requireKey();
+    const problem = midQueryProblem(land, ta, stn);
+    if (problem) throw new WeatherServiceError(problem, 400);
     const fetchLand = this.deps.adapter?.getMidLandFcst ?? getMidLandFcst;
     const fetchTa = this.deps.adapter?.getMidTa ?? getMidTa;
     const fetchOutlook = this.deps.adapter?.getMidFcst ?? getMidFcst;
-    const { data, fetchedAt, stale } = await this.cached(`mid:${land}:${ta}:${stn ?? '-'}`, WEATHER_MID_STALE_MAX_MS, async (now) => {
+    const { data, fetchedAt, stale } = await this.cached(`mid:${land}:${ta}:${stn ?? '-'}`, 'mid', WEATHER_MID_STALE_MAX_MS, async (now) => {
       const { tmFc, results, fallback } = await this.fetchMidWithFallback(
         now,
         stn ? 3 : 2,
-        (at) =>
+        (at, opts) =>
           Promise.all([
             fetchLand(land, at, opts),
             fetchTa(ta, at, opts),
@@ -583,13 +720,15 @@ export class WeatherService {
 
   // ── 중기해상 ─────────────────────────────────────────────────────────────
   async getMidSea(regId: string): Promise<WeatherMidSeaResultType> {
-    const opts = this.requireKey();
+    this.requireKey();
+    const problem = midSeaQueryProblem(regId);
+    if (problem) throw new WeatherServiceError(problem, 400);
     const fetchSea = this.deps.adapter?.getMidSeaFcst ?? getMidSeaFcst;
-    const { data, fetchedAt, stale } = await this.cached(`mid-sea:${regId}`, WEATHER_MID_STALE_MAX_MS, async (now) => {
+    const { data, fetchedAt, stale } = await this.cached(`mid-sea:${regId}`, 'mid', WEATHER_MID_STALE_MAX_MS, async (now) => {
       const { tmFc, results, fallback } = await this.fetchMidWithFallback(
         now,
         1,
-        (at) => fetchSea(regId, at, opts),
+        (at, opts) => fetchSea(regId, at, opts),
         (r) => r.rows.length === 0,
       );
       const row = results.rows[0] ?? null;
@@ -607,4 +746,14 @@ export class WeatherService {
     });
     return { ...data, fetchedAt: fetchedAt.toISOString(), stale };
   }
+
+  // 측정·진단용 — 버킷별 오늘 사용량, 캐시 크기(시뮬레이션·테스트).
+  quotaUsed(bucket: WeatherQuotaBucket): number {
+    return this.quota.used(bucket, this.now());
+  }
+
+  cacheStats(): { entries: number; bytes: number } {
+    return { entries: this.cache.size, bytes: this.cache.calculatedSize };
+  }
 }
+

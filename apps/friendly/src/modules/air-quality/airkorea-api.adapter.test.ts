@@ -118,6 +118,42 @@ describe('게이트웨이 오류 분류/재시도', () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
+  it('재시도는 onRetry 로 알린다(서비스가 쿼터에 센다), 남은 예산이 2초 미만이면 재시도하지 않는다', async () => {
+    const fn = stubFetchSequence([
+      { body: fixture('gateway-timeout.json'), status: 504 },
+      { body: fixture('bad-stations.json') },
+    ]);
+    const onRetry = vi.fn();
+    expect(await getBadStations({ ...OPTS, onRetry })).toHaveLength(3);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+
+    const fn2 = stubFetch(fixture('gateway-timeout.json'), 504);
+    const onRetry2 = vi.fn();
+    const err = await getBadStations({ ...OPTS, onRetry: onRetry2, budgetMs: 1_500 }).catch((e: unknown) => e);
+    expect((err as AirKoreaApiError).code).toBe('05');
+    expect(fn2).toHaveBeenCalledTimes(1);
+    expect(onRetry2).not.toHaveBeenCalled();
+  });
+
+  it('업스트림이 매달리면 시간 예산에서 끊는다(예전 20초 타임아웃 대기 제거)', async () => {
+    // abort 시그널에만 반응하는 영원히 대기하는 fetch.
+    const fn = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    vi.stubGlobal('fetch', fn);
+    const t0 = Date.now();
+    const err = await getBadStations({ ...OPTS, budgetMs: 80 }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AirKoreaApiError);
+    expect((err as AirKoreaApiError).message).toContain('fetch 실패');
+    expect(Date.now() - t0).toBeLessThan(2_000);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
   it('JSON 이 아닌 본문 — 5xx 면 1회 재시도, 200 이면 즉시 파싱 실패 에러', async () => {
     const fn5xx = stubFetch('<html>Bad Gateway</html>', 502);
     const e1 = await getBadStations(OPTS).catch((e: unknown) => e);

@@ -9,8 +9,10 @@ import {
   seaRipLevelOf,
   seaTideKindOf,
 } from '@repo/utils';
+import { LRUCache } from 'lru-cache';
 import { coerceStrOrNull, numOrNull } from '../../lib/narrow.js';
-import { KHOA_PATHS, callKhoaAll, callKhoaPage, type KhoaCallOptions } from './khoa.adapter.js';
+import { DailyQuota, UpstreamCooldown, retryAfterSec } from '../../lib/upstream-guard.js';
+import { KHOA_PATHS, KhoaApiError, callKhoaAll, callKhoaPage, type KhoaCallOptions } from './khoa.adapter.js';
 
 // 바다 예보 프록시 서비스 — DB 없음. 활동별 전량(7일 × 지점 × 오전/오후 × 세부)을 받아 한 슬롯 모양으로 정규화해
 // 메모리에 캐시(FORECAST_TTL_MS)하고, 업스트림이 실패하면 STALE_MAX_MS 안의 마지막 값을 stale=true 로 준다.
@@ -18,11 +20,20 @@ import { KHOA_PATHS, callKhoaAll, callKhoaPage, type KhoaCallOptions } from './k
 // 활동 6개 × 하루 24회 ≈ 300콜 — 개발계정 일 10,000건에 한참 못 미친다.
 //
 // 물때는 좌표 → 가장 가까운 조석 예보지점(utils SEA_TIDE_STATIONS 166곳) → 지점·날짜 단위 캐시(천문조 계산값이라
-// 하루 안 바뀐다). 이안류는 제공 기간(6~9월)에만 해수욕 응답에 붙인다(해수욕장 10곳 × 최신 관측 1행).
+// 하루 안 바뀐다). 날짜는 계약이 KST 오늘-2~오늘+10 으로 막아(E-6) 키가 지점 × 13일로 묶이고, 캐시는 LRU 상한.
+// 이안류는 제공 기간(6~9월)에만 해수욕 응답에 붙인다(해수욕장 10곳 × 최신 관측 1행).
+// 업스트림 호출은 일일 카운터(재시도 포함)로 세고, 실패한 키는 쿨다운(lib/upstream-guard) 동안 다시 부르지 않는다.
 
 export const SEA_FORECAST_TTL_MS = 60 * 60_000;
 export const SEA_TIDE_TTL_MS = 12 * 60 * 60_000;
 export const SEA_STALE_MAX_MS = 12 * 60 * 60_000;
+// 물때 캐시 상한 — 키 최대 2,158개(조석지점 166 × 허용 날짜 13일)를 담고 남는 크기, 엔트리 ≈1KB.
+export const SEA_TIDE_CACHE_MAX = 3_000;
+// 일일 업스트림 카운터 — 이전엔 없어 날짜 순회 한 IP 로 조석 API 하루 한도가 2.8시간에 바닥났다(E-6). 업스트림
+// 한도(개발계정 API 별 10,000)보다 한참 낮게, 정상 사용량의 수 배: 지수 6종은 활동당 하루 24회 × 1~6쪽 ≈300 +
+// 이안류(6~9월) 10곳 × 24회 ≈240, 물때는 지점·날짜 키당 12시간 1콜이라 보통 수십 콜.
+export const SEA_QUOTA_LIMITS = { forecast: 2_000, tide: 2_000 } as const;
+export type SeaQuotaBucket = keyof typeof SEA_QUOTA_LIMITS;
 
 export class SeaServiceError extends Error {
   constructor(
@@ -38,12 +49,21 @@ export interface SeaServiceDeps {
   serviceKey: string;
   callPage?: typeof callKhoaPage;
   now?: () => Date;
+  // 테스트 주입용 — 모든 버킷에 같은 한도(dailyLimits 가 버킷별로 우선).
+  dailyLimit?: number;
+  dailyLimits?: Partial<Record<SeaQuotaBucket, number>>;
 }
 
 interface Entry<T> {
   data: T;
   fetchedAt: Date;
   expiresAt: number;
+}
+
+// 활동 예보 Map(키 6개 고정)과 물때 LRU 가 함께 맞추는 최소 모양.
+interface EntryStore {
+  get(key: string): Entry<unknown> | undefined;
+  set(key: string, value: Entry<unknown>): unknown;
 }
 
 // ── 정규화 ─────────────────────────────────────────────────────────────────────
@@ -225,10 +245,23 @@ export const latestRip = (code: string, rows: Row[]): SeaRipType | null => {
 };
 
 export class SeaService {
-  private readonly cache = new Map<string, Entry<unknown>>();
-  private readonly inflight = new Map<string, Promise<unknown>>();
+  // 활동 예보(키 6개 고정) · 물때(지점 × 날짜, LRU 상한 — 예전 Map 은 청소·상한이 없어 키가 영구 상주했다).
+  private readonly forecasts = new Map<string, Entry<unknown>>();
+  private readonly tides = new LRUCache<string, Entry<unknown>>({ max: SEA_TIDE_CACHE_MAX });
+  private readonly inflight = new Map<string, Promise<{ data: unknown; fetchedAt: Date; stale: boolean }>>();
+  private readonly quota: DailyQuota<SeaQuotaBucket>;
+  private readonly cooldown = new UpstreamCooldown();
 
-  constructor(private readonly deps: SeaServiceDeps) {}
+  constructor(private readonly deps: SeaServiceDeps) {
+    const limits = {} as Record<SeaQuotaBucket, number>;
+    for (const b of Object.keys(SEA_QUOTA_LIMITS) as SeaQuotaBucket[]) {
+      limits[b] = deps.dailyLimits?.[b] ?? deps.dailyLimit ?? SEA_QUOTA_LIMITS[b];
+    }
+    this.quota = new DailyQuota(
+      limits,
+      () => new SeaServiceError('해양조사원 API 일일 호출 한도를 소진해 요청을 처리할 수 없습니다. 내일 다시 시도해주세요.', 503),
+    );
+  }
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();
@@ -243,49 +276,84 @@ export class SeaService {
     return this.deps.callPage ?? callKhoaPage;
   }
 
-  // 캐시 + 합류 + stale 폴백 — 로더가 던지면 STALE_MAX_MS 안 마지막 값으로.
-  private async cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<{ data: T; fetchedAt: Date; stale: boolean }> {
-    const now = this.now().getTime();
-    const hit = this.cache.get(key) as Entry<T> | undefined;
-    if (hit && hit.expiresAt > now) return { data: hit.data, fetchedAt: hit.fetchedAt, stale: false };
-    let p = this.inflight.get(key) as Promise<T> | undefined;
-    if (!p) {
-      p = load().finally(() => this.inflight.delete(key));
-      this.inflight.set(key, p);
+  // 쪽마다 일일 카운터 1(초과면 throw — 캐시 레이어가 stale 폴백) + 어댑터 재시도도 같은 버킷에 가산.
+  private countedPage(bucket: SeaQuotaBucket, now: Date): typeof callKhoaPage {
+    return (path, params, opts) => {
+      this.quota.consume(bucket, now);
+      return this.callPage(path, params, { ...opts, onRetry: () => this.quota.record(bucket, now) });
+    };
+  }
+
+  // 캐시 + 합류 + 쿨다운 + stale 폴백 — 로더가 던지면 STALE_MAX_MS 안 마지막 값으로. 실패한 키는 쿨다운(30초→5분,
+  // 인증·한도 오류면 그 API 전체) 동안 업스트림·카운터 없이 마지막 값이나 503(E-V2).
+  private cached<T>(
+    store: EntryStore,
+    key: string,
+    upstream: string,
+    ttlMs: number,
+    load: (now: Date) => Promise<T>,
+  ): Promise<{ data: T; fetchedAt: Date; stale: boolean }> {
+    const now = this.now();
+    const nowMs = now.getTime();
+    const hit = store.get(key) as Entry<T> | undefined;
+    if (hit && hit.expiresAt > nowMs) return Promise.resolve({ data: hit.data, fetchedAt: hit.fetchedAt, stale: false });
+    const existing = this.inflight.get(key) as Promise<{ data: T; fetchedAt: Date; stale: boolean }> | undefined;
+    if (existing) return existing;
+    const lastKnown = hit && nowMs - hit.fetchedAt.getTime() <= SEA_STALE_MAX_MS ? hit : null;
+
+    const blockedUntil = this.cooldown.blockedUntil(upstream, key, nowMs);
+    if (blockedUntil !== null) {
+      if (lastKnown) return Promise.resolve({ data: lastKnown.data, fetchedAt: lastKnown.fetchedAt, stale: true });
+      return Promise.reject(
+        new SeaServiceError(
+          `해양조사원 API 가 응답하지 않아 잠시 조회를 멈췄습니다. ${retryAfterSec(blockedUntil, nowMs)}초 뒤 다시 시도해 주세요.`,
+          503,
+        ),
+      );
     }
-    try {
-      const data = await p;
-      const fetchedAt = this.now();
-      this.cache.set(key, { data, fetchedAt, expiresAt: fetchedAt.getTime() + ttlMs });
-      return { data, fetchedAt, stale: false };
-    } catch (e) {
-      if (hit && now - hit.fetchedAt.getTime() <= SEA_STALE_MAX_MS) return { data: hit.data, fetchedAt: hit.fetchedAt, stale: true };
-      throw e;
-    }
+
+    const task = (async (): Promise<{ data: T; fetchedAt: Date; stale: boolean }> => {
+      try {
+        const data = await load(now);
+        this.cooldown.success(upstream, key);
+        store.set(key, { data, fetchedAt: now, expiresAt: nowMs + ttlMs });
+        return { data, fetchedAt: now, stale: false };
+      } catch (e) {
+        // 업스트림 실패만 쿨다운 — 카운터 소진은 업스트림 탓이 아니다. 503 은 게이트웨이 인증·한도(20~33).
+        if (e instanceof KhoaApiError) this.cooldown.failure(upstream, key, nowMs, e.statusCode === 503);
+        if (lastKnown) return { data: lastKnown.data, fetchedAt: lastKnown.fetchedAt, stale: true };
+        throw e;
+      }
+    })().finally(() => this.inflight.delete(key));
+    this.inflight.set(key, task as Promise<{ data: unknown; fetchedAt: Date; stale: boolean }>);
+    return task;
   }
 
   async getForecast(activity: SeaActivityType): Promise<SeaForecastResultType> {
     const opts = this.opts();
-    const { data, fetchedAt, stale } = await this.cached(`forecast:${activity}`, SEA_FORECAST_TTL_MS, async () => {
+    const path = KHOA_PATHS[activity];
+    const { data, fetchedAt, stale } = await this.cached(this.forecasts, `forecast:${activity}`, path, SEA_FORECAST_TTL_MS, async (now) => {
       const params: Record<string, string> = activity === 'fishing' ? { gubun: '갯바위' } : {};
-      const rows = await callKhoaAll(KHOA_PATHS[activity], params, opts, this.callPage);
+      const rows = await callKhoaAll(path, params, opts, this.countedPage('forecast', now));
       const grouped = groupSeaSpots(activity, rows);
-      if (activity === 'beach') await this.attachRips(grouped.spots, opts);
+      if (activity === 'beach') await this.attachRips(grouped.spots, opts, now);
       return grouped;
     });
     return { activity, dates: data.dates, spots: data.spots, fetchedAt: fetchedAt.toISOString(), stale };
   }
 
-  // 이안류 — 제공 기간이면 10곳 최신 관측을 해수욕장에 붙인다. 한 곳 실패는 그 곳만 빈다(예보 전체를 막지 않음).
-  private async attachRips(spots: SeaSpotType[], opts: KhoaCallOptions): Promise<void> {
+  // 이안류 — 제공 기간이면 10곳 최신 관측을 해수욕장에 붙인다. 한 곳 실패(카운터 소진 포함)는 그 곳만 빈다(예보
+  // 전체를 막지 않음).
+  private async attachRips(spots: SeaSpotType[], opts: KhoaCallOptions, now: Date): Promise<void> {
     const month = Number(kmaTodayIsoDate(this.now()).slice(5, 7));
     if (!isSeaRipSeason(month)) return;
+    const page = this.countedPage('forecast', now);
     const rips = new Map<string, SeaRipType>();
     await Promise.all(
       SEA_RIP_BEACHES.map(async (b) => {
         try {
-          const page = await this.callPage(KHOA_PATHS.rip, { beachCode: b.code, numOfRows: '300', pageNo: '1' }, opts);
-          const rip = latestRip(b.code, page.items);
+          const res = await page(KHOA_PATHS.rip, { beachCode: b.code, numOfRows: '300', pageNo: '1' }, opts);
+          const rip = latestRip(b.code, res.items);
           if (rip) rips.set(b.code, rip);
         } catch {
           // 이안류는 보조 정보 — 실패해도 해수욕 예보는 그대로.
@@ -302,8 +370,8 @@ export class SeaService {
   async getTide(lat: number, lng: number, date: string): Promise<SeaTideResultType> {
     const opts = this.opts();
     const station = nearestSeaTideStation({ lat, lng });
-    const { data, fetchedAt, stale } = await this.cached(`tide:${station.code}:${date}`, SEA_TIDE_TTL_MS, async () => {
-      const page = await this.callPage(
+    const { data, fetchedAt, stale } = await this.cached(this.tides, `tide:${station.code}:${date}`, KHOA_PATHS.tide, SEA_TIDE_TTL_MS, async (now) => {
+      const page = await this.countedPage('tide', now)(
         KHOA_PATHS.tide,
         { obsCode: station.code, reqDate: date.replace(/-/g, ''), numOfRows: '10', pageNo: '1' },
         opts,
@@ -325,5 +393,14 @@ export class SeaService {
       fetchedAt: fetchedAt.toISOString(),
       stale,
     };
+  }
+
+  // 측정·진단용 — 버킷별 오늘 사용량, 물때 캐시 엔트리 수(시뮬레이션·테스트).
+  quotaUsed(bucket: SeaQuotaBucket): number {
+    return this.quota.used(bucket, this.now());
+  }
+
+  tideCacheSize(): number {
+    return this.tides.size;
   }
 }

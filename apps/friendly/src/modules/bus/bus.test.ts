@@ -28,6 +28,7 @@ vi.mock('./bus-api.adapter.js', async (importOriginal) => {
 import type { BusRouteDetailResultType } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import {
+  BusApiAuthError,
   BusApiError,
   type RawBusPosition,
   type RawBusStation,
@@ -785,7 +786,7 @@ describe('GET /api/v1/bus/routes/:busRouteId/positions', () => {
 });
 
 describe('BusService — 도착/위치 쿼터·키 가드 (서비스 직접 생성)', () => {
-  it('일일 쿼터 공유 — 검색으로 소진하면 도착/위치도 503, 리셋 후 역방향도 공유', async () => {
+  it('쿼터는 오퍼레이션별(E-1) — 검색이 자기 버킷을 소진해도 도착·위치는 산다, 날짜가 바뀌면 리셋', async () => {
     const adapter = {
       getStationsByName: vi.fn(),
       getStationArrivals: vi.fn(),
@@ -801,23 +802,124 @@ describe('BusService — 도착/위치 쿼터·키 가드 (서비스 직접 생�
 
     adapter.getStationsByName.mockResolvedValueOnce([rawStation()]);
     expect((await svc.searchStations(kw(), false)).source).toBe('api');
+    // 검색 버킷(1) 소진 — 다음 검색은 업스트림 미호출 503.
+    await expect(svc.searchStations(kw(), false)).rejects.toMatchObject({ statusCode: 503 });
 
-    // 검색이 소진한 카운터를 도착/위치가 그대로 본다 — 업스트림 미호출 503.
-    await expect(svc.getArrivals('23278')).rejects.toMatchObject({ statusCode: 503 });
-    await expect(svc.getPositions('100100020', 62, 65)).rejects.toMatchObject({
-      statusCode: 503,
-    });
-    expect(adapter.getStationArrivals).not.toHaveBeenCalled();
-    expect(adapter.getBusPositionsByRouteSt).not.toHaveBeenCalled();
-
-    // 하루 경과(Asia/Seoul 날짜 변경) → 리셋. 도착 조회가 소진하면 검색도 503.
-    nowMs += 24 * 60 * 60 * 1000;
+    // 도착·위치는 자기 버킷으로 정상.
     adapter.getStationArrivals.mockResolvedValueOnce([rawArrival()]);
+    adapter.getBusPositionsByRouteSt.mockResolvedValueOnce([rawPosition()]);
     expect((await svc.getArrivals('23278')).items).toHaveLength(1);
-    await expect(svc.searchStations(kw(), false)).rejects.toMatchObject({
-      statusCode: 503,
-    });
+    expect((await svc.getPositions('100100020', 62, 65)).items).toHaveLength(1);
     expect(adapter.getStationsByName).toHaveBeenCalledTimes(1);
+
+    // 하루 경과(Asia/Seoul 날짜 변경) → 검색 버킷도 리셋.
+    nowMs += 24 * 60 * 60 * 1000;
+    adapter.getStationsByName.mockResolvedValueOnce([rawStation()]);
+    expect((await svc.searchStations(kw(), false)).source).toBe('api');
+  });
+
+  it('가짜 노선 id(E-1) — 같은 id 반복은 24시간 0쿼터(네거티브 캐시), 다른 id 순회는 노선 버킷에서 멈추고 도착은 산다', async () => {
+    const adapter = {
+      getStationsByName: vi.fn(),
+      getStationArrivals: vi.fn().mockResolvedValue([rawArrival()]),
+      getRoutePath: vi.fn().mockResolvedValue([]),
+      getStationsByRoute: vi.fn().mockResolvedValue([]),
+      getRouteInfo: vi.fn().mockResolvedValue(null),
+    };
+    let nowMs = Date.parse('2026-10-05T03:00:00Z');
+    const svc = new BusService(app.prisma, {
+      serviceKey: 'svc-key',
+      adapter,
+      now: () => new Date(nowMs),
+      dailyLimits: { route: 6 },
+    });
+    const fake = `9991${Date.now()}`;
+    for (let i = 0; i < 5; i++) {
+      await expect(svc.getRouteDetail(fake)).rejects.toMatchObject({ statusCode: 502 });
+    }
+    // 이전: 5회 × 3콜 = 15쿼터. 지금: 첫 1회만 3콜.
+    expect(adapter.getRouteInfo).toHaveBeenCalledTimes(1);
+    // 24시간이 지나면 다시 확인한다(날짜가 바뀌어 쿼터도 리셋 — 이 호출이 새 날 첫 3콜).
+    nowMs += 24 * 60 * 60 * 1000 + 1000;
+    await expect(svc.getRouteDetail(fake)).rejects.toMatchObject({ statusCode: 502 });
+    expect(adapter.getRouteInfo).toHaveBeenCalledTimes(2);
+
+    // 서로 다른 가짜 id — 노선 버킷(6 = 2회분)에서 멈춘다(위 1회 + 1회 → 소진, 다음은 503).
+    await expect(svc.getRouteDetail(`${fake}1`)).rejects.toMatchObject({ statusCode: 502 });
+    await expect(svc.getRouteDetail(`${fake}2`)).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getRouteInfo).toHaveBeenCalledTimes(3);
+    // 실시간 도착은 영향 없음.
+    expect((await svc.getArrivals('23278')).items).toHaveLength(1);
+  });
+
+  it('노선 상세 같은 id 동시 요청은 3콜 수집 한 번에 합류(E-1 in-flight)', async () => {
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const adapter = {
+      getStationsByName: vi.fn(),
+      getRoutePath: vi.fn(async () => {
+        await gate;
+        return [rawRoutePath()];
+      }),
+      getStationsByRoute: vi.fn().mockResolvedValue([rawRouteStation()]),
+      getRouteInfo: vi.fn().mockResolvedValue(rawRouteInfo()),
+    };
+    const svc = new BusService(app.prisma, { serviceKey: 'svc-key', adapter });
+    const id = `9992${Date.now()}`;
+    const pending = [svc.getRouteDetail(id), svc.getRouteDetail(id), svc.getRouteDetail(id)];
+    release!();
+    const results = await Promise.all(pending);
+    expect(results.every((r) => r.source === 'api')).toBe(true);
+    expect(adapter.getRoutePath).toHaveBeenCalledTimes(1);
+    expect(adapter.getRouteInfo).toHaveBeenCalledTimes(1);
+    await app.prisma.busRouteShape.deleteMany({ where: { busRouteId: id } });
+  });
+
+  it('실패 쿨다운(E-V2) — 도착 업스트림 실패 뒤 30초는 업스트림·쿼터 없이 last-known(없으면 503), 지나면 재시도', async () => {
+    const adapter = { getStationsByName: vi.fn(), getStationArrivals: vi.fn() };
+    let t = Date.parse('2026-07-13T09:00:00Z');
+    const svc = new BusService(app.prisma, { serviceKey: 'k', adapter, now: () => new Date(t), dailyLimit: 10 });
+
+    adapter.getStationArrivals.mockRejectedValue(new BusApiError('bus api status 503'));
+    await expect(svc.getArrivals('23001')).rejects.toMatchObject({ statusCode: 502 });
+    t += 20_000;
+    await expect(svc.getArrivals('23001')).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getStationArrivals).toHaveBeenCalledTimes(1);
+
+    // 다른 정류소는 자기 키 — 쿨다운이 번지지 않는다.
+    adapter.getStationArrivals.mockResolvedValueOnce([rawArrival()]);
+    expect((await svc.getArrivals('23002')).stale).toBe(false);
+
+    // last-known 이 있는 키 — 실패 뒤 쿨다운 동안은 업스트림 없이 stale.
+    t += 16_000;
+    adapter.getStationArrivals.mockRejectedValue(new BusApiError('bus api status 503'));
+    expect((await svc.getArrivals('23002')).stale).toBe(true);
+    t += 16_000;
+    expect((await svc.getArrivals('23002')).stale).toBe(true);
+    expect(adapter.getStationArrivals).toHaveBeenCalledTimes(3);
+
+    // 23001 쿨다운(30초)이 지나면 다시 부른다.
+    t += 10_000;
+    adapter.getStationArrivals.mockResolvedValueOnce([rawArrival()]);
+    expect((await svc.getArrivals('23001')).stale).toBe(false);
+    expect(adapter.getStationArrivals).toHaveBeenCalledTimes(4);
+  });
+
+  it('인증 오류는 그 업스트림 서비스 전체를 막는다 — 정류소정보(검색·도착)만, 버스위치는 산다', async () => {
+    const adapter = {
+      getStationsByName: vi.fn(),
+      getStationArrivals: vi.fn().mockRejectedValue(new BusApiAuthError('Key인증실패', '30')),
+      getBusPositionsByRtid: vi.fn().mockResolvedValue([rawPosition()]),
+    };
+    const svc = new BusService(app.prisma, { serviceKey: 'k', adapter, now: () => new Date('2026-07-13T09:00:00Z') });
+    await expect(svc.getArrivals('23278')).rejects.toMatchObject({ statusCode: 503 });
+    // 같은 서비스(stationinfo)의 검색도 업스트림 없이 503.
+    await expect(svc.searchStations(kw(), false)).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getStationsByName).not.toHaveBeenCalled();
+    // 다른 서비스(buspos)는 정상.
+    expect((await svc.getPositions('100100020')).items).toHaveLength(1);
   });
 
   it('serviceKey 빈 값 → 도착/위치 모두 statusCode 503', async () => {

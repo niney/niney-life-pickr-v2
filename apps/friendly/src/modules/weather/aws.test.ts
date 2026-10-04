@@ -17,7 +17,14 @@ vi.mock('./kma-apihub.adapter.js', async (importOriginal) => {
 
 import type { WeatherAwsResultType } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
-import { KmaApiHubAuthError, KmaApiHubError, kmaNumOrNull, parseKmaTextTable } from './kma-apihub.adapter.js';
+import {
+  KMA_APIHUB_BASE_URL,
+  KmaApiHubAuthError,
+  KmaApiHubError,
+  callKmaApiHub,
+  kmaNumOrNull,
+  parseKmaTextTable,
+} from './kma-apihub.adapter.js';
 import { AWS_MINUTE_TTL_MS, AwsService, toKstMinute } from './aws.service.js';
 
 // stn_inf: 설명 줄("#   STN_ID : 지점번호") 뒤 열 이름 줄(STN 이 두 번: 지점번호·관할 지점) +
@@ -135,16 +142,6 @@ describe('GET /weather/aws', () => {
     mocks.getAwsMinute.mockImplementation(async (tm2: string) => ({ rows: rawMinute(tm2), columns: [] }));
   });
 
-  // 앱의 AwsService 는 전국 자료를 2분 캐시하므로 실패 분기는 성공 호출보다 먼저(캐시 비어 있을 때).
-  it('활용신청/키 오류(403)는 503, 업스트림 장애는 502', async () => {
-    mocks.getAwsMinute.mockRejectedValue(new KmaApiHubAuthError('기상청 API허브 인증/활용신청 오류(403: 활용신청이 필요한 API 입니다.)'));
-    const r503 = await app.inject({ method: 'GET', url: '/api/v1/weather/aws?lat=37.5&lng=126.9' });
-    expect(r503.statusCode).toBe(503);
-    mocks.getAwsMinute.mockRejectedValue(new KmaApiHubError('기상청 API허브 HTTP 502'));
-    const r502 = await app.inject({ method: 'GET', url: '/api/v1/weather/aws?lat=36.5&lng=127.9' });
-    expect(r502.statusCode).toBe(502);
-  });
-
   it('좌표 기준 가까운 관측소를 거리순으로, 관측값은 결측 null 로, 관측 시각은 현재−2분', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/weather/aws?lat=37.523&lng=126.859&limit=2' });
     expect(res.statusCode).toBe(200);
@@ -166,6 +163,34 @@ describe('GET /weather/aws', () => {
   it('좌표 범위 밖·limit 초과는 400', async () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/weather/aws?lat=20&lng=126.8' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/v1/weather/aws?lat=37.5&lng=126.8&limit=99' })).statusCode).toBe(400);
+  });
+});
+
+// 실패 매핑은 새 앱으로 — 라우트 AwsService 의 쿨다운(인증 오류면 API허브 전체 5분)이 위 성공 테스트에 번지지 않게.
+describe('GET /weather/aws — 실패 응답', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp();
+    await app.ready();
+  });
+  afterAll(async () => {
+    await app.close();
+  });
+  beforeEach(() => {
+    for (const m of Object.values(mocks)) m.mockReset();
+    mocks.getAwsStations.mockResolvedValue({ rows: rawStations(), columns: [] });
+  });
+
+  it('활용신청/키 오류(403)는 503 — 그 뒤 차단 동안은 업스트림 없이 503', async () => {
+    mocks.getAwsMinute.mockRejectedValue(new KmaApiHubAuthError('기상청 API허브 인증/활용신청 오류(403: 활용신청이 필요한 API 입니다.)'));
+    const r503 = await app.inject({ method: 'GET', url: '/api/v1/weather/aws?lat=37.5&lng=126.9' });
+    expect(r503.statusCode).toBe(503);
+    expect(r503.json<{ message: string }>().message).toContain('403');
+    const calls = mocks.getAwsMinute.mock.calls.length;
+    const again = await app.inject({ method: 'GET', url: '/api/v1/weather/aws?lat=36.5&lng=127.9' });
+    expect(again.statusCode).toBe(503);
+    expect(again.json<{ message: string }>().message).toContain('잠시 조회를 멈췄습니다');
+    expect(mocks.getAwsMinute.mock.calls.length).toBe(calls);
   });
 });
 
@@ -237,5 +262,46 @@ describe('AwsService', () => {
     const r = await svc.getNearby(37.523, 126.859, 15_000, 1);
     expect(r.stale).toBe(true);
     expect(r.items[0]?.ta).toBe(27.4);
+  });
+
+  it('실패 쿨다운(E-V2) — 업스트림 502 뒤 30초는 다시 묻지 않고(502→503), 지나면 재시도·성공하면 정상', async () => {
+    let now = AT_1812;
+    const svc = new AwsService({ authKey: 'k', now: () => now });
+    mocks.getAwsMinute.mockRejectedValue(new KmaApiHubError('기상청 API허브 HTTP 502'));
+    await expect(svc.getNearby(37.523, 126.859, 15_000, 1)).rejects.toMatchObject({ statusCode: 502 });
+    const calls = mocks.getAwsMinute.mock.calls.length;
+    now = new Date(AT_1812.getTime() + 20_000);
+    await expect(svc.getNearby(37.523, 126.859, 15_000, 1)).rejects.toMatchObject({ statusCode: 503 });
+    expect(mocks.getAwsMinute.mock.calls.length).toBe(calls);
+    now = new Date(AT_1812.getTime() + 31_000);
+    mocks.getAwsMinute.mockImplementation(async (tm2: string) => ({ rows: rawMinute(tm2), columns: [] }));
+    const ok = await svc.getNearby(37.523, 126.859, 15_000, 1);
+    expect(ok.stale).toBe(false);
+    expect(ok.items[0]?.ta).not.toBeNull();
+  });
+});
+
+describe('API허브 어댑터 — 시간 예산', () => {
+  it('업스트림이 매달리면 시도당 상한·전체 예산 안에서 끊는다(예전 20초 × 재시도 = 40.7초)', async () => {
+    // callKmaApiHub 는 mock 팩토리가 실구현 그대로 둔 함수(getAws* 만 mock).
+    const fetchStub = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    vi.stubGlobal('fetch', fetchStub);
+    try {
+      const t0 = Date.now();
+      const err = await callKmaApiHub(KMA_APIHUB_BASE_URL, 'stn_inf.php', {}, { authKey: 'k', budgetMs: 120 }).catch(
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(KmaApiHubError);
+      expect(Date.now() - t0).toBeLessThan(2_000);
+      // 남은 예산이 재시도 최소 창(2초)보다 작아 재시도 없음.
+      expect(fetchStub).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

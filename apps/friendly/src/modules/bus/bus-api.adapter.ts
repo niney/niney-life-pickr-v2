@@ -20,10 +20,12 @@
 // 로깅/에러에는 키 평문 URL 을 절대 싣지 않는다 — 마스킹본(requestUrl)만.
 
 import { isObject, coerceStrOrNull, numOrNull } from '../../lib/narrow.js';
+import { UPSTREAM_REQUEST_BUDGET_MS } from '../../lib/upstream-guard.js';
 import { XMLParser } from 'fast-xml-parser';
 
 const BASE_URL = 'http://ws.bus.go.kr/api/rest';
-const FETCH_TIMEOUT_MS = 10_000;
+// 재시도 없는 1콜의 시간 상한 — 공용 요청 예산(8초). 실시간 폴링이라 오래 매달리느니 끊고 last-known 이 낫다.
+const FETCH_TIMEOUT_MS = UPSTREAM_REQUEST_BUDGET_MS;
 
 // '결과 없음' 계열 headerCd — 에러가 아니라 빈 목록으로 정상 반환한다.
 // 실응답 확정(2026-07-02): headerCd=4, headerMsg "결과가 없습니다."
@@ -138,10 +140,10 @@ export const callBusApi = async (
 ): Promise<BusApiCallResult> => {
   const { fetchUrl, requestUrl } = buildUrls(path, params, opts);
 
-  // signal 미지정 시 자체 timeout — 업스트림이 매달려도 10초에 끊는 안전망.
+  // signal 미지정 시 자체 timeout — 업스트림이 매달려도 8초에 끊는 안전망.
   // 같은 시그널이 본문 읽기도 중단시키므로 clearTimeout 은 text() 완료 후 —
   // fetch 직후 해제하면 헤더만 받고 본문이 매달리는 케이스(undici bodyTimeout
-  // ~300초)가 10초 보호를 못 받는다.
+  // ~300초)가 시간 상한 보호를 못 받는다.
   const ac = opts.signal ? null : new AbortController();
   const timeoutId = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
 

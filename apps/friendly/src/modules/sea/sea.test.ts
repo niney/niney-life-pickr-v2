@@ -1,8 +1,15 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
-import { KhoaApiError, callKhoaAll, interpretKhoaResponse, type KhoaPage } from './khoa.adapter.js';
-import { SEA_FORECAST_TTL_MS, SeaService, groupSeaSpots, latestRip, toSeaSlot } from './sea.service.js';
+import { KhoaApiError, callKhoaAll, callKhoaPage, interpretKhoaResponse, type KhoaPage } from './khoa.adapter.js';
+import {
+  SEA_FORECAST_TTL_MS,
+  SEA_TIDE_CACHE_MAX,
+  SeaService,
+  groupSeaSpots,
+  latestRip,
+  toSeaSlot,
+} from './sea.service.js';
 
 // 바다 예보 — ① 봉투 해석(정상·데이터 없음·필수값 누락·미신청 403) ② 페이지 순회 ③ 활동별 정규화·지점 묶음(동명 지점
 // 좌표 구분·슬롯 정렬) ④ 캐시·stale 폴백 ⑤ 이안류(제공 기간만, 이름 매칭) ⑥ 물때(가까운 지점·만조/간조) ⑦ 계약 400.
@@ -198,6 +205,91 @@ describe('SeaService', () => {
     await svc.getTide(37.452, 126.592, '2026-09-24');
     expect(seen).toHaveLength(1);
   });
+
+  it('물때는 일일 카운터(E-6) — 날짜·지점 순회는 한도에서 멈추고, 바다 지수 예보는 자기 몫으로 산다', async () => {
+    let calls = 0;
+    const svc = new SeaService({
+      serviceKey: 'k',
+      now: at('2026-10-05T03:00:00Z'),
+      dailyLimits: { tide: 5 },
+      callPage: async (): Promise<KhoaPage> => {
+        calls += 1;
+        return { items: [beachRow()], totalCount: 1 };
+      },
+    });
+    for (let d = 1; d <= 5; d++) await svc.getTide(37.452, 126.592, `2026-10-0${d}`);
+    await expect(svc.getTide(37.452, 126.592, '2026-10-06')).rejects.toMatchObject({ statusCode: 503 });
+    expect(calls).toBe(5);
+    expect(svc.quotaUsed('tide')).toBe(5);
+    await svc.getForecast('surf');
+    expect(svc.quotaUsed('forecast')).toBe(1);
+  });
+
+  it('물때 캐시는 LRU 상한 — 키가 늘어도 엔트리 수가 묶인다(예전 Map 은 영구 상주)', async () => {
+    const svc = new SeaService({
+      serviceKey: 'k',
+      now: at('2026-10-05T03:00:00Z'),
+      dailyLimits: { tide: 100_000 },
+      callPage: async (): Promise<KhoaPage> => ({ items: [], totalCount: 0 }),
+    });
+    // 키 = 가장 가까운 지점 × 날짜 — 날짜 문자열만 바꿔 상한 + 50 개(서비스 단위라 계약 범위 검증은 라우트 몫).
+    for (let i = 0; i < SEA_TIDE_CACHE_MAX + 50; i++) await svc.getTide(37.452, 126.592, `d${i}`);
+    expect(svc.tideCacheSize()).toBe(SEA_TIDE_CACHE_MAX);
+  });
+
+  it('실패 쿨다운(E-V2) — 실패한 키는 30초 동안 다시 부르지 않고 last-known(없으면 503), 재시도도 센다', async () => {
+    let nowMs = Date.parse('2026-10-10T00:00:00Z');
+    let mode: 'ok' | 'down' | 'retry' = 'ok';
+    let calls = 0;
+    const svc = new SeaService({
+      serviceKey: 'k',
+      now: () => new Date(nowMs),
+      callPage: async (_p, _params, opts): Promise<KhoaPage> => {
+        calls += 1;
+        if (mode === 'down') throw new KhoaApiError('down', { statusCode: 502 });
+        if (mode === 'retry') opts.onRetry?.();
+        return { items: [beachRow()], totalCount: 1 };
+      },
+    });
+    await svc.getForecast('beach');
+    mode = 'down';
+    nowMs += SEA_FORECAST_TTL_MS + 1000;
+    expect((await svc.getForecast('beach')).stale).toBe(true);
+    nowMs += 10_000;
+    expect((await svc.getForecast('beach')).stale).toBe(true);
+    expect(calls).toBe(2);
+    // 처음 보는 키(서핑) 실패 → 쿨다운 동안 503, 업스트림 0콜.
+    await expect(svc.getForecast('surf')).rejects.toMatchObject({ statusCode: 502 });
+    await expect(svc.getForecast('surf')).rejects.toMatchObject({ statusCode: 503 });
+    expect(calls).toBe(3);
+    // 쿨다운이 풀리면 다시 묻고, 어댑터가 재시도했다고 알리면 카운터에 1 더.
+    mode = 'retry';
+    nowMs += 31_000;
+    const before = svc.quotaUsed('forecast');
+    await svc.getForecast('surf');
+    expect(svc.quotaUsed('forecast')).toBe(before + 2);
+  });
+});
+
+describe('해양조사원 어댑터 — 시간 예산', () => {
+  it('업스트림이 매달리면 시도당 상한·전체 예산 안에서 끊는다(예전 20초 × 재시도)', async () => {
+    const fetchStub = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    vi.stubGlobal('fetch', fetchStub);
+    try {
+      const t0 = Date.now();
+      const err = await callKhoaPage('tideFcstHghLw/x', {}, { serviceKey: 'k', budgetMs: 120 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(KhoaApiError);
+      expect(Date.now() - t0).toBeLessThan(2_000);
+      expect(fetchStub).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('sea routes — 계약', () => {
@@ -214,5 +306,13 @@ describe('sea routes — 계약', () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/sea/forecast?activity=ski' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/v1/sea/tide?lat=10&lng=126&date=2026-09-24' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/v1/sea/tide?lat=37.4&lng=126.5&date=20260924' })).statusCode).toBe(400);
+  });
+
+  it('물때 날짜는 KST 오늘-2~오늘+10 의 실제 날짜만(E-6) — 먼 과거·먼 미래·없는 날짜는 400(업스트림 전)', async () => {
+    const kst = (days: number) => new Date(Date.now() + 9 * 3_600_000 + days * 86_400_000).toISOString().slice(0, 10);
+    for (const date of ['0000-01-01', '9999-12-31', kst(-3), kst(11), '2026-02-31']) {
+      const res = await app.inject({ method: 'GET', url: `/api/v1/sea/tide?lat=37.4&lng=126.5&date=${date}` });
+      expect(res.statusCode, date).toBe(400);
+    }
   });
 });

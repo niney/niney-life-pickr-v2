@@ -31,9 +31,9 @@ import { AirQualityService } from './air-quality.service.js';
 //
 // 키: DATA_GO_KR_API_KEY(data.go.kr 계정 공용 — 15073861 활용신청만 추가, env.ts 주석). 비면 503.
 //
-// 모두 서버 캐시(측정 10분·예보 20~60분)를 얹은 읽기 전용이지만, 캐시 미스 키
-// (측정소명·날짜)를 바꿔 가며 쿼터를 태우는 남용을 막기 위해 실시간 대중교통과 같은
-// 분당 60 프리셋을 건다. autoload 가 `*.route.ts` 를 자동 등록한다.
+// 모두 서버 캐시(측정 다음 HH:20·예보 다음 발표까지)를 얹은 읽기 전용이다. 캐시 미스 키를 바꿔 가며
+// 쿼터를 태우는 남용은 서비스가 막고(측정소명 화이트리스트 404·날짜 clamp·오퍼레이션별 쿼터·실패
+// 쿨다운), 라우트는 실시간 대중교통과 같은 분당 60 프리셋을 건다. autoload 가 `*.route.ts` 를 자동 등록한다.
 
 const airQualityRoutes: FastifyPluginAsync = async (app) => {
   const service = new AirQualityService({
@@ -47,9 +47,9 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
-      summary: '시도별 실시간 대기오염 측정값 — 에어코리아 프록시, 10분 캐시',
+      summary: '시도별 실시간 대기오염 측정값 — 에어코리아 프록시, 매시 갱신 캐시',
       description:
-        'sidoName 은 시도 약칭(서울·경기·전남광주 등)이며 "전국" 이면 전체. 업스트림 전국 조회 1콜을 캐시해 두고 요청 시도로 걸러 돌려준다(포함 매칭).',
+        'sidoName 은 시도 약칭(서울·경기·전남광주 등)이며 "전국" 이면 전체. 업스트림 전국 조회 1콜을 다음 HH:20(측정분 반영 시각)까지 캐시해 두고 요청 시도로 걸러 돌려준다(포함 매칭). 업스트림 실패 시 3시간 이내 마지막 성공 응답을 stale:true 로 돌려준다.',
       params: AirSidoParams,
       response: {
         200: AirSidoRealtimeResult,
@@ -73,13 +73,14 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
-      summary: '측정소별 대기오염 시계열(24시간·1개월·3개월) — 에어코리아 프록시, 10분 캐시',
+      summary: '측정소별 대기오염 시계열(24시간·1개월·3개월) — 에어코리아 프록시, 매시 갱신 캐시',
       description:
-        'term=DAILY(기본)는 최근 24시간 시간별 원본, MONTH·3MONTH 는 서버가 일평균으로 접는다. latest 에 가장 최근 시간 행(등급 포함)을 싣는다.',
+        'term=DAILY(기본)는 최근 24시간 시간별 원본, MONTH·3MONTH 는 서버가 일평균으로 접는다. latest 에 가장 최근 시간 행(등급 포함)을 싣는다. stationName 은 측정소 목록(/air/stations)·전국 실시간에 있는 이름만 받고, 모르는 이름은 404.',
       params: AirStationHistoryParams,
       querystring: AirStationHistoryQuery,
       response: {
         200: AirStationHistoryResult,
+        404: ErrorResponseSchema,
         502: ErrorResponseSchema,
         503: ErrorResponseSchema,
       },
@@ -88,7 +89,7 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getStationHistory(req.params.stationName, req.query.term);
       } catch (e) {
-        const sent = replyUpstreamError(req, reply, e, [502, 503], '대기정보 측정소 조회 실패');
+        const sent = replyUpstreamError(req, reply, e, [404, 502, 503], '대기정보 측정소 조회 실패');
         if (sent) return sent;
         throw e;
       }
@@ -100,7 +101,7 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
-      summary: '통합대기환경지수 나쁨 이상 측정소 목록 — 에어코리아 프록시, 10분 캐시',
+      summary: '통합대기환경지수 나쁨 이상 측정소 목록 — 전국 실시간 측정값에서 파생, 매시 갱신 캐시',
       response: {
         200: AirBadStationsResult,
         502: ErrorResponseSchema,
@@ -123,9 +124,9 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
-      summary: '대기질 예보통보(PM10·PM2.5·O3) — 에어코리아 프록시, 20분 캐시',
+      summary: '대기질 예보통보(PM10·PM2.5·O3) — 에어코리아 프록시, 다음 발표까지 캐시',
       description:
-        'date(YYYY-MM-DD) 생략 시 KST 오늘이며, 당일 발표분이 아직 없으면 전일 발표분으로 1회 폴백한다. 명시한 date 는 폴백하지 않는다.',
+        'date(YYYY-MM-DD) 생략 시 KST 오늘이며, 당일 발표분이 아직 없으면 전일 발표분으로 1회 폴백한다. 명시한 date 는 폴백하지 않고 KST 오늘-2일~오늘+1일 범위로 맞춘다(범위 밖이면 가까운 끝 날짜 — 응답 date 가 실제 조회일).',
       querystring: AirForecastQuery,
       response: {
         200: AirForecastResult,
@@ -230,8 +231,9 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
-      summary: '초미세먼지 주간예보(권역별 등급) — 에어코리아 프록시, 60분 캐시',
-      description: 'date(발표일) 생략 시 KST 오늘이며, 오후 발표 전이면 전일 발표분으로 폴백한다.',
+      summary: '초미세먼지 주간예보(권역별 등급) — 에어코리아 프록시, 발표 주기 캐시',
+      description:
+        'date(발표일) 생략 시 KST 오늘이며, 오후 발표 전이면 전일 발표분으로 폴백한다. 명시한 date 는 KST 오늘-2일~오늘+1일 범위로 맞춘다.',
       querystring: AirWeeklyForecastQuery,
       response: {
         200: AirWeeklyForecastResult,

@@ -24,8 +24,12 @@ import {
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
 import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
-import { RATE } from '../../plugins/rate-limit.js';
-import { SubwayService } from './subway.service.js';
+import { RATE, clientKey } from '../../plugins/rate-limit.js';
+import { SubwayService, SubwayServiceError } from './subway.service.js';
+
+// IP 별 하루 미스 예산 초과(서비스 429)는 표준 Too Many Requests 로 — replyUpstreamError 는 4xx 라벨이 없다.
+const asTooMany = (e: unknown, tooMany: (msg: string) => Error): unknown =>
+  e instanceof SubwayServiceError && e.statusCode === 429 ? tooMany(e.message) : e;
 
 // error-handler 플러그인은 statusCode >= 500 을 일괄 500 으로 뭉개므로, 의미가
 // 있는 502(업스트림 실패)/503(마스터 미적재·키 미설정·쿼터 소진)은 라우트가
@@ -104,7 +108,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['subway'],
       summary: '노선 실시간 열차 위치 — 서울시 실시간 지하철 API 프록시, 15초 캐시',
-      description: 'lineId 는 4자리 subwayId(예: 1002 = 2호선). 미등재 노선은 404.',
+      description:
+        'lineId 는 4자리 subwayId(예: 1002 = 2호선). 미등재 노선은 404. 캐시 미스(업스트림 호출)는 IP 당 하루 150회까지(도착과 합산, 초과 429).',
       params: SubwayPositionsParams,
       response: {
         200: SubwayPositionsResult,
@@ -115,11 +120,11 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req, reply) => {
       try {
-        return await service.getLinePositions(req.params.lineId);
+        return await service.getLinePositions(req.params.lineId, { client: clientKey(req) });
       } catch (e) {
         const sent = replyUpstreamError(req, reply, e, [404, 502, 503], '지하철 위치 조회 실패');
         if (sent) return sent;
-        throw e;
+        throw asTooMany(e, (m) => app.httpErrors.tooManyRequests(m));
       }
     },
   });
@@ -161,7 +166,7 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       tags: ['subway'],
       summary: '역 실시간 열차 도착정보 — 서울시 실시간 지하철 API 프록시, 15초 캐시',
       description:
-        'stationId 는 lineId:역명 형식이라 URL 인코딩해 넣는다. 같은 역명 그룹의 호선을 함께 조회하며, 실시간이라 업스트림 실패 시 stale 폴백 없이 502.',
+        'stationId 는 lineId:역명 형식이라 URL 인코딩해 넣는다. 같은 역명 그룹의 호선을 함께 조회하며, 실시간이라 업스트림 실패 시 stale 폴백 없이 502(실패한 역명은 잠시 503). 캐시 미스(업스트림 호출)는 IP 당 하루 150회까지(위치와 합산, 초과 429).',
       params: SubwayArrivalsParams,
       response: {
         200: SubwayArrivalsResult,
@@ -172,11 +177,11 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req, reply) => {
       try {
-        return await service.getStationArrivals(req.params.stationId);
+        return await service.getStationArrivals(req.params.stationId, { client: clientKey(req) });
       } catch (e) {
         const sent = replyUpstreamError(req, reply, e, [404, 502, 503], '지하철 도착 조회 실패');
         if (sent) return sent;
-        throw e;
+        throw asTooMany(e, (m) => app.httpErrors.tooManyRequests(m));
       }
     },
   });
@@ -245,7 +250,7 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       tags: ['subway'],
       summary: '역 열차 시간표(1~9호선, 상·하행) — 서울 열린데이터광장, DB 30일 캐시',
       description:
-        'dayType 1 평일(기본)·2 토요일·3 휴일. 1~9호선 외 노선은 coverage:false 로 200. 업스트림 실패 시 만료된 캐시가 있으면 stale 로 돌려준다.',
+        'dayType 1 평일(기본)·2 토요일·3 휴일. 1~9호선 외 노선은 coverage:false 로 200. 업스트림 실패 시 만료된 캐시가 있으면 stale 로 돌려준다. 캐시 미스(업스트림 수집)는 IP 당 하루 40회까지(초과 429).',
       params: SubwayTimetableParams,
       querystring: SubwayTimetableQuery,
       response: {
@@ -257,11 +262,13 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req, reply) => {
       try {
-        return await service.getStationTimetable(req.params.stationId, req.query.dayType);
+        return await service.getStationTimetable(req.params.stationId, req.query.dayType, {
+          client: clientKey(req),
+        });
       } catch (e) {
         const sent = replyUpstreamError(req, reply, e, [404, 502, 503], '지하철 시간표 조회 실패');
         if (sent) return sent;
-        throw e;
+        throw asTooMany(e, (m) => app.httpErrors.tooManyRequests(m));
       }
     },
   });

@@ -30,8 +30,10 @@ const busRoutes: FastifyPluginAsync = async (app) => {
   const service = new BusService(app.prisma, { serviceKey: env.DATA_GO_KR_API_KEY });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
-  // 공개 라우트 — 맛집 공개 지도와 동일 정책(비로그인 허용). onRequest 없음.
+  // 공개 라우트 — 맛집 공개 지도와 동일 정책(비로그인 허용). onRequest 없음. 제출형 검색이라 분당 60 이면
+  // 넉넉하다(전역 1000/분만이던 것 — 검색어 순회로 쿼터를 태우던 경로, E-1. 버킷은 서비스가 따로 둔다).
   typed.get(Routes.Bus.stationSearch, {
+    config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['bus'],
       summary: '서울 버스 정류장 이름 검색 — 서울시 버스 API, 키워드별 DB 30일 캐시',
@@ -142,11 +144,15 @@ const busRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // 노선 상세(형상+경유 정류소+기본정보) 합본 — busRouteInfo 3콜을 서버가 한 번에
-  // 수집해 DB 30일 캐싱. 비숫자 busRouteId 는 zod 가 400. 502/503 은 직접 응답.
+  // 수집해 DB 30일 캐싱. 비숫자 busRouteId 는 zod 가 400. 502/503 은 직접 응답. 노선 선택 때
+  // 한 번 부르는 경로라 분당 60(가짜 id 순회 억제 — '노선 없음'은 서비스가 24시간 네거티브 캐싱).
   typed.get(Routes.Bus.routeDetail(':busRouteId'), {
+    config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['bus'],
       summary: '버스 노선 상세(경로 형상·경유 정류소·기본정보) — 서울시 버스 API, DB 30일 캐시',
+      description:
+        '없는 노선(기본정보 0건)은 502 이고, 같은 id 는 24시간 동안 업스트림을 다시 부르지 않는다.',
       params: BusRouteDetailParams,
       response: {
         200: BusRouteDetailResult,

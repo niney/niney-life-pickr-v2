@@ -43,7 +43,8 @@ const seaRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['sea'],
       summary: '좌표에서 가장 가까운 조석 예보지점의 하루 만조·간조(물때) — 국립해양조사원, 12시간 캐시',
-      description: 'lat·lng(WGS84)·date(YYYY-MM-DD) 모두 필수. 전국 조석 예보지점 166곳 중 최근접 지점을 서버가 고른다.',
+      description:
+        'lat·lng(WGS84)·date(YYYY-MM-DD) 모두 필수. date 는 KST 오늘-2일~오늘+10일 범위의 날짜만(그 밖은 400). 전국 조석 예보지점 166곳 중 최근접 지점을 서버가 고른다.',
       querystring: SeaTideQuery,
       response: { 200: SeaTideResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },

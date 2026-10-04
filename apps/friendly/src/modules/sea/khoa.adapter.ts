@@ -11,10 +11,13 @@
 // 20~33 은 503(인증·쿼터).
 
 import { coerceStrOrNull, intOrNull, isObject } from '../../lib/narrow.js';
+import { UPSTREAM_MIN_RETRY_WINDOW_MS, UPSTREAM_REQUEST_BUDGET_MS } from '../../lib/upstream-guard.js';
 import { toServiceKeyPart } from '../bus/bus-api.adapter.js';
 
 export const KHOA_BASE_URL = 'https://apis.data.go.kr/1192136';
-const FETCH_TIMEOUT_MS = 20_000;
+// 시간 상한 — 페이지 1건(재시도 포함) 예산 UPSTREAM_REQUEST_BUDGET_MS(8초) 안에서 시도당 5초. 예전엔 시도당
+// 20초 × 재시도라 업스트림이 매달리면 40초 넘게 기다렸다. 첫 시도가 매달려도 남은 3초로 한 번 더 묻는다.
+const ATTEMPT_TIMEOUT_MS = 5_000;
 const RETRY_DELAY_MS = 700;
 // 한 페이지 최대 300행(가이드). 가장 큰 바다낚시가 1,750행 = 6페이지.
 export const KHOA_PAGE_SIZE = 300;
@@ -44,7 +47,12 @@ export class KhoaApiError extends Error {
 
 export interface KhoaCallOptions {
   serviceKey: string;
+  // 주어지면 타임아웃은 caller 책임 — 자체 AbortController·시간 예산을 쓰지 않는다(프로브).
   signal?: AbortSignal;
+  // 재시도 직전 호출 — 서비스가 재시도도 일일 카운터에 센다(재시도도 업스트림 1콜이다).
+  onRetry?: () => void;
+  // 페이지 1건(재시도 포함) 시간 예산 — 기본 UPSTREAM_REQUEST_BUDGET_MS. 테스트 주입용.
+  budgetMs?: number;
 }
 
 export interface KhoaPage {
@@ -109,17 +117,25 @@ export const interpretKhoaResponse = (
   return { page: { items, totalCount: intOrNull(body['totalCount']) ?? items.length } };
 };
 
-// 한 페이지 — 타임아웃 20초, 재시도 1회.
+// 한 페이지 — 시간 예산 8초(시도당 5초), 예산이 남으면 재시도 1회.
 export const callKhoaPage = async (path: string, params: Record<string, string>, opts: KhoaCallOptions): Promise<KhoaPage> => {
   const qs = new URLSearchParams({ type: 'json', ...params }).toString();
   const prefix = `${KHOA_BASE_URL}/${path}?serviceKey=`;
   const fetchUrl = `${prefix}${toServiceKeyPart(opts.serviceKey)}&${qs}`;
   const requestUrl = `${prefix}***&${qs}`;
+  const deadline = opts.signal
+    ? Number.POSITIVE_INFINITY
+    : Date.now() + (opts.budgetMs ?? UPSTREAM_REQUEST_BUDGET_MS);
   let last: KhoaApiError | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (attempt > 0) await sleep(RETRY_DELAY_MS);
+    if (attempt > 0) {
+      if (deadline - Date.now() - RETRY_DELAY_MS < UPSTREAM_MIN_RETRY_WINDOW_MS) break;
+      opts.onRetry?.();
+      await sleep(RETRY_DELAY_MS);
+    }
     const ac = opts.signal ? null : new AbortController();
-    const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+    const attemptMs = Math.max(1, Math.min(ATTEMPT_TIMEOUT_MS, deadline - Date.now()));
+    const timer = ac ? setTimeout(() => ac.abort(), attemptMs) : null;
     let status: number;
     let text: string;
     try {

@@ -20,7 +20,6 @@ import { RATE } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { MealDailyQuotaService } from '../meal/meal-daily-quota.service.js';
-import { WeatherService } from '../weather/weather.service.js';
 import { MealRecommendationError, MealRecommendationService } from './meal-recommendation.service.js';
 
 // 다음 끼니 추천 — 로그인 사용자 본인 것만. 캐시(같은 날·끼니·프로필)는 일일 한도를 소비하지
@@ -33,18 +32,19 @@ const kstToday = (): string => new Date().toLocaleDateString('en-CA', { timeZone
 const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
-  // 날씨는 선택 보강 — 키가 없거나 업스트림이 죽어도 추천은 계절 추정으로 나온다.
-  const weather = new WeatherService({ serviceKey: env.DATA_GO_KR_API_KEY });
   const dailyQuota = new MealDailyQuotaService(app.prisma);
   const service = new MealRecommendationService(app.prisma, aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
     consumeQuota: (userId) =>
       dailyQuota.consume(userId, kstToday(), 'recommendation', env.MEAL_RECOMMEND_DAILY_LIMIT),
+    // 날씨는 선택 보강 — 키가 없거나 업스트림이 죽어도 추천은 계절 추정으로 나온다. 날씨 라우트와 같은
+    // app.weather 싱글톤의 캐시(stale 포함)를 먼저 보고, 없을 때만 업스트림을 1.5초까지 기다린다(C-5: 따로
+    // 만든 인스턴스가 쿼터를 이중으로 쓰고, 캐시 히트 추천도 업스트림 지연을 그대로 기다렸다).
     weather: async (lat, lng) => {
       const { nx, ny } = latLngToKmaGrid(lat, lng);
-      const res = await weather.getNowcast(nx, ny);
-      const now = res.now;
+      const res = await app.weather.nowcastForAdvice(nx, ny);
+      const now = res?.now ?? null;
       if (!now) return null;
       // PTY: 0 없음 / 1 비 / 2 비·눈 / 3 눈 / 5 빗방울 / 6 빗방울·눈날림 / 7 눈날림.
       return { tempC: now.t1h, rain: now.pty !== null ? now.pty > 0 : null };

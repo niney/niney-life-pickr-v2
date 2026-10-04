@@ -6,14 +6,16 @@
 //   - 빈 결과도 검색 행을 남긴다(네거티브 캐싱 — 무의미 키워드 반복 차단).
 //   - 업스트림 실패 시 만료된 캐시라도 있으면 'stale' 로 반환(가용성 우선).
 //   - 동일 키워드 동시 요청은 in-flight 합류 — 업스트림 1회만 호출.
-//   - 일일 업스트림 쿼터 가드(기본 900) — 단일 인스턴스 전제라 메모리 카운터로
-//     충분(Redis 금지 정책).
+//   - 일일 업스트림 쿼터 — 단일 인스턴스 전제라 메모리 카운터로 충분(Redis 금지 정책).
 // 도착정보/버스 위치는 실시간 프록시 — 15초 마이크로 캐시로 동시 폴링을 흡수하고,
 // 업스트림 실패 시 last-known(≤10분)을 stale:true 로 서빙한다(가용성 우선).
-// 일일 쿼터 카운터는 검색과 공유한다(경로 합산으로 한도 보호).
+// 일일 쿼터는 오퍼레이션별 버킷(검색·도착·위치·노선)이라 검색·노선 상세 남용이 실시간 도착·위치를
+// 멈추지 못한다(E-1). 업스트림이 실패한 키는 쿨다운 동안 다시 부르지 않는다(E-V2, lib/upstream-guard).
 
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { approxDistanceM } from '@repo/utils';
+import { LRUCache } from 'lru-cache';
+import { DailyQuota, UpstreamCooldown, retryAfterSec } from '../../lib/upstream-guard.js';
 import type {
   BusArrivalEntryType,
   BusArrivalsResultType,
@@ -26,6 +28,7 @@ import type {
   BusStationSearchResultType,
 } from '@repo/api-contract';
 import {
+  BusApiAuthError,
   BusApiError,
   getBusPositionsByRouteSt,
   getBusPositionsByRtid,
@@ -48,10 +51,23 @@ export const BUS_SEARCH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const FORCE_MIN_INTERVAL_MS = 60_000;
 // 응답 상한 — total 은 절단 전 건수 (FE 가 '일부만 표시' 안내).
 const MAX_ITEMS = 100;
-// 일일 업스트림 호출 한도 기본값 — 개발계정 일 1,000건에서 여유를 둔 900.
-export const DEFAULT_DAILY_UPSTREAM_LIMIT = 900;
+// 일일 업스트림 쿼터 — 기존 단일 카운터 총량 900(개발계정 1,000 에서 여유)을 업스트림 서비스·오퍼레이션별로
+// 나눈다(E-1). 검색·노선 상세를 아무리 불러도 실시간 도착·위치는 멈추지 않는다. 배분은 화면 호출 모형 기준:
+// 도착은 정류소 패널이 열린 동안 30초 폴링(15초 마이크로 캐시라 패널당 분당 ≈2콜), 위치는 노선을 추적할 때만
+// 15초 폴링(분당 ≈4콜) — 추적은 도착 세션 일부라 세션 평균 도착 ≈2 : 위치 ≈1. 검색(키워드 DB 30일 캐시)과 노선
+// 상세(노선 DB 30일 캐시, 3콜)는 처음 보는 키만 업스트림이라 작게. 업스트림 실한도는 서비스별(stationinfo·buspos·
+// busRouteInfo 각 1,000)이라 stationinfo(검색+도착 570)도 넘지 않는다. 운영 전체 요청이 하루 ≈700건(2026-05~10
+// 로그 10.4만 건)이라 버스 몫은 버킷보다 한참 작다 — 오퍼레이션별 호출 수가 쌓이면 비율을 보정할 것.
+export const BUS_QUOTA_LIMITS = { search: 60, arrivals: 510, positions: 240, route: 90 } as const;
+export type BusQuotaBucket = keyof typeof BUS_QUOTA_LIMITS;
 // 노선 상세(형상+정류소+기본정보)도 사실상 정적 — 검색과 동일 30일 TTL.
 export const BUS_ROUTE_TTL_MS = BUS_SEARCH_TTL_MS;
+// '노선 없음'(기본정보 0건) 노선 id 네거티브 캐시 — 이 동안 업스트림·쿼터 없이 같은 502. 가짜 id 반복이 매번
+// 3콜을 쓰던 경로(E-1: 같은 가짜 id 5회 = 15쿼터). 서로 다른 가짜 id 는 route 버킷이 막는다.
+export const BUS_ROUTE_NOT_FOUND_TTL_MS = 24 * 60 * 60_000;
+const ROUTE_NOT_FOUND_MAX = 2_000;
+// 쿨다운 단위 — data.go.kr 활용신청이 서비스별(정류소정보·버스위치·노선정보)이라 인증·한도 오류도 서비스별.
+type BusUpstream = 'stationinfo' | 'buspos' | 'busRouteInfo';
 
 // 실시간(도착/위치) 마이크로 캐시 TTL — 동시 사용자의 업스트림 중복콜을 흡수해
 // 일일 쿼터를 지킨다. 실시간성 훼손을 막기 위해 15초로 짧게(지하철과 동일 규율).
@@ -60,15 +76,6 @@ export const BUS_REALTIME_MICRO_CACHE_TTL_MS = 15_000;
 // 나이까지만 대신 서빙한다(stale:true + FE "○분 전 정보" 안내). 그보다 오래된
 // 도착정보는 오정보라 에러가 낫다. 2026-07-13 ws.bus.go.kr 503 장애로 도입.
 export const BUS_REALTIME_STALE_MAX_MS = 10 * 60_000;
-
-// Asia/Seoul 기준 YYYY-MM-DD — 쿼터 리셋 경계. en-CA 로캘이 ISO 형식을 낸다.
-const SEOUL_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Seoul',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-const seoulDateKey = (d: Date): string => SEOUL_DATE_FMT.format(d);
 
 // 라우트가 HTTP status 로 변환하는 서비스 에러. error-handler 플러그인은
 // statusCode >= 500 을 일괄 500 으로 응답하므로 라우트가 직접 코드를 내린다.
@@ -120,8 +127,17 @@ export interface BusServiceDeps {
   };
   // 테스트 주입용 — TTL/60초 가드 시간 제어 (가짜 타이머 불필요).
   now?: () => Date;
-  // 일일 업스트림 호출 한도 (기본 DEFAULT_DAILY_UPSTREAM_LIMIT) — 테스트 주입용.
+  // 테스트 주입용 — 모든 버킷에 같은 한도(dailyLimits 가 버킷별로 우선, 기본 BUS_QUOTA_LIMITS).
   dailyLimit?: number;
+  dailyLimits?: Partial<Record<BusQuotaBucket, number>>;
+}
+
+// 기본정보 0건 — 노선 자체가 없다(계약상 502 유지). 네거티브 캐시 대상이라 다른 실패와 구분한다.
+class BusRouteNotFoundError extends Error {
+  constructor() {
+    super('해당 노선 정보를 찾을 수 없습니다.');
+    this.name = 'BusRouteNotFoundError';
+  }
 }
 
 type CachedSearch = Prisma.BusStationSearchGetPayload<{
@@ -259,8 +275,9 @@ const toRouteResult = (
 export class BusService {
   // 동일 키워드 동시 요청 합류용 — 진행 중 Promise 를 공유하고 finally 에서 제거.
   private readonly inflight = new Map<string, Promise<BusStationSearchResultType>>();
-  // Asia/Seoul 날짜 단위 업스트림 호출 카운터 — 단일 인스턴스 전제(메모리).
-  private quota = { dateKey: '', count: 0 };
+  // Asia/Seoul 날짜 단위 오퍼레이션별 업스트림 호출 카운터 — 단일 인스턴스 전제(메모리).
+  private readonly quota: DailyQuota<BusQuotaBucket>;
+  private readonly cooldown = new UpstreamCooldown();
   // 실시간(도착/위치) 키 단위 15초 마이크로 캐시 + in-flight 합류 — 동시 폴링의
   // 업스트림 중복콜을 흡수한다(지하철 fetchRealtime 골격 이식). 쿼터는 캐시 미스 시만.
   private readonly realtimeCache = new Map<
@@ -271,11 +288,40 @@ export class BusService {
     string,
     Promise<{ data: unknown[]; fetchedAt: Date }>
   >();
+  // 노선 상세 — 같은 id 동시 요청 합류 + '노선 없음' 네거티브 캐시(값 = 풀리는 시각 ms).
+  private readonly routeInflight = new Map<string, Promise<BusRouteDetailResultType>>();
+  private readonly routeNotFound = new LRUCache<string, number>({ max: ROUTE_NOT_FOUND_MAX });
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly deps: BusServiceDeps,
-  ) {}
+  ) {
+    const limits = {} as Record<BusQuotaBucket, number>;
+    for (const b of Object.keys(BUS_QUOTA_LIMITS) as BusQuotaBucket[]) {
+      limits[b] = deps.dailyLimits?.[b] ?? deps.dailyLimit ?? BUS_QUOTA_LIMITS[b];
+    }
+    this.quota = new DailyQuota(
+      limits,
+      () =>
+        new BusServiceError(
+          '서울시 버스 API 일일 호출 한도를 소진해 요청을 처리할 수 없습니다. 내일 다시 시도해주세요.',
+          503,
+        ),
+    );
+  }
+
+  // 쿨다운 중 응답(last-known 도 없을 때) — 업스트림을 부르지 않은 503.
+  private cooldownError(blockedUntil: number, nowMs: number): BusServiceError {
+    return new BusServiceError(
+      `서울시 버스 API 가 응답하지 않아 잠시 조회를 멈췄습니다. ${retryAfterSec(blockedUntil, nowMs)}초 뒤 다시 시도해 주세요.`,
+      503,
+    );
+  }
+
+  // 업스트림 실패만 쿨다운 — 인증·한도 오류(BusApiAuthError)는 그 서비스 전체를, 나머지는 그 키만 쉰다.
+  private recordFailure(upstream: BusUpstream, key: string, nowMs: number, e: unknown): void {
+    if (e instanceof BusApiError) this.cooldown.failure(upstream, key, nowMs, e instanceof BusApiAuthError);
+  }
 
   async searchStations(q: string, force: boolean): Promise<BusStationSearchResultType> {
     if (!this.deps.serviceKey) {
@@ -316,10 +362,18 @@ export class BusService {
       if (force && ageMs < FORCE_MIN_INTERVAL_MS) return toResult(cached, 'cache');
     }
 
-    // 일일 쿼터 가드 — 한도 초과 시 업스트림 호출 없이 만료 캐시(stale)나 503.
-    // consumeQuota 는 초과 시 소비 없이 throw 하므로 stale 폴백이 쿼터를 안 먹는다.
+    // 실패 쿨다운 — 업스트림·쿼터 없이 만료 캐시(stale)나 503.
+    const cooldownKey = `search:${keyword}`;
+    const blockedUntil = this.cooldown.blockedUntil('stationinfo', cooldownKey, now.getTime());
+    if (blockedUntil !== null) {
+      if (cached) return toResult(cached, 'stale');
+      throw this.cooldownError(blockedUntil, now.getTime());
+    }
+
+    // 일일 쿼터 가드(검색 버킷) — 한도 초과 시 업스트림 호출 없이 만료 캐시(stale)나 503.
+    // consume 은 초과 시 소비 없이 throw 하므로 stale 폴백이 쿼터를 안 먹는다.
     try {
-      this.consumeQuota(now);
+      this.quota.consume('search', now);
     } catch (e) {
       if (cached) return toResult(cached, 'stale');
       throw e;
@@ -329,7 +383,9 @@ export class BusService {
     let raw: RawBusStation[];
     try {
       raw = await fetchStations(keyword, { serviceKey: this.deps.serviceKey });
+      this.cooldown.success('stationinfo', cooldownKey);
     } catch (e) {
+      this.recordFailure('stationinfo', cooldownKey, now.getTime(), e);
       // 만료된 캐시라도 있으면 stale 로 반환 — 업스트림 장애에 검색이 통째로
       // 죽는 것보다 오래된 정류소 목록이 낫다.
       if (cached) return toResult(cached, 'stale');
@@ -401,25 +457,13 @@ export class BusService {
     };
   }
 
-  // 일일 업스트림 쿼터 소비 — 검색·도착·위치가 공유하는 단일 카운터.
-  // 초과 시 소비 없이 503 throw — 검색은 만료 캐시(stale) 폴백을 위해 catch.
-  private consumeQuota(now: Date): void {
-    const dateKey = seoulDateKey(now);
-    if (this.quota.dateKey !== dateKey) this.quota = { dateKey, count: 0 };
-    if (this.quota.count >= (this.deps.dailyLimit ?? DEFAULT_DAILY_UPSTREAM_LIMIT)) {
-      throw new BusServiceError(
-        '서울시 버스 API 일일 호출 한도를 소진해 요청을 처리할 수 없습니다. 내일 다시 시도해주세요.',
-        503,
-      );
-    }
-    // 실패해도 호출 시도 자체가 한도를 소모하므로 호출 직전 증가.
-    this.quota.count += 1;
-  }
-
   // 실시간 키 1개 — 캐시 히트 시 fetchedAt 보존, 미스는 in-flight 합류(같은 키 동시
-  // 요청 업스트림 1콜). 쿼터는 실제 업스트림 직전(미스 확정)에만 소비. 도착/위치 공용.
+  // 요청 업스트림 1콜). 쿼터는 실제 업스트림 직전(미스 확정)에만 소비. 도착/위치 공용
+  // (버킷·업스트림 서비스만 다르다).
   private fetchRealtime<T>(
     key: string,
+    bucket: BusQuotaBucket,
+    upstream: BusUpstream,
     now: Date,
     load: () => Promise<T[]>,
   ): Promise<{ data: T[]; fetchedAt: Date; stale: boolean }> {
@@ -444,7 +488,7 @@ export class BusService {
       | undefined;
     if (existing) return existing;
 
-    const task = this.loadRealtime(key, now, load).finally(() => {
+    const task = this.loadRealtime(key, bucket, upstream, now, load).finally(() => {
       this.realtimeInflight.delete(key);
     });
     this.realtimeInflight.set(
@@ -456,20 +500,28 @@ export class BusService {
 
   private async loadRealtime<T>(
     key: string,
+    bucket: BusQuotaBucket,
+    upstream: BusUpstream,
     now: Date,
     load: () => Promise<T[]>,
   ): Promise<{ data: T[]; fetchedAt: Date; stale: boolean }> {
+    const nowMs = now.getTime();
     try {
-      this.consumeQuota(now); // 캐시 미스 확정 — 실제 업스트림 콜 직전에만 쿼터 소비.
+      // 실패 쿨다운 중이면 업스트림·쿼터 없이 아래 last-known(또는 503)으로(E-V2).
+      const blockedUntil = this.cooldown.blockedUntil(upstream, key, nowMs);
+      if (blockedUntil !== null) throw this.cooldownError(blockedUntil, nowMs);
+      this.quota.consume(bucket, now); // 캐시 미스 확정 — 실제 업스트림 콜 직전에만 쿼터 소비.
       const data = await load();
+      this.cooldown.success(upstream, key);
       this.realtimeCache.set(key, {
         data,
         fetchedAt: now,
-        expiresAt: now.getTime() + BUS_REALTIME_MICRO_CACHE_TTL_MS,
+        expiresAt: nowMs + BUS_REALTIME_MICRO_CACHE_TTL_MS,
       });
       return { data, fetchedAt: now, stale: false };
     } catch (e) {
-      // 업스트림 실패(서울시 장애)·쿼터 소진 — 상한(10분) 내 last-known 이 있으면
+      this.recordFailure(upstream, key, nowMs, e);
+      // 업스트림 실패(서울시 장애)·쿼터 소진·쿨다운 — 상한(10분) 내 last-known 이 있으면
       // stale 로 서빙(가용성 우선, 검색의 stale 정책과 동일 정신). 없으면 그대로
       // 던져 라우트가 502/503 을 내린다.
       const lastKnown = this.realtimeCache.get(key);
@@ -535,8 +587,12 @@ export class BusService {
     const serviceKey = this.deps.serviceKey;
     const fetchArrivals = this.deps.adapter?.getStationArrivals ?? getStationArrivals;
     // 15초 마이크로 캐시 + in-flight 합류 — 동시/연속 폴링의 업스트림 중복콜 흡수.
-    const { data, fetchedAt, stale } = await this.fetchRealtime(`arrivals:${arsId}`, now, () =>
-      fetchArrivals(arsId, { serviceKey }),
+    const { data, fetchedAt, stale } = await this.fetchRealtime(
+      `arrivals:${arsId}`,
+      'arrivals',
+      'stationinfo',
+      now,
+      () => fetchArrivals(arsId, { serviceKey }),
     );
 
     return {
@@ -581,7 +637,13 @@ export class BusService {
       return fetchAll(busRouteId, { serviceKey });
     };
     const key = `positions:${busRouteId}:${startOrd ?? ''}:${endOrd ?? ''}`;
-    const { data: raw, fetchedAt, stale } = await this.fetchRealtime(key, now, load);
+    const { data: raw, fetchedAt, stale } = await this.fetchRealtime(
+      key,
+      'positions',
+      'buspos',
+      now,
+      load,
+    );
 
     // 검색과 동일 정책 — 좌표 정규화 실패(WGS84 쌍 없음)나 vehId 누락 행은
     // 계약(lat 33~39, vehId min 1)을 만족할 수 없어 drop.
@@ -604,7 +666,8 @@ export class BusService {
 
   // 노선 상세 — 형상+경유 정류소+기본정보 합본. busRouteInfo 3콜을 한 번에
   // 수집해 정규화 blob 을 DB 30일 캐싱한다(노선당 최초 1회만 업스트림, 쿼터 3).
-  // 실패/쿼터 소진 시 만료 캐시라도 있으면 stale — 검색·주변과 동일 정책.
+  // 실패/쿼터 소진 시 만료 캐시라도 있으면 stale — 검색·주변과 동일 정책. 같은 id
+  // 동시 요청은 한 번의 수집에 합류한다(E-1).
   async getRouteDetail(busRouteId: string): Promise<BusRouteDetailResultType> {
     if (!this.deps.serviceKey) {
       throw new BusServiceError(
@@ -612,19 +675,41 @@ export class BusService {
         503,
       );
     }
+    const existing = this.routeInflight.get(busRouteId);
+    if (existing) return existing;
+    const task = this.loadRouteDetail(busRouteId).finally(() => {
+      this.routeInflight.delete(busRouteId);
+    });
+    this.routeInflight.set(busRouteId, task);
+    return task;
+  }
+
+  private async loadRouteDetail(busRouteId: string): Promise<BusRouteDetailResultType> {
     const now = this.deps.now?.() ?? new Date();
+    const nowMs = now.getTime();
 
     const cached = await this.prisma.busRouteShape.findUnique({ where: { busRouteId } });
-    if (cached && now.getTime() - cached.fetchedAt.getTime() < BUS_ROUTE_TTL_MS) {
+    if (cached && nowMs - cached.fetchedAt.getTime() < BUS_ROUTE_TTL_MS) {
       return toRouteResult(busRouteId, cached, 'cache');
     }
 
+    // '노선 없음' 네거티브 캐시 · 실패 쿨다운 — 업스트림·쿼터 없이 stale 이나 에러.
+    const notFoundUntil = this.routeNotFound.get(busRouteId);
+    if (notFoundUntil !== undefined && nowMs < notFoundUntil) {
+      if (cached) return toRouteResult(busRouteId, cached, 'stale');
+      throw new BusServiceError('해당 노선 정보를 찾을 수 없습니다.', 502);
+    }
+    const cooldownKey = `route:${busRouteId}`;
+    const blockedUntil = this.cooldown.blockedUntil('busRouteInfo', cooldownKey, nowMs);
+    if (blockedUntil !== null) {
+      if (cached) return toRouteResult(busRouteId, cached, 'stale');
+      throw this.cooldownError(blockedUntil, nowMs);
+    }
+
     // 3콜분 쿼터를 한 번에 소비 — 중간에 소진돼 1콜만 하고 실패하는 걸 막는다.
-    // 소진 시 만료 캐시가 있으면 stale, 없으면 503(consumeQuota throw).
+    // 소진 시 만료 캐시가 있으면 stale, 없으면 503(consume throw, 소비 없음).
     try {
-      this.consumeQuota(now);
-      this.consumeQuota(now);
-      this.consumeQuota(now);
+      this.quota.consume('route', now, 3);
     } catch (e) {
       if (cached) return toRouteResult(busRouteId, cached, 'stale');
       throw e;
@@ -633,9 +718,16 @@ export class BusService {
     let blob: RouteDetailBlob;
     try {
       blob = await this.collectRouteDetail(busRouteId);
+      this.cooldown.success('busRouteInfo', cooldownKey);
     } catch (e) {
+      if (e instanceof BusRouteNotFoundError) {
+        this.routeNotFound.set(busRouteId, nowMs + BUS_ROUTE_NOT_FOUND_TTL_MS);
+      } else {
+        this.recordFailure('busRouteInfo', cooldownKey, nowMs, e);
+      }
       // 업스트림/정규화 실패 — 만료 캐시라도 있으면 stale 로 가용성 우선.
       if (cached) return toRouteResult(busRouteId, cached, 'stale');
+      if (e instanceof BusRouteNotFoundError) throw new BusServiceError(e.message, 502);
       if (e instanceof BusApiError || e instanceof BusServiceError) throw e;
       throw new BusServiceError(
         e instanceof Error ? e.message : '버스 API 호출 실패',
@@ -673,10 +765,8 @@ export class BusService {
       fetchInfo(busRouteId, key),
     ]);
 
-    // 기본정보가 없으면 사실상 존재하지 않는 노선 — 계약상 info 는 필수라 502.
-    if (!rawInfo) {
-      throw new BusServiceError('해당 노선 정보를 찾을 수 없습니다.', 502);
-    }
+    // 기본정보가 없으면 사실상 존재하지 않는 노선 — 계약상 info 는 필수라 502(호출측이 네거티브 캐싱).
+    if (!rawInfo) throw new BusRouteNotFoundError();
 
     // 형상: no 오름차순 + 좌표 정규화 실패 점 drop(검색과 동일 정책).
     const path: BusRoutePathPointType[] = [...rawPath]

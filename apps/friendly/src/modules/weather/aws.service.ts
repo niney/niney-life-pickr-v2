@@ -1,6 +1,9 @@
 import type { WeatherAwsItemType, WeatherAwsResultType } from '@repo/api-contract';
 import { haversineM } from '@repo/utils';
+import { UpstreamCooldown, retryAfterSec } from '../../lib/upstream-guard.js';
 import {
+  KmaApiHubAuthError,
+  KmaApiHubError,
   getAwsMinute,
   getAwsStations,
   type KmaApiHubRequestOptions,
@@ -16,6 +19,19 @@ import {
 //   30분 last-known(stale). tm2 는 KST 현재 분 — 관측이 아직 안 올라온 분이면 업스트림이 직전
 //   값을 주거나 비므로, 비면 1분 전으로 1회 폴백.
 // 키(KMA_APIHUB_KEY)가 없으면 enabled=false 빈 결과(200) — 보강은 선택 기능.
+// 업스트림이 실패하면 그 자료(지점/매분)는 쿨다운(30초→5분, 인증 오류는 API허브 전체 5분→1시간) 동안 다시
+// 묻지 않고 last-known(stale) 또는 503 — 장애 중 요청마다 시간 예산(8초)을 기다리지 않게(E-V2).
+
+// 쿨다운 중 last-known 도 없을 때의 응답 — 라우트가 503 으로 내린다.
+export class AwsServiceError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: number,
+  ) {
+    super(message);
+    this.name = 'AwsServiceError';
+  }
+}
 
 export const AWS_STATIONS_TTL_MS = 24 * 60 * 60_000;
 export const AWS_STATIONS_STALE_MAX_MS = 7 * 24 * 60 * 60_000;
@@ -82,6 +98,7 @@ export class AwsService {
   private minuteCache: CacheEntry<{ tm: string | null; byStn: Map<string, RawAwsMinuteRow> }> | null = null;
   private inflightStations: Promise<Cached<AwsStation[]>> | null = null;
   private inflightMinute: Promise<Cached<{ tm: string | null; byStn: Map<string, RawAwsMinuteRow> }>> | null = null;
+  private readonly cooldown = new UpstreamCooldown();
 
   constructor(private readonly deps: AwsServiceDeps) {}
 
@@ -106,21 +123,35 @@ export class AwsService {
     load: (now: Date) => Promise<T>,
   ): Promise<Cached<T>> {
     const now = this.now();
+    const nowMs = now.getTime();
     const entry = (slot === 'stations' ? this.stationsCache : this.minuteCache) as CacheEntry<T> | null;
-    if (entry && now.getTime() <= entry.expiresAt) return { data: entry.data, fetchedAt: entry.fetchedAt, stale: false };
+    if (entry && nowMs <= entry.expiresAt) return { data: entry.data, fetchedAt: entry.fetchedAt, stale: false };
     const inflight = (slot === 'stations' ? this.inflightStations : this.inflightMinute) as Promise<Cached<T>> | null;
     if (inflight) return inflight;
+    const lastKnown = entry && nowMs - entry.fetchedAt.getTime() <= entry.staleMaxMs ? entry : null;
+    // 실패 쿨다운 — 업스트림 없이 last-known 이나 503.
+    const blockedUntil = this.cooldown.blockedUntil('apihub', slot, nowMs);
+    if (blockedUntil !== null) {
+      if (lastKnown) return { data: lastKnown.data, fetchedAt: lastKnown.fetchedAt, stale: true };
+      throw new AwsServiceError(
+        `기상청 API허브가 응답하지 않아 잠시 조회를 멈췄습니다. ${retryAfterSec(blockedUntil, nowMs)}초 뒤 다시 시도해 주세요.`,
+        503,
+      );
+    }
     const task = (async (): Promise<Cached<T>> => {
       try {
         const data = await load(now);
-        const next: CacheEntry<T> = { data, fetchedAt: now, expiresAt: now.getTime() + ttlMs, staleMaxMs };
+        this.cooldown.success('apihub', slot);
+        const next: CacheEntry<T> = { data, fetchedAt: now, expiresAt: nowMs + ttlMs, staleMaxMs };
         if (slot === 'stations') this.stationsCache = next as CacheEntry<AwsStation[]>;
         else this.minuteCache = next as CacheEntry<{ tm: string | null; byStn: Map<string, RawAwsMinuteRow> }>;
         return { data, fetchedAt: now, stale: false };
       } catch (e) {
-        if (entry && now.getTime() - entry.fetchedAt.getTime() <= entry.staleMaxMs) {
-          return { data: entry.data, fetchedAt: entry.fetchedAt, stale: true };
+        // 인증·활용신청 오류는 어느 자료로 불러도 같아 API허브 전체를, 그 밖의 업스트림 실패는 그 자료만 쉰다.
+        if (e instanceof KmaApiHubError) {
+          this.cooldown.failure('apihub', slot, nowMs, e instanceof KmaApiHubAuthError);
         }
+        if (lastKnown) return { data: lastKnown.data, fetchedAt: lastKnown.fetchedAt, stale: true };
         throw e;
       } finally {
         if (slot === 'stations') this.inflightStations = null;

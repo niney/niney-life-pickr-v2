@@ -26,15 +26,16 @@
 // 로깅/에러에는 키 평문 URL 을 절대 싣지 않는다 — 마스킹본(requestUrl)만.
 
 import { coerceStrOrNull, intOrNull, isObject } from '../../lib/narrow.js';
+import { UPSTREAM_MIN_RETRY_WINDOW_MS, UPSTREAM_REQUEST_BUDGET_MS } from '../../lib/upstream-guard.js';
 import { toServiceKeyPart } from '../bus/bus-api.adapter.js';
 
 export const AIRKOREA_BASE_URL = 'https://apis.data.go.kr/B552584/ArpltnInforInqireSvc';
 // 측정소정보 서비스(data.go.kr 15073877, MsrstnInfoInqireSvc) — 측정소 좌표·주소·측정항목.
 // 대기오염정보와 별개 API 라 활용신청을 따로 해야 한다(미신청이면 게이트웨이 30).
 export const AIRKOREA_STATION_BASE_URL = 'https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc';
-// 업스트림이 느리다 — '전국'(673행·340KB)은 수 초, 게이트웨이 자체 타임아웃(504 SERVICETIMEOUT)
-// 도 ~10초 뒤에 온다. 10초로 끊으면 504 를 받아 재시도할 기회조차 없어 20초(버스/지하철 10초의 2배).
-const FETCH_TIMEOUT_MS = 20_000;
+// 시간 상한은 요청 1건(재시도 포함) 예산 UPSTREAM_REQUEST_BUDGET_MS(8초). '전국'(673행·340KB)도 평소 수 초라
+// 충분하고, 예전 20초 타임아웃은 업스트림이 매달리면 그대로 기다려 운영 p95 가 20초였다(/air/stations/nearby).
+// 게이트웨이 05(SERVICETIMEOUT)가 예산 안에 오면 남은 시간으로 1회 재시도, 넘기면 서비스가 stale·쿨다운으로 받는다.
 // 게이트웨이 타임아웃(05)·5xx 1회 재시도 간격.
 const RETRY_DELAY_MS = 700;
 // 업스트림 페이지 크기 — 전국 673개소·MONTH 742행이 1페이지에 들어온다(실측 1000 허용).
@@ -92,8 +93,12 @@ export class AirKoreaApiAuthError extends AirKoreaApiError {
 
 export interface AirKoreaApiRequestOptions {
   serviceKey: string;
-  // 주어지면 타임아웃은 caller 책임 — 자체 AbortController 를 만들지 않는다.
+  // 주어지면 타임아웃은 caller 책임 — 자체 AbortController·시간 예산을 쓰지 않는다(프로브).
   signal?: AbortSignal;
+  // 재시도 직전 호출 — 서비스가 재시도도 일일 쿼터에 센다(재시도도 업스트림 1콜이다).
+  onRetry?: () => void;
+  // 요청 1건(재시도 포함) 시간 예산 — 기본 UPSTREAM_REQUEST_BUDGET_MS. 테스트 주입용.
+  budgetMs?: number;
 }
 
 export interface AirKoreaCallResult {
@@ -130,15 +135,16 @@ interface RawHttpResult {
   rawText: string;
 }
 
-// signal 미지정 시 자체 timeout — 업스트림이 매달려도 10초에 끊는다. 같은 시그널이
+// signal 미지정 시 자체 timeout(남은 예산) — 업스트림이 매달려도 예산에서 끊는다. 같은 시그널이
 // 본문 읽기도 중단시키므로 clearTimeout 은 text() 완료 후(bus-api.adapter 주석 참조).
 const httpGet = async (
   fetchUrl: string,
   requestUrl: string,
   opts: AirKoreaApiRequestOptions,
+  timeoutMs: number,
 ): Promise<RawHttpResult> => {
   const ac = opts.signal ? null : new AbortController();
-  const timeoutId = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+  const timeoutId = ac ? setTimeout(() => ac.abort(), Math.max(1, timeoutMs)) : null;
   try {
     let res: Response;
     try {
@@ -275,7 +281,7 @@ const interpret = (
   return { result: { requestUrl, items: parsed.items, totalCount: parsed.totalCount } };
 };
 
-// 단일 오퍼레이션 1페이지 호출. 게이트웨이 타임아웃/5xx 는 1회 재시도. base 로
+// 단일 오퍼레이션 1페이지 호출. 게이트웨이 타임아웃/5xx 는 예산이 남으면 1회 재시도. base 로
 // 서비스(대기오염정보/측정소정보)를 고른다 — 봉투·오류 모델은 두 서비스가 같다.
 export const callAirKoreaApi = async (
   op: string,
@@ -284,10 +290,17 @@ export const callAirKoreaApi = async (
   base: string = AIRKOREA_BASE_URL,
 ): Promise<AirKoreaCallResult> => {
   const { fetchUrl, requestUrl } = buildUrls(op, params, opts.serviceKey, base);
+  const deadline = opts.signal
+    ? Number.POSITIVE_INFINITY
+    : Date.now() + (opts.budgetMs ?? UPSTREAM_REQUEST_BUDGET_MS);
   let lastError: AirKoreaApiError | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await sleep(RETRY_DELAY_MS);
-    const http = await httpGet(fetchUrl, requestUrl, opts);
+    if (attempt > 0) {
+      if (deadline - Date.now() - RETRY_DELAY_MS < UPSTREAM_MIN_RETRY_WINDOW_MS) break;
+      opts.onRetry?.();
+      await sleep(RETRY_DELAY_MS);
+    }
+    const http = await httpGet(fetchUrl, requestUrl, opts, deadline - Date.now());
     const outcome = interpret(http, requestUrl);
     if ('result' in outcome) return outcome.result;
     lastError = outcome.error;

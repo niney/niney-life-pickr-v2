@@ -12,10 +12,14 @@
 // 활용신청 승인 전이라 실응답을 아직 못 봤고, 헤더 기반이면 열 추가/순서 변경에도 버틴다).
 
 import { isObject } from '../../lib/narrow.js';
+import { UPSTREAM_MIN_RETRY_WINDOW_MS, UPSTREAM_REQUEST_BUDGET_MS } from '../../lib/upstream-guard.js';
 
 export const KMA_APIHUB_BASE_URL = 'https://apihub.kma.go.kr/api/typ01/url';
 export const KMA_APIHUB_CGI_BASE_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url';
-const FETCH_TIMEOUT_MS = 20_000;
+// 시간 상한 — 요청 1건(재시도 포함) 예산 UPSTREAM_REQUEST_BUDGET_MS(8초) 안에서 시도당 5초. 예전엔 시도당
+// 20초 × 재시도라 업스트림이 매달리면 40.7초를 기다렸다(운영 /weather/aws p95 40,706ms). 첫 시도가 매달려도
+// 남은 3초로 한 번 더 묻는다.
+const ATTEMPT_TIMEOUT_MS = 5_000;
 const RETRY_DELAY_MS = 700;
 
 export class KmaApiHubError extends Error {
@@ -44,7 +48,10 @@ export class KmaApiHubAuthError extends KmaApiHubError {
 
 export interface KmaApiHubRequestOptions {
   authKey: string;
+  // 주어지면 타임아웃은 caller 책임 — 자체 AbortController·시간 예산을 쓰지 않는다(프로브).
   signal?: AbortSignal;
+  // 요청 1건(재시도 포함) 시간 예산 — 기본 UPSTREAM_REQUEST_BUDGET_MS. 테스트 주입용.
+  budgetMs?: number;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -139,7 +146,8 @@ const readError = (text: string): { status: number; message: string } | null => 
   }
 };
 
-// 한 번의 GET — 오류 JSON 봉투/HTTP 상태를 분류하고 본문 텍스트를 돌려준다. 5xx 는 1회 재시도.
+// 한 번의 GET — 오류 JSON 봉투/HTTP 상태를 분류하고 본문 텍스트를 돌려준다. 연결 실패·5xx 는 예산이 남으면
+// 1회 재시도.
 export const callKmaApiHub = async (
   base: string,
   path: string,
@@ -147,11 +155,18 @@ export const callKmaApiHub = async (
   opts: KmaApiHubRequestOptions,
 ): Promise<{ text: string; requestUrl: string }> => {
   const { fetchUrl, requestUrl } = buildUrls(base, path, params, opts.authKey);
+  const deadline = opts.signal
+    ? Number.POSITIVE_INFINITY
+    : Date.now() + (opts.budgetMs ?? UPSTREAM_REQUEST_BUDGET_MS);
   let lastError: KmaApiHubError | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await sleep(RETRY_DELAY_MS);
+    if (attempt > 0) {
+      if (deadline - Date.now() - RETRY_DELAY_MS < UPSTREAM_MIN_RETRY_WINDOW_MS) break;
+      await sleep(RETRY_DELAY_MS);
+    }
     const ac = opts.signal ? null : new AbortController();
-    const timeoutId = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+    const attemptMs = Math.max(1, Math.min(ATTEMPT_TIMEOUT_MS, deadline - Date.now()));
+    const timeoutId = ac ? setTimeout(() => ac.abort(), attemptMs) : null;
     let text: string;
     let status: number;
     try {

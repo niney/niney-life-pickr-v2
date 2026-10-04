@@ -4,6 +4,8 @@
 // 도착정보는 실시간이라 stale 폴백이 없다 — 대신 역명 단위 15초 마이크로 캐시 +
 // in-flight 합류로 동시 사용자의 업스트림 콜을 공유하고, 일일 쿼터로 한도를 지킨다
 // (bus.service 의 쿼터/in-flight 규율 이식). 6차 실시간 위치도 이 골격을 재사용한다.
+// 업스트림 미스는 IP 별 하루 예산(E-7)으로도 세고, 실패한 키는 쿨다운(E-V2) 동안 다시
+// 부르지 않는다(lib/upstream-guard).
 
 import type { PrismaClient } from '@prisma/client';
 import type {
@@ -22,6 +24,7 @@ import type {
   SubwayTrainPositionItemType,
 } from '@repo/api-contract';
 import { approxDistanceM, roundCoord, subwayLineById, subwayLineName } from '@repo/utils';
+import { PerClientDailyBudget, UpstreamCooldown, retryAfterSec } from '../../lib/upstream-guard.js';
 import { isLoopSection } from './subway-line-order.service.js';
 import {
   buildSectionShapeIndex,
@@ -32,6 +35,7 @@ import {
   getRealtimeArrivals,
   getRealtimePositions,
   getStationTimetable,
+  SubwayApiAuthError,
   SubwayApiError,
   type RawSubwayArrival,
   type RawSubwayPosition,
@@ -56,6 +60,15 @@ export const MAX_GROUPS = 30;
 export const ARRIVALS_MICRO_CACHE_TTL_MS = 15_000;
 // 일일 업스트림 호출 한도 기본값 — 도착/위치(6차)가 'realtime' 그룹으로 공유한다.
 export const DEFAULT_DAILY_UPSTREAM_LIMIT = 900;
+// IP 1개당 하루 업스트림 미스 예산(E-7) — 역명 순회 한 IP 가 공유 일일 쿼터(실시간 900)를 15분에 혼자 태우던
+// 경로를 막는다. 캐시 히트(15초 마이크로 캐시·DB 30일 시간표)는 세지 않는다. 실시간 150 = 한 역을 30초 폴링으로
+// 75분 지켜볼 몫, 시간표는 미스 1회가 업스트림 2콜이라 40(80콜). 같은 통신사 IP(CGNAT) 뒤 여러 명이면 먼저 닿을
+// 수 있는 보조 수단 — 본 방어는 일일 쿼터·실패 쿨다운이다.
+export const SUBWAY_CLIENT_DAILY_MISS_BUDGET = { realtime: 150, timetable: 40 } as const;
+// 서울 열린데이터 일일 트래픽 초과 코드 — 어떤 키로 불러도 같은 답이라 그 포털 전체를 쉰다.
+const DAILY_LIMIT_CODE = 'ERROR-337';
+// 쿨다운 단위 — 실시간(swopenAPI)과 시간표(열린데이터 openapi)는 키·포털이 다르다.
+type SubwayUpstream = 'swopen' | 'openapi';
 
 // 시간표(8차) blob 캐시 TTL — 사실상 정적이라 30일(버스 노선상세 미러).
 export const SUBWAY_TIMETABLE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -111,6 +124,8 @@ export interface SubwayServiceDeps {
   dailyLimit?: number;
   // 테스트 주입 — 마이크로 캐시 TTL(기본 15s).
   microCacheTtlMs?: number;
+  // 테스트 주입 — IP 별 하루 미스 예산(기본 SUBWAY_CLIENT_DAILY_MISS_BUDGET).
+  clientBudget?: { realtime?: number; timetable?: number };
   // 테스트 주입 — 실시간 어댑터(기본은 실제 swopenAPI).
   adapter?: {
     getRealtimeArrivals: (
@@ -279,8 +294,42 @@ export class SubwayService {
   // 경로 그래프(11차) lazy 캐시 — 재적재 드물어 TTL 로 충분. 동시 구축 합류.
   private graphCache?: { graph: SubwayGraph; builtAt: number };
   private graphInflight?: Promise<SubwayGraph>;
+  // 실패 쿨다운(E-V2) + IP 별 하루 미스 예산(E-7).
+  private readonly cooldown = new UpstreamCooldown();
+  private readonly realtimeBudget: PerClientDailyBudget;
+  private readonly timetableBudget: PerClientDailyBudget;
 
-  constructor(private readonly deps: SubwayServiceDeps) {}
+  constructor(private readonly deps: SubwayServiceDeps) {
+    this.realtimeBudget = new PerClientDailyBudget(
+      deps.clientBudget?.realtime ?? SUBWAY_CLIENT_DAILY_MISS_BUDGET.realtime,
+    );
+    this.timetableBudget = new PerClientDailyBudget(
+      deps.clientBudget?.timetable ?? SUBWAY_CLIENT_DAILY_MISS_BUDGET.timetable,
+    );
+  }
+
+  // 쿨다운 중 응답 — 업스트림을 부르지 않은 503(실시간은 stale 폴백이 없다).
+  private cooldownError(blockedUntil: number, nowMs: number): SubwayServiceError {
+    return new SubwayServiceError(
+      `서울시 지하철 API 가 응답하지 않아 잠시 조회를 멈췄습니다. ${retryAfterSec(blockedUntil, nowMs)}초 뒤 다시 시도해 주세요.`,
+      503,
+    );
+  }
+
+  // IP 별 하루 미스 예산 초과 — 라우트가 429 로 내린다.
+  private clientBudgetError(): SubwayServiceError {
+    return new SubwayServiceError(
+      '오늘 이 네트워크에서 지하철 실시간 정보를 너무 많이 조회했습니다. 내일 다시 이용해 주세요.',
+      429,
+    );
+  }
+
+  // 업스트림 실패만 쿨다운 — 인증(INFO-100)·일일 트래픽 초과(ERROR-337)는 그 포털 전체, 나머지는 그 키만.
+  private recordFailure(upstream: SubwayUpstream, key: string, nowMs: number, e: unknown): void {
+    if (e instanceof SubwayApiError) {
+      this.cooldown.failure(upstream, key, nowMs, e instanceof SubwayApiAuthError || e.code === DAILY_LIMIT_CODE);
+    }
+  }
 
   async searchStations(q: string): Promise<SubwayStationSearchResultType> {
     // 1차 방어는 스키마(SubwayStationSearchQuery 가 NFC 정규화 후 길이 검증) —
@@ -477,8 +526,12 @@ export class SubwayService {
   }
 
   // 역 실시간 도착정보 — stationId 로 역명 그룹을 재구성해 유니크 조회역명별로
-  // 업스트림을 부르고(캐시/쿼터/in-flight), 합본을 그룹 lineId 로 필터한다.
-  async getStationArrivals(stationId: string): Promise<SubwayArrivalsResultType> {
+  // 업스트림을 부르고(캐시/쿼터/in-flight), 합본을 그룹 lineId 로 필터한다. client(IP)를
+  // 주면 업스트림 미스를 그 IP 의 하루 예산에서 뺀다(라우트).
+  async getStationArrivals(
+    stationId: string,
+    opts: { client?: string } = {},
+  ): Promise<SubwayArrivalsResultType> {
     if (!this.deps.serviceKey) {
       throw new SubwayServiceError(
         'SUBWAY_API_KEY 가 설정되지 않아 실시간 도착 조회를 사용할 수 없습니다.',
@@ -523,8 +576,11 @@ export class SubwayService {
     // 조회역명별 병렬 — 각자 캐시/in-flight, 미스는 쿼터 소비 후 업스트림.
     const results = await Promise.all(
       queryNames.map((qn) =>
-        this.fetchRealtime(`arrivals:${qn}`, now, () =>
-          fetchArrivals(qn, { apiKey: this.deps.serviceKey! }),
+        this.fetchRealtime(
+          `arrivals:${qn}`,
+          now,
+          () => fetchArrivals(qn, { apiKey: this.deps.serviceKey! }),
+          opts.client,
         ),
       ),
     );
@@ -554,7 +610,10 @@ export class SubwayService {
   // 실시간 인프라(캐시 `positions:${호선명}`·쿼터 'realtime'·in-flight)로 조회.
   // 응답 statnId 를 마스터 statnId 배치 조인해 좌표 enrich(실패 null). 미등재
   // lineId 는 404, 빈 키 503, INFO-200 은 빈 배열(어댑터가 처리).
-  async getLinePositions(lineId: string): Promise<SubwayPositionsResultType> {
+  async getLinePositions(
+    lineId: string,
+    opts: { client?: string } = {},
+  ): Promise<SubwayPositionsResultType> {
     if (!this.deps.serviceKey) {
       throw new SubwayServiceError(
         'SUBWAY_API_KEY 가 설정되지 않아 실시간 위치 조회를 사용할 수 없습니다.',
@@ -569,8 +628,11 @@ export class SubwayService {
     const now = this.deps.now?.() ?? new Date();
     const fetchPositions = this.deps.adapter?.getRealtimePositions ?? getRealtimePositions;
 
-    const { data, fetchedAt } = await this.fetchRealtime(`positions:${line.positionParam}`, now, () =>
-      fetchPositions(line.positionParam!, { apiKey: this.deps.serviceKey! }),
+    const { data, fetchedAt } = await this.fetchRealtime(
+      `positions:${line.positionParam}`,
+      now,
+      () => fetchPositions(line.positionParam!, { apiKey: this.deps.serviceKey! }),
+      opts.client,
     );
     // trainNo/statnId 필수(계약 min 1) — 누락 행 drop.
     const valid = (data as RawSubwayPosition[]).filter((p) => p.trainNo && p.statnId);
@@ -602,6 +664,7 @@ export class SubwayService {
   async getStationTimetable(
     stationId: string,
     dayType: string,
+    opts: { client?: string } = {},
   ): Promise<SubwayTimetableResultType> {
     const { prisma } = this.deps;
     const station = await prisma.subwayStation.findUnique({ where: { id: stationId } });
@@ -633,10 +696,10 @@ export class SubwayService {
       }
     }
 
-    // 미스 — 업스트림 2콜 수집(in-flight 합류). 실패/쿼터 소진 시 만료 blob 이면 stale.
+    // 미스 — 업스트림 2콜 수집(in-flight 합류). 실패/쿼터·예산 소진/쿨다운 시 만료 blob 이면 stale.
     let blob: TimetableBlob;
     try {
-      blob = await this.collectTimetable(cacheKey, station.stationCd, dayType, now);
+      blob = await this.collectTimetable(cacheKey, station.stationCd, dayType, now, opts.client);
     } catch (e) {
       if (cached) {
         const stale = JSON.parse(cached.payload) as TimetableBlob;
@@ -846,10 +909,11 @@ export class SubwayService {
     stationCd: string,
     dayType: string,
     now: Date,
+    client?: string,
   ): Promise<TimetableBlob> {
     const existing = this.timetableInflight.get(cacheKey);
     if (existing) return existing;
-    const task = this.doCollectTimetable(cacheKey, stationCd, dayType, now).finally(() => {
+    const task = this.doCollectTimetable(cacheKey, stationCd, dayType, now, client).finally(() => {
       this.timetableInflight.delete(cacheKey);
     });
     this.timetableInflight.set(cacheKey, task);
@@ -861,6 +925,7 @@ export class SubwayService {
     stationCd: string,
     dayType: string,
     now: Date,
+    client?: string,
   ): Promise<TimetableBlob> {
     if (!this.deps.seoulKey) {
       throw new SubwayServiceError(
@@ -868,16 +933,28 @@ export class SubwayService {
         503,
       );
     }
+    const nowMs = now.getTime();
+    const blockedUntil = this.cooldown.blockedUntil('openapi', cacheKey, nowMs);
+    if (blockedUntil !== null) throw this.cooldownError(blockedUntil, nowMs);
+    if (client !== undefined && !this.timetableBudget.take(client, now)) throw this.clientBudgetError();
     // openapi 그룹으로 방향 2콜분 선소비(중간 소진 방지) — 실시간('realtime')과 별도.
     this.consumeQuota('openapi', now);
     this.consumeQuota('openapi', now);
 
     const fetch = this.deps.adapter?.getStationTimetable ?? getStationTimetable;
     const opts = { apiKey: this.deps.seoulKey };
-    const [up, down] = await Promise.all([
-      fetch(stationCd, dayType, '1', opts),
-      fetch(stationCd, dayType, '2', opts),
-    ]);
+    let up: RawSubwayTimetableRow[];
+    let down: RawSubwayTimetableRow[];
+    try {
+      [up, down] = await Promise.all([
+        fetch(stationCd, dayType, '1', opts),
+        fetch(stationCd, dayType, '2', opts),
+      ]);
+      this.cooldown.success('openapi', cacheKey);
+    } catch (e) {
+      this.recordFailure('openapi', cacheKey, nowMs, e);
+      throw e;
+    }
 
     // 방향별 정규화 — 빈 방향은 계약상 제외(0행 방향 미노출). 양쪽 0 이면 coverage
     // false 로 저장(1~9호선인데 데이터 없음 — 무의미 재호출 방지).
@@ -900,6 +977,7 @@ export class SubwayService {
     key: string,
     now: Date,
     load: () => Promise<unknown[]>,
+    client?: string,
   ): Promise<{ data: unknown[]; fetchedAt: Date }> {
     const cached = this.microCache.get(key);
     if (cached) {
@@ -912,7 +990,7 @@ export class SubwayService {
     const existing = this.inflight.get(key);
     if (existing) return existing;
 
-    const task = this.loadRealtime(key, now, load).finally(() => {
+    const task = this.loadRealtime(key, now, load, client).finally(() => {
       this.inflight.delete(key);
     });
     this.inflight.set(key, task);
@@ -923,12 +1001,26 @@ export class SubwayService {
     key: string,
     now: Date,
     load: () => Promise<unknown[]>,
+    client?: string,
   ): Promise<{ data: unknown[]; fetchedAt: Date }> {
+    const nowMs = now.getTime();
+    // 실패 쿨다운 — 실시간은 stale 폴백이 없어 업스트림·쿼터 없이 503(E-V2).
+    const blockedUntil = this.cooldown.blockedUntil('swopen', key, nowMs);
+    if (blockedUntil !== null) throw this.cooldownError(blockedUntil, nowMs);
+    // IP 별 하루 예산 — 업스트림을 실제로 부르는 미스만 센다(E-7).
+    if (client !== undefined && !this.realtimeBudget.take(client, now)) throw this.clientBudgetError();
     // 쿼터는 실제 업스트림 콜 직전(캐시 미스 확정)에만 소비.
     this.consumeQuota('realtime', now);
-    const data = await load();
+    let data: unknown[];
+    try {
+      data = await load();
+      this.cooldown.success('swopen', key);
+    } catch (e) {
+      this.recordFailure('swopen', key, nowMs, e);
+      throw e;
+    }
     const ttl = this.deps.microCacheTtlMs ?? ARRIVALS_MICRO_CACHE_TTL_MS;
-    this.microCache.set(key, { data, fetchedAt: now, expiresAt: now.getTime() + ttl });
+    this.microCache.set(key, { data, fetchedAt: now, expiresAt: nowMs + ttl });
     return { data, fetchedAt: now };
   }
 

@@ -81,10 +81,37 @@ export const SeaForecastResult = z.object({
 export type SeaForecastResultType = z.infer<typeof SeaForecastResult>;
 
 // ── 조석(물때) ──────────────────────────────────────────────────────────────
+// 조회 날짜 허용 범위(KST) — 웹은 활동 예보의 날짜(오늘부터 7일, 캐시가 묵으면 어제 포함)만 고르니 넉넉히
+// 오늘-2 ~ 오늘+10. 범위를 열어 두면 날짜 × 조석지점 166곳마다 새 캐시 키·업스트림 1콜이라 무인증 순회로 조석
+// API 일일 한도가 바닥났다(perf-2 E-6).
+export const SEA_TIDE_DATE_PAST_DAYS = 2;
+export const SEA_TIDE_DATE_FUTURE_DAYS = 10;
+const KST_OFFSET_MS = 9 * 60 * 60_000;
+const DAY_MS = 86_400_000;
+// KST 오늘에서 days 만큼 떨어진 'YYYY-MM-DD'.
+const kstYmd = (days: number): string =>
+  new Date(Date.now() + KST_OFFSET_MS + days * DAY_MS).toISOString().slice(0, 10);
+// 달력에 있는 날짜인지(2026-02-31 같은 값 거름).
+const isCalendarDate = (d: string): boolean => {
+  const t = Date.parse(`${d}T00:00:00Z`);
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === d;
+};
+
 export const SeaTideQuery = z.object({
   lat: z.coerce.number().min(32).max(39),
   lng: z.coerce.number().min(124).max(132),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine(
+      (d) =>
+        isCalendarDate(d) &&
+        d >= kstYmd(-SEA_TIDE_DATE_PAST_DAYS) &&
+        d <= kstYmd(SEA_TIDE_DATE_FUTURE_DAYS),
+      {
+        message: `date 는 KST 오늘-${SEA_TIDE_DATE_PAST_DAYS}일 ~ 오늘+${SEA_TIDE_DATE_FUTURE_DAYS}일 범위의 날짜여야 합니다.`,
+      },
+    ),
 });
 export type SeaTideQueryType = z.infer<typeof SeaTideQuery>;
 

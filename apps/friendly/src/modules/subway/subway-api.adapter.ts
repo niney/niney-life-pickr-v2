@@ -21,10 +21,12 @@
 //   - 그 외 ERROR-*/비정상 코드 → SubwayApiError(502).
 
 import { isObject, coerceStrOrNull, numOrNull } from '../../lib/narrow.js';
+import { UPSTREAM_REQUEST_BUDGET_MS } from '../../lib/upstream-guard.js';
 
 const SWOPEN_BASE = 'http://swopenAPI.seoul.go.kr/api/subway';
 const SEOUL_OPEN_BASE = 'http://openapi.seoul.go.kr:8088';
-const FETCH_TIMEOUT_MS = 10_000;
+// 재시도 없는 1콜의 시간 상한 — 공용 요청 예산(8초). 실시간 폴링이라 오래 매달리느니 끊는 편이 낫다.
+const FETCH_TIMEOUT_MS = UPSTREAM_REQUEST_BUDGET_MS;
 
 // 정상 처리 / 데이터 없음(빈 결과, 에러 아님) — 나머지 코드는 아래에서 분류.
 const OK_CODE = 'INFO-000';
@@ -90,7 +92,7 @@ interface RawJsonResult {
   json: unknown; // 파싱 성공 시 값, 실패 시 null.
 }
 
-// signal 미지정 시 자체 timeout — 업스트림이 매달려도 10초에 끊는다. 같은 시그널이
+// signal 미지정 시 자체 timeout — 업스트림이 매달려도 8초에 끊는다. 같은 시그널이
 // 본문 읽기도 중단시키므로 clearTimeout 은 text() 완료 후 (undici bodyTimeout
 // ~300초 함정 회피 — bus-api.adapter 주석 참조).
 const callJson = async (

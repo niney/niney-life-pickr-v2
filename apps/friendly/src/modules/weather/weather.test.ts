@@ -33,8 +33,20 @@ import type {
   WeatherVersionsResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
-import { KmaApiAuthError, KmaApiError, type RawKmaFcstRow, type RawKmaMidRow } from './kma-api.adapter.js';
-import { WEATHER_SHORT_TTL_MS, WeatherService, foldForecastDays, toForecastHours } from './weather.service.js';
+import {
+  KmaApiAuthError,
+  KmaApiError,
+  type KmaApiRequestOptions,
+  type RawKmaFcstRow,
+  type RawKmaMidRow,
+} from './kma-api.adapter.js';
+import {
+  WEATHER_SHORT_TTL_MS,
+  WeatherService,
+  foldForecastDays,
+  midQueryProblem,
+  toForecastHours,
+} from './weather.service.js';
 
 // 픽스처(2026-08-21 16:05 KST 실응답 원문) → 어댑터 원시 행. 어댑터 파싱은 별도 테스트가
 // 맡고 여기서는 JSON 값을 그대로 문자열/null 로 옮긴다.
@@ -202,6 +214,30 @@ describe('weather routes', () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/weather/forecast?nx=60&ny=300' })).statusCode).toBe(400);
   });
 
+  it('app.weather 싱글톤 — 라우트가 받은 실황이 같은 인스턴스 캐시에서 보인다(식단 추천과 공유, C-5)', async () => {
+    expect(app.weather).toBeInstanceOf(WeatherService);
+    expect(app.weather.peekNowcast(61, 128)).toBeNull();
+    const res = await app.inject({ method: 'GET', url: '/api/v1/weather/nowcast?nx=61&ny=128' });
+    expect(res.statusCode).toBe(200);
+    expect(app.weather.peekNowcast(61, 128)?.grid).toEqual({ nx: 61, ny: 128 });
+  });
+
+  it('중기 화이트리스트(E-4) — 가짜 구역·짝 안 맞는 지점·남의 전망 지점·가짜 해역은 400, 업스트림 0콜', async () => {
+    const urls = [
+      '/api/v1/weather/mid?land=11Z00000&ta=11B10101', // 형식만 맞는 가짜 구역
+      '/api/v1/weather/mid?land=11B00000&ta=11H10701', // 대구 기온 지점 + 서울 구역
+      '/api/v1/weather/mid?land=11B00000&ta=11B10101&stn=159', // 부산권 전망 지점
+      '/api/v1/weather/mid/sea?regId=12H00000',
+    ];
+    for (const url of urls) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, url).toBe(400);
+      expect((res.json() as { message: string }).message).toMatch(/구역|지점|해역/);
+    }
+    expect(mocks.getMidLandFcst).not.toHaveBeenCalled();
+    expect(mocks.getMidSeaFcst).not.toHaveBeenCalled();
+  });
+
   it('업스트림 게이트웨이 오류는 502, 인증(키 미등록 30)은 503 으로 내린다', async () => {
     mocks.getVilageFcst.mockRejectedValue(new KmaApiError('기상청 api 게이트웨이 오류(05: SERVICETIMEOUT)', { code: '05' }));
     const r502 = await app.inject({ method: 'GET', url: '/api/v1/weather/forecast?nx=1&ny=1' });
@@ -309,6 +345,99 @@ describe('WeatherService — 슬롯 폴백·캐시·stale', () => {
     const tiny = new WeatherService({ serviceKey: 'k', now: () => AT_1605, dailyLimit: 0 });
     await expect(tiny.getNowcast(60, 127)).rejects.toMatchObject({ statusCode: 503 });
     expect(mocks.getUltraSrtNcst).not.toHaveBeenCalled();
+  });
+
+  it('쿼터는 단기·중기 서비스별(E-4) — 중기를 다 써도 단기(실황)는 산다, 재시도도 센다', async () => {
+    const svc = new WeatherService({ serviceKey: 'k', now: () => AT_1605, dailyLimits: { mid: 2 } });
+    await svc.getMid('11B00000', '11B10101'); // 육상+기온 2콜
+    await expect(svc.getMid('11D10000', '11D10301')).rejects.toMatchObject({ statusCode: 503 });
+    expect(svc.quotaUsed('mid')).toBe(2);
+    expect((await svc.getNowcast(60, 127)).stale).toBe(false);
+    expect(svc.quotaUsed('vilage')).toBe(2);
+
+    // 어댑터가 재시도(게이트웨이 05)를 하면 onRetry 로 알리고 같은 버킷에 1 가산.
+    mocks.getVilageFcst.mockImplementation(async (_p: unknown, opts: KmaApiRequestOptions) => {
+      opts.onRetry?.();
+      return { rows: fcstRows('vilage.json'), noData: false, totalCount: 798 };
+    });
+    await svc.getForecast(60, 127);
+    expect(svc.quotaUsed('vilage')).toBe(4);
+  });
+
+  it('중기 화이트리스트 — 가짜 구역 1,500회도 업스트림·쿼터 0(이전: 요청당 최대 6콜로 9,000 소진)', async () => {
+    const svc = new WeatherService({ serviceKey: 'k', now: () => AT_1605 });
+    for (let i = 0; i < 1500; i++) {
+      const land = `11Z${String(i).padStart(5, '0')}`;
+      await expect(svc.getMid(land, '11B10101', '108')).rejects.toMatchObject({ statusCode: 400 });
+    }
+    expect(mocks.getMidLandFcst).not.toHaveBeenCalled();
+    expect(svc.quotaUsed('mid')).toBe(0);
+    // 웹·앱이 보내는 조합(지점의 구역 + 그 구역 전망 지점 / 전국 108)은 통과.
+    expect(midQueryProblem('11B00000', '11B10101', '109')).toBeNull();
+    expect(midQueryProblem('11B00000', '11B20101', '108')).toBeNull(); // 강화(인천 구·군 행)
+    expect(midQueryProblem('11H10000', '11H10701')).toBeNull();
+  });
+
+  it('캐시는 바이트 상한 LRU(E-4) — 격자를 바꿔 가며 불러도 상한 안, 최근 격자는 히트', async () => {
+    const svc = new WeatherService({ serviceKey: 'k', now: () => AT_1605, cacheMaxBytes: 300_000 });
+    for (let nx = 1; nx <= 30; nx++) await svc.getForecast(nx, 100);
+    const stats = svc.cacheStats();
+    expect(stats.bytes).toBeLessThanOrEqual(300_000);
+    expect(stats.entries).toBeLessThan(30);
+    expect(stats.entries).toBeGreaterThan(0);
+    const before = mocks.getVilageFcst.mock.calls.length;
+    await svc.getForecast(30, 100); // 마지막 격자 — 히트
+    expect(mocks.getVilageFcst.mock.calls.length).toBe(before);
+  });
+
+  it('실패 쿨다운(E-V2) — 실패한 키는 30초 동안 업스트림·쿼터 없이 stale/503, 인증 오류는 그 서비스만 막는다', async () => {
+    let now = AT_1605;
+    const svc = new WeatherService({ serviceKey: 'k', now: () => now });
+    mocks.getVilageFcst.mockRejectedValue(new KmaApiError('down', { code: '05' }));
+    await expect(svc.getForecast(55, 120)).rejects.toBeInstanceOf(KmaApiError);
+    now = new Date(now.getTime() + 20_000);
+    await expect(svc.getForecast(55, 120)).rejects.toMatchObject({ statusCode: 503 });
+    expect(mocks.getVilageFcst).toHaveBeenCalledTimes(1);
+    expect(svc.quotaUsed('vilage')).toBe(1);
+
+    // 중기 인증 오류(30) — 중기 전체 차단, 단기는 그대로.
+    mocks.getMidSeaFcst.mockRejectedValue(new KmaApiAuthError('인증 실패(30)', { code: '30' }));
+    await expect(svc.getMidSea('12A20000')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(svc.getMid('11B00000', '11B10101')).rejects.toMatchObject({ statusCode: 503 });
+    expect(mocks.getMidLandFcst).not.toHaveBeenCalled();
+    expect((await svc.getNowcast(60, 127)).stale).toBe(false);
+  });
+
+  it('nowcastForAdvice(C-5) — 캐시(만료분 포함)는 즉시·업스트림 0콜, 없으면 대기 상한까지만 기다리고 끝나면 캐시를 채운다', async () => {
+    let now = AT_1605;
+    const svc = new WeatherService({ serviceKey: 'k', now: () => now });
+    await svc.getNowcast(60, 127);
+    const calls = mocks.getUltraSrtNcst.mock.calls.length;
+    // 다음 슬롯(17:10) 이 지나 만료됐어도 stale 상한(3h) 안이면 업스트림 없이.
+    now = new Date('2026-08-21T17:30:00+09:00');
+    const peeked = await svc.nowcastForAdvice(60, 127, 50);
+    expect(peeked?.now?.t1h).toBe(27.9);
+    expect(peeked?.stale).toBe(true);
+    expect(mocks.getUltraSrtNcst.mock.calls.length).toBe(calls);
+
+    // 처음 보는 격자 + 느린 업스트림(200ms) — 50ms 만 기다리고 null, 호출은 끝까지 가서 캐시를 채운다.
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    mocks.getUltraSrtNcst.mockImplementation(async () => {
+      await gate;
+      return { rows: fcstRows('ultra-ncst.json'), noData: false };
+    });
+    const t0 = Date.now();
+    expect(await svc.nowcastForAdvice(70, 130, 50)).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(1_000);
+    release!();
+    await vi.waitFor(() => expect(svc.peekNowcast(70, 130)).not.toBeNull());
+    expect((await svc.nowcastForAdvice(70, 130, 50))?.grid).toEqual({ nx: 70, ny: 130 });
+
+    // 키가 없거나 업스트림이 죽으면 null(추천은 계절 추정으로).
+    expect(await new WeatherService({ serviceKey: '' }).nowcastForAdvice(60, 127, 50)).toBeNull();
   });
 });
 

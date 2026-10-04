@@ -32,10 +32,13 @@ import type {
   SubwayTimetableResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
-import type {
-  RawSubwayArrival,
-  RawSubwayPosition,
-  RawSubwayTimetableRow,
+// 에러 클래스는 mock 팩토리가 실구현을 그대로 펼쳐 둔다 — 서비스의 instanceof 와 같은 클래스.
+import {
+  SubwayApiAuthError,
+  SubwayApiError,
+  type RawSubwayArrival,
+  type RawSubwayPosition,
+  type RawSubwayTimetableRow,
 } from './subway-api.adapter.js';
 import { SubwayService } from './subway.service.js';
 
@@ -478,6 +481,96 @@ describe('SubwayService — 실시간 인프라 (직접 주입)', () => {
       statusCode: 503,
     });
     expect(adapter.getRealtimeArrivals).not.toHaveBeenCalled();
+  });
+
+  it('⑩ IP 별 하루 미스 예산(E-7) — 업스트림 미스만 세고(히트는 무료), 바닥나면 429·업스트림 0, 다른 IP 는 산다', async () => {
+    const names = Array.from({ length: 4 }, (_, i) => `${NAME_PREFIX}예산${i}${stamp()}`);
+    await seed(
+      app,
+      names.map((name, i) => ({ lineId: '1002', name, lat: 37.5 + i * 0.05, lng: 127.0 })),
+    );
+    const adapter = {
+      getRealtimeArrivals: vi.fn().mockResolvedValue([rawArrival({ subwayId: '1002' })]),
+    };
+    const svc = new SubwayService({
+      prisma: app.prisma,
+      serviceKey: 'k',
+      adapter,
+      clientBudget: { realtime: 3 },
+    });
+    for (const name of names.slice(0, 3)) await svc.getStationArrivals(`1002:${name}`, { client: 'ip-a' });
+    // 캐시 히트(15초 안 같은 역)는 예산을 쓰지 않는다.
+    await svc.getStationArrivals(`1002:${names[0]}`, { client: 'ip-a' });
+    await expect(svc.getStationArrivals(`1002:${names[3]}`, { client: 'ip-a' })).rejects.toMatchObject({
+      statusCode: 429,
+    });
+    expect(adapter.getRealtimeArrivals).toHaveBeenCalledTimes(3);
+    // 다른 IP 는 자기 예산.
+    await svc.getStationArrivals(`1002:${names[3]}`, { client: 'ip-b' });
+    expect(adapter.getRealtimeArrivals).toHaveBeenCalledTimes(4);
+  });
+
+  it('⑪ 실패 쿨다운(E-V2) — 실패한 조회역명은 30초간 업스트림·쿼터 없이 503, 인증 오류는 실시간 전체를 막고 시간표는 산다', async () => {
+    const nameA = `${NAME_PREFIX}쿨다운가${stamp()}`;
+    const nameB = `${NAME_PREFIX}쿨다운나${stamp()}`;
+    await seed(app, [
+      { lineId: '1002', name: nameA, lat: 37.5, lng: 127.0 },
+      { lineId: '1002', name: nameB, lat: 37.6, lng: 127.1, stationCd: `TC${stamp()}` },
+    ]);
+    let nowMs = Date.now();
+    const adapter = {
+      getRealtimeArrivals: vi.fn().mockRejectedValue(new SubwayApiError('지하철 api 오류(ERROR-500)', { code: 'ERROR-500' })),
+      getRealtimePositions: vi.fn().mockResolvedValue([rawPosition()]),
+      getStationTimetable: vi.fn().mockResolvedValue([rawTimetableRow()]),
+    };
+    const svc = new SubwayService({
+      prisma: app.prisma,
+      serviceKey: 'k',
+      seoulKey: 'k2',
+      adapter,
+      now: () => new Date(nowMs),
+      dailyLimit: 100,
+    });
+    await expect(svc.getStationArrivals(`1002:${nameA}`)).rejects.toMatchObject({ statusCode: 502 });
+    nowMs += 20_000;
+    await expect(svc.getStationArrivals(`1002:${nameA}`)).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getRealtimeArrivals).toHaveBeenCalledTimes(1);
+    // 다른 키(노선 위치)는 그대로.
+    expect((await svc.getLinePositions('1002')).items).toHaveLength(1);
+
+    // 인증 오류(INFO-100) — 실시간(swopen) 전체 차단: 위치도 업스트림 없이 503.
+    nowMs += 20_000;
+    adapter.getRealtimeArrivals.mockRejectedValue(new SubwayApiAuthError('지하철 api 인증 실패(INFO-100)', { code: 'INFO-100' }));
+    await expect(svc.getStationArrivals(`1002:${nameA}`)).rejects.toMatchObject({ statusCode: 503 });
+    nowMs += 16_000; // 위치 마이크로 캐시 만료
+    await expect(svc.getLinePositions('1002')).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getRealtimePositions).toHaveBeenCalledTimes(1);
+    // 시간표(열린데이터 포털)는 다른 서비스라 정상.
+    expect((await svc.getStationTimetable(`1002:${nameB}`, '1')).source).toBe('api');
+  });
+
+  it('⑫ 라우트 — IP 예산(150) 소진 시 429 Too Many Requests(CF-Connecting-IP 기준)', async () => {
+    const names = Array.from({ length: 151 }, (_, i) => `${NAME_PREFIX}라우트예산${i}${stamp()}`);
+    await seed(
+      app,
+      // 동해 먼바다 좌표 — 주변 역 테스트(서남해 34.x/125.0)의 반경 박스와 겹치지 않게.
+      names.map((name, i) => ({ lineId: '1002', name, lat: 38.0 + i * 0.002, lng: 131.5 })),
+    );
+    mocks.getRealtimeArrivals.mockResolvedValue([]);
+    const ip = `10.99.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+    for (const name of names.slice(0, 150)) {
+      const res = await app.inject({ url: arrivalsUrl(`1002:${name}`), headers: { 'cf-connecting-ip': ip } });
+      expect(res.statusCode).toBe(200);
+    }
+    const over = await app.inject({ url: arrivalsUrl(`1002:${names[150]}`), headers: { 'cf-connecting-ip': ip } });
+    expect(over.statusCode).toBe(429);
+    expect(mocks.getRealtimeArrivals).toHaveBeenCalledTimes(150);
+    // 다른 IP 는 영향 없음.
+    const other = await app.inject({
+      url: arrivalsUrl(`1002:${names[150]}`),
+      headers: { 'cf-connecting-ip': `${ip}9` },
+    });
+    expect(other.statusCode).toBe(200);
   });
 });
 
