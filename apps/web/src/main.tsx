@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import {
+  ApiError,
   applyCssVars,
   configureApi,
   darkTheme,
@@ -54,7 +55,11 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: QUERY_STALE_TIME,
       gcTime: QUERY_GC_TIME,
-      retry: 1,
+      // 한 번만 재시도하되 4xx 는 하지 않는다 — 만료·없는 링크(410/404)나 권한 오류는 다시 물어도 답이
+      // 같고, 재시도 대기(1초) 동안 에러 화면이 늦게 뜬다(공유 정산·투표 링크).
+      retry: (failureCount, error) =>
+        failureCount < 1 &&
+        !(error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500),
       refetchOnWindowFocus: false,
     },
   },

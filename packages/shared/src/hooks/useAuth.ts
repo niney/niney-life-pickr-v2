@@ -12,6 +12,10 @@ export const useCurrentUser = () => {
     queryKey: ['auth', 'me'],
     queryFn: authApi.me,
     enabled: !!token,
+    // 내 정보는 로그인·로그아웃 때만 바뀌고, 그때는 아래 뮤테이션이 캐시를 통째로 비운다. 기본 60초면
+    // 이 훅을 쓰는 화면(App·어드민 가드·식단 입력)에 들어갈 때마다 /auth/me 를 다시 부른다. 권한 판정은
+    // 서버가 하므로 화면의 role 이 몇 분 늦어도 안전하다.
+    staleTime: 5 * 60_000,
   });
 
   useEffect(() => {
