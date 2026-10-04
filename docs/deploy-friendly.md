@@ -109,6 +109,30 @@ pm2 save
 pm2 startup     # 출력된 sudo 명령 실행 → 부팅 자동 기동
 ```
 
+### 실제 운영 값과 메모리 상한 (2026-10-05 확인)
+
+- 운영 서버의 실제 로그는 위 예시와 다르게 `/home/samplepcb/niney-life-pickr-v2/log/out-3.log`·`err-3.log`
+  (끝 숫자는 pm2 id)다. 확인은 `pm2 describe friendly | grep -E "out log path|error log path"`.
+- 실제 `max_memory_restart` 는 **1500M** 이다(위 예시의 500M 아님). 2026-09-13~10-04 에 이 상한 초과로 90회 재시작됐고
+  주범은 공개 맛집 목록·상세의 요청당 전량 로드였다(`docs/PLAN-perf-2.md`). 성능 2차 배포 뒤 `pm2 ls` 의 mem·재시작 수(↺)를
+  며칠 보고 상한을 정한다 — 지금 올리면 원인을 가린다.
+- **로그 로테이션**: pm2 기본은 로그를 무한히 키운다(운영에 5개월치가 쌓여 있었다). 한 번만 설정:
+
+  ```bash
+  pm2 install pm2-logrotate
+  pm2 set pm2-logrotate:max_size 50M
+  pm2 set pm2-logrotate:retain 30
+  pm2 set pm2-logrotate:compress true
+  ```
+
+- **메모리 관측**(성능 2차부터): 서버가 10분마다 `{"msg":"mem","rss":…,"heap":…,"ext":…}`(MB) 를 info 로 남긴다.
+  재시작 직전 추이를 `grep '"msg":"mem"' out-*.log` 로 본다. 코드 수정 뒤에도 RSS 가 시간에 비례해 오르기만 하면(힙은 평평)
+  sharp·resvg 같은 네이티브 메모리의 glibc 단편화를 의심하고, ecosystem 의 `env` 에 `MALLOC_ARENA_MAX: '2'` 를 넣어
+  하루 이상 비교한다(되돌리기 쉬움). 개발기(Windows)에서는 재현되지 않는다.
+- **요청 로그 형식**(성능 2차부터): 요청마다 2줄(`incoming request`/`request completed`, IP·쿼리 포함)을 쓰지 않고 완료 1줄
+  `{"msg":"req","m":"GET","route":"/api/v1/...","status":200,"ms":12}`(라우트 패턴, IP·쿼리 없음)만 남긴다. 500ms 이상은
+  `"msg":"slow request"`(warn) 로 실제 URL(토큰 가림)까지 남긴다. 경로별 지연은 `route` 로 바로 묶어 볼 수 있다.
+
 ## Nginx + HTTPS
 
 같은 도메인에서 웹/API 모두 서비스 (`ninelife.kr` 예시).
@@ -290,10 +314,30 @@ git pull --ff-only
 pnpm install --frozen-lockfile
 pnpm --filter friendly db:generate
 pnpm --filter friendly exec prisma migrate deploy
+pnpm --filter friendly db:analyze     # 플래너 통계 — 대량 적재·스키마 변경 뒤(테이블별 짧은 쓰기 락)
 pnpm --filter friendly build
 pm2 reload friendly --update-env
 pm2 save
 ```
+
+`deploy.sh` 는 적재 단계 뒤 `analyze_db` 로 같은 일을 한다. 통계(sqlite_stat1)가 없으면 SQLite 가 값이 하나뿐인 인덱스
+(예: 집값 kind)를 골라 지도·집계 쿼리가 10~30배 느려진다. 이후 갱신은 서버가 매일 04:30 `PRAGMA optimize` 로 한다.
+
+### DB 연결 설정
+
+`plugins/prisma.ts` 가 `DATABASE_URL` 에 `socket_timeout=30`·`connection_limit=12` 를 덧붙인다(이미 있으면 그대로).
+SQLite PRAGMA 는 실행한 연결에만 걸리므로 busy_timeout 을 PRAGMA 로 주면 풀의 첫 연결만 30초를 기다리고 나머지는 5초에
+`database is locked` 로 실패했다. 쓰기 트랜잭션은 DB 전체 쓰기 락이라 본문에서 외부 호출·긴 계산을 하지 않는다.
+
+### Cloudflare·nginx (성능 2차 권장)
+
+- **공개 JSON 캐시**: 공개 맛집 목록·랭킹(30초)·상세류(60초)·여행·집값 상태 등 사용자 무관 GET 은 `Cache-Control: public`
+  을 단다. Cloudflare 는 JSON 을 기본으로 캐시하지 않으므로 엣지까지 쓰려면 `/api/v1/restaurants/public*`·`/api/v1/restaurants/ranking`
+  등에 Cache Rule(“Eligible for cache”, 원본 헤더 존중)을 추가한다.
+- **실제 클라이언트 IP**: 레이트리밋 키는 `CF-Connecting-IP`(없으면 XFF)를 믿는다. 원본(nginx)에 Cloudflare 를 거치지 않고
+  직접 붙을 수 있으면 헤더를 위조해 IP 한도를 우회할 수 있다. 80/443 을 Cloudflare IP 대역으로만 허용하거나, nginx 에서
+  `set_real_ip_from <Cloudflare 대역>; real_ip_header CF-Connecting-IP;` 로 `$remote_addr` 를 확정한 뒤
+  `proxy_set_header CF-Connecting-IP $remote_addr;` 로 덮어쓴다.
 
 ## SQLite 백업
 

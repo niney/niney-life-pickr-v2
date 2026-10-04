@@ -105,6 +105,9 @@ build_web()  { step "web 빌드";             pnpm --filter web build; chmod -R 
 pm_stop()    { step "서버 중단";            pm2 stop friendly; }
 pm_start()   { step "서버 기동";            pm2 start friendly --update-env; pm2 save; }
 pm_reload()  { step "서버 reload";          pm2 reload friendly --update-env; pm2 save; }
+# 플래너 통계 — 없으면 집값 지도·공개 목록 집계가 저선택도 인덱스를 골라 10~30배 느리다(docs/PLAN-perf-2.md X-2).
+# 테이블별 ANALYZE 라 서버가 떠 있어도 쓰기 락은 짧게(0.1~0.8초씩) 나뉜다. 이후 갱신은 서버의 매일 PRAGMA optimize.
+analyze_db() { step "플래너 통계(ANALYZE)"; pnpm --filter friendly db:analyze || echo "  (통계 갱신 실패 — 'pnpm --filter friendly db:analyze' 로 재실행)"; }
 
 # ── 일상지도 데이터 ────────────────────────────────────────
 # status:life-map 은 "ok cctv=N toilet=M geocoded=G hospital=H store=S tour=T tour_matched=X cache=C" 한 줄(테이블이 없으면 "missing").
@@ -303,15 +306,15 @@ food_catalog_data() {
 }
 
 case_1() {  # API만, DB 변경 없음
-  pull; build_api; life_map_data; food_catalog_data; housing_data; parking_data; pm_reload
+  pull; build_api; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; pm_reload
 }
 
 case_2() {  # API + DB 마이그레이션
   pull
   if ask_stop; then
-    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; pm_start
+    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; pm_start
   else
-    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; pm_reload
+    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; pm_reload
   fi
 }
 
@@ -323,9 +326,9 @@ case_3() {  # 웹만
 case_4() {  # 웹 + API + DB (풀)
   pull
   if ask_stop; then
-    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; build_web; pm_start
+    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; build_web; pm_start
   else
-    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; build_web; pm_reload
+    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; build_web; pm_reload
   fi
 }
 
@@ -334,19 +337,19 @@ case_5() {  # .env만
 }
 
 case_6() {  # 일상지도 데이터 적재/갱신 — CSV 를 data/open/ 에 올린 뒤 실행(코드 배포·재기동 없음)
-  pull; gen; life_map_data 1
+  pull; gen; life_map_data 1; analyze_db
 }
 
 case_7() {  # 음식 카탈로그 적재/갱신 — 배포본을 data/open/food/ 에 올린 뒤 실행(코드 배포·재기동 없음)
-  pull; gen; food_catalog_data 1
+  pull; gen; food_catalog_data 1; analyze_db
 }
 
 case_8() {  # 집값 데이터 적재/갱신 — 단지 CSV 를 data/open/housing/ 에 올린 뒤 실행. HOUSING_MONTHS=24 로 백필.
-  pull; gen; housing_data 1
+  pull; gen; housing_data 1; analyze_db
 }
 
 case_9() {  # 주차 데이터 적재/갱신 — 표준데이터·서울 공영주차장·전기차 충전소 API(코드 배포·재기동 없음)
-  pull; gen; parking_data 1
+  pull; gen; parking_data 1; analyze_db
 }
 
 # ── 메뉴 ────────────────────────────────────────────────
