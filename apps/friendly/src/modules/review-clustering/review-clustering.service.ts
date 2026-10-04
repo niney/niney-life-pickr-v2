@@ -525,16 +525,19 @@ export class ReviewClusteringService {
   }
 
   // restaurantId → 검색가능 리뷰 수 맵. ids 미지정 시 전체. (status·pending 용)
+  // review-search 의 같은 이름 메서드처럼 DB GROUP BY 로 카운트만 받는다 — 전 행을 관계 select 로
+  // 읽으면 임베딩 6만 행에서 1.1초·RSS +165MB 였다(docs/PLAN-perf-2.md B-6).
   private async countEnrichedByRestaurant(ids?: string[]): Promise<Map<string, number>> {
-    const rows = await this.prisma.reviewSummary.findMany({
-      where: { embeddingJson: { not: null }, review: ids ? { restaurantId: { in: ids } } : {} },
-      select: { review: { select: { restaurantId: true } } },
+    const grouped = await this.prisma.visitorReview.groupBy({
+      by: ['restaurantId'],
+      where: {
+        summary: { is: { embeddingJson: { not: null } } },
+        ...(ids ? { restaurantId: { in: ids } } : {}),
+      },
+      _count: { _all: true },
     });
     const by = new Map<string, number>();
-    for (const r of rows) {
-      const rid = r.review.restaurantId;
-      by.set(rid, (by.get(rid) ?? 0) + 1);
-    }
+    for (const g of grouped) by.set(g.restaurantId, g._count._all);
     return by;
   }
 

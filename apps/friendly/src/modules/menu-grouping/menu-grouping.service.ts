@@ -941,19 +941,18 @@ export class MenuGroupingService {
           _max: { createdAt: true },
           _min: { version: true },
         }),
-        // 분석 done 수 — review 의 restaurantId 로 풀어내야 해서 select 후 메모리 집계.
-        // done 행은 보통 식당당 수십~수백이라 부하 미미.
-        this.prisma.reviewSummary.findMany({
-          where: { status: 'done', review: { restaurantId: { in: ids } } },
-          select: { review: { select: { restaurantId: true } } },
+        // 분석 done 수 — 리뷰(restaurantId) 단위 GROUP BY 로 카운트만. done 행을 관계 select 로
+        // 전부 읽어 세면 매일 03:00 스케줄 경로에서 요약 수에 비례해 느려지고 메모리를 잡았다
+        // (docs/PLAN-perf-2.md A-V2).
+        this.prisma.visitorReview.groupBy({
+          by: ['restaurantId'],
+          where: { restaurantId: { in: ids }, summary: { is: { status: 'done' } } },
+          _count: { _all: true },
         }),
       ]);
 
     const analyzedMap = new Map<string, number>();
-    for (const s of analyzedSummaries) {
-      const rid = s.review.restaurantId;
-      analyzedMap.set(rid, (analyzedMap.get(rid) ?? 0) + 1);
-    }
+    for (const g of analyzedSummaries) analyzedMap.set(g.restaurantId, g._count._all);
 
     const distinctMenuByRest = new Map<string, number>();
     for (const g of mentionGroups) {

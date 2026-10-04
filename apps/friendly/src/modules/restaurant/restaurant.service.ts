@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Prisma, type PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { isCandidate, scoreMatch } from '../../lib/matching.js';
 import { normalizeTerm } from '../../lib/text.js';
 import { buildCategoryTree, type CategoryTreeLeaf } from '../analytics/category-tree.js';
@@ -27,8 +27,15 @@ import { compareReviewRecencyDesc } from '@repo/utils';
 import { deriveRegion } from './region-derive.js';
 import { getRestaurantStoreInfo } from './restaurant-store-match.service.js';
 import { getRestaurantTourMatchInfo } from '../tour/restaurant-tour-match.service.js';
-import { getPublicListTourMap, getRestaurantTourSummary, travelerWeight } from '../tour/tour-public.service.js';
+import { getRestaurantTourSummary, travelerWeight } from '../tour/tour-public.service.js';
 import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
+import {
+  aggregateSummaryBuckets,
+  emptySummaryBucket,
+  foldAscii,
+  getPublicRestaurantBase,
+  invalidatePublicRestaurantCache,
+} from './restaurant-public-base.js';
 import type {
   AdminVisitorReviewType,
   CategoryTreeNodeType,
@@ -122,31 +129,54 @@ export interface RestaurantPublicSeoMeta {
 // when the source has one; FE clients ignore it.
 export type RawReview = VisitorReviewType & { externalId: string | null };
 
-// 공개 랭킹 read 캐시 — 같은 (sort, excludeNeutral, minMentions) 조합은 풀
-// 집계가 동일하므로 한 번 계산해 60s 동안 재사용. limit/offset 변화는 같은
-// 정렬된 배열 위 slicing 이므로 캐시 키에 포함하지 않는다(메모리 절약).
-// 새 리뷰 분석 결과가 들어와도 60s 안에는 stale 이지만, 공개 랭킹은 분 단위
-// freshness 로 충분하다. 강한 무효화가 필요하면 invalidateRankingCache().
-interface RankingCacheEntry {
-  rows: Array<{
-    placeId: string;
-    name: string;
-    category: string | null;
-    positiveCount: number;
-    negativeCount: number;
-    neutralCount: number;
-    totalMentions: number;
-    score: number;
-  }>;
-  expiresAt: number;
-}
-const RANKING_CACHE_TTL_MS = 60_000;
-const rankingCache = new Map<string, RankingCacheEntry>();
-const rankingPending = new Map<string, Promise<RankingCacheEntry['rows']>>();
-
+// 공개 목록·스마트픽·랭킹은 restaurant-public-base 의 공유 캐시(SQL 집계, TTL 30s)를 쓴다.
+// 랭킹은 예전엔 (sort, excludeNeutral, minMentions) 조합마다 따로 캐시해 키가 4천 개까지 늘었다 —
+// 이제 집계 하나에서 요청마다 메모리로 거르고 정렬한다.
+export { invalidatePublicRestaurantCache };
 export const invalidateRankingCache = (): void => {
-  rankingCache.clear();
+  invalidatePublicRestaurantCache();
 };
+
+// 공개 상세·리뷰가 리뷰마다 읽는 열. summary 를 include 하면 embeddingJson(~13KB)·aspectsJson 까지
+// 리뷰마다 실려 1천 건 가게 응답(58KB) 하나에 DB→JS 15MB 가 오갔다(docs/PLAN-perf-2.md B-3).
+const PUBLIC_REVIEW_SELECT = {
+  id: true,
+  authorName: true,
+  rating: true,
+  body: true,
+  visitedAt: true,
+  imageUrlsJson: true,
+  videosJson: true,
+  fetchedAt: true,
+  summary: {
+    select: {
+      status: true,
+      text: true,
+      sentiment: true,
+      sentimentScore: true,
+      satisfactionScore: true,
+      menusJson: true,
+      tipsJson: true,
+      keywordsJson: true,
+      finishedAt: true,
+    },
+  },
+} satisfies Prisma.VisitorReviewSelect;
+
+// 어드민 상세 — 공개 열 + 운영 메타(모델·오류·시작 시각)·externalId. 임베딩은 여기서도 쓰지 않는다.
+const ADMIN_REVIEW_SELECT = {
+  ...PUBLIC_REVIEW_SELECT,
+  externalId: true,
+  summary: {
+    select: {
+      ...PUBLIC_REVIEW_SELECT.summary.select,
+      model: true,
+      errorCode: true,
+      errorMessage: true,
+      startedAt: true,
+    },
+  },
+} satisfies Prisma.VisitorReviewSelect;
 
 // 지역 통계 캐시 — 어드민 대시보드 위젯 1곳만 호출하므로 단일 슬롯. 60s TTL +
 // in-flight dedup (동시 요청이 같은 전수 집계를 중복 실행하지 않도록). 데이터가
@@ -355,6 +385,7 @@ export class RestaurantService {
         console.warn('[restaurant-menu] normalized menu write skipped', err);
       });
     }
+    invalidatePublicRestaurantCache();
     return { id: r.id, keptMenuCount: keptMenus?.menus.length ?? 0 };
   }
 
@@ -430,6 +461,7 @@ export class RestaurantService {
       },
       select: { id: true },
     });
+    invalidatePublicRestaurantCache();
     return r;
   }
 
@@ -606,6 +638,7 @@ export class RestaurantService {
       },
       select: { id: true },
     });
+    invalidatePublicRestaurantCache();
     return r;
   }
 
@@ -650,6 +683,7 @@ export class RestaurantService {
       },
       select: { id: true },
     });
+    invalidatePublicRestaurantCache();
     return r;
   }
 
@@ -888,6 +922,7 @@ export class RestaurantService {
   // valid; the upsert from the new crawl will refresh the snapshot.
   async clearReviewsAndSummaries(restaurantId: string): Promise<void> {
     await this.prisma.visitorReview.deleteMany({ where: { restaurantId } });
+    invalidatePublicRestaurantCache();
   }
 
   // Hard-delete a restaurant and all its reviews/summaries (cascade). Returns
@@ -900,6 +935,7 @@ export class RestaurantService {
     });
     if (!r) return null;
     await this.prisma.restaurant.delete({ where: { id: r.id } });
+    invalidatePublicRestaurantCache();
     return { deletedReviewCount: r._count.visitorReviews };
   }
 
@@ -981,96 +1017,9 @@ export class RestaurantService {
 
     const ids = selectedRows.map((r) => r.id);
 
-    interface Bucket {
-      pending: number;
-      running: number;
-      done: number;
-      failed: number;
-      positive: number;
-      negative: number;
-      neutral: number;
-      mixed: number;
-      sentSum: number;
-      sentN: number;
-      satSum: number;
-      satN: number;
-    }
-    const emptyBucket = (): Bucket => ({
-      pending: 0,
-      running: 0,
-      done: 0,
-      failed: 0,
-      positive: 0,
-      negative: 0,
-      neutral: 0,
-      mixed: 0,
-      sentSum: 0,
-      sentN: 0,
-      satSum: 0,
-      satN: 0,
-    });
-    const byRestaurant = new Map<string, Bucket>();
-    for (const id of ids) byRestaurant.set(id, emptyBucket());
-
-    // ReviewSummary 원본을 전부 애플리케이션으로 가져오지 않고 DB 에서 식당별로
-    // 집계한다. 동적 IN 은 SQLite bind-variable 한도와 환경별 차이를 피하도록
-    // 500개씩 나눈다. queued/pending 은 기존 카드 의미대로 pending 에 합산한다.
-    type AggregateNumber = number | bigint | null;
-    interface SummaryAggregateRow {
-      restaurantId: string;
-      pending: AggregateNumber;
-      running: AggregateNumber;
-      done: AggregateNumber;
-      failed: AggregateNumber;
-      positive: AggregateNumber;
-      negative: AggregateNumber;
-      neutral: AggregateNumber;
-      mixed: AggregateNumber;
-      sentSum: AggregateNumber;
-      sentN: AggregateNumber;
-      satSum: AggregateNumber;
-      satN: AggregateNumber;
-    }
-    const aggregateNumber = (value: AggregateNumber): number =>
-      value === null ? 0 : Number(value);
-    const SUMMARY_AGGREGATE_BATCH_SIZE = 500;
-    for (let offset = 0; offset < ids.length; offset += SUMMARY_AGGREGATE_BATCH_SIZE) {
-      const batch = ids.slice(offset, offset + SUMMARY_AGGREGATE_BATCH_SIZE);
-      const aggregates = await this.prisma.$queryRaw<SummaryAggregateRow[]>`
-        SELECT v."restaurantId" AS "restaurantId",
-               SUM(CASE WHEN rs."status" IN ('queued', 'pending') THEN 1 ELSE 0 END) AS "pending",
-               SUM(CASE WHEN rs."status" = 'running' THEN 1 ELSE 0 END) AS "running",
-               SUM(CASE WHEN rs."status" = 'done' THEN 1 ELSE 0 END) AS "done",
-               SUM(CASE WHEN rs."status" = 'failed' THEN 1 ELSE 0 END) AS "failed",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'positive' THEN 1 ELSE 0 END) AS "positive",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'negative' THEN 1 ELSE 0 END) AS "negative",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'neutral' THEN 1 ELSE 0 END) AS "neutral",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'mixed' THEN 1 ELSE 0 END) AS "mixed",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."sentimentScore" IS NOT NULL THEN rs."sentimentScore" ELSE 0 END) AS "sentSum",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."sentimentScore" IS NOT NULL THEN 1 ELSE 0 END) AS "sentN",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."satisfactionScore" IS NOT NULL THEN rs."satisfactionScore" ELSE 0 END) AS "satSum",
-               SUM(CASE WHEN rs."status" = 'done' AND rs."satisfactionScore" IS NOT NULL THEN 1 ELSE 0 END) AS "satN"
-          FROM "review_summaries" rs
-          JOIN "visitor_reviews" v ON v."id" = rs."reviewId"
-         WHERE v."restaurantId" IN (${Prisma.join(batch)})
-         GROUP BY v."restaurantId"`;
-      for (const aggregate of aggregates) {
-        byRestaurant.set(aggregate.restaurantId, {
-          pending: aggregateNumber(aggregate.pending),
-          running: aggregateNumber(aggregate.running),
-          done: aggregateNumber(aggregate.done),
-          failed: aggregateNumber(aggregate.failed),
-          positive: aggregateNumber(aggregate.positive),
-          negative: aggregateNumber(aggregate.negative),
-          neutral: aggregateNumber(aggregate.neutral),
-          mixed: aggregateNumber(aggregate.mixed),
-          sentSum: aggregateNumber(aggregate.sentSum),
-          sentN: aggregateNumber(aggregate.sentN),
-          satSum: aggregateNumber(aggregate.satSum),
-          satN: aggregateNumber(aggregate.satN),
-        });
-      }
-    }
+    // ReviewSummary 원본을 애플리케이션으로 가져오지 않고 DB 에서 식당별로 집계한다(500개씩 IN,
+    // 커버링 인덱스). queued/pending 은 기존 카드 의미대로 pending 에 합산한다. 요약이 없는 가게는 빈 버킷.
+    const byRestaurant = await aggregateSummaryBuckets(this.prisma, ids);
 
     // canonicalId → 그 canonical 에 매달린 source 행들. rows 는 lastCrawledAt
     // desc 정렬이라 sources 도 자동으로 최근순.
@@ -1079,7 +1028,7 @@ export class RestaurantService {
       { canonical: (typeof rows)[number]['canonical']; sources: RestaurantSourceSummaryType[] }
     >();
     for (const r of selectedRows) {
-      const b = byRestaurant.get(r.id)!;
+      const b = byRestaurant.get(r.id) ?? emptySummaryBucket();
       const source: RestaurantSourceSummaryType = {
         restaurantId: r.id,
         source: r.source,
@@ -1334,105 +1283,35 @@ export class RestaurantService {
     return { items: sliced, total, limit: query.limit, offset: query.offset };
   }
 
-  // 공개 맛집 지도/리스트 페이지가 호출하는 리스트. 어드민 list() 와는
-  // 응답 셋이 다르다 — 좌표·도로명·대표 이미지가 들어가고 운영 메타(요약 진행
-  // 상태/실패 카운트 등) 는 빠진다. 좌표·imageUrls 는 snapshotJson 안에 살아
-  // 있어서 결과적으로 모든 행을 fetch 해 파싱해야 한다 (식당 수는 수십~수백
-  // 단위라 메모리 처리로 충분).
+  // 공개 맛집 지도/리스트 페이지가 호출하는 리스트. 어드민 list() 와는 응답 셋이 다르다 — 좌표·도로명·
+  // 대표 이미지가 들어가고 운영 메타(요약 진행 상태/실패 카운트 등)는 빠진다.
+  //
+  // 필터 전 전체(네이버 가게 + 같은 canonical 의 다이닝코드·테이블링 형제까지 합산한 리뷰/요약 수 +
+  // 여행로그 요약)는 restaurant-public-base 의 공유 캐시를 쓰고, 여기서는 q·category·bbox·정렬·페이지만
+  // 메모리에서 한다. 응답 행은 네이버 placeId 키 — 라우팅/캐시/UI 가 placeId 에 의존한다.
   async getPublicList(
     query: RestaurantPublicListQueryType,
   ): Promise<RestaurantPublicListResultType> {
-    // 응답 행은 네이버 placeId 키를 그대로 유지 — 라우팅/캐시/UI 가 placeId 에
-    // 의존. 다만 같은 canonical 에 묶인 다이닝코드·테이블링 형제가 있으면 그
-    // 행의 리뷰/요약 카운트를 함께 합산해 카드 카운트가 어드민 맛집 list 와
-    // 정렬되게 한다.
-    const ands: Record<string, unknown>[] = [{ source: 'naver' }];
+    const base = await getPublicRestaurantBase(this.prisma);
+    let rows = base.rows;
+    // 예전 name/category LIKE '%q%' 와 같은 의미(SQLite LIKE 는 ASCII 만 대소문자 무시).
     if (query.q && query.q.length > 0) {
-      ands.push({
-        OR: [{ name: { contains: query.q } }, { category: { contains: query.q } }],
-      });
+      const q = foldAscii(query.q);
+      rows = rows.filter((r) => r.nameFold.includes(q) || r.categoryFold.includes(q));
     }
     if (query.category && query.category.length > 0) {
-      ands.push({ category: { contains: query.category } });
+      const category = foldAscii(query.category);
+      rows = rows.filter((r) => r.categoryFold.includes(category));
     }
-    const where: Record<string, unknown> = ands.length > 0 ? { AND: ands } : {};
-
-    const rows = await this.prisma.restaurant.findMany({
-      where,
-      select: {
-        id: true,
-        canonicalId: true,
-        placeId: true,
-        name: true,
-        category: true,
-        address: true,
-        rating: true,
-        reviewCount: true,
-        firstCrawledAt: true,
-        snapshotJson: true,
-        _count: { select: { visitorReviews: true } },
-      },
-    });
-
-    interface Enriched {
-      id: string;
-      canonicalId: string;
-      placeId: string;
-      name: string;
-      category: string | null;
-      address: string | null;
-      roadAddress: string | null;
-      rating: number | null;
-      reviewCount: number | null;
-      firstCrawledAt: Date;
-      latitude: number | null;
-      longitude: number | null;
-      thumbnailUrl: string | null;
-      totalReviews: number;
-    }
-    const enriched: Enriched[] = rows.map((r) => {
-      let latitude: number | null = null;
-      let longitude: number | null = null;
-      let roadAddress: string | null = null;
-      let thumbnailUrl: string | null = null;
-      try {
-        const snap = JSON.parse(r.snapshotJson) as Partial<NaverPlaceDataType>;
-        if (typeof snap.latitude === 'number') latitude = snap.latitude;
-        if (typeof snap.longitude === 'number') longitude = snap.longitude;
-        if (typeof snap.roadAddress === 'string') roadAddress = snap.roadAddress;
-        if (Array.isArray(snap.imageUrls) && typeof snap.imageUrls[0] === 'string') {
-          thumbnailUrl = snap.imageUrls[0];
-        }
-      } catch {
-        // snapshotJson 파손은 드문 케이스 — 좌표/사진만 비고 다른 필드는 살림.
-      }
-      return {
-        id: r.id,
-        canonicalId: r.canonicalId,
-        // source='naver' 필터로 placeId 는 항상 non-null.
-        placeId: r.placeId!,
-        name: r.name,
-        category: r.category,
-        address: r.address,
-        roadAddress,
-        rating: r.rating,
-        reviewCount: r.reviewCount,
-        firstCrawledAt: r.firstCrawledAt,
-        latitude,
-        longitude,
-        thumbnailUrl,
-        totalReviews: r._count.visitorReviews,
-      };
-    });
-
-    let filtered = enriched;
+    // map 이 새 배열이라 아래 정렬이 캐시를 건드리지 않는다.
+    let items = rows.map((r) => r.item);
     if (query.bbox) {
       const parts = query.bbox.split(',').map(Number);
       // bbox 가 무효(NaN) 이면 무시하고 전체 통과 — Zod regex 통과한 입력이라
       // 정상 파싱되지만 방어적으로 length·finite 체크.
       if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
         const [minLng, minLat, maxLng, maxLat] = parts as [number, number, number, number];
-        filtered = enriched.filter(
+        items = items.filter(
           (r) =>
             r.latitude !== null &&
             r.longitude !== null &&
@@ -1443,185 +1322,8 @@ export class RestaurantService {
         );
       }
     }
-
-    // bbox 후의 ids 만 집계 — 검색 범위 밖 식당의 분석 통계까지 부르지 않게.
-    // status 전체를 끌어와 진행도(pending/running/done/failed) 분포도 함께
-    // 채운다 — 어드민 발견 페이지가 SSE 로 행 배지를 갱신할 때 응답 필드
-    // 셋이 어드민 list 와 정렬되어 캐시 패치가 단순해진다.
-    //
-    // 추가: 같은 canonical 에 묶인 다이닝코드·테이블링 형제가 있으면 그 행의
-    // visitorReview 수 / ReviewSummary 분포도 동일 카운트에 합산. 행은 여전히
-    // Naver placeId 키 1개지만 카드에 보이는 숫자는 세 출처의 통합 카운트가 된다.
-    const naverIds = filtered.map((r) => r.id);
-    const canonicalIds = filtered.map((r) => r.canonicalId);
-    const dcSiblings =
-      canonicalIds.length > 0
-        ? await this.prisma.restaurant.findMany({
-            where: { source: 'diningcode', canonicalId: { in: canonicalIds } },
-            select: {
-              id: true,
-              canonicalId: true,
-              _count: { select: { visitorReviews: true } },
-            },
-          })
-        : [];
-    // 테이블링은 partner 행만 — place 행은 리뷰가 없어 합산 의미가 없다
-    // (상세 융합 경로와 동일 기준).
-    const tbSiblings =
-      canonicalIds.length > 0
-        ? await this.prisma.restaurant.findMany({
-            where: {
-              source: 'tabling',
-              canonicalId: { in: canonicalIds },
-              NOT: { sourceId: { startsWith: 'place:' } },
-            },
-            select: {
-              id: true,
-              canonicalId: true,
-              _count: { select: { visitorReviews: true } },
-            },
-          })
-        : [];
-    // 같은 canonical 에 형제 행이 둘 이상이면 통상 의미상 첫 매칭만 사용 —
-    // 실제로는 (source, sourceId) unique + 자동 매칭이 1:1 이라 한 줄.
-    const dcByCanonical = new Map<string, { id: string; visitorReviewCount: number }>();
-    for (const dc of dcSiblings) {
-      if (!dcByCanonical.has(dc.canonicalId)) {
-        dcByCanonical.set(dc.canonicalId, {
-          id: dc.id,
-          visitorReviewCount: dc._count.visitorReviews,
-        });
-      }
-    }
-    const tbByCanonical = new Map<string, { id: string; visitorReviewCount: number }>();
-    for (const tb of tbSiblings) {
-      if (!tbByCanonical.has(tb.canonicalId)) {
-        tbByCanonical.set(tb.canonicalId, {
-          id: tb.id,
-          visitorReviewCount: tb._count.visitorReviews,
-        });
-      }
-    }
-
-    const ids = [...naverIds, ...dcSiblings.map((dc) => dc.id), ...tbSiblings.map((tb) => tb.id)];
-    const summaryRows =
-      ids.length > 0
-        ? await this.prisma.reviewSummary.findMany({
-            where: { review: { restaurantId: { in: ids } } },
-            select: {
-              status: true,
-              sentiment: true,
-              sentimentScore: true,
-              satisfactionScore: true,
-              review: { select: { restaurantId: true } },
-            },
-          })
-        : [];
-
-    interface Bucket {
-      pending: number;
-      running: number;
-      done: number;
-      failed: number;
-      analyzed: number;
-      sentSum: number;
-      sentN: number;
-      satSum: number;
-      satN: number;
-      pos: number;
-      neg: number;
-      neu: number;
-    }
-    const byId = new Map<string, Bucket>();
-    for (const id of ids) {
-      byId.set(id, {
-        pending: 0,
-        running: 0,
-        done: 0,
-        failed: 0,
-        analyzed: 0,
-        sentSum: 0,
-        sentN: 0,
-        satSum: 0,
-        satN: 0,
-        pos: 0,
-        neg: 0,
-        neu: 0,
-      });
-    }
-    for (const s of summaryRows) {
-      const b = byId.get(s.review.restaurantId);
-      if (!b) continue;
-      // queued 도 진행 중 의미로 pending 에 합산 (위 비공개 list 와 동일 정책).
-      if (s.status === 'pending' || s.status === 'queued') b.pending += 1;
-      else if (s.status === 'running') b.running += 1;
-      else if (s.status === 'failed') b.failed += 1;
-      else if (s.status === 'done') {
-        b.done += 1;
-        b.analyzed += 1;
-        if (s.sentiment === 'positive') b.pos += 1;
-        else if (s.sentiment === 'negative') b.neg += 1;
-        else if (s.sentiment === 'neutral') b.neu += 1;
-        // mixed 는 공개 카운트에서 빼고 별도 집계도 안 함 — 라이트한 UI 표면에서
-        // 4범주가 시각적으로 무거워 신호/잡음 비가 나쁘다.
-        if (s.sentimentScore !== null) {
-          b.sentSum += s.sentimentScore;
-          b.sentN += 1;
-        }
-        if (s.satisfactionScore !== null) {
-          b.satSum += s.satisfactionScore;
-          b.satN += 1;
-        }
-      }
-    }
-
-    // 여행로그 매칭 요약(카드 메타·정렬) — canonical 단위, 매칭 없는 행은 null.
-    const tourMap = await getPublicListTourMap(this.prisma, canonicalIds);
-
-    const items: RestaurantPublicListItemType[] = filtered.map((r) => {
-      const naverBucket = byId.get(r.id)!;
-      const dc = dcByCanonical.get(r.canonicalId) ?? null;
-      const dcBucket = dc ? (byId.get(dc.id) ?? null) : null;
-      const tb = tbByCanonical.get(r.canonicalId) ?? null;
-      const tbBucket = tb ? (byId.get(tb.id) ?? null) : null;
-      const sentSum = naverBucket.sentSum + (dcBucket?.sentSum ?? 0) + (tbBucket?.sentSum ?? 0);
-      const sentN = naverBucket.sentN + (dcBucket?.sentN ?? 0) + (tbBucket?.sentN ?? 0);
-      const satSum = naverBucket.satSum + (dcBucket?.satSum ?? 0) + (tbBucket?.satSum ?? 0);
-      const satN = naverBucket.satN + (dcBucket?.satN ?? 0) + (tbBucket?.satN ?? 0);
-      return {
-        placeId: r.placeId,
-        name: r.name,
-        category: r.category,
-        address: r.address,
-        roadAddress: r.roadAddress,
-        rating: r.rating,
-        reviewCount: r.reviewCount,
-        latitude: r.latitude,
-        longitude: r.longitude,
-        thumbnailUrl: r.thumbnailUrl,
-        firstCrawledAt: r.firstCrawledAt.toISOString(),
-        totalReviews:
-          r.totalReviews + (dc?.visitorReviewCount ?? 0) + (tb?.visitorReviewCount ?? 0),
-        summaryPending: naverBucket.pending + (dcBucket?.pending ?? 0) + (tbBucket?.pending ?? 0),
-        summaryRunning: naverBucket.running + (dcBucket?.running ?? 0) + (tbBucket?.running ?? 0),
-        summaryDone: naverBucket.done + (dcBucket?.done ?? 0) + (tbBucket?.done ?? 0),
-        summaryFailed: naverBucket.failed + (dcBucket?.failed ?? 0) + (tbBucket?.failed ?? 0),
-        analyzedCount: naverBucket.analyzed + (dcBucket?.analyzed ?? 0) + (tbBucket?.analyzed ?? 0),
-        avgSentimentScore: sentN > 0 ? sentSum / sentN : null,
-        avgSatisfactionScore: satN > 0 ? satSum / satN : null,
-        positiveCount: naverBucket.pos + (dcBucket?.pos ?? 0) + (tbBucket?.pos ?? 0),
-        negativeCount: naverBucket.neg + (dcBucket?.neg ?? 0) + (tbBucket?.neg ?? 0),
-        neutralCount: naverBucket.neu + (dcBucket?.neu ?? 0) + (tbBucket?.neu ?? 0),
-        tour: tourMap.get(r.canonicalId) ?? null,
-      };
-    });
-
-    const sortFn = pickPublicSort(query.sort);
-    items.sort(sortFn);
-
-    const total = items.length;
-    const slice = items.slice(query.offset, query.offset + query.limit);
-    return { items: slice, total };
+    items.sort(pickPublicSort(query.sort));
+    return { items: items.slice(query.offset, query.offset + query.limit), total: items.length };
   }
 
   // 공개 상세 — Naver placeId 로 찾은 행 + 같은 canonical 의 다이닝코드·
@@ -1953,10 +1655,7 @@ export class RestaurantService {
     const naverRow = await this.prisma.restaurant.findUnique({
       where: { placeId },
       include: {
-        visitorReviews: {
-          orderBy: { fetchedAt: 'desc' },
-          include: { summary: true },
-        },
+        visitorReviews: { orderBy: { fetchedAt: 'desc' }, select: PUBLIC_REVIEW_SELECT },
       },
     });
     if (!naverRow) return null;
@@ -1964,10 +1663,7 @@ export class RestaurantService {
     const dcRow = await this.prisma.restaurant.findFirst({
       where: { canonicalId: naverRow.canonicalId, source: 'diningcode' },
       include: {
-        visitorReviews: {
-          orderBy: { fetchedAt: 'desc' },
-          include: { summary: true },
-        },
+        visitorReviews: { orderBy: { fetchedAt: 'desc' }, select: PUBLIC_REVIEW_SELECT },
       },
     });
 
@@ -1980,10 +1676,7 @@ export class RestaurantService {
         NOT: { sourceId: { startsWith: 'place:' } },
       },
       include: {
-        visitorReviews: {
-          orderBy: { fetchedAt: 'desc' },
-          include: { summary: true },
-        },
+        visitorReviews: { orderBy: { fetchedAt: 'desc' }, select: PUBLIC_REVIEW_SELECT },
       },
     });
 
@@ -2089,15 +1782,44 @@ export class RestaurantService {
   // 공개 식당 랭킹 — 비로그인/게스트도 호출. 분석된(done) 리뷰의 sentiment
   // 분포를 식당 단위로 집계해 긍정/부정 비율로 정렬.
   //
-  // 집계 전략:
-  //   1) 단일 raw SQL 로 (restaurantId, sentiment) 그룹 카운트 — N+1 회피.
-  //   2) 결과를 JS 에서 식당별 버킷으로 묶고 score 계산.
-  //   3) (sort, excludeNeutral, minMentions) 단위로 60s TTL 캐시 — 같은 풀에서
-  //      limit/offset 만 다른 호출은 캐시된 정렬 배열을 slice 만 하면 된다.
-  //   4) 동일 키 동시 요청은 in-flight Promise 공유로 dogpile 방어.
+  // 네이버 가게 자신의 done 감정 분포(형제 합산 없음)는 공유 베이스(SQL 집계, TTL 30s)에 있다.
+  // minMentions·excludeNeutral·sort 는 요청마다 메모리에서 거르고 정렬한다(가게 수백~수천 행, 1ms 대).
+  // mixed 는 분포에 넣지 않는다(긍정/부정 비율 정의가 모호해짐).
   async getRanking(query: RestaurantRankingQueryType): Promise<RestaurantRankingResultType> {
-    const cacheKey = `${query.sort}:${query.excludeNeutral}:${query.minMentions}`;
-    const rows = await this.getRankingRows(cacheKey, query);
+    const base = await getPublicRestaurantBase(this.prisma);
+    const rows: Array<{
+      placeId: string;
+      name: string;
+      category: string | null;
+      positiveCount: number;
+      negativeCount: number;
+      neutralCount: number;
+      totalMentions: number;
+      score: number;
+    }> = [];
+    for (const r of base.rows) {
+      const b = r.own;
+      const total = b.positive + b.negative + b.neutral;
+      if (total === 0 || total < query.minMentions) continue;
+      const denom = query.excludeNeutral ? b.positive + b.negative : total;
+      if (denom === 0) continue;
+      rows.push({
+        placeId: r.item.placeId,
+        name: r.item.name,
+        category: r.item.category,
+        positiveCount: b.positive,
+        negativeCount: b.negative,
+        neutralCount: b.neutral,
+        totalMentions: total,
+        score: (query.sort === 'positive' ? b.positive : b.negative) / denom,
+      });
+    }
+    // 점수 desc, 동률은 표본 큰 식당 우선, 그 다음 이름 asc 로 안정화.
+    rows.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.totalMentions !== a.totalMentions) return b.totalMentions - a.totalMentions;
+      return a.name.localeCompare(b.name);
+    });
     const total = rows.length;
     const slice = rows.slice(query.offset, query.offset + query.limit);
     return {
@@ -2204,101 +1926,6 @@ export class RestaurantService {
 
     const total = sidos.reduce((n, s) => n + s.count, 0);
     return { total, unclassified, sidos, points };
-  }
-
-  private async getRankingRows(
-    cacheKey: string,
-    query: RestaurantRankingQueryType,
-  ): Promise<RankingCacheEntry['rows']> {
-    const now = Date.now();
-    const cached = rankingCache.get(cacheKey);
-    if (cached && cached.expiresAt >= now) return cached.rows;
-    if (cached) rankingCache.delete(cacheKey);
-
-    const pending = rankingPending.get(cacheKey);
-    if (pending) return pending;
-
-    const promise = this.computeRankingRows(query)
-      .then((rows) => {
-        rankingCache.set(cacheKey, { rows, expiresAt: Date.now() + RANKING_CACHE_TTL_MS });
-        return rows;
-      })
-      .finally(() => {
-        rankingPending.delete(cacheKey);
-      });
-    rankingPending.set(cacheKey, promise);
-    return promise;
-  }
-
-  private async computeRankingRows(
-    query: RestaurantRankingQueryType,
-  ): Promise<RankingCacheEntry['rows']> {
-    // (restaurantId, sentiment) 그룹 카운트 — done 행만. mixed 는 여기서 분포에
-    // 포함하지 않는다(긍정/부정 비율 정의가 모호해짐). 필요해지면 추후 보정.
-    const grouped = await this.prisma.$queryRaw<
-      Array<{ restaurantId: string; sentiment: string; cnt: number | bigint }>
-    >`SELECT v.restaurantId AS restaurantId,
-             rs.sentiment   AS sentiment,
-             COUNT(*)       AS cnt
-        FROM review_summaries rs
-        JOIN visitor_reviews v ON v.id = rs.reviewId
-       WHERE rs.status = 'done'
-         AND rs.sentiment IN ('positive','negative','neutral')
-       GROUP BY v.restaurantId, rs.sentiment`;
-
-    interface Bucket {
-      positive: number;
-      negative: number;
-      neutral: number;
-    }
-    const byId = new Map<string, Bucket>();
-    for (const g of grouped) {
-      const cnt = typeof g.cnt === 'bigint' ? Number(g.cnt) : g.cnt;
-      const b = byId.get(g.restaurantId) ?? { positive: 0, negative: 0, neutral: 0 };
-      if (g.sentiment === 'positive') b.positive = cnt;
-      else if (g.sentiment === 'negative') b.negative = cnt;
-      else if (g.sentiment === 'neutral') b.neutral = cnt;
-      byId.set(g.restaurantId, b);
-    }
-
-    if (byId.size === 0) return [];
-
-    const restaurants = await this.prisma.restaurant.findMany({
-      // 공개 랭킹은 네이버 전용 — placeId 가 응답 키이자 라우팅 키.
-      where: { id: { in: [...byId.keys()] }, source: 'naver' },
-      select: { id: true, placeId: true, name: true, category: true },
-    });
-
-    const rows: RankingCacheEntry['rows'] = [];
-    for (const r of restaurants) {
-      const b = byId.get(r.id)!;
-      const total = b.positive + b.negative + b.neutral;
-      if (total < query.minMentions) continue;
-      const denom = query.excludeNeutral ? b.positive + b.negative : total;
-      if (denom === 0) continue;
-      const positiveRatio = b.positive / denom;
-      const negativeRatio = b.negative / denom;
-      const score = query.sort === 'positive' ? positiveRatio : negativeRatio;
-      rows.push({
-        // source='naver' 필터로 placeId 항상 non-null.
-        placeId: r.placeId!,
-        name: r.name,
-        category: r.category,
-        positiveCount: b.positive,
-        negativeCount: b.negative,
-        neutralCount: b.neutral,
-        totalMentions: total,
-        score,
-      });
-    }
-
-    // 점수 desc, 동률은 표본 큰 식당 우선, 그 다음 이름 asc 로 안정화.
-    rows.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.totalMentions !== a.totalMentions) return b.totalMentions - a.totalMentions;
-      return a.name.localeCompare(b.name);
-    });
-    return rows;
   }
 
   // 식당 단위 집계. 분석된(done) 행에서 메뉴/팁/키워드 빈도를 추출. 메뉴는
@@ -2513,10 +2140,7 @@ export class RestaurantService {
       where: { canonicalId: r.canonicalId },
       orderBy: { lastCrawledAt: 'desc' },
       include: {
-        visitorReviews: {
-          orderBy: { fetchedAt: 'desc' },
-          include: { summary: true },
-        },
+        visitorReviews: { orderBy: { fetchedAt: 'desc' }, select: ADMIN_REVIEW_SELECT },
       },
     });
 
@@ -2651,73 +2275,30 @@ export class RestaurantService {
   // 제공하므로 여기에는 분석 기반 픽만 둔다.
   async smartPick(input: RestaurantSmartPickInputType): Promise<RestaurantSmartPickResultType> {
     const strategy = input.strategy;
-    // 공개 픽도 네이버 전용 — 응답 picked.placeId 가 string. 후보가 명시되면 placeId
-    // IN 필터로 자연 제한되지만, 후보 없을 때도 source 명시.
-    const where: Record<string, unknown> = { source: 'naver' };
+    // 공개 픽도 네이버 전용 — 응답 picked.placeId 가 string. 후보·여행로그·네이버 행 자신의 done
+    // 점수 합은 공유 베이스(SQL 집계, TTL 30s)에서 읽는다 — 무인증 경로라 요청마다 전 가게 요약을
+    // 읽던 비용(운영형 1.1~1.4s, 동시 10건 RSS 1.5GB)을 없앴다.
+    const base = await getPublicRestaurantBase(this.prisma);
+    let restaurants = base.rows;
     if (input.candidatePlaceIds && input.candidatePlaceIds.length > 0) {
-      where.placeId = { in: input.candidatePlaceIds };
+      const wanted = new Set(input.candidatePlaceIds);
+      restaurants = restaurants.filter((r) => wanted.has(r.item.placeId));
     }
-    const restaurants = await this.prisma.restaurant.findMany({
-      where,
-      select: {
-        id: true,
-        canonicalId: true,
-        placeId: true,
-        name: true,
-      },
-    });
 
     if (restaurants.length === 0) {
       return { picked: null, candidates: 0, strategy };
     }
 
-    // 여행로그 보정 만족도(매칭된 가게만) — 리뷰 분석이 없는 가게도 이 항으로 후보에 든다.
-    const tourMap = await getPublicListTourMap(
-      this.prisma,
-      restaurants.map((r) => r.canonicalId),
-    );
-
-    // list()와 같은 집계를 그대로 재사용하기엔 인터페이스가 안 맞으므로
-    // 후보 식당들의 done 행만 따로 집계한다.
-    const ids = restaurants.map((r) => r.id);
-    const summaryRows = await this.prisma.reviewSummary.findMany({
-      where: { review: { restaurantId: { in: ids } }, status: 'done' },
-      select: {
-        sentimentScore: true,
-        satisfactionScore: true,
-        review: { select: { restaurantId: true } },
-      },
-    });
-    interface Agg {
-      sentSum: number;
-      sentN: number;
-      satSum: number;
-      satN: number;
-    }
-    const byId = new Map<string, Agg>();
-    for (const id of ids) byId.set(id, { sentSum: 0, sentN: 0, satSum: 0, satN: 0 });
-    for (const s of summaryRows) {
-      const a = byId.get(s.review.restaurantId);
-      if (!a) continue;
-      if (s.sentimentScore !== null) {
-        a.sentSum += s.sentimentScore;
-        a.sentN += 1;
-      }
-      if (s.satisfactionScore !== null) {
-        a.satSum += s.satisfactionScore;
-        a.satN += 1;
-      }
-    }
-
     const weighted = restaurants
       .map((r) => {
-        const a = byId.get(r.id)!;
+        const a = r.own;
         const sentAvg = a.sentN > 0 ? a.sentSum / a.sentN : null;
         const satAvg = a.satN > 0 ? a.satSum / a.satN : null;
         // 정규화: sentiment -1~1 → 0~1, satisfaction 1~5 → 0~1, 여행자 보정 만족도 1~5 → 0~1.
         const sentNorm = sentAvg === null ? null : (sentAvg + 1) / 2;
         const satNorm = satAvg === null ? null : (satAvg - 1) / 4;
-        const tourScore = tourMap.get(r.canonicalId)?.bayesScore ?? null;
+        // 여행로그 보정 만족도(매칭된 가게만) — 리뷰 분석이 없는 가게도 이 항으로 후보에 든다.
+        const tourScore = r.item.tour?.bayesScore ?? null;
         const tourNorm = travelerWeight(tourScore);
         let weight: number;
         if (strategy === 'satisfaction') {
@@ -2732,9 +2313,8 @@ export class RestaurantService {
           weight = parts.length === 0 ? 0 : parts.reduce((a, b) => a + b, 0) / parts.length;
         }
         return {
-          // source='naver' 필터로 placeId non-null.
-          placeId: r.placeId!,
-          name: r.name,
+          placeId: r.item.placeId,
+          name: r.item.name,
           weight,
           avgSentimentScore: sentAvg,
           avgSatisfactionScore: satAvg,

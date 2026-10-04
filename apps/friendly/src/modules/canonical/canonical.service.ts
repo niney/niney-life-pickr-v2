@@ -7,6 +7,8 @@ import type {
   CanonicalSummaryType,
 } from '@repo/api-contract';
 import { isCandidate, scoreMatch } from '../../lib/matching.js';
+// 병합·분리·삭제는 공개 목록의 형제 합산(canonical 단위)을 바꾼다 — 공유 캐시를 비운다.
+import { invalidatePublicRestaurantCache } from '../restaurant/restaurant-public-base.js';
 
 // 호출자 오류 (404/409 등). route 가 catch 해서 적절한 status 로 변환.
 export class CanonicalError extends Error {
@@ -196,6 +198,7 @@ export class CanonicalService {
       // 사실상 일어나지 않지만, 발생 시 보수적으로 conflict 로 보고.
       throw new CanonicalError('target canonical missing after merge', 'CONFLICT');
     }
+    invalidatePublicRestaurantCache();
     return { ok: true as const, target: targetSummary, movedRestaurantIds };
   }
 
@@ -268,6 +271,7 @@ export class CanonicalService {
 
     const newSummary = await this.loadSummary(result.newCanonicalId);
     if (!newSummary) throw new CanonicalError('new canonical missing after split', 'CONFLICT');
+    invalidatePublicRestaurantCache();
     return {
       ok: true as const,
       newCanonical: newSummary,
@@ -308,6 +312,7 @@ export class CanonicalService {
       }
       await tx.canonicalRestaurant.delete({ where: { id: canonicalId } });
     });
+    invalidatePublicRestaurantCache();
     return { deletedRestaurantCount, deletedReviewCount };
   }
 

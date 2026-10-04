@@ -88,6 +88,12 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
+  // 사용자 무관 공개 GET 은 브라우저·CDN 이 짧게 재사용하게 한다(서버 공개 베이스 캐시도 30초 —
+  // docs/PLAN-perf-2.md B-9). 로그인에 따라 달라지는 응답에는 붙이지 않고, 404 에도 붙이지 않는다.
+  // Cloudflare 는 JSON 을 기본 캐시하지 않아 엣지까지 쓰려면 Cache Rule 이 함께 필요하다(배포 문서).
+  const PUBLIC_LIST_CACHE = 'public, max-age=30, stale-while-revalidate=300';
+  const PUBLIC_DETAIL_CACHE = 'public, max-age=60, stale-while-revalidate=300';
+
   // 공개 식당 랭킹 — 인증 불필요. 루트 페이지에서 게스트도 본다.
   typed.get(Routes.Restaurant.ranking, {
     schema: {
@@ -96,7 +102,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       querystring: RestaurantRankingQuery,
       response: { 200: RestaurantRankingResult },
     },
-    handler: async (req) => service.getRanking(req.query),
+    handler: async (req, reply) => {
+      reply.header('Cache-Control', PUBLIC_LIST_CACHE);
+      return service.getRanking(req.query);
+    },
   });
 
   // 공개 식당 리스트 — 맛집 지도 페이지가 호출. 좌표·대표 사진·AI 통계 한 번에.
@@ -107,7 +116,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       querystring: RestaurantPublicListQuery,
       response: { 200: RestaurantPublicListResult },
     },
-    handler: async (req) => service.getPublicList(req.query),
+    handler: async (req, reply) => {
+      reply.header('Cache-Control', PUBLIC_LIST_CACHE);
+      return service.getPublicList(req.query);
+    },
   });
 
   // 공개 식당 상세 — 어드민 detail 의 운영 메타 (요약 진행 상태/에러/모델) 제거,
@@ -119,9 +131,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantPublicDetail },
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const detail = await service.getPublicDetail(req.params.placeId);
       if (!detail) throw app.httpErrors.notFound('Restaurant not found');
+      reply.header('Cache-Control', PUBLIC_DETAIL_CACHE);
       return detail;
     },
   });
@@ -136,9 +149,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       querystring: RestaurantPublicReviewsQuery,
       response: { 200: RestaurantPublicReviewsResult },
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const result = await service.getPublicReviews(req.params.placeId, req.query);
       if (!result) throw app.httpErrors.notFound('Restaurant not found');
+      reply.header('Cache-Control', PUBLIC_DETAIL_CACHE);
       return result;
     },
   });
@@ -151,9 +165,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantInsights },
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const insights = await service.getInsights(req.params.placeId);
       if (!insights) throw app.httpErrors.notFound('Restaurant not found');
+      reply.header('Cache-Control', PUBLIC_DETAIL_CACHE);
       return insights;
     },
   });
@@ -183,9 +198,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantCategoryTreeResult },
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const roots = await service.getCategoryTree(req.params.placeId);
       if (roots === null) throw app.httpErrors.notFound('Restaurant not found');
+      reply.header('Cache-Control', PUBLIC_DETAIL_CACHE);
       return { roots };
     },
   });

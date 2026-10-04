@@ -13,6 +13,7 @@ import errorHandlerPlugin from '../../plugins/error-handler.js';
 import restaurantRoutes from './restaurant.route.js';
 import {
   contentHashOf,
+  invalidatePublicRestaurantCache,
   invalidateRankingCache,
   RestaurantService,
   type RawReview,
@@ -714,6 +715,8 @@ describe('Public restaurant routes', () => {
   });
 
   afterEach(async () => {
+    // 공개 목록·스마트픽·랭킹의 공유 캐시 — 테스트마다 prisma 로 직접 시딩하므로 비운다.
+    invalidatePublicRestaurantCache();
     await app.prisma.restaurant.deleteMany({
       where: { placeId: { startsWith: PUB_PREFIX } },
     });
@@ -722,6 +725,19 @@ describe('Public restaurant routes', () => {
   it('GET /restaurants/public — no auth required', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/restaurants/public' });
     expect(res.statusCode).toBe(200);
+  });
+
+  it('공개 GET 은 짧은 공용 캐시 헤더를 달고, 404 에는 달지 않는다', async () => {
+    const list = await app.inject({ method: 'GET', url: '/api/v1/restaurants/public' });
+    expect(list.headers['cache-control']).toBe('public, max-age=30, stale-while-revalidate=300');
+    const ranking = await app.inject({ method: 'GET', url: '/api/v1/restaurants/ranking' });
+    expect(ranking.headers['cache-control']).toBe('public, max-age=30, stale-while-revalidate=300');
+    const missing = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${PUB_PREFIX}nope`,
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers['cache-control']).toBeUndefined();
   });
 
   it('GET /restaurants/public — returns lat/lng + thumbnail from snapshot', async () => {

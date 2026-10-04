@@ -607,7 +607,8 @@ model VisitorReview {
 
   @@unique([restaurantId, externalId])
   @@unique([restaurantId, contentHash])
-  @@index([restaurantId])
+  // (restaurantId) 단일 인덱스를 대체 — 가게별 리뷰 id 를 테이블 없이 인덱스만으로 읽는다(공개 목록 집계).
+  @@index([restaurantId, id])
   @@map("visitor_reviews")
 }
 
@@ -657,6 +658,9 @@ model ReviewSummary {
   cluster      ReviewCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
 
   @@index([clusterId])
+  // 가게별 상태·감정 집계 커버링 인덱스 — 임베딩이 든 큰 행을 읽지 않게 한다. 원시 SQL 이 INDEXED BY 로
+  // 이름을 지정하므로(restaurant-public-base.ts) 이름을 고정한다.
+  @@index([reviewId, status, sentiment, sentimentScore, satisfactionScore], map: "review_summaries_agg_idx")
   @@map("review_summaries")
 }
 

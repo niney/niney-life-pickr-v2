@@ -11,7 +11,7 @@ import jwtPlugin from '../../plugins/jwt.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import restaurantRoutes from './restaurant.route.js';
-import { RestaurantService } from './restaurant.service.js';
+import { invalidatePublicRestaurantCache, RestaurantService } from './restaurant.service.js';
 
 const buildTestApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -69,6 +69,8 @@ describe('public smart-pick route', () => {
   });
 
   afterEach(async () => {
+    // 공개 픽은 공유 캐시(TTL 30s)를 쓴다 — 요약을 prisma 로 직접 붙이는 시딩이라 테스트마다 비운다.
+    invalidatePublicRestaurantCache();
     await app.prisma.restaurant.deleteMany({
       where: { placeId: { startsWith: PLACE_PREFIX } },
     });
