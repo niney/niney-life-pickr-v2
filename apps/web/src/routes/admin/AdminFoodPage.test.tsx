@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { toast } from 'sonner';
 import type {
   FoodAdminStatsType,
@@ -391,6 +391,71 @@ describe('AdminFoodPage', () => {
       offset: '0',
       limit: '50',
     });
+  });
+
+  it('2페이지에서 검색을 시작해도 옛 검색어로 1페이지를 먼저 요청하지 않는다', async () => {
+    const itemRequests: string[] = [];
+    useBaseHandlers();
+    server.use(
+      http.get(ITEMS_URL, ({ request }) => {
+        itemRequests.push(request.url);
+        return HttpResponse.json({ items: [item()], total: 120 });
+      }),
+    );
+    renderPage();
+    await screen.findByText('김치찌개');
+    // '검색어@offset' 으로 요청 순서를 본다.
+    const seen = () =>
+      itemRequests.map((u) => {
+        const p = new URL(u).searchParams;
+        return `${p.get('q') ?? ''}@${p.get('offset')}`;
+      });
+
+    // 페이저는 데스크톱·모바일 두 벌이 DOM 에 있다(jsdom 은 CSS 로 숨기지 않는다).
+    fireEvent.click(screen.getAllByRole('button', { name: '다음 페이지' })[0]!);
+    await waitFor(() => expect(seen().at(-1)).toBe('@50'));
+
+    const input = screen.getByLabelText('음식 검색');
+    fireEvent.change(input, { target: { value: '김' } });
+    fireEvent.change(input, { target: { value: '김치' } });
+    expect(input).toHaveValue('김치');
+    await waitFor(() => expect(seen().at(-1)).toBe('김치@0'));
+    // 검색어와 페이지 리셋이 한 번에 반영된다 — 예전엔 글자를 치는 즉시 페이지만 1로 돌아가
+    // '@0'(옛 검색어·1페이지) 요청이 먼저 나갔고, 글자마다('김') 따로 나가지도 않는다.
+    expect(seen().slice(seen().lastIndexOf('@50') + 1)).toEqual(['김치@0']);
+  });
+
+  it('cron 미리보기는 설정을 받은 뒤 저장된 값으로 한 번만 요청한다', async () => {
+    const previews: Array<{ cronExpr: string; timezone: string }> = [];
+    useBaseHandlers();
+    server.use(
+      // 설정이 늦게 오는 동안 기본 cron(매월 1일)으로 먼저 요청하면 안 된다.
+      http.get(CONFIG_URL, async () => {
+        await delay(80);
+        return HttpResponse.json(importConfig({ cronExpr: '0 4 * * 1' }));
+      }),
+      http.post(PREVIEW_URL, async ({ request }) => {
+        previews.push((await request.json()) as { cronExpr: string; timezone: string });
+        return HttpResponse.json({ valid: true, error: null, nextRuns: ['2026-09-07T04:00:00.000Z'] });
+      }),
+    );
+    renderPage();
+    await waitFor(() => expect(previews).toHaveLength(1));
+    expect(previews[0]).toEqual({ cronExpr: '0 4 * * 1', timezone: 'Asia/Seoul' });
+
+    // 커스텀 cron 을 손으로 고칠 때는 입력이 멈춘 뒤의 값으로만 — 글자마다 요청하지 않는다.
+    fireEvent.click(screen.getByRole('button', { name: '커스텀' }));
+    const cron = screen.getByLabelText('cron 식');
+    fireEvent.change(cron, { target: { value: '0 5' } });
+    fireEvent.change(cron, { target: { value: '0 5 * *' } });
+    fireEvent.change(cron, { target: { value: '0 5 * * *' } });
+    await waitFor(() => expect(previews.at(-1)?.cronExpr).toBe('0 5 * * *'));
+    expect(previews.map((p) => p.cronExpr)).toEqual(['0 4 * * 1', '0 5 * * *']);
+
+    // 프리셋 버튼은 타이핑이 아니므로 기다리지 않고 바로 반영한다.
+    fireEvent.click(screen.getByRole('button', { name: '매일 04:00' }));
+    await waitFor(() => expect(previews.at(-1)?.cronExpr).toBe('0 4 * * *'));
+    expect(previews).toHaveLength(3);
   });
 
   it('지금 실행 — 기본은 body 없이, 오버라이드를 켜면 현재 선택(소스·분류)을 보내고 결과를 토스트로 알린다', async () => {

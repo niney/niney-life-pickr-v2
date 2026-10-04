@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   AlertTriangle,
@@ -348,14 +348,28 @@ const ImportJobSection = () => {
   const classify = draft.classify ?? cfg?.classify ?? true;
   const patchDraft = (patch: ImportDraft): void => setDraft((prev) => ({ ...prev, ...patch }));
 
-  const preview = useFoodImportPreview(draftCron, timezone, true);
+  const isPreset = PRESETS.some((p) => p.cron === draftCron);
+  const showCustomInput = customMode || !isPreset;
+  // 미리보기는 입력이 멈춘 뒤, 그리고 설정 응답이 온 다음에만 요청한다 — cron·타임존을 손으로
+  // 고칠 때 글자마다 요청하지 않고, 설정 응답 전에 기본 cron 으로 한 번 헛요청하지도 않는다
+  // (설정 조회가 실패하면 예전처럼 기본값으로 미리보기를 보여 준다). 프리셋 버튼은 타이핑이
+  // 아니므로 지연 없이 반영한다.
+  const previewCron = useDebounced(draftCron, showCustomInput ? 300 : 0);
+  const previewTimezone = useDebounced(timezone, 300);
+  const previewSettled = previewCron === draftCron && previewTimezone === timezone;
+  const preview = useFoodImportPreview(
+    previewCron,
+    previewTimezone,
+    !config.isPending && previewSettled,
+  );
+  // 입력 중(아직 미리보기에 반영 전)에는 직전 식의 결과를 지금 식의 것처럼 보여 주지 않는다 —
+  // 응답을 기다릴 때와 같은 "불러오는 중" 상태로 둔다.
+  const previewData = previewSettled ? preview.data : undefined;
   const inflightRunId = runs.data?.inflightRunId ?? null;
   const { progress } = useFoodImportRunEvents(!!inflightRunId);
 
   const enabled = cfg?.enabled ?? false;
-  const cronValid = preview.data?.valid ?? true;
-  const isPreset = PRESETS.some((p) => p.cron === draftCron);
-  const showCustomInput = customMode || !isPreset;
+  const cronValid = previewData?.valid ?? true;
   const isRunning = !!inflightRunId || progress !== null;
   const dirty =
     !!cfg &&
@@ -577,13 +591,13 @@ const ImportJobSection = () => {
         <div className="rounded-md border p-3 text-sm">
           {!cronValid ? (
             <p className="text-red-600 dark:text-red-400">
-              잘못된 cron 식입니다{preview.data?.error ? `: ${preview.data.error}` : ''}
+              잘못된 cron 식입니다{previewData?.error ? `: ${previewData.error}` : ''}
             </p>
-          ) : preview.data && preview.data.nextRuns.length > 0 ? (
+          ) : previewData && previewData.nextRuns.length > 0 ? (
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">다음 실행 예정 (적용 후)</div>
               <ul className="space-y-0.5">
-                {preview.data.nextRuns.slice(0, 3).map((r) => (
+                {previewData.nextRuns.slice(0, 3).map((r) => (
                   <li key={r} className="font-mono text-xs text-muted-foreground">
                     {formatDate(r)}
                   </li>
@@ -1014,12 +1028,14 @@ const RecognitionQualitySection = () => {
   const [modelInput, setModelInput] = useState('');
   const model = useDebounced(modelInput.trim(), 300);
   const [versionInput, setVersionInput] = useState('');
+  // 모델 필터와 마찬가지로 입력이 멈춘 뒤의 값만 쿼리에 — 자릿수마다 집계를 다시 받지 않게.
+  const version = useDebounced(versionInput, 300);
   const [confidenceBucket, setConfidenceBucket] = useState<'' | 'low' | 'medium' | 'high'>('');
-  const parsedVersion = Number(versionInput);
+  const parsedVersion = Number(version);
   const quality = useFoodRecognitionQuality({
     days,
     ...(model ? { model } : {}),
-    ...(versionInput && Number.isInteger(parsedVersion) && parsedVersion > 0
+    ...(version && Number.isInteger(parsedVersion) && parsedVersion > 0
       ? { version: parsedVersion }
       : {}),
     ...(confidenceBucket ? { confidenceBucket } : {}),
@@ -1222,10 +1238,36 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
 const COLS = 9;
 
+// 카탈로그 검색창 — 치는 중인 글자는 여기서만 들고, 300ms 멈춘 뒤에 표로 올린다. 글자마다
+// 요청이 나가지 않고 표(최대 100행)도 다시 그려지지 않는다.
+const CatalogSearchInput = ({ onSearch }: { onSearch: (q: string) => void }) => {
+  const [text, setText] = useState('');
+  // 마지막으로 표에 올린 값 — 쳤다가 도로 지운 경우엔 다시 올리지 않는다.
+  const [sent, setSent] = useState('');
+  useEffect(() => {
+    if (text === sent) return undefined;
+    const timer = setTimeout(() => {
+      setSent(text);
+      onSearch(text);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [text, sent, onSearch]);
+  return (
+    <div className="relative sm:col-span-2 lg:col-span-5">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        aria-label="음식 검색"
+        className="pl-8"
+        placeholder="음식명·별칭 검색"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+    </div>
+  );
+};
+
 const CatalogSection = () => {
-  const [searchInput, setSearchInput] = useState('');
-  // 입력은 즉시, 요청은 300ms 안정 후 — 글자마다 fetch 가 나가지 않게.
-  const q = useDebounced(searchInput, 300);
+  const [q, setQ] = useState('');
   const [dishType, setDishType] = useState<FoodDishTypeType | ''>('');
   const [mainIngredient, setMainIngredient] = useState<FoodMainIngredientType | ''>('');
   const [cuisine, setCuisine] = useState<FoodCuisineType | ''>('');
@@ -1261,6 +1303,12 @@ const CatalogSection = () => {
       set(v);
       setPage(1);
     };
+  // 검색어와 페이지 리셋을 한 번에 — 예전엔 글자를 치는 즉시 페이지만 1로 돌아가, 2페이지
+  // 이상에서 검색을 시작하면 '옛 검색어·1페이지' 요청이 한 번 헛나갔다.
+  const onSearch = useCallback((next: string): void => {
+    setQ(next);
+    setPage(1);
+  }, []);
 
   return (
     <Card>
@@ -1280,19 +1328,7 @@ const CatalogSection = () => {
       <CardContent className="space-y-4">
         {/* 검색 + 필터 */}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="relative sm:col-span-2 lg:col-span-5">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="음식 검색"
-              className="pl-8"
-              placeholder="음식명·별칭 검색"
-              value={searchInput}
-              onChange={(e) => {
-                setSearchInput(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
+          <CatalogSearchInput onSearch={onSearch} />
           <TaxonomySelect
             aria-label="조리형태 필터"
             value={dishType}

@@ -47,6 +47,8 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
   const photos = useTourRawPhotos(on('photos'), pageParams);
   const trips = useTourRawTrips(on('trips'), pageParams);
   const active = { visits, orders, receipts, photos, trips }[tab];
+  // 페이지를 넘기는 동안은 이전 페이지를 흐리게 둔다(훅의 placeholderData) — 표가 한 줄로 접혔다 펴지며 페이저가 사라지지 않게.
+  const dim = cn('transition-opacity', active.isPlaceholderData && 'opacity-70');
 
   const changeTab = (t: Tab) => {
     setTab(t);
@@ -77,7 +79,7 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
           <p className="text-sm text-destructive">{(active.error as Error).message}</p>
         ))}
       {tab === 'visits' && visits.data && (
-        <div className="overflow-x-auto">
+        <div className={cn('overflow-x-auto', dim)}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -124,7 +126,7 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
         </div>
       )}
       {tab === 'orders' && orders.data && (
-        <div className="overflow-x-auto">
+        <div className={cn('overflow-x-auto', dim)}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -150,7 +152,7 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
         </div>
       )}
       {tab === 'receipts' && receipts.data && (
-        <div className="overflow-x-auto">
+        <div className={cn('overflow-x-auto', dim)}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -183,8 +185,16 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
           </Table>
         </div>
       )}
-      {tab === 'photos' && photos.data && <PhotoGrid items={photos.data.items} sizes={photos.data.sizes} />}
-      {tab === 'trips' && trips.data && <TripList items={trips.data.items} />}
+      {tab === 'photos' && photos.data && (
+        <div className={dim}>
+          <PhotoGrid items={photos.data.items} sizes={photos.data.sizes} />
+        </div>
+      )}
+      {tab === 'trips' && trips.data && (
+        <div className={dim}>
+          <TripList items={trips.data.items} />
+        </div>
+      )}
       {active.data && active.data.total > PAGE_SIZE && <Pager total={active.data.total} page={page} pageSize={PAGE_SIZE} onPageChange={setPage} pageSizeOptions={[PAGE_SIZE]} />}
       <p className="text-[11px] text-muted-foreground">
         AI 허브 「국내 여행로그 데이터(제주도 및 도서지역)」(2023) 원본 — 승인받은 계정의 내부 검토용. 화면 밖으로 내보내거나 공개 화면에 옮기지 않습니다.

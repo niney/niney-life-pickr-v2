@@ -98,17 +98,24 @@ export const useTourBizCheck = () => {
 // ── 3차 원본 열람 — placeId 가 null 이면 비활성(탭이 닫혀 있을 때). 404 는 allowlist 밖 또는 없는 장소.
 const RAW_STALE_MS = 5 * 60_000;
 const rawKey = (kind: string, id: string | null, p: TourRawPageParams) => [...KEY, 'raw', kind, id, p.limit ?? 50, p.offset ?? 0] as const;
+// 같은 장소에서 페이지만 넘길 때는 이전 페이지를 둔 채 새로 받는다(표가 "불러오는 중" 한 줄로 접혔다 펴지지 않게).
+// 장소가 바뀌거나 탭이 닫혀 있던(id null) 직후에는 비운다 — 다른 장소의 원본이 잠깐이라도 보이면 안 된다.
+const RAW_KEY_ID_INDEX = KEY.length + 2;
+const keepSamePlacePage =
+  (placeId: string | null) =>
+  <T>(previousData: T | undefined, previousQuery: { queryKey: readonly unknown[] } | undefined): T | undefined =>
+    placeId !== null && previousQuery?.queryKey[RAW_KEY_ID_INDEX] === placeId ? previousData : undefined;
 
 export const useTourRawVisits = (placeId: string | null, p: TourRawPageParams = {}) =>
-  useQuery({ queryKey: rawKey('visits', placeId, p), queryFn: () => tourApi.adminPlaceVisits(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false });
+  useQuery({ queryKey: rawKey('visits', placeId, p), queryFn: () => tourApi.adminPlaceVisits(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false, placeholderData: keepSamePlacePage(placeId) });
 export const useTourRawActivities = (placeId: string | null, p: TourRawPageParams = {}) =>
-  useQuery({ queryKey: rawKey('activities', placeId, p), queryFn: () => tourApi.adminPlaceActivities(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false });
+  useQuery({ queryKey: rawKey('activities', placeId, p), queryFn: () => tourApi.adminPlaceActivities(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false, placeholderData: keepSamePlacePage(placeId) });
 export const useTourRawSpend = (placeId: string | null, p: TourRawPageParams = {}) =>
-  useQuery({ queryKey: rawKey('spend', placeId, p), queryFn: () => tourApi.adminPlaceSpend(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false });
+  useQuery({ queryKey: rawKey('spend', placeId, p), queryFn: () => tourApi.adminPlaceSpend(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false, placeholderData: keepSamePlacePage(placeId) });
 export const useTourRawPhotos = (placeId: string | null, p: TourRawPageParams = {}) =>
-  useQuery({ queryKey: rawKey('photos', placeId, p), queryFn: () => tourApi.adminPlacePhotos(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false });
+  useQuery({ queryKey: rawKey('photos', placeId, p), queryFn: () => tourApi.adminPlacePhotos(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false, placeholderData: keepSamePlacePage(placeId) });
 export const useTourRawTrips = (placeId: string | null, p: TourRawPageParams = {}) =>
-  useQuery({ queryKey: rawKey('trips', placeId, p), queryFn: () => tourApi.adminPlaceTrips(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false });
+  useQuery({ queryKey: rawKey('trips', placeId, p), queryFn: () => tourApi.adminPlaceTrips(placeId!, p), enabled: placeId !== null, staleTime: RAW_STALE_MS, retry: false, placeholderData: keepSamePlacePage(placeId) });
 export const useTourRawTrip = (travelId: string | null) =>
   useQuery({ queryKey: [...KEY, 'raw', 'trip', travelId], queryFn: () => tourApi.adminTrip(travelId!), enabled: travelId !== null, staleTime: RAW_STALE_MS, retry: false });
 

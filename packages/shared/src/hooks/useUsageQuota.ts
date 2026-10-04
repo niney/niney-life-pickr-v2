@@ -11,7 +11,8 @@ export const useUsageQuotaOverview = (date?: string) =>
     queryKey: overviewKey(date),
     queryFn: () => usageQuotaApi.overview(date),
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    // 오늘(date 미지정)만 30초 폴링 — 지난 날짜의 사용량은 더 바뀌지 않는다.
+    refetchInterval: date ? false : 30_000,
   });
 
 export const useUpdateUsageQuota = () => {

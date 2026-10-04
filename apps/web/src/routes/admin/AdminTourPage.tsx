@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, ExternalLink, FileSearch, Loader2, RefreshCw, Search } from 'lucide-react';
 import {
@@ -40,11 +40,49 @@ const STATUS_OPTIONS: Array<{ value: TourSeedStatusFilterType; label: string }> 
 
 const won = (v: number | null): string => (v === null ? '–' : `${Math.round(v).toLocaleString('ko-KR')}원`);
 
+// 여행자 수 필터 — 입력은 즉시 반영하고(예전처럼 빈 값·1 미만은 1 로 맞춘다) 표에는 300ms 멈춘 뒤에만 알린다.
+// "12" 를 칠 때 1 과 12 로 두 번 조회하거나, 자릿수마다 50행 표를 다시 그리지 않게.
+const MinTravelersInput = ({ value, onCommit }: { value: number; onCommit: (next: number) => void }) => {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    if (draft === value) return undefined;
+    const timer = setTimeout(() => onCommit(draft), 300);
+    return () => clearTimeout(timer);
+  }, [draft, value, onCommit]);
+  return (
+    <Input
+      id="tour-min-travelers"
+      type="number"
+      min={1}
+      max={1000}
+      value={draft}
+      onChange={(e) => setDraft(Math.max(1, Number(e.target.value) || 1))}
+      className="h-8 w-16"
+    />
+  );
+};
+
+// 가게 이름 검색 — 치는 중인 글자는 이 폼 안에만 두고 제출할 때 표에 알린다(글자마다 표가 다시 그려지지 않게).
+const SeedSearchForm = ({ onSearch }: { onSearch: (q: string) => void }) => {
+  const [text, setText] = useState('');
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    onSearch(text.trim());
+  };
+  return (
+    <form onSubmit={submit} className="flex items-center gap-1">
+      <Input id="tour-seed-q" value={text} onChange={(e) => setText(e.target.value)} placeholder="가게 이름" className="h-8 w-40" />
+      <Button type="submit" size="sm" variant="outline">
+        검색
+      </Button>
+    </form>
+  );
+};
+
 export const AdminTourPage = () => {
   const [region, setRegion] = useState<SeedRegion>('all');
   const [minTravelers, setMinTravelers] = useState(5);
   const [status, setStatus] = useState<TourSeedStatusFilterType>('unmatched');
-  const [qInput, setQInput] = useState('');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [maxCalls, setMaxCalls] = useState(10);
@@ -63,11 +101,15 @@ export const AdminTourPage = () => {
   const st = statusQ.data;
   const seeds = seedsQ.data;
 
-  const onSearch = (e: FormEvent) => {
-    e.preventDefault();
-    setQ(qInput.trim());
+  // 입력 중인 글자는 MinTravelersInput·SeedSearchForm 이 들고 있다 — 여기(50행 표를 그리는 쪽)에는 확정된 값만 온다.
+  const onSearch = useCallback((next: string) => {
+    setQ(next);
     setPage(1);
-  };
+  }, []);
+  const onMinTravelers = useCallback((next: number) => {
+    setMinTravelers(next);
+    setPage(1);
+  }, []);
 
   const onDiscover = (placeId: string) => {
     setOpen({ placeId, mode: 'discover' });
@@ -209,26 +251,10 @@ export const AdminTourPage = () => {
             </div>
             <label className="flex items-center gap-1 text-xs text-muted-foreground" htmlFor="tour-min-travelers">
               여행자
-              <Input
-                id="tour-min-travelers"
-                type="number"
-                min={1}
-                max={1000}
-                value={minTravelers}
-                onChange={(e) => {
-                  setMinTravelers(Math.max(1, Number(e.target.value) || 1));
-                  setPage(1);
-                }}
-                className="h-8 w-16"
-              />
+              <MinTravelersInput value={minTravelers} onCommit={onMinTravelers} />
               명 이상
             </label>
-            <form onSubmit={onSearch} className="flex items-center gap-1">
-              <Input id="tour-seed-q" value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="가게 이름" className="h-8 w-40" />
-              <Button type="submit" size="sm" variant="outline">
-                검색
-              </Button>
-            </form>
+            <SeedSearchForm onSearch={onSearch} />
             <span className="ml-auto text-xs text-muted-foreground">{seeds ? `${seeds.total.toLocaleString('ko-KR')}곳` : ''}</span>
           </div>
         </CardHeader>

@@ -23,12 +23,28 @@ export const useProviders = () =>
     queryFn: aiApi.listProviders,
   });
 
+// 설정을 바꾼 뒤에는 목록만 정확 일치로 다시 받는다. ['ai','providers'] 접두사로
+// 무효화하면 모델 카탈로그(['ai','providers',id,purpose,'models'] — 서버가 캐시 없이
+// 외부 /api/tags 를 부른다)까지 저장할 때마다 재요청된다. 카탈로그는 키·Base URL 이
+// 바뀌어 내용이 달라질 수 있을 때만(catalogOf) 함께 무효화한다.
+const invalidateProviders = (
+  qc: ReturnType<typeof useQueryClient>,
+  catalogOf?: ProviderKey['id'],
+): Promise<void> => {
+  if (catalogOf) void qc.invalidateQueries({ queryKey: ['ai', 'providers', catalogOf] });
+  return qc.invalidateQueries({ queryKey: ['ai', 'providers'], exact: true });
+};
+
 export const useUpdateProvider = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ key, input }: { key: ProviderKey; input: UpdateLlmProviderInputType }) =>
       aiApi.updateProvider(key, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ai', 'providers'] }),
+    onSuccess: (_data, { key, input }) =>
+      invalidateProviders(
+        qc,
+        input.apiKey !== undefined || input.baseUrl !== undefined ? key.id : undefined,
+      ),
   });
 };
 
@@ -36,7 +52,7 @@ export const useDeleteProvider = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (key: ProviderKey) => aiApi.deleteProvider(key),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ai', 'providers'] }),
+    onSuccess: (_data, key) => invalidateProviders(qc, key.id),
   });
 };
 

@@ -67,6 +67,34 @@ describe('AdminQuotasPage', () => {
     expect(await screen.findByText('저장됨')).toBeInTheDocument();
   });
 
+  it('오늘 사용량만 30초 폴링하고, 지난 날짜를 볼 때는 폴링하지 않는다', async () => {
+    const dates: Array<string | null> = [];
+    server.use(
+      http.get('/api/v1/admin/quotas', ({ request }) => {
+        dates.push(new URL(request.url).searchParams.get('date'));
+        return HttpResponse.json(overview);
+      }),
+    );
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <AdminQuotasPage />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('타로 해석');
+    // 30초를 실제로 기다리지 않고 쿼리에 걸린 폴링 주기를 본다.
+    const pollingOf = (dateKey: string) =>
+      qc.getQueryCache().find({ queryKey: ['admin', 'usage-quota', dateKey] })?.observers[0]?.options
+        .refetchInterval;
+    expect(dates).toEqual([null]);
+    expect(pollingOf('today')).toBe(30_000);
+
+    // 지난 날짜의 사용량은 더 바뀌지 않는다.
+    fireEvent.change(screen.getByLabelText('사용량 날짜'), { target: { value: '2026-09-01' } });
+    await waitFor(() => expect(dates.at(-1)).toBe('2026-09-01'));
+    expect(pollingOf('2026-09-01')).toBe(false);
+  });
+
   it('잘못된 값은 저장하지 않고 안내한다', async () => {
     server.use(http.get('/api/v1/admin/quotas', () => HttpResponse.json(overview)));
     renderPage();

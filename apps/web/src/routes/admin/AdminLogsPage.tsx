@@ -226,6 +226,10 @@ export const AdminLogsPage = () => {
   const listQuery = useOperationRuns({ page, limit: pageSize, feature, status });
   const items = listQuery.data?.items ?? [];
   const total = listQuery.data?.total ?? 0;
+  // 페이지·필터를 바꾸면 이전 목록을 흐리게 둔 채 새 목록을 받는다(훅의
+  // keepPreviousData). isFetching 이 아니라 isPlaceholderData 로 가른다 — 5초 폴링
+  // 때마다 목록이 깜빡이면 안 된다.
+  const dimmed = listQuery.isPlaceholderData;
 
   return (
     <div className="mx-auto max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
@@ -306,11 +310,16 @@ export const AdminLogsPage = () => {
               <XCircle className="size-4" /> 목록을 불러올 수 없습니다.
             </div>
           ) : items.length === 0 ? (
-            <div className="flex h-32 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+            <div
+              className={cn(
+                'flex h-32 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground transition-opacity',
+                dimmed && 'opacity-70',
+              )}
+            >
               조건에 맞는 실행 기록이 없습니다.
             </div>
           ) : (
-            <ul className="space-y-3">
+            <ul className={cn('space-y-3 transition-opacity', dimmed && 'opacity-70')}>
               {items.map((run) => (
                 <li key={run.id}>
                   <RunRow run={run} />

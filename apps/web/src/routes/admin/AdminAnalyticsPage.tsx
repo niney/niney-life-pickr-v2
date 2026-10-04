@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type InputHTMLAttributes,
+} from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -58,6 +65,8 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
+import { useDebounced } from '~/lib/useDebounced';
+import { useIsDesktopXl } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
 import { RandomCrawlSection } from './RandomCrawlSection';
 
@@ -75,8 +84,98 @@ const formatDate = (iso: string | null): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+// URL 같은 바깥 값에 묶인 텍스트 입력의 상태 — 치는 글자는 즉시 보이고, 바깥에는
+// delayMs 동안 멈춘 뒤의 값만 올린다(onCommit). 입력을 URL 에 바로 묶으면 글자마다
+// 요청이 나가고 페이지 전체가 다시 그려지며, react-router 가 URL 갱신을 transition 으로
+// 늦춰 제어 입력의 글자가 되돌려졌다 다시 들어간다(한글 조합이 깨진다).
+//
+// 바깥 값(value)이 바뀌면 둘로 가른다.
+//   · 우리가 올린 값이 돌아온 것 → 입력은 그대로 둔다(그 사이 더 친 글자를 덮지 않는다).
+//   · 그 밖의 변화(카테고리 클릭·딥링크·사이드바로 초기화) → 입력을 그 값으로 맞춘다.
+// 가르는 일은 동기화 effect 없이 렌더 중에 하고, 타이머만 effect 로 둔다.
+const useDebouncedText = (
+  value: string,
+  onCommit: (next: string) => void,
+  delayMs = 300,
+): [string, (next: string) => void] => {
+  // 치는 중인 글자. null 이면 바깥 값을 그대로 보여 준다.
+  const [draft, setDraft] = useState<string | null>(null);
+  // 올렸지만 아직 바깥 값으로 돌아오지 않은 값들(오래된 순). 늦게 돌아온 옛 값을
+  // 바깥 변화로 착각하지 않으려고 마지막 하나가 아니라 전부 기억한다.
+  const [sent, setSent] = useState<string[]>([]);
+  const [seen, setSeen] = useState(value);
+
+  if (seen !== value) {
+    setSeen(value);
+    const at = sent.indexOf(value);
+    if (at >= 0) {
+      setSent(sent.slice(at + 1));
+      if (draft === value) setDraft(null);
+    } else {
+      setSent([]);
+      setDraft(null);
+    }
+  }
+
+  // 바깥이 알고 있는(곧 알게 될) 가장 최근 값 — 이 값과 같으면 올릴 게 없다.
+  const settled = sent.length > 0 ? sent[sent.length - 1]! : value;
+  useEffect(() => {
+    if (draft === null || draft === settled) return undefined;
+    const timer = setTimeout(() => {
+      setSent((prev) => [...prev, draft]);
+      onCommit(draft);
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [draft, settled, delayMs, onCommit]);
+
+  return [draft ?? value, setDraft];
+};
+
+// useDebouncedText 를 쓰는 <input> — 전역 메뉴 통계의 검색·카테고리 필터용.
+const DebouncedInput = ({
+  value,
+  onCommit,
+  ...rest
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) => {
+  const [text, setText] = useDebouncedText(value, onCommit);
+  return <input {...rest} value={text} onChange={(e) => setText(e.target.value)} />;
+};
+
+// 식당 이름 검색창. 치는 글자를 페이지 루트의 state 로 들면 글자마다 표·섹션 전체가
+// 다시 그려지므로 여기서만 든다 — URL(q) 에는 300ms 뒤에 올라간다.
+const RestaurantSearchInput = ({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+}) => {
+  const [text, setText] = useDebouncedText(value, onCommit);
+  return (
+    <div className="relative w-full sm:w-60">
+      <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="식당 이름 검색"
+        className="h-9 pl-8"
+        aria-label="식당 이름 검색"
+      />
+    </div>
+  );
+};
+
+// 다른 파일의 섹션이라 여기서 감싼다(이 파일의 섹션들은 정의에서 memo).
+const RandomCrawlSectionMemo = memo(RandomCrawlSection);
+
 export const AdminAnalyticsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  // 목록은 화면 폭에 맞는 한 벌만 그린다(모바일 카드 / xl+ 표). 예전엔 두 벌을 다 그리고
+  // CSS 로 한쪽을 숨겨, 다시 그릴 때마다 일이 두 배였다.
+  const isDesktop = useIsDesktopXl();
 
   // URL 이 진실의 원천. 컴포넌트 state 는 URL 파싱 결과로만 도출.
   const qParam = searchParams.get('q') ?? '';
@@ -88,38 +187,29 @@ export const AdminAnalyticsPage = () => {
     return PAGE_SIZE_OPTIONS.includes(n) ? n : DEFAULT_PAGE_SIZE;
   })();
 
-  // 검색 입력은 디바운스 — 즉시 URL 동기화하면 글자마다 fetch 가 터진다.
-  // 입력값과 URL(q) 의 의도적 분리: 입력값은 즉시 반영, URL 은 300ms 후.
-  const [searchInput, setSearchInput] = useState(qParam);
-  useEffect(() => {
-    if (searchInput === qParam) return;
-    const handle = setTimeout(() => {
-      updateParams({ q: searchInput || null, page: null });
-    }, 300);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
-  // URL 이 외부에서 바뀐 경우(뒤로/앞으로) 입력 동기화.
-  useEffect(() => {
-    setSearchInput(qParam);
-  }, [qParam]);
+  const updateParams = useCallback(
+    (patch: Record<string, string | number | null>, opts: { replace?: boolean } = {}): void => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [k, v] of Object.entries(patch)) {
+            if (v === null || v === '') next.delete(k);
+            else next.set(k, String(v));
+          }
+          return next;
+        },
+        { replace: opts.replace ?? true },
+      );
+    },
+    [setSearchParams],
+  );
 
-  const updateParams = (
-    patch: Record<string, string | number | null>,
-    opts: { replace?: boolean } = {},
-  ): void => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        for (const [k, v] of Object.entries(patch)) {
-          if (v === null || v === '') next.delete(k);
-          else next.set(k, String(v));
-        }
-        return next;
-      },
-      { replace: opts.replace ?? true },
-    );
-  };
+  // 검색 입력은 디바운스 — 즉시 URL 동기화하면 글자마다 fetch 가 터진다.
+  // 입력값은 RestaurantSearchInput 이 들고, 여기(URL)에는 300ms 뒤의 값만 온다.
+  const commitSearch = useCallback(
+    (next: string): void => updateParams({ q: next || null, page: null }),
+    [updateParams],
+  );
 
   const status = useGroupingRestaurantsStatus({
     q: qParam || undefined,
@@ -264,8 +354,11 @@ export const AdminAnalyticsPage = () => {
         </Card>
       </section>
 
+      {/* props 없는 섹션들은 전부 memo — 이 루트가 선택 체크·잡 진행(SSE)·식당 표 조회로
+          다시 그려질 때 따라 그려지지 않는다. 각자 자기 쿼리로, URL 을 읽는 두 섹션
+          (카테고리 트리·전역 메뉴)은 자기 구독으로만 갱신된다. */}
       <ScheduleSection />
-      <RandomCrawlSection />
+      <RandomCrawlSectionMemo />
       <GlobalMergeSection />
       <CategoryTreeSection />
       <GlobalMenusSection />
@@ -350,16 +443,7 @@ export const AdminAnalyticsPage = () => {
             </CardDescription>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative w-full sm:w-60">
-              <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="식당 이름 검색"
-                className="h-9 pl-8"
-                aria-label="식당 이름 검색"
-              />
-            </div>
+            <RestaurantSearchInput value={qParam} onCommit={commitSearch} />
             {/* 모바일에선 page-level sticky 바로 이관 — xl+ 에서만 헤더 인라인. */}
             <div className="hidden items-center gap-2 xl:flex">
               <Button
@@ -396,7 +480,7 @@ export const AdminAnalyticsPage = () => {
               {qParam && (
                 <button
                   type="button"
-                  onClick={() => setSearchInput('')}
+                  onClick={() => updateParams({ q: null, page: null })}
                   className="ml-2 underline hover:no-underline"
                 >
                   검색어 지우기
@@ -407,7 +491,8 @@ export const AdminAnalyticsPage = () => {
             <>
               {/* 모바일 카드 — 정렬 컨트롤은 xl+ 표 컬럼 헤더 클릭으로만 동작.
                   카드 클릭(=label) 으로 체크박스 토글되도록 label 래핑. */}
-              <ul className="space-y-2 xl:hidden">
+              {!isDesktop && (
+              <ul className="space-y-2">
                 {items.map((r) => {
                   const attention = needsAttention(r);
                   const stale =
@@ -492,8 +577,10 @@ export const AdminAnalyticsPage = () => {
                   );
                 })}
               </ul>
+              )}
               {/* 데스크톱 표 — xl+ */}
-              <div className="hidden xl:block">
+              {isDesktop && (
+              <div>
             <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
@@ -611,6 +698,7 @@ export const AdminAnalyticsPage = () => {
               </TableBody>
             </Table>
               </div>
+              )}
               {/* 페이저 — 데스크탑은 풀, 모바일은 컴팩트. total=0 이어도 노출 시
                   레이아웃 점프 방지. selected 와 무관 — 페이지 전환에도 선택은 보존. */}
               <Pager
@@ -722,7 +810,7 @@ const ScheduleStatusChip = ({ status }: { status: ScheduleRunStatusType }) => {
 
 // 자동 실행 스케줄 — 관리자가 주기를 설정하면 "미분류 식당 정규화 → 전역 머지"를
 // 그 주기마다 자동 실행. 설정은 서버 DB 에 영속되어 재시작에도 유지된다.
-const ScheduleSection = () => {
+const ScheduleSection = memo(function ScheduleSection() {
   const config = useScheduleConfig();
   const update = useUpdateScheduleConfig();
   const runNow = useRunScheduleNow();
@@ -742,15 +830,22 @@ const ScheduleSection = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.data?.cronExpr, config.data?.timezone]);
 
-  const preview = useSchedulePreview(draftCron, timezone, true);
+  const isPreset = SCHEDULE_PRESETS.some((p) => p.cron === draftCron);
+  const showCustomInput = customMode || !isPreset;
+  // 커스텀 cron 을 손으로 고칠 때는 입력이 멈춘 뒤에만 미리보기를 요청한다(글자마다 X).
+  // 프리셋 버튼은 타이핑이 아니므로 지연 없이.
+  const previewCron = useDebounced(draftCron, showCustomInput ? 300 : 0);
+  const previewSettled = previewCron === draftCron;
+  const preview = useSchedulePreview(previewCron, timezone, previewSettled);
+  // 입력 중(아직 미리보기에 반영 전)에는 직전 식의 결과를 지금 식의 것처럼 보여 주지 않는다 —
+  // 응답을 기다릴 때와 같은 "불러오는 중" 상태로 둔다(바로 아래 자동 발굴 섹션과 같은 동작).
+  const previewData = previewSettled ? preview.data : undefined;
   const inflightRunId = runs.data?.inflightRunId ?? null;
   const { progress } = useScheduleRunEvents(!!inflightRunId);
 
   const enabled = config.data?.enabled ?? false;
   const dirty = !!config.data && draftCron !== config.data.cronExpr;
-  const isPreset = SCHEDULE_PRESETS.some((p) => p.cron === draftCron);
-  const showCustomInput = customMode || !isPreset;
-  const cronValid = preview.data?.valid ?? true;
+  const cronValid = previewData?.valid ?? true;
   const isRunning = !!inflightRunId || progress !== null;
 
   const selectPreset = (cron: string): void => {
@@ -843,13 +938,13 @@ const ScheduleSection = () => {
         <div className="rounded-md border p-3 text-sm">
           {!cronValid ? (
             <p className="text-red-600 dark:text-red-400">
-              잘못된 cron 식입니다{preview.data?.error ? `: ${preview.data.error}` : ''}
+              잘못된 cron 식입니다{previewData?.error ? `: ${previewData.error}` : ''}
             </p>
-          ) : preview.data && preview.data.nextRuns.length > 0 ? (
+          ) : previewData && previewData.nextRuns.length > 0 ? (
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">다음 실행 예정 (적용 후)</div>
               <ul className="space-y-0.5">
-                {preview.data.nextRuns.slice(0, 3).map((r) => (
+                {previewData.nextRuns.slice(0, 3).map((r) => (
                   <li key={r} className="font-mono text-xs text-muted-foreground">
                     {formatDate(r)}
                   </li>
@@ -952,9 +1047,9 @@ const ScheduleSection = () => {
       </CardContent>
     </Card>
   );
-};
+});
 
-const GlobalMergeSection = () => {
+const GlobalMergeSection = memo(function GlobalMergeSection() {
   const overview = useAnalyticsOverview();
   const start = useStartGlobalMerge();
   // 식당 정규화 잡과 동일 패턴 — 별도 store 인 이유는 두 잡이 동시 실행 가능한
@@ -1074,7 +1169,7 @@ const GlobalMergeSection = () => {
       </CardContent>
     </Card>
   );
-};
+});
 
 const Metric = ({ label, value }: { label: string; value: string | number }) => (
   <div className="space-y-1">
@@ -1092,18 +1187,32 @@ const GLOBAL_SORT_OPTIONS: { value: GlobalMenuQuerySortType; label: string }[] =
   { value: 'restaurants', label: '식당 수' },
 ];
 
-const GlobalMenusSection = () => {
-  // ?menu=김치찌개 deep-link 가 single source of truth — 별도 useState 두지 않고
-  // searchParams 를 그대로 읽는다. 변경은 onChange 안에서 즉시 setSearchParams.
+const GlobalMenusSection = memo(function GlobalMenusSection() {
+  // ?menu=김치찌개 deep-link 가 single source of truth — 검색어·카테고리는 URL 에서
+  // 읽는다. 입력창은 DebouncedInput 이 치는 글자를 따로 들고 300ms 뒤에 URL 로 올린다
+  // (URL 에 바로 묶으면 글자마다 요청 + 페이지 전체 재렌더, 한글 조합도 깨진다).
   const [searchParams, setSearchParams] = useSearchParams();
+  // 필터 줄·목록은 화면 폭에 맞는 한 벌만 그린다(루트의 식당 표와 같은 기준).
+  const isDesktop = useIsDesktopXl();
   const q = searchParams.get('menu') ?? '';
-  const setQ = (next: string): void => {
-    const params = new URLSearchParams(searchParams);
-    if (next.trim().length > 0) params.set('menu', next);
-    else params.delete('menu');
-    setSearchParams(params, { replace: true });
-    setPage(1);
-  };
+  const category = searchParams.get('category') ?? '';
+  // 파라미터 하나만 바꾼다 — 나머지(식당 표의 q/sort/page 등)는 그대로.
+  const setParam = useCallback(
+    (key: 'menu' | 'category', next: string): void => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next.trim().length > 0) params.set(key, next);
+          else params.delete(key);
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const setQ = useCallback((next: string): void => setParam('menu', next), [setParam]);
+  const setCategory = useCallback((next: string): void => setParam('category', next), [setParam]);
   const [sort, setSort] = useState<GlobalMenuQuerySortType>('mentions');
   const [minMentions, setMinMentions] = useState(5);
   const [includeUnlinked, setIncludeUnlinked] = useState(false);
@@ -1113,23 +1222,22 @@ const GlobalMenusSection = () => {
   // 두 페이저가 같은 키 쓰면 충돌하니 분리. 페이지 떠났다 돌아오면 1로 리셋 OK.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const category = searchParams.get('category') ?? '';
-  const setCategory = (next: string): void => {
-    const params = new URLSearchParams(searchParams);
-    if (next.trim().length > 0) params.set('category', next);
-    else params.delete('category');
-    setSearchParams(params, { replace: true });
-    setPage(1);
-  };
 
-  // 필터/검색/정렬 변경 시 page 1 로 리셋 — 안 하면 빈 결과로 점프.
-  // useEffect 회피: 변경 핸들러 안에서 page reset 호출.
+  // 검색어·카테고리가 바뀌면 1페이지로 — 안 하면 빈 결과로 점프. URL 이 어디서
+  // 바뀌든(입력·목록의 카테고리 클릭·카테고리 트리·딥링크) 걸리도록 렌더 중에 맞춘다.
+  const filterKey = `${q}\u0000${category}`;
+  const [pagedFor, setPagedFor] = useState(filterKey);
+  if (pagedFor !== filterKey) {
+    setPagedFor(filterKey);
+    setPage(1);
+  }
+  // 정렬·최소 언급·미머지는 로컬 state 라 변경 핸들러에서 직접 리셋.
   const resetPage = () => setPage(1);
 
   const menus = useGlobalMenus({ q, category, sort, minMentions, page, pageSize, includeUnlinked });
   const tree = useCategoryTree();
   // 자동완성용 path 후보 — 트리 노드 path 들 평탄화.
-  const categoryPaths = (tree.data?.roots ?? []).flatMap(flattenPaths);
+  const categoryPaths = useMemo(() => (tree.data?.roots ?? []).flatMap(flattenPaths), [tree.data]);
 
   return (
     <Card>
@@ -1147,18 +1255,19 @@ const GlobalMenusSection = () => {
         </datalist>
 
         {/* 데스크톱 — 기존 wrap 그대로 (xl+ 만 노출) */}
-        <div className="hidden flex-wrap items-center gap-2 xl:flex">
-          <input
+        {isDesktop && (
+        <div className="flex flex-wrap items-center gap-2">
+          <DebouncedInput
             type="search"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onCommit={setQ}
             placeholder="메뉴 검색 (예: 김치찌개)"
             className="flex-1 min-w-[200px] rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
-          <input
+          <DebouncedInput
             type="text"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onCommit={setCategory}
             placeholder="카테고리 (예: 고기 > 삼겹살)"
             list="analytics-category-suggestions"
             className="min-w-[180px] rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
@@ -1193,14 +1302,16 @@ const GlobalMenusSection = () => {
             미머지 포함
           </label>
         </div>
+        )}
 
         {/* 모바일 — 검색 1줄 + [필터 ▾] 토글 + 펼침 영역 */}
-        <div className="space-y-2 xl:hidden">
+        {!isDesktop && (
+        <div className="space-y-2">
           <div className="flex gap-2">
-            <input
+            <DebouncedInput
               type="search"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onCommit={setQ}
               placeholder="메뉴 검색 (예: 김치찌개)"
               className="min-w-0 flex-1 rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
@@ -1216,10 +1327,10 @@ const GlobalMenusSection = () => {
           </div>
           {filtersOpen && (
             <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2">
-              <input
+              <DebouncedInput
                 type="text"
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onCommit={setCategory}
                 placeholder="카테고리 (예: 고기 > 삼겹살)"
                 list="analytics-category-suggestions"
                 className="rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
@@ -1256,6 +1367,7 @@ const GlobalMenusSection = () => {
             </div>
           )}
         </div>
+        )}
 
         {menus.isLoading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
@@ -1266,7 +1378,8 @@ const GlobalMenusSection = () => {
         ) : (
           <>
             {/* 모바일 카드 */}
-            <ul className="space-y-2 xl:hidden">
+            {!isDesktop && (
+            <ul className="space-y-2">
               {menus.data.items.map((m) => (
                 <li key={m.globalKey} className="rounded-md border p-3">
                   <div className="flex items-start justify-between gap-2">
@@ -1327,8 +1440,10 @@ const GlobalMenusSection = () => {
                 </li>
               ))}
             </ul>
+            )}
             {/* 데스크톱 표 */}
-            <div className="hidden xl:block">
+            {isDesktop && (
+            <div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -1390,6 +1505,7 @@ const GlobalMenusSection = () => {
             </TableBody>
           </Table>
             </div>
+            )}
             <Pager
               className="mt-3"
               total={menus.data.total}
@@ -1403,7 +1519,7 @@ const GlobalMenusSection = () => {
       </CardContent>
     </Card>
   );
-};
+});
 
 // 트리에서 모든 path 평탄화 — datalist 자동완성 후보로 사용.
 const flattenPaths = (node: CategoryTreeNodeType): string[] => {
@@ -1416,14 +1532,21 @@ const flattenPaths = (node: CategoryTreeNodeType): string[] => {
 
 // ── 카테고리 트리 섹션 ──────────────────────────────────────────────
 
-const CategoryTreeSection = () => {
+const CategoryTreeSection = memo(function CategoryTreeSection() {
   const tree = useCategoryTree();
   const [, setSearchParams] = useSearchParams();
   const setCategory = (path: string): void => {
-    const params = new URLSearchParams();
-    params.set('category', path);
-    setSearchParams(params, { replace: true });
-    // 메뉴 통계 섹션이 같은 URL state 를 보고 있으므로 자동으로 필터링됨.
+    // category 만 바꾼다 — 쿼리스트링을 통째로 갈아 끼우면 식당 표의 q/sort/page/pageSize 와
+    // 메뉴 검색(menu)이 함께 날아간다.
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        params.set('category', path);
+        return params;
+      },
+      { replace: true },
+    );
+    // 메뉴 통계 섹션이 같은 URL state 를 보고 있으므로 자동으로 필터링됨(페이지도 1로).
   };
 
   if (tree.isLoading) {
@@ -1472,7 +1595,7 @@ const CategoryTreeSection = () => {
       </CardContent>
     </Card>
   );
-};
+});
 
 const CategoryTreeRow = ({
   node,

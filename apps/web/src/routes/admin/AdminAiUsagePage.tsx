@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Activity } from 'lucide-react';
 import type { LlmTelemetryCallType } from '@repo/api-contract';
 import { useLlmTelemetry } from '@repo/shared';
@@ -24,7 +25,49 @@ const STATUS_BADGE: Record<LlmTelemetryCallType['status'], { label: string; clas
   cancelled: { label: '취소', className: 'bg-muted text-muted-foreground' },
 };
 
-// LLM 사용량 상세 — 플로팅 패널과 같은 SSE 스냅샷(React Query 캐시 공유)을
+// 최근 호출 한 줄. 스냅샷은 LLM 이 도는 동안 1초마다 통째로 오지만 끝난 호출의
+// 기록은 다시 바뀌지 않는다 — 같은 호출(id + 시각)이면 건너뛰어 새로 들어온 줄만
+// 그린다. (새 호출이 앞에 끼면 뒤 줄들은 자리가 밀려 객체 동일성이 깨지므로 id 로
+// 비교한다. 시각까지 보는 건 서버 재시작 뒤 id 가 다시 1부터 매겨지기 때문.)
+const RecentCallRow = memo(
+  function RecentCallRow({ call: c }: { call: LlmTelemetryCallType }) {
+    const badge = STATUS_BADGE[c.status];
+    return (
+      <TableRow>
+        <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+          {new Date(c.at).toLocaleTimeString('ko-KR')}
+        </TableCell>
+        <TableCell>{c.purpose}</TableCell>
+        <TableCell className="max-w-40 truncate" title={c.model}>
+          {c.model}
+        </TableCell>
+        <TableCell>
+          <Badge variant="secondary" className={badge.className}>
+            {badge.label}
+          </Badge>
+          {c.errorName && c.status !== 'ok' && (
+            <span className="ml-1 text-xs text-muted-foreground">{c.errorName}</span>
+          )}
+        </TableCell>
+        <TableCell className={cn('text-right tabular-nums', c.queueWaitMs > 1000 && 'text-amber-600')}>
+          {fmtMs(c.queueWaitMs)}
+        </TableCell>
+        <TableCell className="text-right tabular-nums">{fmtMs(c.durationMs)}</TableCell>
+        <TableCell className="text-right tabular-nums">
+          {c.promptTokens !== null || c.completionTokens !== null
+            ? `${fmt(c.promptTokens ?? 0)} / ${fmt(c.completionTokens ?? 0)}`
+            : '–'}
+        </TableCell>
+        <TableCell className={cn('text-right tabular-nums', c.retries > 0 && 'text-amber-600')}>
+          {c.retries}
+        </TableCell>
+      </TableRow>
+    );
+  },
+  (prev, next) => prev.call.id === next.call.id && prev.call.at === next.call.at,
+);
+
+// LLM 사용량 상세 — 플로팅 패널과 같은 SSE 스냅샷(React Query 캐시·스트림 공유)을
 // 더 큰 지면에 펼친다. 인메모리 집계라 서버 재시작 시 리셋(startedAt 표기).
 export const AdminAiUsagePage = () => {
   const { data, connected, isLoading } = useLlmTelemetry(true);
@@ -310,51 +353,9 @@ export const AdminAiUsagePage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.recent.map((c) => {
-                      const badge = STATUS_BADGE[c.status];
-                      return (
-                        <TableRow key={c.id}>
-                          <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
-                            {new Date(c.at).toLocaleTimeString('ko-KR')}
-                          </TableCell>
-                          <TableCell>{c.purpose}</TableCell>
-                          <TableCell className="max-w-40 truncate" title={c.model}>
-                            {c.model}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={badge.className}>
-                              {badge.label}
-                            </Badge>
-                            {c.errorName && c.status !== 'ok' && (
-                              <span className="ml-1 text-xs text-muted-foreground">
-                                {c.errorName}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell
-                            className={cn(
-                              'text-right tabular-nums',
-                              c.queueWaitMs > 1000 && 'text-amber-600',
-                            )}
-                          >
-                            {fmtMs(c.queueWaitMs)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {fmtMs(c.durationMs)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {c.promptTokens !== null || c.completionTokens !== null
-                              ? `${fmt(c.promptTokens ?? 0)} / ${fmt(c.completionTokens ?? 0)}`
-                              : '–'}
-                          </TableCell>
-                          <TableCell
-                            className={cn('text-right tabular-nums', c.retries > 0 && 'text-amber-600')}
-                          >
-                            {c.retries}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {data.recent.map((c) => (
+                      <RecentCallRow key={c.id} call={c} />
+                    ))}
                   </TableBody>
                 </Table>
               )}

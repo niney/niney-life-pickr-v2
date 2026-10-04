@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
+  OPERATION_REPORT_STALL_MS,
   flattenOperationLogPages,
   useAnalyzeRun,
   useOperationRun,
@@ -61,7 +62,8 @@ const SEVERITY_BADGE: Record<
 // 고아 보고서(pending/running 인 채 멈춤) 판정 임계 — 백엔드 sweep 이 주
 // 방어지만, sweep 이전이거나 누락돼도 버튼이 영구 비활성되지 않게 하는
 // 웹 측 보조 방어. updatedAt 이 이 시간 넘게 갱신되지 않으면 멈춘 것으로.
-const REPORT_STALL_MS = 10 * 60 * 1000;
+// 값은 훅(useLogs)과 함께 쓴다 — 같은 시점부터 상세 폴링도 느려진다.
+const REPORT_STALL_MS = OPERATION_REPORT_STALL_MS;
 
 // run.meta 는 JSON 직렬화 문자열 — 파싱 실패(절단 등)해도 원문은 보여준다.
 const parseRunMeta = (meta: string | null): string | null => {
@@ -187,7 +189,20 @@ export const AdminLogRunDetailPage = () => {
   } | null>(null);
   const reportPendingLike =
     report?.status === 'pending' || report?.status === 'running';
-  // 폴링(3초) 재렌더마다 재평가되므로 시간이 지나면 자연히 풀린다.
+  // 멈춤 판정은 "지금 시각"에 달려 있다. 폴링 응답이 그대로면(구조 공유) 화면이 다시
+  // 그려지지 않으므로, 임계 시각에 한 번 다시 그리도록 타이머를 건다 — 없으면 다른
+  // 조작으로 다시 그려지기 전까지 '다시 분석' 버튼이 잠긴 채 남는다.
+  const reportUpdatedAtMs =
+    reportPendingLike && report ? new Date(report.updatedAt).getTime() : null;
+  const [, setStallTick] = useState(0);
+  useEffect(() => {
+    if (reportUpdatedAtMs === null) return undefined;
+    const wait = reportUpdatedAtMs + REPORT_STALL_MS - Date.now();
+    if (!(wait > 0)) return undefined;
+    // 판정이 '초과(>)' 라 임계를 살짝 넘긴 뒤에 깨운다.
+    const timer = setTimeout(() => setStallTick((n) => n + 1), wait + 250);
+    return () => clearTimeout(timer);
+  }, [reportUpdatedAtMs]);
   const reportStalled =
     reportPendingLike &&
     report !== null &&
@@ -441,7 +456,9 @@ export const AdminLogRunDetailPage = () => {
               variant="outline"
               className="w-full"
               onClick={() => void logsQuery.fetchNextPage()}
-              disabled={logsQuery.isFetchingNextPage}
+              // 레벨을 바꾼 직후(이전 목록을 흐리게 보여 주는 동안)에는 아직 새
+              // 목록의 커서가 없다.
+              disabled={logsQuery.isFetchingNextPage || logsQuery.isPlaceholderData}
             >
               {logsQuery.isFetchingNextPage ? (
                 <>
@@ -458,11 +475,22 @@ export const AdminLogRunDetailPage = () => {
               <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
             </div>
           ) : entries.length === 0 ? (
-            <div className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
+            <div
+              className={cn(
+                'rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground transition-opacity',
+                logsQuery.isPlaceholderData && 'opacity-70',
+              )}
+            >
               저장된 로그가 없습니다.
             </div>
           ) : (
-            <ul className="max-h-[480px] space-y-1 overflow-y-auto">
+            // 레벨을 바꾸면 이전 목록을 흐리게 둔 채 새 목록을 받는다(훅의 placeholderData).
+            <ul
+              className={cn(
+                'max-h-[480px] space-y-1 overflow-y-auto transition-opacity',
+                logsQuery.isPlaceholderData && 'opacity-70',
+              )}
+            >
               {entries.map((e) => {
                 const isOpen = expanded.has(e.id);
                 const hasMeta = e.meta !== null && Object.keys(e.meta).length > 0;
