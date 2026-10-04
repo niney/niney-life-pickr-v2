@@ -167,6 +167,8 @@ describe('meal data export/delete routes (격리 DB)', () => {
         }),
         dislikedFoodsJson: JSON.stringify(['고수']),
         likedFoodsJson: JSON.stringify(['비빔밥']),
+        sex: 'female',
+        birthYear: 1990,
         onboarded: true,
       },
     });
@@ -209,6 +211,16 @@ describe('meal data export/delete routes (격리 DB)', () => {
     });
     await app.prisma.mealDailyQuota.create({
       data: { userId: 'meal-data-user', date: '2026-08-23', purpose: 'recognition', count: 1 },
+    });
+    // 영양제 조언은 기록에서 계산한 파생 데이터라 내보내지 않고 전체 삭제에서만 지운다.
+    await app.prisma.mealNutritionAdvice.create({
+      data: {
+        userId: 'meal-data-user',
+        targetDate: '2026-08-23',
+        analysisJson: '{}',
+        summary: '칼슘이 모자라요.',
+        status: 'fallback',
+      },
     });
     await app.prisma.mealDataImport.create({
       data: {
@@ -320,6 +332,8 @@ describe('meal data export/delete routes (격리 DB)', () => {
     expect(body.preference).toMatchObject({
       dislikedFoods: ['고수'],
       likedFoods: ['비빔밥'],
+      sex: 'female',
+      birthYear: 1990,
       onboarded: true,
     });
     expect(body.recommendations).toHaveLength(1);
@@ -402,6 +416,13 @@ describe('meal data export/delete routes (격리 DB)', () => {
     expect(restoredEntry?.photos[0]?.token).not.toBe(attachedToken);
     await expect(app.mealPhotos.read('meal-data-restore', restoredEntry!.photos[0]!.token, 'full')).resolves.toBeTruthy();
     expect(await app.prisma.mealRecommendationEvent.count({ where: { userId: 'meal-data-restore' } })).toBe(1);
+    // 영양소 점검 기준(성별·출생연도)도 백업에서 되살린다.
+    expect(
+      await app.prisma.mealPreference.findUnique({
+        where: { userId: 'meal-data-restore' },
+        select: { sex: true, birthYear: true },
+      }),
+    ).toEqual({ sex: 'female', birthYear: 1990 });
 
     const beforeCounts = await Promise.all([
       app.prisma.mealEntry.count({ where: { userId: 'meal-data-restore' } }),
@@ -677,12 +698,14 @@ describe('meal data export/delete routes (격리 DB)', () => {
       photos: 2,
       recommendations: 1,
       recommendationEvents: 1,
+      nutritionAdvices: 1,
       dailyQuotas: 1,
       importLedgers: 1,
       preference: 1,
       photoFileSets: 2,
     });
     expect(await app.prisma.mealEntry.count({ where: { userId: 'meal-data-user' } })).toBe(0);
+    expect(await app.prisma.mealNutritionAdvice.count({ where: { userId: 'meal-data-user' } })).toBe(0);
     expect(await app.prisma.mealPhoto.count({ where: { userId: 'meal-data-user' } })).toBe(0);
     expect(await app.prisma.mealRecommendation.count({ where: { userId: 'meal-data-user' } })).toBe(0);
     expect(await app.prisma.mealRecommendationEvent.count({ where: { userId: 'meal-data-user' } })).toBe(0);
@@ -713,6 +736,7 @@ describe('meal data export/delete routes (격리 DB)', () => {
       photos: 0,
       recommendations: 0,
       recommendationEvents: 0,
+      nutritionAdvices: 0,
       dailyQuotas: 0,
       importLedgers: 0,
       preference: 0,
@@ -826,6 +850,7 @@ describe('meal data export/delete routes (격리 DB)', () => {
         photos: 0,
         recommendations: 0,
         recommendationEvents: 0,
+        nutritionAdvices: 0,
         dailyQuotas: 0,
         importLedgers: 0,
         preference: 0,

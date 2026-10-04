@@ -359,6 +359,10 @@ export const Meal = {
   recommendationFeedback: (id: string) => `${API_PREFIX}/meals/recommendations/${id}/feedback`,
   // 후보 선택·후보별 평가·식당 열기 등 불변 행동 이벤트.
   recommendationEvents: (id: string) => `${API_PREFIX}/meals/recommendations/${id}/events`,
+  // 영양소 점검(?days=) — 최근 기록의 하루 평균 섭취 vs 2020 한국인 영양소 섭취기준.
+  nutrition: `${API_PREFIX}/meals/nutrition`,
+  // 영양제 조언 생성(POST, 텍스트 LLM) / 최근 조언(GET).
+  nutritionAdvice: `${API_PREFIX}/meals/nutrition/advice`,
 } as const;
 
 // provider × purpose 조합으로 row 를 식별한다. purpose='chat' 이 기본이며

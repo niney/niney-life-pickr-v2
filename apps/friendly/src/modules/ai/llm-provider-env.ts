@@ -18,6 +18,7 @@ export const buildLlmProviderEnv = (): LlmProviderEnv => ({
     'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
     'meal-photo': env.OLLAMA_MEAL_PHOTO_MODEL,
     'meal-recommend': env.OLLAMA_MEAL_RECOMMEND_MODEL,
+    'meal-supplement': env.OLLAMA_MEAL_SUPPLEMENT_MODEL,
     tarot: env.OLLAMA_TAROT_MODEL,
     saju: env.OLLAMA_SAJU_MODEL,
     'saju-g': env.OLLAMA_SAJU_G_MODEL,

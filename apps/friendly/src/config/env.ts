@@ -27,6 +27,8 @@ const EnvSchema = z.object({
   //  - OLLAMA_LOG_ANALYSIS_MODEL:   로그 분석(log-analysis) 기본 모델.
   //  - OLLAMA_MEAL_PHOTO_MODEL:     식단 사진 인식(meal-photo, vision) 기본 모델 — 식단 관리.
   //  - OLLAMA_MEAL_RECOMMEND_MODEL: 식단 추천(meal-recommend, 텍스트) 기본 모델 — 식단 관리.
+  //  - OLLAMA_MEAL_SUPPLEMENT_MODEL: 영양제 조언(meal-supplement, 텍스트) — 식단 기록의 부족한 영양소 점검.
+  //                                 가끔 보는 리포트라 지연보다 구체성을 우선해 kimi-k3(2026-10-04, probe:meal-models 비교).
   //  - OLLAMA_TAROT_MODEL:          타로 해석(tarot, 텍스트) 기본 모델. 무인증 공개 기능이라
   //                                 어드민에서 전용 키를 두는 것을 권장. 재측정: probe:tarot-reading.
   OLLAMA_DEFAULT_MODEL: z.string().default(''),
@@ -34,6 +36,7 @@ const EnvSchema = z.object({
   OLLAMA_LOG_ANALYSIS_MODEL: z.string().default(''),
   OLLAMA_MEAL_PHOTO_MODEL: z.string().default(''),
   OLLAMA_MEAL_RECOMMEND_MODEL: z.string().default(''),
+  OLLAMA_MEAL_SUPPLEMENT_MODEL: z.string().default('kimi-k3'),
   OLLAMA_TAROT_MODEL: z.string().default('gpt-oss:120b'),
   //  - OLLAMA_SAJU_MODEL:           사주 풀이(saju, 텍스트). 섹션 4개 병렬이라 지연보다 한국어·명리 용어 품질을
   //                                 우선. 프로브(2026-09-06, 3사주×4섹션): kimi-k3 가 문맥(계절·오행)을 가장 자연스럽게
@@ -143,6 +146,8 @@ const EnvSchema = z.object({
   // 사용자 트리거 호출이라 계정 동시성 게이트만으론 비용이 안 막힌다.
   MEAL_RECOGNIZE_DAILY_LIMIT: z.coerce.number().int().min(0).default(30),
   MEAL_RECOMMEND_DAILY_LIMIT: z.coerce.number().int().min(0).default(20),
+  // 영양제 조언(meal-supplement) — 캐시(같은 날·같은 기록)는 차감하지 않는다.
+  MEAL_SUPPLEMENT_DAILY_LIMIT: z.coerce.number().int().min(0).default(10),
 
   // 정산 공유 링크 SNS 미리보기(OG)용. 빌드된 웹 index.html 경로 — Fastify 가
   // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치

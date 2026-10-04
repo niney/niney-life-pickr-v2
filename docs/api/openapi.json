@@ -11276,6 +11276,10 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "nutritionAdvices": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
                         "dailyQuotas": {
                           "type": "integer",
                           "minimum": 0
@@ -11299,6 +11303,7 @@
                         "photos",
                         "recommendations",
                         "recommendationEvents",
+                        "nutritionAdvices",
                         "dailyQuotas",
                         "importLedgers",
                         "preference",
@@ -12094,6 +12099,18 @@
                           },
                           "minItems": 1,
                           "maxItems": 5
+                        },
+                        "sex": {
+                          "type": "string",
+                          "enum": [
+                            "male",
+                            "female"
+                          ],
+                          "nullable": true
+                        },
+                        "birthYear": {
+                          "type": "integer",
+                          "nullable": true
                         },
                         "onboarded": {
                           "type": "boolean"
@@ -13282,6 +13299,18 @@
                         },
                         "minItems": 1,
                         "maxItems": 5
+                      },
+                      "sex": {
+                        "type": "string",
+                        "enum": [
+                          "male",
+                          "female"
+                        ],
+                        "nullable": true
+                      },
+                      "birthYear": {
+                        "type": "integer",
+                        "nullable": true
                       },
                       "onboarded": {
                         "type": "boolean"
@@ -14522,6 +14551,18 @@
                             ]
                           }
                         },
+                        "sex": {
+                          "type": "string",
+                          "enum": [
+                            "male",
+                            "female"
+                          ],
+                          "nullable": true
+                        },
+                        "birthYear": {
+                          "type": "integer",
+                          "nullable": true
+                        },
                         "onboarded": {
                           "type": "boolean"
                         },
@@ -15484,6 +15525,1064 @@
         }
       }
     },
+    "/api/v1/meals/nutrition": {
+      "get": {
+        "summary": "영양소 점검 — 최근 N일 식단 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 비교",
+        "tags": [
+          "meal"
+        ],
+        "description": "days(7~28, 기본 14)일 중 두 끼 이상 기록한 날의 평균을 낸다. 성별·출생연도(식단 설정)가 없으면 30-49세 남녀 중 낮은 기준으로 본다. 4일 미만이면 status=insufficient. 진단이 아니라 기록으로 본 추정이다. LLM 을 쓰지 않으며 일일 한도와 무관하다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 7,
+              "maximum": 28,
+              "default": 14
+            },
+            "in": "query",
+            "name": "days",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "x-rate-limit": {
+          "max": 30,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "days": {
+                      "type": "integer"
+                    },
+                    "analyzedDays": {
+                      "type": "integer"
+                    },
+                    "mealCount": {
+                      "type": "integer"
+                    },
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "sex": {
+                          "type": "string",
+                          "enum": [
+                            "male",
+                            "female"
+                          ],
+                          "nullable": true
+                        },
+                        "ageGroup": {
+                          "type": "string"
+                        },
+                        "basis": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "default"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "sex",
+                        "ageGroup",
+                        "basis"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "energy": {
+                      "type": "object",
+                      "properties": {
+                        "intakePerDay": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "requirement": {
+                          "type": "number"
+                        },
+                        "percent": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "intakePerDay",
+                        "requirement",
+                        "percent"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "coverage": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "insufficient"
+                      ]
+                    },
+                    "insufficientReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nutrients": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "protein",
+                              "fiber",
+                              "calcium",
+                              "iron",
+                              "potassium",
+                              "vitaminA",
+                              "vitaminD",
+                              "thiamin",
+                              "riboflavin",
+                              "niacin",
+                              "vitaminC",
+                              "sodium"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "intakePerDay": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "reference": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "rni",
+                                  "ai",
+                                  "cdrr"
+                                ]
+                              },
+                              "amount": {
+                                "type": "number"
+                              },
+                              "ear": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "amount",
+                              "ear"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "upperLimit": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "percent": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "coverage": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "borderline",
+                              "ok",
+                              "high",
+                              "unknown"
+                            ]
+                          },
+                          "supplementCandidate": {
+                            "type": "boolean"
+                          },
+                          "topSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "foodSuggestions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "typicalFoods": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "note": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "unit",
+                          "intakePerDay",
+                          "reference",
+                          "upperLimit",
+                          "percent",
+                          "coverage",
+                          "status",
+                          "supplementCandidate",
+                          "topSources",
+                          "foodSuggestions",
+                          "typicalFoods",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "notMeasured": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "days",
+                    "analyzedDays",
+                    "mealCount",
+                    "profile",
+                    "energy",
+                    "coverage",
+                    "status",
+                    "insufficientReason",
+                    "nutrients",
+                    "notMeasured",
+                    "notes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meals/nutrition/advice": {
+      "get": {
+        "summary": "내 최근 영양제 조언 — 없으면 advice=null",
+        "tags": [
+          "meal"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "advice": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "targetDate": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "done",
+                            "fallback",
+                            "insufficient"
+                          ]
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "nutrient": {
+                                "type": "string",
+                                "enum": [
+                                  "protein",
+                                  "fiber",
+                                  "calcium",
+                                  "iron",
+                                  "potassium",
+                                  "vitaminA",
+                                  "vitaminD",
+                                  "thiamin",
+                                  "riboflavin",
+                                  "niacin",
+                                  "vitaminC",
+                                  "sodium"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "foodTip": {
+                                "type": "string"
+                              },
+                              "supplementTip": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "shortfallPerDay": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "upperLimit": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "caution": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "nutrient",
+                              "label",
+                              "reason",
+                              "foodTip",
+                              "supplementTip",
+                              "unit",
+                              "shortfallPerDay",
+                              "upperLimit",
+                              "caution"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "disclaimer": {
+                          "type": "string"
+                        },
+                        "analysis": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "to": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "days": {
+                              "type": "integer"
+                            },
+                            "analyzedDays": {
+                              "type": "integer"
+                            },
+                            "mealCount": {
+                              "type": "integer"
+                            },
+                            "profile": {
+                              "type": "object",
+                              "properties": {
+                                "sex": {
+                                  "type": "string",
+                                  "enum": [
+                                    "male",
+                                    "female"
+                                  ],
+                                  "nullable": true
+                                },
+                                "ageGroup": {
+                                  "type": "string"
+                                },
+                                "basis": {
+                                  "type": "string",
+                                  "enum": [
+                                    "user",
+                                    "default"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "sex",
+                                "ageGroup",
+                                "basis"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "energy": {
+                              "type": "object",
+                              "properties": {
+                                "intakePerDay": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "requirement": {
+                                  "type": "number"
+                                },
+                                "percent": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "intakePerDay",
+                                "requirement",
+                                "percent"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "coverage": {
+                              "type": "number"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "insufficient"
+                              ]
+                            },
+                            "insufficientReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "nutrients": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "enum": [
+                                      "protein",
+                                      "fiber",
+                                      "calcium",
+                                      "iron",
+                                      "potassium",
+                                      "vitaminA",
+                                      "vitaminD",
+                                      "thiamin",
+                                      "riboflavin",
+                                      "niacin",
+                                      "vitaminC",
+                                      "sodium"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  },
+                                  "intakePerDay": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "reference": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "rni",
+                                          "ai",
+                                          "cdrr"
+                                        ]
+                                      },
+                                      "amount": {
+                                        "type": "number"
+                                      },
+                                      "ear": {
+                                        "type": "number",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "amount",
+                                      "ear"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "upperLimit": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "percent": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "coverage": {
+                                    "type": "number"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "low",
+                                      "borderline",
+                                      "ok",
+                                      "high",
+                                      "unknown"
+                                    ]
+                                  },
+                                  "supplementCandidate": {
+                                    "type": "boolean"
+                                  },
+                                  "topSources": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "foodSuggestions": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "typicalFoods": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "note": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "unit",
+                                  "intakePerDay",
+                                  "reference",
+                                  "upperLimit",
+                                  "percent",
+                                  "coverage",
+                                  "status",
+                                  "supplementCandidate",
+                                  "topSources",
+                                  "foodSuggestions",
+                                  "typicalFoods",
+                                  "note"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "notMeasured": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "notes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to",
+                            "days",
+                            "analyzedDays",
+                            "mealCount",
+                            "profile",
+                            "energy",
+                            "coverage",
+                            "status",
+                            "insufficientReason",
+                            "nutrients",
+                            "notMeasured",
+                            "notes"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "targetDate",
+                        "status",
+                        "model",
+                        "summary",
+                        "items",
+                        "disclaimer",
+                        "analysis",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "advice"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "영양제 조언 생성 — 부족한 영양소를 음식·영양제(성분·형태)로 채우는 법, 텍스트 LLM 1콜",
+        "tags": [
+          "meal"
+        ],
+        "description": "영양소 점검 결과에서 열량을 채워 봐도 모자란 영양소만 조언한다(제품명 없음). 같은 날·같은 점검 결과면 저장된 조언을 주고 force=true 면 새로 만든다. 새로 만들 때마다 일일 한도(MEAL_SUPPLEMENT_DAILY_LIMIT, 기본 10회)를 1회 차감하며 초과 시 429. 기록이 모자라거나 조언할 영양소가 없으면 LLM 없이 답한다. LLM 이 없거나 실패하면 서버 문장만으로 쓴 조언(status=fallback)을 돌려준다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "type": "integer",
+                    "minimum": 7,
+                    "maximum": 28,
+                    "default": 14
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "x-rate-limit": {
+          "max": 5,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "targetDate": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "done",
+                        "fallback",
+                        "insufficient"
+                      ]
+                    },
+                    "model": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "nutrient": {
+                            "type": "string",
+                            "enum": [
+                              "protein",
+                              "fiber",
+                              "calcium",
+                              "iron",
+                              "potassium",
+                              "vitaminA",
+                              "vitaminD",
+                              "thiamin",
+                              "riboflavin",
+                              "niacin",
+                              "vitaminC",
+                              "sodium"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "foodTip": {
+                            "type": "string"
+                          },
+                          "supplementTip": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "shortfallPerDay": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "upperLimit": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "caution": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "nutrient",
+                          "label",
+                          "reason",
+                          "foodTip",
+                          "supplementTip",
+                          "unit",
+                          "shortfallPerDay",
+                          "upperLimit",
+                          "caution"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "disclaimer": {
+                      "type": "string"
+                    },
+                    "analysis": {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "to": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "days": {
+                          "type": "integer"
+                        },
+                        "analyzedDays": {
+                          "type": "integer"
+                        },
+                        "mealCount": {
+                          "type": "integer"
+                        },
+                        "profile": {
+                          "type": "object",
+                          "properties": {
+                            "sex": {
+                              "type": "string",
+                              "enum": [
+                                "male",
+                                "female"
+                              ],
+                              "nullable": true
+                            },
+                            "ageGroup": {
+                              "type": "string"
+                            },
+                            "basis": {
+                              "type": "string",
+                              "enum": [
+                                "user",
+                                "default"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "sex",
+                            "ageGroup",
+                            "basis"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "energy": {
+                          "type": "object",
+                          "properties": {
+                            "intakePerDay": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "requirement": {
+                              "type": "number"
+                            },
+                            "percent": {
+                              "type": "number",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "intakePerDay",
+                            "requirement",
+                            "percent"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coverage": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "insufficient"
+                          ]
+                        },
+                        "insufficientReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nutrients": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "enum": [
+                                  "protein",
+                                  "fiber",
+                                  "calcium",
+                                  "iron",
+                                  "potassium",
+                                  "vitaminA",
+                                  "vitaminD",
+                                  "thiamin",
+                                  "riboflavin",
+                                  "niacin",
+                                  "vitaminC",
+                                  "sodium"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "intakePerDay": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "reference": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "rni",
+                                      "ai",
+                                      "cdrr"
+                                    ]
+                                  },
+                                  "amount": {
+                                    "type": "number"
+                                  },
+                                  "ear": {
+                                    "type": "number",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "amount",
+                                  "ear"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "upperLimit": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "percent": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "coverage": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "low",
+                                  "borderline",
+                                  "ok",
+                                  "high",
+                                  "unknown"
+                                ]
+                              },
+                              "supplementCandidate": {
+                                "type": "boolean"
+                              },
+                              "topSources": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "foodSuggestions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "typicalFoods": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "unit",
+                              "intakePerDay",
+                              "reference",
+                              "upperLimit",
+                              "percent",
+                              "coverage",
+                              "status",
+                              "supplementCandidate",
+                              "topSources",
+                              "foodSuggestions",
+                              "typicalFoods",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "notMeasured": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "notes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "days",
+                        "analyzedDays",
+                        "mealCount",
+                        "profile",
+                        "energy",
+                        "coverage",
+                        "status",
+                        "insufficientReason",
+                        "nutrients",
+                        "notMeasured",
+                        "notes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "targetDate",
+                    "status",
+                    "model",
+                    "summary",
+                    "items",
+                    "disclaimer",
+                    "analysis",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meals/photos": {
       "post": {
         "summary": "식단 사진 업로드 — multipart 파일 1개(최대 5MB), 사진 토큰 발급",
@@ -15824,6 +16923,18 @@
                         ]
                       }
                     },
+                    "sex": {
+                      "type": "string",
+                      "enum": [
+                        "male",
+                        "female"
+                      ],
+                      "nullable": true
+                    },
+                    "birthYear": {
+                      "type": "integer",
+                      "nullable": true
+                    },
                     "onboarded": {
                       "type": "boolean"
                     },
@@ -15995,6 +17106,20 @@
                     "minItems": 1,
                     "maxItems": 5
                   },
+                  "sex": {
+                    "type": "string",
+                    "enum": [
+                      "male",
+                      "female"
+                    ],
+                    "nullable": true
+                  },
+                  "birthYear": {
+                    "type": "integer",
+                    "minimum": 1900,
+                    "maximum": 2100,
+                    "nullable": true
+                  },
                   "onboarded": {
                     "type": "boolean"
                   }
@@ -16138,6 +17263,18 @@
                           "late_night"
                         ]
                       }
+                    },
+                    "sex": {
+                      "type": "string",
+                      "enum": [
+                        "male",
+                        "female"
+                      ],
+                      "nullable": true
+                    },
+                    "birthYear": {
+                      "type": "integer",
+                      "nullable": true
                     },
                     "onboarded": {
                       "type": "boolean"
@@ -17392,6 +18529,18 @@
                               "late_night"
                             ]
                           }
+                        },
+                        "sex": {
+                          "type": "string",
+                          "enum": [
+                            "male",
+                            "female"
+                          ],
+                          "nullable": true
+                        },
+                        "birthYear": {
+                          "type": "integer",
+                          "nullable": true
                         },
                         "onboarded": {
                           "type": "boolean"

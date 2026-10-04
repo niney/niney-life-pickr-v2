@@ -121,6 +121,13 @@ describe('recommendModelForPurpose', () => {
       'deepseek-v4-pro:0813',
     );
   });
+  it('영양제 조언도 Kimi K3를 먼저 추천한다', () => {
+    expect(recommendModelForPurpose('meal-supplement', ['gpt-oss:120b', 'kimi-k3'])).toBe('kimi-k3');
+    // kimi 계열이 없으면 텍스트 모델 중간 규모로.
+    expect(recommendModelForPurpose('meal-supplement', ['gpt-oss:20b', 'gpt-oss:120b'])).toBe(
+      'gpt-oss:20b',
+    );
+  });
   // 규모: gpt-oss:20b(20) · gpt-oss:120b(120) · deepseek-v4-pro:671b(671) —
   //       gemma4:31b(31, vision) · qwen3-vl:235b(235, vision) · qwen3.5:397b(397, vision)
   const catalog = [

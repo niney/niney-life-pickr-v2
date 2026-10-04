@@ -55,13 +55,30 @@ describe('AdapterCache', () => {
   it('evicts the oldest entry beyond the cap', () => {
     const cache = new AdapterCache();
     const first = cache.get(resolved({ apiKey: 'k0' }));
-    for (let i = 1; i <= 8; i += 1) {
+    for (let i = 1; i <= 16; i += 1) {
       cache.get(resolved({ apiKey: `k${i}` }));
     }
-    // 상한(8) 초과로 가장 오래된 k0 이 제거됨 — 다시 요청하면 새 인스턴스.
+    // 상한(16) 초과로 가장 오래된 k0 이 제거됨 — 다시 요청하면 새 인스턴스.
     expect(cache.get(resolved({ apiKey: 'k0' }))).not.toBe(first);
-    // 마지막으로 넣은 k8 은 살아있다.
-    const k8 = cache.get(resolved({ apiKey: 'k8' }));
-    expect(cache.get(resolved({ apiKey: 'k8' }))).toBe(k8);
+    // 마지막으로 넣은 k16 은 살아있다.
+    const k16 = cache.get(resolved({ apiKey: 'k16' }));
+    expect(cache.get(resolved({ apiKey: 'k16' }))).toBe(k16);
+  });
+
+  it('용도 9개를 모두 써도 서로 밀어내지 않는다', () => {
+    const cache = new AdapterCache();
+    const purposes = [
+      'chat',
+      'image',
+      'log-analysis',
+      'meal-photo',
+      'meal-recommend',
+      'meal-supplement',
+      'tarot',
+      'saju',
+      'saju-g',
+    ] as const;
+    const first = purposes.map((purpose) => cache.get(resolved({ purpose })));
+    purposes.forEach((purpose, i) => expect(cache.get(resolved({ purpose }))).toBe(first[i]));
   });
 });

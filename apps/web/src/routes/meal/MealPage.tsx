@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CalendarDays, ChartNoAxesColumn, Loader2, Plus, Settings2, Sparkles, UtensilsCrossed } from 'lucide-react';
+import {
+  CalendarDays,
+  ChartNoAxesColumn,
+  Loader2,
+  Pill,
+  Plus,
+  Settings2,
+  Sparkles,
+  UtensilsCrossed,
+} from 'lucide-react';
 import type {
   MealEntrySourceType,
   MealEntryType,
@@ -27,21 +36,23 @@ import {
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
+import { MealNutritionTab } from './MealNutritionTab';
 import { MealPhotoImg } from './MealPhotoImg';
 import { MealPreferenceTab } from './MealPreferenceTab';
 import { MealRecommendTab } from './MealRecommendTab';
 
-// 내 식단 — 기록/달력/통계/추천/설정. 사진 기록(촬영·인식)은 앱에서만 하고, 웹은 손으로 적는
+// 내 식단 — 기록/달력/통계/추천/영양/설정. 사진 기록(촬영·인식)은 앱에서만 하고, 웹은 손으로 적는
 // 기록(/me/meals/new)과 상세·수정·삭제까지 한다. 탭은 주소(?tab=)에 둬 상세에서 뒤로 오면 보던
 // 탭으로 돌아온다. 차트 라이브러리를 쓰지 않는 리포 관례대로 막대는 div 폭으로 그린다.
 
-type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'preference';
+type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'nutrition' | 'preference';
 
 const TABS: ReadonlyArray<{ value: Tab; label: string; icon: typeof UtensilsCrossed }> = [
   { value: 'list', label: '기록', icon: UtensilsCrossed },
   { value: 'calendar', label: '달력', icon: CalendarDays },
   { value: 'stats', label: '통계', icon: ChartNoAxesColumn },
   { value: 'recommend', label: '추천', icon: Sparkles },
+  { value: 'nutrition', label: '영양', icon: Pill },
   { value: 'preference', label: '설정', icon: Settings2 },
 ];
 
@@ -76,18 +87,19 @@ export const MealPage = () => {
             </Link>
           </Button>
         </div>
-        <div className="flex gap-1 rounded-lg bg-muted p-1">
+        {/* 탭 6개 — 좁은 화면에서는 아이콘을 숨기고 넘치면 가로로 민다. */}
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
           {TABS.map((t) => (
             <button
               key={t.value}
               type="button"
               onClick={() => setTab(t.value)}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                'flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                 tab === t.value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <t.icon className="size-4" />
+              <t.icon className="hidden size-4 sm:block" />
               {t.label}
             </button>
           ))}
@@ -102,6 +114,8 @@ export const MealPage = () => {
         <MealStats />
       ) : tab === 'recommend' ? (
         <MealRecommendTab />
+      ) : tab === 'nutrition' ? (
+        <MealNutritionTab />
       ) : (
         <MealPreferenceTab />
       )}

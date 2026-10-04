@@ -38,6 +38,7 @@ model User {
   mealPhotos               MealPhoto[]
   mealPreference           MealPreference?
   mealRecommendations      MealRecommendation[]
+  mealNutritionAdvices     MealNutritionAdvice[]
   mealRecommendationEvents MealRecommendationEvent[]
   mealDailyQuotas          MealDailyQuota[]
   mealDataImports          MealDataImport[]
@@ -342,7 +343,7 @@ model LlmProviderConfig {
   enabled       Boolean  @default(true)
   maxConcurrent Int      @default(15)
   // 추론(thinking) 설정 — null=auto(모델 규칙 thinkOptionForModel) / off / on / low / medium / high.
-  // 지금은 saju 용도만 읽는다(어드민 "추론" 선택). Ollama /api/chat 의 think 로 전달.
+  // 지금은 saju·meal-supplement 용도만 읽는다(어드민 "추론" 선택). Ollama /api/chat 의 think 로 전달.
   thinking      String?
   updatedAt     DateTime @updatedAt
   updatedById   String?
@@ -1763,6 +1764,9 @@ model FoodItem {
   // 환산하지 못한 행도 이 값은 가질 수 있다. 메뉴명에 중량이 있는 외식 메뉴("항정살 150g")의
   // "100g당" 표시 근거.
   kcalPer100g          Float?
+  // 100g(또는 100ml)당 비타민·무기질 등 { fiberG, calciumMg, ironMg, … } — 식약처 음식 표준데이터 원본 단위(없으면 null).
+  // 영양소 점검(meal-nutrition)이 식단 항목의 먹은 양으로 환산한다. 영양을 빌려온 행은 같은 행에서 함께 빌린다.
+  nutrientsPer100gJson String?
   // 영양을 같은 계열 행에서 빌려왔으면 그 행의 이름(예: 불고기 ← '소불고기'). 직접 값이면 null.
   // UI 는 이 값이 있으면 "○○ 기준 추정"이라고 밝힌다.
   nutritionFrom        String?
@@ -2067,12 +2071,42 @@ model MealPreference {
   likedFoodsJson    String   @default("[]")
   mealTypesJson     String   @default("[]")
   slotsJson         String   @default("[\"breakfast\",\"lunch\",\"dinner\"]")
+  // 영양소 점검의 섭취기준(성별·연령) — 선택 입력. 없으면 30-49세 성인 기준(남녀 중 낮은 값)으로 보고 그렇다고 밝힌다.
+  // male|female
+  sex               String?
+  birthYear         Int?
   onboarded         Boolean  @default(false)
   updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("meal_preferences")
+}
+
+// 식단 기록 영양소 점검의 영양제 조언(텍스트 LLM, purpose meal-supplement). 분석 스냅샷을 근거로 함께 남긴다 —
+// 같은 날·같은 입력이면 다시 부르지 않는다(inputHash). 식단 데이터 전체 삭제·계정 삭제 때 함께 지운다.
+model MealNutritionAdvice {
+  id            String   @id @default(cuid())
+  userId        String
+  // 분석 기간의 끝 날짜(KST).
+  targetDate    String
+  // 근거가 된 영양소 분석(MealNutritionAnalysis JSON).
+  analysisJson  String
+  // MealSupplementAdviceItem[] JSON.
+  itemsJson     String   @default("[]")
+  summary       String   @default("")
+  // done|fallback|insufficient
+  status        String
+  model         String?
+  promptVersion Int      @default(1)
+  inputHash     String   @default("")
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, targetDate])
+  @@map("meal_nutrition_advices")
 }
 
 model MealRecommendation {

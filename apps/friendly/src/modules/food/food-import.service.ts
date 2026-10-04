@@ -47,6 +47,15 @@ import {
   serializeFoodAllergenMetadata,
 } from './food-allergen.js';
 import { buildAliasNorms, parseJsonStringArray } from './food.service.js';
+import {
+  MFDS_NUTRIENT_API_FIELD,
+  MFDS_NUTRIENT_CSV_HEADER,
+  NUTRIENT_KEYS,
+  pickNutrientsPer100g,
+  serializeNutrientsPer100g,
+  type NutrientKey,
+  type NutrientsPer100g,
+} from './food-nutrients.js';
 
 // 음식 카탈로그 적재 — 외부 소스(식약처 영양성분 표준데이터 / 식약처 레시피 / MAFRA 레시피) + 로컬
 // (global_menu_canonicals 필터분 / 한식 800선 CSV) 를 FoodSeed 로 정규화해 FoodItem 에 병합(upsert)
@@ -129,6 +138,8 @@ export interface FoodSeed {
   } | null;
   // 100g(100ml)당 열량. nutrition(1인분)이 servingG 부재로 비어도 원본이 100g 기준이면 채운다.
   kcalPer100g?: number | null;
+  // 100g(100ml)당 비타민·무기질 등(식약처 음식 표준데이터) — 영양소 점검용.
+  nutrientsPer100g?: NutrientsPer100g | null;
   source: FoodSourceType;
   sourceId?: string | null;
   sourceCategory?: string | null;
@@ -202,6 +213,8 @@ interface MfdsGroup {
     };
     unit: 'g' | 'ml' | null;
   } | null;
+  // 변형마다의 100g당 비타민·무기질 — 영양소별로 골라 쓴다(pickNutrientsPer100g).
+  nutrientVariants: { priority: number; values: Partial<Record<NutrientKey, number | null>> }[];
   firstCode: string | null;
 }
 
@@ -247,21 +260,30 @@ const CSV_FIELD_MAP: Record<string, string> = {
   '당류(g)': 'sugar',
   '나트륨(mg)': 'nat',
   식품중량: 'foodSize',
+  ...MFDS_NUTRIENT_CSV_HEADER,
 };
+
+// 머리글을 느슨하게 비교한다 — 배포본마다 '비타민 A(μg RAE)'·'비타민A(㎍RAE)'처럼 공백·μ 표기가 다르다.
+const looseHeader = (h: string): string =>
+  h
+    .replace(/^\uFEFF/, '')
+    .replace(/\s+/g, '')
+    .replace(/㎍/g, 'μg')
+    .replace(/µ/g, 'μ');
 
 export const nutritionFileRowsToRecords = (
   header: string[],
   rows: string[][],
 ): Record<string, unknown>[] => {
-  // 헤더 이름 → 열 인덱스(공백·BOM 제거).
+  // 헤더 이름 → 열 인덱스(공백·BOM·μ 표기 무시).
   const index = new Map<string, number>();
   header.forEach((h, i) => {
-    const key = h.replace(/^\uFEFF/, '').trim();
+    const key = looseHeader(h);
     if (key && !index.has(key)) index.set(key, i);
   });
   const picks: [string, number][] = [];
   for (const [ko, api] of Object.entries(CSV_FIELD_MAP)) {
-    const i = index.get(ko);
+    const i = index.get(looseHeader(ko));
     if (i !== undefined) picks.push([api, i]);
   }
   return rows.map((r) => {
@@ -303,6 +325,7 @@ export const normalizeMfdsNutritionRows = (
         category,
         variants: new Set(),
         best: null,
+        nutrientVariants: [],
         firstCode: coerceStrOrNull(row['foodCd']),
       };
       groups.set(key, g);
@@ -325,6 +348,11 @@ export const normalizeMfdsNutritionRows = (
       sugarG: numOrNull(row['sugar']),
     };
     const hasAny = Object.values(per100).some((v) => v !== null);
+    const nutrientValues: Partial<Record<NutrientKey, number | null>> = {};
+    for (const nk of NUTRIENT_KEYS) nutrientValues[nk] = numOrNull(row[MFDS_NUTRIENT_API_FIELD[nk]]);
+    if (Object.values(nutrientValues).some((v) => v !== null)) {
+      g.nutrientVariants.push({ priority, values: nutrientValues });
+    }
     if (
       !g.best ||
       priority < g.best.priority ||
@@ -363,6 +391,7 @@ export const normalizeMfdsNutritionRows = (
       nutrition,
       // 원본이 100g 기준이라 1인분 중량이 없어도 이 값은 남긴다.
       kcalPer100g: n?.kcal == null ? null : round1(n.kcal),
+      nutrientsPer100g: pickNutrientsPer100g(g.nutrientVariants),
       source: 'mfds-nutrition',
       sourceId: g.firstCode,
       sourceCategory: g.category,
@@ -769,6 +798,7 @@ export const upsertFoodSeeds = async (
       prev.ingredients = prev.ingredients ?? s.ingredients ?? null;
       prev.servingG = prev.servingG ?? s.servingG ?? null;
       prev.nutrition = prev.nutrition ?? s.nutrition ?? null;
+      prev.nutrientsPer100g = prev.nutrientsPer100g ?? s.nutrientsPer100g ?? null;
       prev.sourceCategory = prev.sourceCategory ?? s.sourceCategory ?? null;
       if (s.source !== prev.source && !(prev.sourceRefs ?? []).some((r) => r.source === s.source)) {
         prev.sourceRefs = [
@@ -813,6 +843,7 @@ export const upsertFoodSeeds = async (
             sodiumMg: seedWithRules.nutrition?.sodiumMg ?? null,
             sugarG: seedWithRules.nutrition?.sugarG ?? null,
             kcalPer100g: seedWithRules.kcalPer100g ?? null,
+            nutrientsPer100gJson: serializeNutrientsPer100g(seedWithRules.nutrientsPer100g),
             source: seedWithRules.source,
             sourceId: seedWithRules.sourceId ?? null,
             sourceCategory: seedWithRules.sourceCategory ?? null,
@@ -868,6 +899,12 @@ export const upsertFoodSeeds = async (
         (opts.refreshNutrition || existing.kcalPer100g === null)
       ) {
         data.kcalPer100g = seedWithRules.kcalPer100g;
+      }
+      // 비타민·무기질도 빈 행만 채운다(빌려온 값이 있으면 그대로) — 영양소 점검 도입(2026-10-04) 전 적재분을
+      // 재적재로 채우려면 이 규칙이면 된다.
+      const nutrientsJson = serializeNutrientsPer100g(seedWithRules.nutrientsPer100g);
+      if (nutrientsJson && (opts.refreshNutrition || !existing.nutrientsPer100gJson)) {
+        data.nutrientsPer100gJson = nutrientsJson;
       }
       if (!existing.sourceCategory && seedWithRules.sourceCategory) {
         data.sourceCategory = seedWithRules.sourceCategory;

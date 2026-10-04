@@ -698,6 +698,9 @@ export class MealDataService {
                   likedFoodsJson: JSON.stringify(archive.preference.likedFoods),
                   mealTypesJson: JSON.stringify(archive.preference.mealTypes),
                   slotsJson: JSON.stringify(archive.preference.slots),
+                  // 영양소 점검 기준(선택) — 이 필드가 없던 백업은 비운다.
+                  sex: archive.preference.sex ?? null,
+                  birthYear: archive.preference.birthYear ?? null,
                   onboarded: archive.preference.onboarded,
                 },
               });
@@ -768,6 +771,7 @@ export class MealDataService {
         const entries = await tx.mealEntry.deleteMany({ where: { userId } });
         const recommendationEvents = await tx.mealRecommendationEvent.deleteMany({ where: { userId } });
         const recommendations = await tx.mealRecommendation.deleteMany({ where: { userId } });
+        const nutritionAdvices = await tx.mealNutritionAdvice.deleteMany({ where: { userId } });
         const preference = await tx.mealPreference.deleteMany({ where: { userId } });
         const dailyQuotas = await tx.mealDailyQuota.deleteMany({ where: { userId } });
         // 전체 삭제 뒤 같은 archiveId를 다시 복원할 수 있어야 하므로 멱등 원장도 비운다.
@@ -781,6 +785,7 @@ export class MealDataService {
             photos: photos.count,
             recommendations: recommendations.count,
             recommendationEvents: recommendationEvents.count,
+            nutritionAdvices: nutritionAdvices.count,
             dailyQuotas: dailyQuotas.count,
             importLedgers: importLedgers.count,
             preference: preference.count,

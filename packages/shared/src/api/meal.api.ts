@@ -1,6 +1,7 @@
 import {
   Routes,
   type CreateMealEntryInputType,
+  type CreateMealNutritionAdviceInputType,
   type CreateMealRecommendationInputType,
   type DeleteMealPhotosInputType,
   type DeleteMealPhotosResultType,
@@ -9,6 +10,7 @@ import {
   type DeleteMealRecommendationsInputType,
   type DeleteMealRecommendationsResultType,
   type FrequentMealItemsResultType,
+  type LatestMealNutritionAdviceResultType,
   type ListMealRecommendationsResultType,
   type MealRecommendationContextType,
   type MealRecommendationFeedbackInputType,
@@ -21,6 +23,8 @@ import {
   type MealDataBackupType,
   type MealDataExportType,
   type MealEntryType,
+  type MealNutritionAdviceType,
+  type MealNutritionAnalysisType,
   type MealPreferenceType,
   type MealPhotoRetentionPreviewType,
   type MealSlotType,
@@ -199,6 +203,22 @@ export const mealApi = {
 
   recommendationEvent: (id: string, input: MealRecommendationEventInputType) =>
     apiFetch<MealRecommendationEventType>(Routes.Meal.recommendationEvents(id), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  // ── 영양소 점검·영양제 조언 ──
+  // 점검은 LLM 없이 계산만(최근 days 일, 기본 14). 조언은 LLM 1콜이라 같은 날·같은 기록이면 서버가 저장본을 준다.
+  nutrition: (days?: number) =>
+    apiFetch<MealNutritionAnalysisType>(
+      `${Routes.Meal.nutrition}${days !== undefined ? `?days=${days}` : ''}`,
+    ),
+
+  latestNutritionAdvice: () =>
+    apiFetch<LatestMealNutritionAdviceResultType>(Routes.Meal.nutritionAdvice),
+
+  createNutritionAdvice: (input: Partial<CreateMealNutritionAdviceInputType> = {}) =>
+    apiFetch<MealNutritionAdviceType>(Routes.Meal.nutritionAdvice, {
       method: 'POST',
       body: JSON.stringify(input),
     }),

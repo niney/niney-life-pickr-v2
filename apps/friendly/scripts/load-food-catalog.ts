@@ -39,7 +39,10 @@ import {
 import { FoodClassifyService } from '../src/modules/food/food-classify.service.js';
 import { curatedSeeds } from '../src/modules/food/food-curated-seeds.js';
 import { normalizeMfdsRawRows, rawFileRowsToRecords } from '../src/modules/food/food-raw-import.js';
-import { backfillNutrition } from '../src/modules/food/food-nutrition.service.js';
+import {
+  backfillBorrowedNutrients,
+  backfillNutrition,
+} from '../src/modules/food/food-nutrition.service.js';
 import {
   FoodImportService,
   normalizeHansik800Rows,
@@ -252,6 +255,9 @@ const runBackfillNutrition = async (): Promise<void> => {
   for (const s of r.samples) {
     console.log(`    ${s.name} ← ${s.from} (${Math.round(s.kcal)}kcal, 같은 계열 ${s.donorCount}개)`);
   }
+  // 이미 빌려 온 행에 비타민·무기질만 채운다(영양소 점검 도입 전 보강분).
+  const b = await backfillBorrowedNutrients(prisma, { dryRun: DRY_RUN });
+  console.log(`  비타민·무기질(빌려 온 행) 대상 ${b.targets}행 → 채움 ${b.filled}, 건너뜀 ${b.skipped}`);
 };
 
 const main = async (): Promise<void> => {

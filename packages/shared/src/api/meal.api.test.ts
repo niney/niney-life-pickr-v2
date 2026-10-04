@@ -74,3 +74,27 @@ describe('mealApi 데이터 관리', () => {
     expect(res.deleted.recommendations).toBe(2);
   });
 });
+
+describe('mealApi 영양소 점검·영양제 조언', () => {
+  it('점검은 days 쿼리 GET, 최근 조언은 GET, 새 조언은 POST JSON body', async () => {
+    const fetchMock = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse({ advice: null })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await mealApi.nutrition(28);
+    await mealApi.nutrition();
+    await mealApi.latestNutritionAdvice();
+    await mealApi.createNutritionAdvice({ days: 14, force: true });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      '/api/v1/meals/nutrition?days=28',
+      '/api/v1/meals/nutrition',
+      '/api/v1/meals/nutrition/advice',
+      '/api/v1/meals/nutrition/advice',
+    ]);
+    const post = fetchMock.mock.calls[3]?.[1] as RequestInit;
+    expect(post.method).toBe('POST');
+    expect(post.body).toBe(JSON.stringify({ days: 14, force: true }));
+  });
+});

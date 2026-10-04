@@ -20,6 +20,7 @@ import {
   upsertFoodSeeds,
 } from './food-import.service.js';
 import { foodImportRegistry } from './food-import-registry.js';
+import { backfillBorrowedNutrients } from './food-nutrition.service.js';
 import { FoodService, foodNameSimilarity, foodNameVariants } from './food.service.js';
 
 // 정규화는 순수 함수 — 픽스처(실응답 형식을 본뜬 최소 행)로 네트워크 없이 검증. upsert·검색·매칭은
@@ -82,6 +83,24 @@ describe('normalizeMfdsNutritionRows — 표준데이터(음식)', () => {
     // 삶은 달걀 → 미정).
     expect(egg.dishType ?? null).toBeNull();
     expect(seeds.find((s) => s.repName === '육회')?.dishType ?? null).toBeNull();
+  });
+
+  it('비타민·무기질 — 같은 이름 변형 안에서 0 보다 큰 첫 값, 다른 음식 변형 값은 같은 이름 행이 적었으면 안 쓴다', () => {
+    const { seeds } = normalizeMfdsNutritionRows([
+      // 외식 분석 행은 철·비타민C 를 0, 비타민D 를 빈칸으로 둔다(실측 김치찌개).
+      { foodCd: 'K1', foodNm: '김치찌개', foodLv3Nm: '찌개 및 전골류', foodLv4Nm: '김치찌개', foodOriginNm: '외식(분석함량)', nutConSrtrQua: '100g', enerc: '61', ca: '38', fe: '0.00', vitc: '0.00', vitd: '', foodSize: '400g' },
+      { foodCd: 'K2', foodNm: '김치찌개', foodLv3Nm: '찌개 및 전골류', foodLv4Nm: '김치찌개', foodOriginNm: '산업체급식(재료량 기반 산출 함량)', nutConSrtrQua: '100ml', enerc: '19', ca: '23', fe: '0.30', vitc: '1.27', vitd: '0.00', foodSize: '200ml' },
+      // 다른 음식(참치김치찌개)의 비타민D 는 넘어오지 않는다.
+      { foodCd: 'K3', foodNm: '김치찌개_참치', foodLv3Nm: '찌개 및 전골류', foodLv4Nm: '김치찌개', foodOriginNm: '가정식(분석 함량)', nutConSrtrQua: '100g', enerc: '70', vitd: '1.61', thia: '0.05', foodSize: '400g' },
+    ]);
+    expect(seeds[0]?.nutrientsPer100g).toEqual({
+      calciumMg: 38,
+      ironMg: 0.3,
+      vitaminCMg: 1.27,
+      vitaminDUg: 0,
+      // 같은 이름 행이 아무도 적지 않은 영양소만 다른 변형에서.
+      thiaminMg: 0.05,
+    });
   });
 
   it('parseSize/originPriority 보조 함수', () => {
@@ -217,6 +236,41 @@ describe('upsertFoodSeeds + FoodService (격리 DB)', () => {
   afterAll(async () => {
     await app.close();
     isolated.restore();
+  });
+
+  it('비타민·무기질은 새 행에 쓰고, 기존 행은 비어 있을 때만 채운다(빌려 온 행엔 빌려준 행 값을 채운다)', async () => {
+    await upsertFoodSeeds(app.prisma, [
+      { name: '나물비빔밥', source: 'mfds-nutrition', sourceId: 'N1', kcalPer100g: 140, nutrientsPer100g: { calciumMg: 31, vitaminCMg: 2 } },
+    ]);
+    const nutrientsOf = async (name: string) =>
+      (await app.prisma.foodItem.findUnique({ where: { nameNorm: name } }))?.nutrientsPer100gJson;
+    expect(JSON.parse((await nutrientsOf('나물비빔밥'))!)).toEqual({ calciumMg: 31, vitaminCMg: 2 });
+    // 다시 적재해도 이미 있는 값은 덮지 않는다.
+    await upsertFoodSeeds(app.prisma, [
+      { name: '나물비빔밥', source: 'mfds-nutrition', sourceId: 'N1', nutrientsPer100g: { calciumMg: 99 } },
+    ]);
+    expect(JSON.parse((await nutrientsOf('나물비빔밥'))!)).toEqual({ calciumMg: 31, vitaminCMg: 2 });
+    // 값이 하나도 없으면 칼럼을 비워 둔다(나중에 채울 수 있게).
+    await upsertFoodSeeds(app.prisma, [{ name: '빈영양', source: 'mfds-nutrition', nutrientsPer100g: {} }]);
+    expect(await nutrientsOf('빈영양')).toBeNull();
+
+    // 영양을 빌려 온 행 — 빌려준 행 이름(nutritionFrom)에서 비타민·무기질을 채운다.
+    await app.prisma.foodItem.update({
+      where: { nameNorm: '나물비빔밥' },
+      data: { kcal: 600 },
+    });
+    await upsertFoodSeeds(app.prisma, [{ name: '산채비빔밥집메뉴', source: 'menu-canonical' }]);
+    await app.prisma.foodItem.update({
+      where: { nameNorm: '산채비빔밥집메뉴' },
+      data: { kcal: 600, nutritionFrom: '나물비빔밥' },
+    });
+    const r = await backfillBorrowedNutrients(app.prisma);
+    expect(r.filled).toBeGreaterThanOrEqual(1);
+    expect(JSON.parse((await nutrientsOf('산채비빔밥집메뉴'))!)).toEqual({ calciumMg: 31, vitaminCMg: 2 });
+    // 같은 격리 DB 를 쓰는 아래 집계 테스트가 행 수를 센다.
+    await app.prisma.foodItem.deleteMany({
+      where: { nameNorm: { in: ['나물비빔밥', '빈영양', '산채비빔밥집메뉴'] } },
+    });
   });
 
   it('신규 생성 → 다른 출처 병합(빈 필드 채움·별칭 합집합·sourceRefs·popularity max)', async () => {
@@ -395,6 +449,14 @@ describe('nutritionFileRowsToRecords — 배포 파일(CSV) 헤더 매핑', () =
   it('BOM·공백이 섞인 헤더도 찾는다', () => {
     const [rec] = nutritionFileRowsToRecords(['﻿식품코드', ' 식품명 '], [['A1', '김밥']]);
     expect(rec).toMatchObject({ foodCd: 'A1', foodNm: '김밥' });
+  });
+
+  it('비타민·무기질 열은 공백·μ 표기가 달라도 찾는다', () => {
+    const [rec] = nutritionFileRowsToRecords(
+      ['식품명', '칼슘(mg)', '비타민A(㎍RAE)', '비타민 C (mg)', '식이섬유(g)'],
+      [['김밥', '30', '120', '4.5', '1.2']],
+    );
+    expect(rec).toMatchObject({ foodNm: '김밥', ca: '30', vitaRae: '120', vitc: '4.5', fibtg: '1.2' });
   });
 });
 

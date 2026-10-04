@@ -83,3 +83,10 @@ export const curatedSeeds = (): FoodSeed[] =>
     sourceCategory: c.category,
     popularity: 0,
   }));
+
+// 비타민·무기질을 같은 음식의 식약처 행에서 빌려 올 큐레이션 행(이름 → 식약처 행 이름). 공기밥은 끼니마다 곁들여
+// 영양소 점검에서 빠지면 티아민·니아신 등이 실제보다 적게 잡힌다(100g당 열량도 쌀밥과 같은 166kcal).
+// 주류·음료는 비타민·무기질이 거의 없어 영양소 점검이 0 으로 본다(meal-nutrition).
+export const CURATED_NUTRIENTS_LIKE: Readonly<Record<string, string>> = {
+  공기밥: '쌀밥',
+};

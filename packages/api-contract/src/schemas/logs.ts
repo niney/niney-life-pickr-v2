@@ -20,6 +20,7 @@ export const OperationFeature = z.enum([
   'food-import',
   'meal-recognition',
   'meal-recommendation',
+  'meal-nutrition-advice',
 ]);
 export type OperationFeatureType = z.infer<typeof OperationFeature>;
 

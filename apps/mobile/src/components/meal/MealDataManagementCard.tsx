@@ -224,7 +224,7 @@ export const MealDataManagementCard = () => {
   };
 
   const confirmDelete = () => {
-    Alert.alert('식단 데이터 전체 삭제', '기록·사진·추천·선호 설정을 모두 삭제합니다. 계속할까요?', [
+    Alert.alert('식단 데이터 전체 삭제', '기록·사진·추천·영양제 조언·선호 설정을 모두 삭제합니다. 계속할까요?', [
       { text: '취소', style: 'cancel' },
       { text: '전체 삭제', style: 'destructive', onPress: () => void runDelete() },
     ]);

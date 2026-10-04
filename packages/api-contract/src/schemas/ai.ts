@@ -95,6 +95,7 @@ export type LlmProviderIdType = z.infer<typeof LlmProviderId>;
 //  - log-analysis   실패 작업 로그 분석
 //  - meal-photo     비전 — 식단 사진 음식 인식(식단 관리). image 와 모델·게이트를 분리해 독립 튜닝
 //  - meal-recommend 텍스트 — 다음 끼니 추천(식단 관리)
+//  - meal-supplement 텍스트 — 식단 기록 영양소 점검의 영양제 조언(식단 관리). 기본 kimi-k3
 //  - tarot          텍스트 — 타로 해석. 무인증 공개 기능이라 전용 키(own)를 두면 계정 한도가 분리된다
 //  - saju           텍스트 — 사주 풀이(섹션 병렬·오늘·궁합·택일·음식). 타로와 같은 공개 기능
 export const LlmProviderPurpose = z.enum([
@@ -103,6 +104,7 @@ export const LlmProviderPurpose = z.enum([
   'log-analysis',
   'meal-photo',
   'meal-recommend',
+  'meal-supplement',
   'tarot',
   'saju',
   'saju-g',

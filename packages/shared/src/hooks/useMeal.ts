@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query';
 import type {
   CreateMealEntryInputType,
+  CreateMealNutritionAdviceInputType,
   CreateMealRecommendationInputType,
   DeleteMealPhotosInputType,
   DeleteMealDataInputType,
@@ -36,6 +37,7 @@ const invalidateEntries = (qc: ReturnType<typeof useQueryClient>): void => {
   void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'time-presets'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'frequent'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'nutrition'] });
 };
 
 // 전체 내보내기는 사용자 동작 때만 큰 JSON 을 받도록 mutation 으로 제공한다.
@@ -248,8 +250,9 @@ export const useUpdateMealPreference = () => {
     mutationFn: (input: UpdateMealPreferenceInputType) => mealApi.updatePreference(input),
     onSuccess: (pref) => {
       qc.setQueryData([...KEY, 'preference'], pref);
-      // 가중치가 바뀌면 캐시된 추천의 근거가 달라진다.
+      // 가중치가 바뀌면 캐시된 추천의 근거가 달라진다. 성별·출생연도·알레르기는 영양소 점검 기준·음식 제안을 바꾼다.
       void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+      void qc.invalidateQueries({ queryKey: [...KEY, 'nutrition'] });
     },
   });
 };
@@ -384,6 +387,35 @@ export const useMealRecommendationEvent = () => {
       mealApi.recommendationEvent(id, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+    },
+  });
+};
+
+// ── 영양소 점검·영양제 조언 ─────────────────────────────────────────────────────
+// 점검은 기록·선호가 바뀌면 무효화된다(['meal','nutrition']). 조언은 LLM 이라 사용자가 눌렀을 때만 만든다 —
+// 같은 날·같은 기록이면 서버가 저장본을 주므로 다시 눌러도 한도를 쓰지 않는다(force 만 새로).
+export const useMealNutrition = (days = 14, enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'nutrition', 'analysis', days],
+    queryFn: () => mealApi.nutrition(days),
+    enabled,
+    staleTime: 60_000,
+  });
+
+export const useLatestMealNutritionAdvice = (enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'nutrition', 'advice'],
+    queryFn: mealApi.latestNutritionAdvice,
+    enabled,
+  });
+
+export const useCreateMealNutritionAdvice = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Partial<CreateMealNutritionAdviceInputType> = {}) =>
+      mealApi.createNutritionAdvice(input),
+    onSuccess: (advice) => {
+      qc.setQueryData([...KEY, 'nutrition', 'advice'], { advice });
     },
   });
 };

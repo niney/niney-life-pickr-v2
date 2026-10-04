@@ -573,6 +573,10 @@ export const MEAL_WEIGHT_PRESETS: Record<string, { label: string; weights: MealW
   },
 };
 
+// 영양소 점검의 섭취기준용 성별(선택 입력).
+export const MealSex = z.enum(['male', 'female']);
+export type MealSexType = z.infer<typeof MealSex>;
+
 export const MealPreference = z.object({
   weights: MealWeights,
   // 취향상 제외. 알레르기는 아래 구조화 목록으로 분리한다.
@@ -585,6 +589,9 @@ export const MealPreference = z.object({
   mealTypes: z.array(MealType),
   // 기록·추천 대상 끼니.
   slots: z.array(MealSlot),
+  // 영양소 점검의 섭취기준(성별·연령) — 선택. 없으면 성인 기준으로 보고 그렇다고 밝힌다.
+  sex: MealSex.nullable().optional(),
+  birthYear: z.number().int().nullable().optional(),
   onboarded: z.boolean(),
   updatedAt: z.string(),
 });
@@ -598,9 +605,147 @@ export const UpdateMealPreferenceInput = z.object({
   likedFoods: z.array(z.string().trim().min(1).max(40)).max(50).optional(),
   mealTypes: z.array(MealType).max(5).optional(),
   slots: z.array(MealSlot).min(1).max(5).optional(),
+  sex: MealSex.nullable().optional(),
+  birthYear: z.number().int().min(1900).max(2100).nullable().optional(),
   onboarded: z.boolean().optional(),
 });
 export type UpdateMealPreferenceInputType = z.infer<typeof UpdateMealPreferenceInput>;
+
+// ── 영양소 점검·영양제 조언 ─────────────────────────────────────────────────
+// 식단 기록(최근 N일)의 하루 평균 섭취를 2020 한국인 영양소 섭취기준과 견준다. 판단은 서버 코드가, 조언 문장은
+// 텍스트 LLM(purpose meal-supplement)이 쓴다. 진단이 아니라 기록으로 본 추정이다.
+
+export const MealNutrientKey = z.enum([
+  'protein',
+  'fiber',
+  'calcium',
+  'iron',
+  'potassium',
+  'vitaminA',
+  'vitaminD',
+  'thiamin',
+  'riboflavin',
+  'niacin',
+  'vitaminC',
+  'sodium',
+]);
+export type MealNutrientKeyType = z.infer<typeof MealNutrientKey>;
+
+//  low        평균필요량(또는 충분섭취량의 70%)보다 적다 — 부족할 가능성이 높다.
+//  borderline 평균필요량은 넘지만 권장섭취량(충분섭취량)보다 적다.
+//  ok         권장섭취량(충분섭취량) 이상.
+//  high       상한섭취량 초과(나트륨은 만성질환위험감소섭취량 초과).
+//  unknown    영양 정보가 있는 기록이 적어 판단을 미룬다.
+export const MealNutrientStatus = z.enum(['low', 'borderline', 'ok', 'high', 'unknown']);
+export type MealNutrientStatusType = z.infer<typeof MealNutrientStatus>;
+
+export const MealNutrientResult = z.object({
+  key: MealNutrientKey,
+  label: z.string(),
+  unit: z.string(),
+  intakePerDay: z.number().nullable(),
+  // 견준 기준 — rni 권장섭취량 · ai 충분섭취량 · cdrr 만성질환위험감소섭취량(나트륨).
+  reference: z.object({
+    kind: z.enum(['rni', 'ai', 'cdrr']),
+    amount: z.number(),
+    ear: z.number().nullable(),
+  }),
+  upperLimit: z.number().nullable(),
+  // intakePerDay ÷ reference.amount × 100.
+  percent: z.number().nullable(),
+  // 이 영양소 값이 있는 기록의 열량 비율(0~1).
+  coverage: z.number(),
+  status: MealNutrientStatus,
+  // 기록이 덜 남았다고 보고 열량을 필요량만큼 채워 봐도 기준에 못 미치는지 — 조언 대상.
+  supplementCandidate: z.boolean(),
+  // 내 기록에서 이 영양소를 가장 많이 준 음식.
+  topSources: z.array(z.string()),
+  // 흔한 한 끼 중 열량에 비해 이 영양소가 많은 음식(알레르기·제외 음식, 짜고 무거운 음식 뺀다).
+  foodSuggestions: z.array(z.string()),
+  // 이 영양소가 많은 흔한 음식(과일·유제품 포함, 일반 영양 상식).
+  typicalFoods: z.array(z.string()),
+  note: z.string().nullable(),
+});
+export type MealNutrientResultType = z.infer<typeof MealNutrientResult>;
+
+export const MealNutritionAnalysis = z.object({
+  from: DateString,
+  to: DateString,
+  days: z.number().int(),
+  // 두 끼 이상 기록한 날 — 평균은 이 날들로만 낸다(한 끼만 적은 날이 부족해 보이지 않게).
+  analyzedDays: z.number().int(),
+  mealCount: z.number().int(),
+  profile: z.object({
+    sex: MealSex.nullable(),
+    ageGroup: z.string(),
+    basis: z.enum(['user', 'default']),
+  }),
+  energy: z.object({
+    intakePerDay: z.number().nullable(),
+    requirement: z.number(),
+    percent: z.number().nullable(),
+  }),
+  // 열량 기준 영양 정보(비타민·무기질) 보유 비율(0~1).
+  coverage: z.number(),
+  status: z.enum(['ok', 'insufficient']),
+  insufficientReason: z.string().nullable(),
+  nutrients: z.array(MealNutrientResult),
+  // 식단 데이터에 없어 판단할 수 없는 영양소(마그네슘·아연·엽산…).
+  notMeasured: z.array(z.string()),
+  notes: z.array(z.string()),
+});
+export type MealNutritionAnalysisType = z.infer<typeof MealNutritionAnalysis>;
+
+export const MealNutritionQuery = z.object({
+  days: z.coerce.number().int().min(7).max(28).default(14),
+});
+export type MealNutritionQueryType = z.infer<typeof MealNutritionQuery>;
+
+export const MealSupplementAdviceItem = z.object({
+  nutrient: MealNutrientKey,
+  label: z.string(),
+  // 왜 이 영양소인지(기록 근거) — LLM.
+  reason: z.string(),
+  // 음식으로 먼저 채우는 법 — LLM(서버가 준 추천 음식 안에서).
+  foodTip: z.string(),
+  // 보충제를 고른다면(성분·형태, 제품명 없음) — LLM. 음식으로만 권하는 영양소(칼륨 등)는 null.
+  supplementTip: z.string().nullable(),
+  unit: z.string(),
+  // 하루 기준까지 모자란 양(서버 계산).
+  shortfallPerDay: z.number().nullable(),
+  upperLimit: z.number().nullable(),
+  // 서버가 붙이는 고정 주의 문구(복약·임신·질환 등).
+  caution: z.string(),
+});
+export type MealSupplementAdviceItemType = z.infer<typeof MealSupplementAdviceItem>;
+
+export const MealNutritionAdvice = z.object({
+  id: z.string(),
+  targetDate: DateString,
+  //  done        LLM 조언
+  //  fallback    LLM 없음·실패 — 서버 계산만으로 쓴 조언
+  //  insufficient 기록이 적어 조언하지 않음
+  status: z.enum(['done', 'fallback', 'insufficient']),
+  model: z.string().nullable(),
+  summary: z.string(),
+  items: z.array(MealSupplementAdviceItem),
+  disclaimer: z.string(),
+  analysis: MealNutritionAnalysis,
+  createdAt: z.string(),
+});
+export type MealNutritionAdviceType = z.infer<typeof MealNutritionAdvice>;
+
+export const CreateMealNutritionAdviceInput = z.object({
+  days: z.number().int().min(7).max(28).default(14),
+  // true 면 같은 날·같은 기록이어도 새로 만든다(일일 한도 차감).
+  force: z.boolean().default(false),
+});
+export type CreateMealNutritionAdviceInputType = z.infer<typeof CreateMealNutritionAdviceInput>;
+
+export const LatestMealNutritionAdviceResult = z.object({
+  advice: MealNutritionAdvice.nullable(),
+});
+export type LatestMealNutritionAdviceResultType = z.infer<typeof LatestMealNutritionAdviceResult>;
 
 // ── 추천 ────────────────────────────────────────────────────────────────────
 
@@ -1082,6 +1227,8 @@ export const DeleteMealDataResult = z.object({
     photos: z.number().int().nonnegative(),
     recommendations: z.number().int().nonnegative(),
     recommendationEvents: z.number().int().nonnegative(),
+    // 영양제 조언 이력(영양소 점검 결과 스냅샷 포함).
+    nutritionAdvices: z.number().int().nonnegative(),
     dailyQuotas: z.number().int().nonnegative(),
     importLedgers: z.number().int().nonnegative(),
     preference: z.number().int().nonnegative(),

@@ -642,4 +642,166 @@ describe('MealPage — 추천·설정 탭', () => {
     fireEvent.click(await screen.findByRole('button', { name: '새로운 도전' }));
     expect((screen.getByLabelText('새로운 시도') as HTMLInputElement).value).toBe('5');
   });
+
+  it('설정 탭 — 성별·출생연도를 함께 저장하고, 연도 형식이 틀리면 막는다', async () => {
+    let saved: Record<string, unknown> | null = null;
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(PREFERENCE_URL, () => HttpResponse.json(preference)),
+      http.put(PREFERENCE_URL, async ({ request }) => {
+        saved = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ...preference, ...saved });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '여성' }));
+    const year = screen.getByLabelText('출생연도');
+    fireEvent.change(year, { target: { value: '19' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByText(/출생연도는 1900년부터/)).toBeInTheDocument();
+    expect(saved).toBeNull();
+
+    fireEvent.change(year, { target: { value: '1990' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(saved).not.toBeNull());
+    expect(saved).toMatchObject({ sex: 'female', birthYear: 1990 });
+  });
+});
+
+describe('MealPage — 영양 탭', () => {
+  const NUTRITION_URL = '/api/v1/meals/nutrition';
+  const ADVICE_URL = '/api/v1/meals/nutrition/advice';
+
+  const nutrient = (over: Record<string, unknown>) => ({
+    key: 'calcium',
+    label: '칼슘',
+    unit: 'mg',
+    intakePerDay: 260,
+    reference: { kind: 'rni', amount: 700, ear: 550 },
+    upperLimit: 2500,
+    percent: 37,
+    coverage: 1,
+    status: 'low',
+    supplementCandidate: true,
+    topSources: ['된장찌개'],
+    foodSuggestions: ['순두부찌개'],
+    typicalFoods: ['우유·요거트·치즈', '두부'],
+    note: null,
+    ...over,
+  });
+  const analysis = (days: number) => ({
+    from: '2026-09-21',
+    to: '2026-10-04',
+    days,
+    analyzedDays: 9,
+    mealCount: 24,
+    profile: { sex: null, ageGroup: '30-49', basis: 'default' },
+    energy: { intakePerDay: 1650, requirement: 1900, percent: 87 },
+    coverage: 0.97,
+    status: 'ok',
+    insufficientReason: null,
+    nutrients: [
+      nutrient({ key: 'protein', label: '단백질', unit: 'g', intakePerDay: 72, percent: 144, status: 'ok', supplementCandidate: false }),
+      nutrient({}),
+    ],
+    notMeasured: ['마그네슘', '아연'],
+    notes: ['성별·출생연도를 설정하면 내 기준으로 더 정확히 봐요(지금은 30-49세 성인 기준).'],
+  });
+  const advice = {
+    id: 'adv1',
+    targetDate: '2026-10-04',
+    status: 'done',
+    model: 'kimi-k3',
+    summary: '칼슘부터 음식으로 챙겨 보세요.',
+    items: [
+      {
+        nutrient: 'calcium',
+        label: '칼슘',
+        reason: '하루 평균 260mg으로 권장의 37%예요.',
+        foodTip: '두부·우유를 곁들여 보세요.',
+        supplementTip: '구연산칼슘을 나눠 드세요.',
+        unit: 'mg',
+        shortfallPerDay: 440,
+        upperLimit: 2500,
+        caution: '철분제와는 시간을 띄우세요.',
+      },
+    ],
+    disclaimer: '식단 기록으로 본 추정이며 진단이 아니에요.',
+    analysis: analysis(14),
+    createdAt: '2026-10-04T03:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    useAuthStore.setState({
+      token: 't',
+      user: {
+        id: 'u1',
+        email: 'u@x.com',
+        role: 'USER',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      isGuest: false,
+    });
+  });
+
+  it('점검을 모자란 순으로 보여 주고, 조언 받기는 force=false·다시 쓰기는 force=true, 기간을 바꾸면 days 로 다시 조회한다', async () => {
+    const asked: number[] = [];
+    const posted: unknown[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(NUTRITION_URL, ({ request }) => {
+        const days = Number(new URL(request.url).searchParams.get('days'));
+        asked.push(days);
+        return HttpResponse.json(analysis(days));
+      }),
+      http.get(ADVICE_URL, () => HttpResponse.json({ advice: null })),
+      http.post(ADVICE_URL, async ({ request }) => {
+        posted.push(await request.json());
+        return HttpResponse.json(advice);
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+
+    expect(await screen.findByText('260mg / 권장섭취량 700mg (37%)', { exact: false })).toBeInTheDocument();
+    const rows = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
+    expect(rows.findIndex((t) => t.startsWith('칼슘'))).toBeLessThan(rows.findIndex((t) => t.startsWith('단백질')));
+    expect(screen.getByText(/한 끼로는 순두부찌개/)).toBeInTheDocument();
+    expect(screen.getByText(/판단하지 않는 영양소: 마그네슘, 아연/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '최근 14일로 조언 받기' }));
+    expect(await screen.findByText('칼슘부터 음식으로 챙겨 보세요.')).toBeInTheDocument();
+    expect(posted[0]).toEqual({ days: 14, force: false });
+    expect(screen.getByText('구연산칼슘을 나눠 드세요.')).toBeInTheDocument();
+    expect(screen.getByText('하루 약 440mg 모자람')).toBeInTheDocument();
+    expect(screen.getByText(/진단이 아니에요/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 쓰기' }));
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1]).toEqual({ days: 14, force: true });
+
+    fireEvent.click(screen.getByRole('button', { name: '28일' }));
+    await waitFor(() => expect(asked).toContain(28));
+  });
+
+  it('기록이 모자라면 이유를 보여 주고 조언 버튼을 막는다', async () => {
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(NUTRITION_URL, () =>
+        HttpResponse.json({
+          ...analysis(14),
+          status: 'insufficient',
+          analyzedDays: 2,
+          insufficientReason: '최근 14일 중 두 끼 이상 기록한 날이 2일이에요.',
+        }),
+      ),
+      http.get(ADVICE_URL, () => HttpResponse.json({ advice: null })),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+    expect(await screen.findByText(/두 끼 이상 기록한 날이 2일/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '최근 14일로 조언 받기' })).toBeDisabled();
+  });
 });

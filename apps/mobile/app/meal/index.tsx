@@ -19,20 +19,22 @@ import {
 import { StateBlock } from '~/components/common/Cards';
 import { MealCalendarView } from '~/components/meal/MealCalendarView';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
+import { MealNutritionView } from '~/components/meal/MealNutritionView';
 import { MealPreferenceView } from '~/components/meal/MealPreferenceView';
 import { MealRecommendView } from '~/components/meal/MealRecommendView';
 import { MealStatsView } from '~/components/meal/MealStatsView';
 import { Chip, ChipRow, FieldLabel } from '~/components/meal/mealUi';
 
-// 식단 — 기록 / 달력 / 통계. 입력(사진)은 앱에서만 하므로 여기 FAB 가 진입점이다.
+// 식단 — 기록 / 달력 / 통계 / 추천 / 영양 / 설정. 입력(사진)은 앱에서만 하므로 여기 FAB 가 진입점이다.
 // 게스트는 진입점을 볼 수 없지만(프로필에서 숨김) 딥링크로 올 수 있어 화면에서도 안내한다.
 
-type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'preference';
+type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'nutrition' | 'preference';
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: 'list', label: '기록' },
   { value: 'calendar', label: '달력' },
   { value: 'stats', label: '통계' },
   { value: 'recommend', label: '추천' },
+  { value: 'nutrition', label: '영양' },
   { value: 'preference', label: '설정' },
 ];
 
@@ -327,6 +329,8 @@ export default function MealScreen() {
             <MealStatsView />
           ) : tab === 'recommend' ? (
             <MealRecommendView key={initialSlot ?? 'auto'} initialSlot={initialSlot} />
+          ) : tab === 'nutrition' ? (
+            <MealNutritionView />
           ) : (
             <MealPreferenceView />
           )}

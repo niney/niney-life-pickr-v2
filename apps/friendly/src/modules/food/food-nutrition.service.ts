@@ -10,6 +10,7 @@
 // 빌려온 행은 nutritionFrom 에 출처 id 를 남겨 UI 가 "○○ 기준 추정"이라고 밝힐 수 있게 한다.
 
 import type { PrismaClient } from '@prisma/client';
+import { CURATED_NUTRIENTS_LIKE } from './food-curated-seeds.js';
 
 // 대상명이 이보다 짧으면(1글자) 범주어일 위험이 커서 보강하지 않는다.
 const MIN_TARGET_LEN = 2;
@@ -37,6 +38,8 @@ export interface NutritionDonor {
   sodiumMg: number | null;
   sugarG: number | null;
   kcalPer100g: number | null;
+  // 100g당 비타민·무기질 — 영양을 빌려줄 때 같은 행에서 함께 빌려준다(영양소 점검이 같은 행 기준으로 환산하게).
+  nutrientsPer100gJson: string | null;
 }
 
 export interface NutritionTarget {
@@ -108,6 +111,7 @@ export const backfillNutrition = async (
     sodiumMg: true,
     sugarG: true,
     kcalPer100g: true,
+    nutrientsPer100gJson: true,
   } as const;
 
   const candidates = (await prisma.foodItem.findMany({
@@ -139,6 +143,7 @@ export const backfillNutrition = async (
           sodiumMg: d.sodiumMg,
           sugarG: d.sugarG,
           kcalPer100g: d.kcalPer100g,
+          nutrientsPer100gJson: d.nutrientsPer100gJson,
           // 여럿에서 고른 것이면 그 사실을 남긴다 — UI 가 "○○ 외 N종 중앙값 기준 추정"이라 밝힌다.
           nutritionFrom: pick.donorCount > 1 ? `${d.name} 외 ${pick.donorCount - 1}종 중앙값` : d.name,
         },
@@ -148,6 +153,74 @@ export const backfillNutrition = async (
     if (result.samples.length < 20) {
       result.samples.push({ name: target.name, from: d.name, kcal: d.kcal!, donorCount: pick.donorCount });
     }
+  }
+  return result;
+};
+
+export interface BorrowedNutrientsResult {
+  targets: number;
+  filled: number;
+  skipped: number;
+}
+
+/**
+ * 영양을 이미 빌려 온 행(nutritionFrom)에 비타민·무기질만 채운다 — 영양소 점검 도입(2026-10-04) 전에 빌려 온 행은
+ * 열량·탄단지만 가졌다. 빌려준 행 이름이 nutritionFrom 에 남아 있으면('소불고기', '소불고기 외 9종 중앙값') 그 행에서,
+ * 없으면 같은 규칙(pickNutritionDonor)으로 비타민·무기질이 있는 행 중에서 다시 고른다.
+ */
+export const backfillBorrowedNutrients = async (
+  prisma: PrismaClient,
+  opts: { dryRun?: boolean } = {},
+): Promise<BorrowedNutrientsResult> => {
+  const donors = (await prisma.foodItem.findMany({
+    where: { active: true, kcal: { not: null }, nutritionFrom: null, nutrientsPer100gJson: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      nameNorm: true,
+      dishType: true,
+      servingG: true,
+      kcal: true,
+      carbG: true,
+      proteinG: true,
+      fatG: true,
+      sodiumMg: true,
+      sugarG: true,
+      kcalPer100g: true,
+      nutrientsPer100gJson: true,
+    },
+  })) as NutritionDonor[];
+  const byName = new Map(donors.map((d) => [d.name, d]));
+  const targets = await prisma.foodItem.findMany({
+    where: {
+      active: true,
+      nutrientsPer100gJson: null,
+      OR: [
+        { nutritionFrom: { not: null } },
+        { source: 'curated', name: { in: Object.keys(CURATED_NUTRIENTS_LIKE) } },
+      ],
+    },
+    select: { id: true, name: true, nameNorm: true, dishType: true, nutritionFrom: true },
+  });
+  const result: BorrowedNutrientsResult = { targets: targets.length, filled: 0, skipped: 0 };
+  for (const target of targets) {
+    const likeName =
+      CURATED_NUTRIENTS_LIKE[target.name] ??
+      (target.nutritionFrom ?? '').replace(/ 외 \d+종 중앙값$/, '');
+    const named = byName.get(likeName);
+    const donor =
+      named ?? (target.nutritionFrom ? (pickNutritionDonor(target, donors)?.donor ?? null) : null);
+    if (!donor?.nutrientsPer100gJson) {
+      result.skipped += 1;
+      continue;
+    }
+    if (!opts.dryRun) {
+      await prisma.foodItem.update({
+        where: { id: target.id },
+        data: { nutrientsPer100gJson: donor.nutrientsPer100gJson },
+      });
+    }
+    result.filled += 1;
   }
   return result;
 };

@@ -2,10 +2,12 @@ import type { MealPreference as PrismaMealPreference, PrismaClient } from '@pris
 import {
   MEAL_DEFAULT_WEIGHTS,
   MealAllergen,
+  MealSex,
   MealSlot,
   MealType,
   MealWeights,
   type MealPreferenceType,
+  type MealSexType,
   type MealAllergenType,
   type MealSlotType,
   type MealTypeType,
@@ -101,6 +103,8 @@ export const toMealPreference = (row: PrismaMealPreference | null): MealPreferen
       const parsed = parseJsonArray(row?.slotsJson).filter((v): v is MealSlotType => MealSlot.safeParse(v).success);
       return parsed.length > 0 ? parsed : [...DEFAULT_SLOTS];
     })(),
+    sex: MealSex.safeParse(row?.sex).success ? (row!.sex as MealSexType) : null,
+    birthYear: row?.birthYear ?? null,
     onboarded: row?.onboarded ?? false,
     updatedAt: row?.updatedAt?.toISOString() ?? new Date(0).toISOString(),
   };
@@ -133,6 +137,9 @@ export class MealPreferenceService {
       likedFoodsJson: JSON.stringify(foodPreferences.likedFoods),
       mealTypesJson: JSON.stringify(input.mealTypes ?? parseJsonArray(current?.mealTypesJson)),
       slotsJson: JSON.stringify(input.slots ?? (parseJsonArray(current?.slotsJson).length > 0 ? parseJsonArray(current?.slotsJson) : DEFAULT_SLOTS)),
+      // null 은 "지움", undefined 는 "그대로".
+      sex: input.sex !== undefined ? input.sex : (current?.sex ?? null),
+      birthYear: input.birthYear !== undefined ? input.birthYear : (current?.birthYear ?? null),
       onboarded: input.onboarded ?? current?.onboarded ?? false,
     };
     const row = await this.prisma.mealPreference.upsert({

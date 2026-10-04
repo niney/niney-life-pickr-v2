@@ -6,6 +6,7 @@ import {
   MEAL_WEIGHT_PRESETS,
   MealAllergen,
   type MealAllergenType,
+  type MealSexType,
   type MealSlotType,
   type MealTypeType,
   type MealWeightsType,
@@ -16,7 +17,14 @@ import {
   useMealPreference,
   useUpdateMealPreference,
 } from '@repo/shared';
-import { MEAL_SLOTS, MEAL_SLOT_LABEL, MEAL_TYPES, MEAL_TYPE_LABEL } from '@repo/utils';
+import {
+  MEAL_SEX_OPTIONS,
+  MEAL_SLOTS,
+  MEAL_SLOT_LABEL,
+  MEAL_TYPES,
+  MEAL_TYPE_LABEL,
+  parseMealBirthYear,
+} from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
@@ -44,6 +52,8 @@ export const MealPreferenceTab = () => {
   const [liked, setLiked] = useState('');
   const [slots, setSlots] = useState<MealSlotType[]>([]);
   const [mealTypes, setMealTypes] = useState<MealTypeType[]>([]);
+  const [sex, setSex] = useState<MealSexType | null>(null);
+  const [birthYear, setBirthYear] = useState('');
   const [dirty, setDirty] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -57,6 +67,8 @@ export const MealPreferenceTab = () => {
     setLiked(pref.data.likedFoods.join(', '));
     setSlots(pref.data.slots);
     setMealTypes(pref.data.mealTypes);
+    setSex(pref.data.sex ?? null);
+    setBirthYear(pref.data.birthYear ? String(pref.data.birthYear) : '');
   }, [pref.data, dirty]);
 
   if (pref.isLoading) {
@@ -98,6 +110,11 @@ export const MealPreferenceTab = () => {
 
   const onSave = () => {
     setFormError(null);
+    const year = parseMealBirthYear(birthYear);
+    if (year === undefined) {
+      setFormError('출생연도는 1900년부터 올해까지 네 자리로 적어 주세요.');
+      return;
+    }
     save.mutate(
       {
         weights,
@@ -107,6 +124,8 @@ export const MealPreferenceTab = () => {
         likedFoods: parseList(liked),
         slots,
         mealTypes,
+        sex,
+        birthYear: year,
         onboarded: true,
       },
       { onSuccess: () => setDirty(false) },
@@ -269,6 +288,51 @@ export const MealPreferenceTab = () => {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">영양소 점검 기준</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            영양 탭이 성별·나이에 맞는 섭취기준으로 봐요. 비워 두면 30-49세 성인 기준(남녀 중 낮은 값)으로
+            봐요.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">성별</p>
+            <div className="flex flex-wrap gap-2">
+              {MEAL_SEX_OPTIONS.map((o) => (
+                <Toggle
+                  key={o.label}
+                  label={o.label}
+                  selected={sex === o.value}
+                  onClick={() => {
+                    setSex(o.value);
+                    setDirty(true);
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium" htmlFor="meal-birth-year">
+              출생연도
+            </label>
+            <input
+              id="meal-birth-year"
+              value={birthYear}
+              onChange={(e) => {
+                setBirthYear(e.target.value.replace(/\D/g, '').slice(0, 4));
+                setDirty(true);
+              }}
+              inputMode="numeric"
+              placeholder="예: 1990"
+              className="w-32 rounded-md border bg-background px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-muted-foreground">나이 구간을 고르는 데만 쓰고 공개되지 않아요.</p>
+          </div>
+        </CardContent>
+      </Card>
+
       <MealDataManagement />
 
       <div className="flex items-center gap-3">
@@ -319,7 +383,7 @@ const MealDataManagement = () => {
 
   const handleDelete = async () => {
     if (confirmation !== MEAL_DATA_DELETE_CONFIRMATION) return;
-    if (!window.confirm('식단 기록·사진·추천·선호 설정을 모두 영구 삭제할까요? 계정은 유지됩니다.'))
+    if (!window.confirm('식단 기록·사진·추천·영양제 조언·선호 설정을 모두 영구 삭제할까요? 계정은 유지됩니다.'))
       return;
     setError(null);
     setNotice(null);

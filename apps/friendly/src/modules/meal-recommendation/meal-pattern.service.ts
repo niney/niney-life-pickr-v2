@@ -766,14 +766,20 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
  * 적는 건 '오이'처럼 재료인 경우가 많은데, 이름만 보면 오이냉국은 걸러도 오이가 든 김밥은
  * 그대로 추천되기 때문이다. 재료 데이터가 있는 행은 1,097종뿐이라 이름 매칭도 계속 필요하다.
  */
-export const matchesFoodTerms = (c: CandidateInput, terms: string[]): boolean => {
+export const matchesFoodTerms = (
+  c: Pick<CandidateInput, 'nameNorm' | 'ingredients'>,
+  terms: string[],
+): boolean => {
   const norms = terms.map((e) => normalizeTerm(e)).filter((e) => e.length > 0);
   if (norms.length === 0) return false;
   const ingredientNorms = (c.ingredients ?? []).map((i) => normalizeTerm(i));
   return norms.some((e) => c.nameNorm.includes(e) || ingredientNorms.some((i) => i.includes(e)));
 };
 
-export const isExcluded = (c: CandidateInput, excluded: string[]): boolean =>
+export const isExcluded = (
+  c: Pick<CandidateInput, 'nameNorm' | 'ingredients'>,
+  excluded: string[],
+): boolean =>
   matchesFoodTerms(c, excluded);
 
 // ── 후보 풀 + 서비스 ─────────────────────────────────────────────────────────
@@ -1262,7 +1268,7 @@ const countIngredients = (json: string | null): number | null => {
   }
 };
 
-const shiftDate = (key: string, days: number): string => {
+export const shiftDate = (key: string, days: number): string => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!m) return key;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));

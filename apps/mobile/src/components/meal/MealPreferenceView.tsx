@@ -12,11 +12,19 @@ import {
   MEAL_ALLERGEN_LABEL,
   MealAllergen,
   type MealAllergenType,
+  type MealSexType,
   type MealSlotType,
   type MealTypeType,
   type MealWeightsType,
 } from '@repo/api-contract';
-import { MEAL_SLOTS, MEAL_SLOT_LABEL, MEAL_TYPES, MEAL_TYPE_LABEL } from '@repo/utils';
+import {
+  MEAL_SEX_OPTIONS,
+  MEAL_SLOTS,
+  MEAL_SLOT_LABEL,
+  MEAL_TYPES,
+  MEAL_TYPE_LABEL,
+  parseMealBirthYear,
+} from '@repo/utils';
 import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
 import { MealDataManagementCard } from './MealDataManagementCard';
 import { MealReminderSettingsCard } from './MealReminderSettingsCard';
@@ -50,6 +58,8 @@ export const MealPreferenceView = () => {
   const [liked, setLiked] = useState('');
   const [slots, setSlots] = useState<MealSlotType[]>([]);
   const [mealTypes, setMealTypes] = useState<MealTypeType[]>([]);
+  const [sex, setSex] = useState<MealSexType | null>(null);
+  const [birthYear, setBirthYear] = useState('');
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +73,8 @@ export const MealPreferenceView = () => {
     setLiked(pref.data.likedFoods.join(', '));
     setSlots(pref.data.slots);
     setMealTypes(pref.data.mealTypes);
+    setSex(pref.data.sex ?? null);
+    setBirthYear(pref.data.birthYear ? String(pref.data.birthYear) : '');
   }, [pref.data, dirty]);
 
   if (pref.isLoading) return <StateBlock kind="loading" />;
@@ -86,6 +98,11 @@ export const MealPreferenceView = () => {
 
   const onSave = () => {
     setError(null);
+    const year = parseMealBirthYear(birthYear);
+    if (year === undefined) {
+      setError('출생연도는 1900년부터 올해까지 네 자리로 적어 주세요.');
+      return;
+    }
     save.mutate(
       {
         weights,
@@ -95,6 +112,8 @@ export const MealPreferenceView = () => {
         likedFoods: parseList(liked),
         slots,
         mealTypes,
+        sex,
+        birthYear: year,
         onboarded: true,
       },
       {
@@ -270,6 +289,42 @@ export const MealPreferenceView = () => {
         </ChipRow>
       </Card>
 
+      <Card>
+        <CardTitle
+          title="영양소 점검 기준"
+          sub="영양 탭이 성별·나이에 맞는 섭취기준으로 봐요. 비워 두면 30-49세 성인 기준(남녀 중 낮은 값)으로 봐요."
+        />
+        <FieldLabel>성별</FieldLabel>
+        <ChipRow>
+          {MEAL_SEX_OPTIONS.map((o) => (
+            <Chip
+              key={o.label}
+              label={o.label}
+              selected={sex === o.value}
+              onPress={() => {
+                setSex(o.value);
+                setDirty(true);
+              }}
+            />
+          ))}
+        </ChipRow>
+        <FieldLabel>출생연도</FieldLabel>
+        <TextInput
+          value={birthYear}
+          onChangeText={(v) => {
+            setBirthYear(v.replace(/\D/g, '').slice(0, 4));
+            setDirty(true);
+          }}
+          keyboardType="number-pad"
+          maxLength={4}
+          placeholder="예: 1990"
+          placeholderTextColor={theme.colors.textMuted}
+          accessibilityLabel="출생연도"
+          style={[styles.input, styles.yearInput]}
+        />
+        <Text style={styles.hint}>나이 구간을 고르는 데만 쓰고 공개되지 않아요.</Text>
+      </Card>
+
       <MealReminderSettingsCard slots={slots} />
 
       <MealDataManagementCard />
@@ -322,5 +377,6 @@ const createStyles = (theme: Theme) =>
       fontSize: 14,
     },
     hint: { fontSize: 11, color: theme.colors.textMuted },
-    saveBtn: { borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+    yearInput: { width: 120 },
+    saveBtn:{ borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   });

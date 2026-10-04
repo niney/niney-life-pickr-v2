@@ -32,6 +32,7 @@ export const FEATURE_LABEL: Record<OperationFeatureType, string> = {
   'food-import': '음식 카탈로그 적재',
   'meal-recognition': '식단 사진 인식',
   'meal-recommendation': '식단 추천',
+  'meal-nutrition-advice': '영양제 조언',
 };
 
 const STATUS_LABEL: Record<OperationRunStatusType, string> = {

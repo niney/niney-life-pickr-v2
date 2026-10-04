@@ -7,6 +7,7 @@ import {
   List,
   Loader2,
   MessageSquare,
+  Pill,
   PlugZap,
   RefreshCw,
   Save,
@@ -53,6 +54,7 @@ const PURPOSE_ORDER: LlmProviderPurposeType[] = [
   'log-analysis',
   'meal-photo',
   'meal-recommend',
+  'meal-supplement',
   'tarot',
   'saju',
   'saju-g',
@@ -63,7 +65,7 @@ interface PurposeMeta {
   label: string;
   desc: string;
   placeholder: string;
-  /** 추론(thinking) 선택을 노출하는 용도 — 서비스가 이 설정을 읽는 곳만(지금은 사주(C)). kimi 계열 모델일 때만 보인다. */
+  /** 추론(thinking) 선택을 노출하는 용도 — 서비스가 이 설정을 읽는 곳만(사주(C)·영양제 조언). kimi 계열 모델일 때만 보인다. */
   thinking?: boolean;
 }
 
@@ -114,6 +116,13 @@ const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
     label: '식단 추천',
     desc: '식단 관리 — 내 식사 패턴으로 다음 끼니를 추천하는 텍스트 모델',
     placeholder: 'gpt-oss:120b',
+  },
+  'meal-supplement': {
+    icon: Pill,
+    label: '영양제 조언',
+    desc: '식단 관리 — 식단 기록으로 계산한 부족 영양소를 보고 음식·영양제를 조언하는 텍스트 모델. 기본 kimi-k3',
+    placeholder: 'kimi-k3',
+    thinking: true,
   },
   tarot: {
     icon: Sparkles,
