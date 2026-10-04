@@ -71,6 +71,8 @@ export const PublicRestaurantCard = memo(function PublicRestaurantCard({
           {item.thumbnailUrl ? (
             <ImgWithFallback
               src={reviewThumbnailUrl(item.thumbnailUrl, 160)}
+              // 프록시가 거절하는 주소(서버 허용 목록 밖의 pstatic 서브도메인)면 원본으로 되돌아간다.
+              fallbackSrc={item.thumbnailUrl}
               className="size-full object-cover"
             />
           ) : (

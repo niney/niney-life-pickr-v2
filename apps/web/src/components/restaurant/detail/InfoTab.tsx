@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ExternalLink, MapPin, Phone } from 'lucide-react';
 import type {
   RestaurantPublicDetailType,
@@ -38,6 +39,28 @@ const formatTablingDay = (d: TablingBusinessDayType): string | null => {
     .filter((v): v is string => v !== null)
     .join(', ');
   return brk ? `${label} ${open} (브레이크 ${brk})` : `${label} ${open}`;
+};
+
+// 다이닝코드 워드클라우드 — 첫 화면 밖이라 lazy 로 받고, 받기 전에는 이미지 높이만큼 자리를 잡아
+// 둔다(뜨는 순간 아래 블로그 리뷰가 밀려 내려가지 않게). 다이닝코드가 내려주는 워드클라우드는
+// 248×100 고정 크기라 100px 를 예약한다. 뜬 뒤(또는 실패 뒤)에는 예약을 풀어 예전과 같은 크기로
+// 그린다 — 크기가 다른 이미지가 와도 최종 모양은 그대로.
+const WordCloudImage = ({ src }: { src: string }) => {
+  const [settled, setSettled] = useState(false);
+  return (
+    <div className={settled ? undefined : 'min-h-[100px]'}>
+      <img
+        src={src}
+        alt="키워드 워드클라우드"
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setSettled(true)}
+        onError={() => setSettled(true)}
+        className="mx-auto max-h-60 object-contain"
+        referrerPolicy="no-referrer"
+      />
+    </div>
+  );
 };
 
 export const InfoTab = ({ detail }: Props) => {
@@ -172,14 +195,7 @@ export const InfoTab = ({ detail }: Props) => {
               )}
             </div>
           )}
-          {dc.wordcloudUrl && (
-            <img
-              src={dc.wordcloudUrl}
-              alt="키워드 워드클라우드"
-              className="mx-auto max-h-60 object-contain"
-              referrerPolicy="no-referrer"
-            />
-          )}
+          {dc.wordcloudUrl && <WordCloudImage src={dc.wordcloudUrl} />}
         </section>
       )}
 

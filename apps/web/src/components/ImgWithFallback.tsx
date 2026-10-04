@@ -9,9 +9,15 @@ const IMG_REFERRER_POLICY = 'no-referrer' as const;
 
 interface Props {
   src: string;
+  // src 가 실패했을 때 placeholder 로 가기 전에 한 번 더 시도할 주소. src 에 썸네일 프록시
+  // (reviewThumbnailUrl)를 넣는 곳이 원본을 여기 넘긴다 — 프록시가 거절하는 호스트(서버 허용
+  // 목록 밖의 pstatic 서브도메인)나 프록시 일시 장애에도 원본은 예전처럼 뜬다. src 와 같으면 무시.
+  fallbackSrc?: string;
   alt?: string;
   className?: string;
   loading?: 'lazy' | 'eager';
+  // 첫 화면의 대표 이미지(LCP 후보)에만 'high' — 나머지는 브라우저 기본 우선순위에 맡긴다.
+  fetchPriority?: 'high' | 'low' | 'auto';
   // 고정 크기 썸네일이면 넘겨서 로드 전 자리(레이아웃 시프트 방지)를 잡는다.
   width?: number;
   height?: number;
@@ -19,13 +25,17 @@ interface Props {
 
 export const ImgWithFallback = ({
   src,
+  fallbackSrc,
   alt,
   className,
   loading = 'lazy',
+  fetchPriority,
   width,
   height,
 }: Props) => {
   const [failed, setFailed] = useState(false);
+  // src 로드가 실패해 fallbackSrc 로 갈아 끼운 상태.
+  const [usingFallback, setUsingFallback] = useState(false);
   // src 가 바뀌면 실패 상태를 렌더 중 리셋(useEffect 대신 파생) — 이중 렌더/1프레임
   // stale placeholder 없이, 캐러셀처럼 같은 컴포넌트가 다른 이미지를 연속으로 그릴 때
   // 이전 실패가 다음 이미지를 가리지 않게 한다.
@@ -33,7 +43,9 @@ export const ImgWithFallback = ({
   if (src !== prevSrc) {
     setPrevSrc(src);
     setFailed(false);
+    setUsingFallback(false);
   }
+  const canFallBack = !!fallbackSrc && fallbackSrc !== src;
 
   if (failed) {
     return (
@@ -49,15 +61,19 @@ export const ImgWithFallback = ({
   }
   return (
     <img
-      src={src}
+      src={usingFallback && canFallBack ? fallbackSrc : src}
       alt={alt ?? ''}
       loading={loading}
+      fetchPriority={fetchPriority}
       // 디코딩을 메인 스레드 밖으로 — 큰 원본이 뷰포트에 들어올 때 스크롤 프레임을 잡아먹지 않게.
       decoding="async"
       width={width}
       height={height}
       referrerPolicy={IMG_REFERRER_POLICY}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (canFallBack && !usingFallback) setUsingFallback(true);
+        else setFailed(true);
+      }}
       className={className}
     />
   );

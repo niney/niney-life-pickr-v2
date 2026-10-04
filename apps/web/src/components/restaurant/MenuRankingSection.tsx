@@ -49,6 +49,9 @@ export const MenuRankingSection = ({ placeId }: { placeId: string }) => {
   }
 
   const data = ranking.data;
+  // 정렬·최소 언급 수를 바꿔 새 순위를 받는 동안엔 직전 순위가 남아 있다(훅의 placeholderData) —
+  // 그동안 목록만 흐리게 그리고 select 는 그대로 둔다.
+  const isRefreshing = ranking.isPlaceholderData;
   const visible = showAll ? data.items : data.items.slice(0, 10);
   const hasUnmapped = data.unmappedMenus.length > 0;
   const isStale =
@@ -131,11 +134,17 @@ export const MenuRankingSection = ({ placeId }: { placeId: string }) => {
       )}
 
       {visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p
+          className={cn('text-sm text-muted-foreground', isRefreshing && 'opacity-60')}
+          aria-busy={isRefreshing}
+        >
           최소 {minMentions}회 이상 언급된 메뉴가 없습니다.
         </p>
       ) : (
-        <ul className="divide-y rounded-md border">
+        <ul
+          className={cn('divide-y rounded-md border transition-opacity', isRefreshing && 'opacity-60')}
+          aria-busy={isRefreshing}
+        >
           {visible.map((it, idx) => (
             <li key={it.canonicalKey} className="flex flex-wrap items-center gap-3 px-3 py-2">
               <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">

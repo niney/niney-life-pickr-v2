@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RestaurantFavoriteItemType, RestaurantFavoritesResultType } from '@repo/api-contract';
 import { restaurantFavoriteApi } from '../api/restaurant-favorite.api.js';
@@ -21,8 +21,15 @@ import { useAuthStore } from '../stores/authStore.js';
 // react-router Outlet context 로 내려준다 — sync effect 가 인스턴스마다 붙기
 // 때문(서버 sync 는 멱등이라 데이터는 안 깨지지만 중복 요청이 낭비).
 
+// ⚠️ 반환 객체(items·isFavorite·toggle)는 목록이나 로그인 상태가 바뀔 때만 새로 만든다. 호출부가
+// 이 객체를 Outlet context·props 로 그대로 내려주므로, 매 렌더 새 객체면 페이지가 다른 이유로
+// 리렌더될 때마다 받는 쪽(식당 상세 패널 전체)이 따라 리렌더된다.
+
 // useRestaurant.ts 컨벤션(['restaurant', ...])에 맞춘 즐겨찾기 캐시 키.
 const FAVORITES_KEY = ['restaurant', 'favorites'] as const;
+
+// 서버 목록이 아직 없을 때 쓰는 고정 빈 배열 — `?? []` 는 렌더마다 새 배열이라 반환 객체가 흔들린다.
+const NO_ITEMS: RestaurantFavoriteItemType[] = [];
 
 export interface RestaurantFavoritesApi {
   items: RestaurantFavoriteItemType[];
@@ -47,7 +54,7 @@ export const useRestaurantFavorites = (): RestaurantFavoritesApi => {
     staleTime: 60_000,
   });
 
-  const serverItems = listQuery.data?.items ?? [];
+  const serverItems = listQuery.data?.items ?? NO_ITEMS;
 
   // pending 중 같은 항목 연타 무시용 — placeId 집합.
   const pending = useRef(new Set<string>());
@@ -110,18 +117,27 @@ export const useRestaurantFavorites = (): RestaurantFavoritesApi => {
   // ── 반환 — 로그인이면 서버 목록, 게스트면 store. 파생 판정은 렌더 중 계산 ──
   const items = loggedIn ? serverItems : guestItems;
 
-  const isFavorite = (placeId: string) => items.some((i) => i.placeId === placeId);
+  // 포함 여부 판정용 placeId 집합 — isFavorite 는 목록 카드 수만큼 불리므로 매번 선형 탐색하지 않는다.
+  const favoriteIds = useMemo(() => new Set(items.map((i) => i.placeId)), [items]);
 
-  const toggle = (item: RestaurantFavoriteItemType) => {
-    if (!loggedIn) {
-      guestToggle(item);
-      return;
-    }
-    if (pending.current.has(item.placeId)) return;
-    const isFav = serverItems.some((i) => i.placeId === item.placeId);
-    pending.current.add(item.placeId);
-    toggleMutation.mutate({ item, isFav });
-  };
+  const isFavorite = useCallback((placeId: string) => favoriteIds.has(placeId), [favoriteIds]);
 
-  return { items, isFavorite, toggle };
+  // useMutation 의 mutate 는 훅 수명 동안 같은 함수(결과 객체만 매 렌더 새로 만들어진다).
+  const mutateToggle = toggleMutation.mutate;
+  const toggle = useCallback(
+    (item: RestaurantFavoriteItemType) => {
+      if (!loggedIn) {
+        guestToggle(item);
+        return;
+      }
+      if (pending.current.has(item.placeId)) return;
+      // 로그인 상태에선 items 가 곧 서버 목록.
+      const isFav = favoriteIds.has(item.placeId);
+      pending.current.add(item.placeId);
+      mutateToggle({ item, isFav });
+    },
+    [loggedIn, guestToggle, favoriteIds, mutateToggle],
+  );
+
+  return useMemo(() => ({ items, isFavorite, toggle }), [items, isFavorite, toggle]);
 };

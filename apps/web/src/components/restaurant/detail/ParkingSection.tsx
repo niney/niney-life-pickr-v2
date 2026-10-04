@@ -18,11 +18,12 @@ import { feeRuleOf, lotTypeLine } from '~/components/parking/parkingFormat';
 
 const NEARBY_LIMIT = 5;
 
-const useParkingData = (detail: RestaurantPublicDetailType) => {
+// enabled=false 면 조회(와 5분 폴링)를 걸지 않는다 — 캐시에 이미 있으면(가는 법 탭을 먼저 본 경우) 그 값은 그대로 쓴다.
+const useParkingData = (detail: RestaurantPublicDetailType, enabled = true) => {
   const lat = detail.latitude;
   const lng = detail.longitude;
-  const reviews = useRestaurantParkingReviews(detail.placeId);
-  const nearby = useParkingLotNearby(lat, lng, { radius: PARKING_RESTAURANT_RADIUS_M, limit: NEARBY_LIMIT });
+  const reviews = useRestaurantParkingReviews(enabled ? detail.placeId : null);
+  const nearby = useParkingLotNearby(lat, lng, { radius: PARKING_RESTAURANT_RADIUS_M, limit: NEARBY_LIMIT, enabled });
   const dcParking = detail.diningcode?.facilities.some((f) => f.includes('주차')) ?? false;
   return { reviews, nearby, dcParking };
 };
@@ -131,8 +132,18 @@ export const ParkingNearbySection = ({ detail, lat, lng }: { detail: RestaurantP
 // ── 홈 탭 한 줄 요약 ────────────────────────────────────────────────────────
 // 리뷰 평가 한 마디 + 가장 가까운 주차장(무료·여석). 둘 다 없으면 그리지 않는다.
 // onOpen 이 없으면('가는 법' 탭이 없는 어드민 상세) 누를 수 없는 정보 줄로만 그린다.
-export const ParkingSummaryLine = ({ detail, onOpen }: { detail: RestaurantPublicDetailType; onOpen?: () => void }) => {
-  const { reviews, nearby, dcParking } = useParkingData(detail);
+// enabled — 이 줄은 홈 탭 맨 아래라 대개 첫 화면 밖이다. 홈 탭이 "영업 정보" 가 화면에 들어온 뒤에
+// true 로 넘겨, 상세를 열 때마다 안 보이는 한 줄을 위해 조회 2건(+주변 주차장 5분 폴링)이 나가지 않게 한다.
+export const ParkingSummaryLine = ({
+  detail,
+  onOpen,
+  enabled = true,
+}: {
+  detail: RestaurantPublicDetailType;
+  onOpen?: () => void;
+  enabled?: boolean;
+}) => {
+  const { reviews, nearby, dcParking } = useParkingData(detail, enabled);
   const topTip = reviews.data?.tips[0]?.term ?? null;
   const verdict = verdictOf(reviews.data?.aspect) ?? (topTip ? `리뷰: '${topTip}'` : dcParking ? '주차 가능(다이닝코드)' : null);
   const nearest = nearby.data?.items[0] ?? null;

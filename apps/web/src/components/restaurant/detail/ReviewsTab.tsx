@@ -61,11 +61,16 @@ export const ReviewsTab = ({
     [detail.reviewsFirstPage, detail.reviewCounts.all],
   );
 
+  // keepPrevious — 칩·정렬·팁/메뉴 필터를 바꿔 새 목록을 받는 동안 직전 목록을 흐리게 남겨 둔다
+  // (목록이 "불러오는 중…" 한 줄로 줄었다가 다시 늘어나며 스크롤이 튀지 않게).
   const reviewsQuery = useRestaurantPublicReviews(
     placeId,
     { sentiment, sort, tip: tip ?? undefined, menu: menu ?? undefined },
     seed,
+    { keepPrevious: true },
   );
+  // 지금 보이는 목록이 직전 필터의 것(새 결과 대기 중)인지.
+  const isStale = reviewsQuery.isPlaceholderData;
 
   // tip/menu 는 동시 1개만 — 활성 칩 하나로 표현. total 은 현재 필터 적용 결과 수.
   const activeChip = tip
@@ -105,7 +110,8 @@ export const ReviewsTab = ({
             <span className="text-muted-foreground">{activeChip.label} · </span>
             <span className="font-medium">{activeChip.value}</span>
             <span className="ml-1 tabular-nums text-muted-foreground">
-              ({filterTotal})
+              {/* 새 결과를 받는 중엔 직전 필터의 건수를 보여주지 않는다. */}
+              ({isStale ? '…' : filterTotal})
             </span>
           </span>
           {activeChip.onClear && (
@@ -165,12 +171,21 @@ export const ReviewsTab = ({
           불러오는 중…
         </div>
       ) : flat.length === 0 ? (
-        <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
+        <div
+          className={cn(
+            'rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground',
+            isStale && 'opacity-60',
+          )}
+          aria-busy={isStale}
+        >
           조건에 맞는 리뷰가 없습니다.
         </div>
       ) : (
         <>
-          <ul className="divide-y divide-border">
+          <ul
+            className={cn('divide-y divide-border transition-opacity', isStale && 'opacity-60')}
+            aria-busy={isStale}
+          >
             {flat.map((r) => (
               <li key={r.id}>
                 <ReviewCard

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -68,10 +69,15 @@ const renderWith = (ui: React.ReactNode) =>
   );
 
 let nearbyUrl: URL | null = null;
+let reviewCalls = 0;
 beforeEach(() => {
   nearbyUrl = null;
+  reviewCalls = 0;
   server.use(
-    http.get('/api/v1/restaurants/public/P1/parking-reviews', () => HttpResponse.json(reviews)),
+    http.get('/api/v1/restaurants/public/P1/parking-reviews', () => {
+      reviewCalls += 1;
+      return HttpResponse.json(reviews);
+    }),
     http.get('/api/v1/parking/lots/nearby', ({ request }) => {
       nearbyUrl = new URL(request.url);
       return HttpResponse.json(nearby);
@@ -100,5 +106,35 @@ describe('식당 상세 주차', () => {
     await waitFor(() => expect(line).toHaveTextContent('리뷰: 주차 불편한 편 · 신정4동길(구) 133m · 무료'));
     fireEvent.click(line);
     expect(opened).toBe(true);
+  });
+
+  it('홈 한 줄 요약 — enabled=false 인 동안은 조회하지 않고(상세 응답만으로 아는 것만 그린다), 켜지면 조회한다', async () => {
+    // 홈 탭이 "영업 정보" 가 화면에 들어오기 전까지 enabled=false 로 넘기는 상황.
+    const Gate = () => {
+      const [enabled, setEnabled] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setEnabled(true)}>
+            화면에 들어옴
+          </button>
+          <ParkingSummaryLine detail={detail} enabled={enabled} />
+        </>
+      );
+    };
+    renderWith(<Gate />);
+    // 다이닝코드 시설 정보는 상세 응답에 이미 있다 — 조회 없이도 한 줄은 뜬다.
+    expect(await screen.findByTestId('restaurant-parking-summary')).toHaveTextContent('주차 가능(다이닝코드)');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reviewCalls).toBe(0);
+    expect(nearbyUrl).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '화면에 들어옴' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('restaurant-parking-summary')).toHaveTextContent(
+        '리뷰: 주차 불편한 편 · 신정4동길(구) 133m · 무료',
+      ),
+    );
+    expect(reviewCalls).toBe(1);
+    expect(nearbyUrl).not.toBeNull();
   });
 });

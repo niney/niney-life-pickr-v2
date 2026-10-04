@@ -310,6 +310,7 @@ export const SmartPickSection = ({
                   {resultThumbnail ? (
                     <ImgWithFallback
                       src={reviewThumbnailUrl(resultThumbnail, 160)}
+                      fallbackSrc={resultThumbnail}
                       className="size-full object-cover"
                     />
                   ) : (

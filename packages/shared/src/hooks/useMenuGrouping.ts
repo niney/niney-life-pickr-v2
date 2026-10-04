@@ -19,6 +19,9 @@ const isNotFound = (e: unknown): boolean =>
 
 // 식당 메뉴 순위. placeId null 이면 비활성. 정렬·minMentions 가 바뀌면
 // React Query 가 자동 refetch — fetch 하나가 가벼워서 부담 없음.
+// 같은 식당 안에서 정렬·minMentions 만 바뀔 때는 직전 순위를 placeholder 로 남긴다 — 섹션이 로딩
+// 문구로 통째 갈아 끼워지며 정렬 select 까지 사라졌다 나타나지 않게(화면은 isPlaceholderData 로 흐리게).
+// 식당이 바뀌면(queryKey[2]) 남기지 않는다.
 export const useMenuRanking = (
   placeId: string | null,
   query: Partial<MenuRankingQueryType> = {},
@@ -35,6 +38,7 @@ export const useMenuRanking = (
       }
     },
     enabled: !!placeId,
+    placeholderData: (prev, previousQuery) => (previousQuery?.queryKey[2] === placeId ? prev : undefined),
   });
 
 // 단일 식당 그룹핑 실행 (분류 버튼). 성공 시 ranking 캐시 무효화 → UI 자동 갱신.

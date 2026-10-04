@@ -1,5 +1,6 @@
 import { ArrowRight, MapPin, Star } from 'lucide-react';
 import type { RestaurantInsightsType, RestaurantPublicDetailType } from '@repo/api-contract';
+import { reviewThumbnailUrl } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import {
@@ -15,6 +16,7 @@ import { ParkingSummaryLine } from './ParkingSection';
 import { StoreInfoBadges } from './StoreInfoBadges';
 import { TourSummaryBadge, TourSummaryLine } from './TourSummaryBadge';
 import type { TabKey } from './tabs';
+import { useInViewOnce } from './useInViewOnce';
 
 interface Props {
   detail: RestaurantPublicDetailType;
@@ -30,6 +32,9 @@ interface Props {
 
 const HOME_MENU_PREVIEW = 4;
 const HOME_REVIEW_PREVIEW = 3;
+// 히어로 썸네일 폭(px) — 썸네일 프록시의 상한. 히어로는 모바일에선 화면 폭 전체, 어드민 상세에선
+// 900px 안팎까지 넓어져서 고밀도 화면에서도 흐려지지 않게 상한을 그대로 쓴다.
+const HERO_THUMB_WIDTH = 1200;
 
 export const HomeTab = ({
   detail,
@@ -57,10 +62,20 @@ export const HomeTab = ({
   const src = detail.storedReviewCount;
   const showSourceBadges =
     [src.naver, src.diningcode, src.tabling].filter((c) => c > 0).length >= 2;
+  // 맨 아래 "영업 정보" 가 화면에 들어온 뒤에야 주차 한 줄 요약을 조회한다(ParkingSummaryLine 의 enabled).
+  const [infoRef, infoInView] = useInViewOnce<HTMLElement>();
 
   const heroInner = hero ? (
     <>
-      <ImgWithFallback src={hero} className="size-full object-cover" />
+      {/* 상세를 열면 가장 먼저 보이는 큰 이미지 — 원본 대신 프록시 썸네일(프록시 상한 폭)로 받고,
+          첫 화면이라 lazy 를 끄고 우선순위를 올린다. 프록시가 실패하면 원본으로 되돌아간다. */}
+      <ImgWithFallback
+        src={reviewThumbnailUrl(hero, HERO_THUMB_WIDTH)}
+        fallbackSrc={hero}
+        loading="eager"
+        fetchPriority="high"
+        className="size-full object-cover"
+      />
       {detail.imageUrls.length > 1 && (
         <span className="absolute bottom-2 right-2 rounded-md bg-background/80 px-2 py-0.5 text-[11px] tabular-nums">
           사진 {detail.imageUrls.length}장
@@ -195,7 +210,7 @@ export const HomeTab = ({
         </section>
       )}
 
-      <section className="space-y-2 border-t px-4 pt-4 pb-6">
+      <section ref={infoRef} className="space-y-2 border-t px-4 pt-4 pb-6">
         <SectionHead
           title="영업 정보"
           actionLabel="정보 전체 보기"
@@ -211,6 +226,7 @@ export const HomeTab = ({
           )}
           <ParkingSummaryLine
             detail={detail}
+            enabled={infoInView}
             onOpen={canOpen('transit') ? () => onChangeTab('transit') : undefined}
           />
         </div>

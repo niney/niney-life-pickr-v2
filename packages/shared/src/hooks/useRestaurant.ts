@@ -177,9 +177,11 @@ export const useRestaurantRanking = (query: Partial<RestaurantRankingQueryType> 
 // `alwaysRefetchOnMount` 는 어드민 발견 페이지처럼 재진입마다 최신 데이터를
 // 강제로 받아야 하는 호출처를 위한 옵트인. 기본은 30s staleTime 캐시 그대로 —
 // 공개 맛집 페이지는 토글/스크롤이 잦아 캐시 우선이 맞다.
+// `enabled` 는 닫힌 다이얼로그·빈 검색어처럼 결과를 안 쓰는 동안 조회를 막는 옵트아웃(기본 켬). 이 목록은
+// 서버에서 가장 무거운 공개 경로라, 안 보이는 화면이 부르지 않게 호출처가 직접 끈다.
 export const useRestaurantsPublic = (
   query: Partial<RestaurantPublicListQueryType> = {},
-  options: { alwaysRefetchOnMount?: boolean } = {},
+  options: { alwaysRefetchOnMount?: boolean; enabled?: boolean } = {},
 ) =>
   useQuery({
     queryKey: [
@@ -194,6 +196,7 @@ export const useRestaurantsPublic = (
       query.offset ?? 0,
     ],
     queryFn: () => restaurantApi.publicList(query),
+    enabled: options.enabled ?? true,
     placeholderData: (prev) => prev,
     staleTime: 30_000,
     refetchOnMount: options.alwaysRefetchOnMount ? 'always' : true,
@@ -224,6 +227,10 @@ export const useRestaurantSmartPick = () =>
 // detail.reviewsFirstPage 를 initialData 로 seed — sentiment='all', sort='recent'
 // 일 때만 (detail 동봉 페이로드의 필터 상태와 일치). 다른 chip 으로 시작하면
 // seed 무효, 첫 페이지부터 fetch.
+//
+// `keepPrevious` 는 옵트인 — 같은 식당 안에서 필터·정렬만 바뀌어 새 키를 받는 동안 직전 목록을
+// placeholder 로 남긴다(목록이 로딩 문구로 통째 갈아 끼워지며 스크롤이 튀지 않게). 화면은
+// `isPlaceholderData` 로 흐리게 그린다. 기본은 끔 — 그런 표시가 없는 화면(앱)은 로딩 표시를 그대로 쓴다.
 const REVIEWS_PAGE_SIZE = 10;
 
 export const useRestaurantPublicReviews = (
@@ -239,6 +246,7 @@ export const useRestaurantPublicReviews = (
     menu?: string;
   },
   seed?: { items: PublicVisitorReviewType[]; total: number },
+  options: { keepPrevious?: boolean } = {},
 ) => {
   const canSeed =
     !!seed &&
@@ -286,6 +294,10 @@ export const useRestaurantPublicReviews = (
           pages: [{ items: seed!.items, total: seed!.total }],
           pageParams: [0],
         }
+      : undefined,
+    // 직전 키가 같은 식당(queryKey[3])일 때만 — 다른 식당의 리뷰를 잠깐이라도 보여주지 않는다.
+    placeholderData: options.keepPrevious
+      ? (prev, previousQuery) => (previousQuery?.queryKey[3] === placeId ? prev : undefined)
       : undefined,
   });
 };

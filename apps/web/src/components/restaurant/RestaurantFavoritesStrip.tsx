@@ -39,6 +39,7 @@ export const RestaurantFavoritesStrip = ({
                 {item.thumbnailUrl ? (
                   <ImgWithFallback
                     src={reviewThumbnailUrl(item.thumbnailUrl, 160)}
+                    fallbackSrc={item.thumbnailUrl}
                     className="size-full object-cover"
                   />
                 ) : (

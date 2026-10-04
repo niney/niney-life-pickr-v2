@@ -346,6 +346,7 @@ export const MenuGrid = ({
                       디코딩이 터져 버벅인다 — 프록시로 112px(2x)까지 줄여 받는다. */}
                   <ImgWithFallback
                     src={reviewThumbnailUrl(m.imageUrls[0], 112)}
+                    fallbackSrc={m.imageUrls[0]}
                     width={56}
                     height={56}
                     className="size-14 rounded object-cover transition-opacity hover:opacity-90"
@@ -739,10 +740,15 @@ export const ReviewCard = ({
               type="button"
               onClick={() => setLightboxIndex(i)}
               aria-label={`${authorLabel} 리뷰 ${i + 1}번 사진 크게 보기`}
-              className="shrink-0 snap-start overflow-hidden rounded bg-muted"
+              // 사진은 높이만 고정(h-56)이고 폭은 원본 비율을 따른다. 받기 전엔 비율을 몰라 폭이 0 이
+              // 되는데, 그러면 한 리뷰의 사진이 전부 화면 안에 겹쳐 있는 셈이라 lazy 가 듣지 않고 한꺼번에
+              // 받는다. `aspect-ratio: auto 4/3` 은 받기 전에만 4:3 으로 자리를 잡고, 받은 뒤엔 원본 비율을
+              // 쓴다(최종 모양은 그대로). 실패 placeholder(div)엔 걸지 않게 img 에만 건다.
+              className="shrink-0 snap-start overflow-hidden rounded bg-muted [&>img]:[aspect-ratio:auto_4/3]"
             >
               <ImgWithFallback
                 src={reviewThumbnailUrl(u, 480)}
+                fallbackSrc={u}
                 className="h-56 w-auto object-cover transition-transform active:scale-95 sm:h-64"
               />
             </button>

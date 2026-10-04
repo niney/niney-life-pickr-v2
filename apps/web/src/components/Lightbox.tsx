@@ -10,6 +10,11 @@ interface Props {
   onClose(): void;
 }
 
+// 현재 장에서 이만큼 떨어진 슬라이드까지만 <img> 를 그린다. 그 밖은 빈 슬라이드(폭은 그대로라
+// 스크롤 위치·스냅은 변하지 않는다) — 사진 탭처럼 수십~수백 장을 넘길 때 장마다 <img> 를 만들지
+// 않고, index 가 바뀔 때 다시 그리는 것도 창 안의 몇 장뿐이다.
+const SLIDE_WINDOW = 2;
+
 // 풀스크린 캐러셀. scroll-snap 으로 재구성 — 컨테이너 가로 스크롤 + 각 슬라이드
 // `min-w-full snap-center`. 모바일은 손가락 좌우 스와이프 → 브라우저가 momentum
 // + snap 자동 처리, JS swipe 핸들러 불필요. 데스크톱은 chevron 버튼/키보드.
@@ -18,6 +23,7 @@ interface Props {
 // - index prop 변경 시 scrollLeft 를 인덱스 위치로 jump (open / 키보드 / 버튼).
 // - 사용자 스와이프 → onScroll 에서 현재 페이지 계산 → onChangeIndex.
 // - 이중 트리거 방지 위해 programmatic scroll 중에는 onScroll 무시(플래그).
+// - 스와이프가 올린 index 는 다시 scrollLeft 로 되돌려 쓰지 않는다(scrollDrivenIdxRef).
 export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
   const safeIdx = ((index % images.length) + images.length) % images.length;
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -27,6 +33,10 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
   const ignoreScrollRef = useRef(false);
   // 첫 effect 실행 여부. 첫 mount 는 instant jump, 이후는 smooth.
   const firstRunRef = useRef(true);
+  // 스와이프(onScroll)가 방금 올린 index. 이 값으로 index 가 바뀐 것이면 아래 effect 가 스크롤을
+  // 건드리지 않는다 — 손가락이 아직 끌고 있거나 scroll-snap 이 안착시키는 중이라, 여기서 scrollTo 를
+  // 걸면 제스처와 싸우게 된다(끊김·튐).
+  const scrollDrivenIdxRef = useRef<number | null>(null);
   // 빈 영역 '클릭'으로 닫기 위해 pointerdown 좌표를 기록 — click 시점에 이동
   // 거리를 비교해 스와이프/드래그와 진짜 클릭을 구분한다.
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
@@ -43,10 +53,19 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const target = safeIdx * el.clientWidth;
-    if (Math.abs(el.scrollLeft - target) < 1) return;
+    // 첫 실행 표시는 스크롤을 했든 안 했든 여기서 끈다. 0번으로 열면 옮길 곳이 없어 아래에서 바로
+    // 끝나는데, 그때 표시가 남으면 다음 이동이 '첫 진입'으로 오인돼 instant 로 튄다.
     const isFirst = firstRunRef.current;
     firstRunRef.current = false;
+    const drivenByScroll = scrollDrivenIdxRef.current === safeIdx;
+    scrollDrivenIdxRef.current = null;
+    const target = safeIdx * el.clientWidth;
+    // 스와이프가 올린 index 이거나 이미 그 자리면 스크롤할 일이 없다. 가드도 여기서 푼다 — 직전
+    // 실행의 타이머는 cleanup 이 이미 지웠으므로, 그냥 돌아가면 onScroll 이 계속 무시된 채로 남는다.
+    if (drivenByScroll || Math.abs(el.scrollLeft - target) < 1) {
+      ignoreScrollRef.current = false;
+      return;
+    }
     ignoreScrollRef.current = true;
     el.scrollTo({ left: target, behavior: isFirst ? 'instant' : 'smooth' });
     // instant 는 onScroll 한 번이면 충분, smooth 는 모바일에서 종종 300ms+
@@ -74,9 +93,13 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
   const handleScroll = () => {
     if (ignoreScrollRef.current) return;
     const el = scrollerRef.current;
-    if (!el) return;
+    // 폭 0(아직 배치 전·숨김)이면 페이지를 계산할 수 없다 — 0 으로 나눈 NaN 을 올리지 않는다.
+    if (!el || el.clientWidth === 0) return;
     const next = Math.round(el.scrollLeft / el.clientWidth);
-    if (next !== safeIdx) onChangeIndex(next);
+    if (next !== safeIdx) {
+      scrollDrivenIdxRef.current = next;
+      onChangeIndex(next);
+    }
   };
 
   // 이미지 바깥 어두운 영역을 '클릭'하면 닫는다 (X 버튼 외 보조 닫기).
@@ -166,13 +189,16 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
             // 고정해 max-w-full 이 실효력을 갖도록.
             className="flex h-full w-full shrink-0 snap-center items-center justify-center p-4"
           >
-            <ImgWithFallback
-              src={u}
-              loading={Math.abs(i - safeIdx) <= 1 ? 'eager' : 'lazy'}
-              // max-h 는 dvh — dialog 와 동일 기준이라 모바일 주소창 상태가
-              // 바뀌어도 잘리지 않는다.
-              className="max-h-[88dvh] max-w-full rounded object-contain"
-            />
+            {/* 창(SLIDE_WINDOW) 밖 슬라이드는 자리만 지킨다 — 스와이프로 가까워지면 그때 그려진다. */}
+            {Math.abs(i - safeIdx) <= SLIDE_WINDOW && (
+              <ImgWithFallback
+                src={u}
+                loading={Math.abs(i - safeIdx) <= 1 ? 'eager' : 'lazy'}
+                // max-h 는 dvh — dialog 와 동일 기준이라 모바일 주소창 상태가
+                // 바뀌어도 잘리지 않는다.
+                className="max-h-[88dvh] max-w-full rounded object-contain"
+              />
+            )}
           </div>
         ))}
       </div>

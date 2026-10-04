@@ -7,6 +7,7 @@ import type {
 } from '@repo/api-contract';
 import { useRestaurantFavorites, useRestaurantsPublic } from '@repo/shared';
 import { PublicRestaurantList } from '~/components/restaurant/PublicRestaurantList';
+import { RestaurantDetailWarmup } from '~/components/restaurant/RestaurantDetailWarmup';
 import { toFavoriteItem } from '~/components/restaurant/favoriteSnapshot';
 import { PublicRestaurantsMap } from '~/components/restaurant/PublicRestaurantsMap';
 import { Button } from '~/components/ui/button';
@@ -20,6 +21,9 @@ const isSortKey = (s: string | null): s is SortKey =>
   s !== null && (VALID_SORTS as string[]).includes(s);
 
 type MobileView = 'list' | 'map';
+
+// 목록 응답 전의 고정 빈 배열 — `?? []` 는 렌더마다 새 배열이라 지도의 markers 메모가 매번 깨진다.
+const NO_ITEMS: RestaurantPublicListItemType[] = [];
 
 // 공개 맛집 페이지(layout). 네이버 지도 패턴: 좌측 결과 리스트 + 우측 풀-뷰포트
 // 지도. xl(>=1280) 이상에서 양쪽 동시 노출, 그 미만에서는 [목록/지도] 탭 토글.
@@ -42,7 +46,14 @@ export const RestaurantsPage = () => {
   // 상세 활성 여부는 nested route path 로 판단 (URL 의 단일 source-of-truth).
   const detailMatch = useMatch('/restaurants/:placeId');
   const placeId = detailMatch?.params.placeId ?? null;
+  // BrowserRouter 의 useNavigate 는 pathname 이 바뀔 때마다 새 함수를 돌려준다(상대 경로 해석용
+  // 클로저). 그대로 콜백 deps 에 두면 식당을 고를 때마다 handleSelectItem 이 새 참조가 되어 카드
+  // 80장의 memo 가 전부 깨진다 — favoritesRef 와 같은 방식으로 최신 함수만 ref 에 담아 둔다.
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  });
 
   const setParam = useCallback(
     (key: string, value: string | null) => {
@@ -66,7 +77,7 @@ export const RestaurantsPage = () => {
     bbox: bbox ?? undefined,
     limit: 80,
   });
-  const items = list.data?.items ?? [];
+  const items = list.data?.items ?? NO_ITEMS;
   const total = list.data?.total ?? 0;
 
   // 맛집 즐겨찾기 — 페이지당 1회 호출 원칙(RestaurantsV2Page 와 동일 구조).
@@ -91,15 +102,12 @@ export const RestaurantsPage = () => {
   // 데스크톱 좌/우 패널 토글 — 사용자별 선호 저장. xl 미만에선 의미 없음.
   const [panelSide, togglePanelSide] = usePanelSide('public.restaurants');
 
-  const handleSelectItem = useCallback(
-    (id: string) => {
-      // 식당 선택 = path 전환 (push) — 식당 간 뒤로가기 가능, tab query 는
-      // 초기화(home). 기존 list 검색/필터 query 는 보존.
-      navigate({ pathname: `/restaurants/${id}`, search: window.location.search });
-      setMobileView('list');
-    },
-    [navigate],
-  );
+  const handleSelectItem = useCallback((id: string) => {
+    // 식당 선택 = path 전환 (push) — 식당 간 뒤로가기 가능, tab query 는
+    // 초기화(home). 기존 list 검색/필터 query 는 보존.
+    navigateRef.current({ pathname: `/restaurants/${id}`, search: window.location.search });
+    setMobileView('list');
+  }, []);
 
   const handleResearch = useCallback((b: string) => setParam('bbox', b), [setParam]);
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
@@ -159,7 +167,9 @@ export const RestaurantsPage = () => {
               panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
             )}
           >
-            {/* 상세 탭 묶음은 lazy — 목록은 그대로 두고 이 패널만 로딩 표시. */}
+            {/* 상세 탭 묶음은 lazy — 목록은 그대로 두고 이 패널만 로딩 표시.
+                청크를 받는 동안 상세·인사이트 조회는 Warmup 이 먼저 걸어 둔다. */}
+            <RestaurantDetailWarmup placeId={placeId} />
             <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
               <Outlet context={favorites} />
             </Suspense>
