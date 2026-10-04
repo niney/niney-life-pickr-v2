@@ -167,9 +167,11 @@ export const MealRecommendTab = () => {
     );
   };
 
+  // 데스크톱은 왼쪽에 추천 결과(두 행에 걸침), 오른쪽에 조건·최근 추천 — 식단 화면 공통(mealLayout)처럼 오른쪽이
+  // 맥락·동작 자리다. DOM 순서(조건 → 결과 → 최근 추천)는 좁은 화면·키보드 순서 그대로 두고 그리드 자리만 바꾼다.
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr] lg:items-start lg:gap-x-6 lg:gap-y-4 lg:space-y-0">
+      <Card className="lg:col-start-2 lg:row-start-1">
         <CardHeader>
           <CardTitle className="text-base">다음 끼니 추천</CardTitle>
         </CardHeader>
@@ -245,7 +247,7 @@ export const MealRecommendTab = () => {
         </CardContent>
       </Card>
 
-      <div ref={cardRef} className="scroll-mt-20">
+      <div ref={cardRef} className="scroll-mt-20 lg:col-start-1 lg:row-span-2 lg:row-start-1">
         {shown ? (
           <RecommendationCard
             rec={shown}
@@ -311,13 +313,18 @@ export const MealRecommendTab = () => {
               });
             }}
           />
+        ) : ctx.data ? (
+          // 데스크톱에서 오른쪽 결과 자리가 비지 않게 — 좁은 화면은 바로 위가 조건 입력이라 안내가 필요 없다.
+          <div className="hidden rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground lg:block">
+            끼니와 상황을 고르고 &lsquo;추천받기&rsquo;를 누르면 여기에 추천이 나와요.
+          </div>
         ) : null}
       </div>
 
       {/* 목록은 늘 최신순 그대로 — 보고 있는 추천을 목록에서 빼면 누를 때마다 줄이 빠지고 끼어들어 헷갈렸다
           (2026-10-04). 보고 있는 줄만 강조한다. 지우기가 생겨 한 개여도 보인다(마지막 추천도 지울 수 있게). */}
       {historyItems.length > 0 ? (
-        <Card>
+        <Card className="lg:col-start-2 lg:row-start-2">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">최근 추천</CardTitle>
             <Button

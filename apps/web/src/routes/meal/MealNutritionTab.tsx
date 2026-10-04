@@ -61,8 +61,9 @@ export const MealNutritionTab = () => {
   const [days, setDays] = useState<(typeof PERIODS)[number]>(14);
   const analysis = useMealNutrition(days);
 
+  // 데스크톱은 점검과 조언을 나란히 — 조언(이 탭의 결론)이 점검 목록 아래(1,440px)로 밀리지 않게.
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">

@@ -132,10 +132,11 @@ export const MealPreferenceTab = () => {
     );
   };
 
+  // 데스크톱은 카드 두 단(중요도 | 먹는 것 / 영양 기준 | 내 데이터) — 한 단이면 슬라이더·입력칸이 800px 로 늘어났다.
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
       {pref.data && !pref.data.onboarded ? (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 lg:col-span-2">
           <p className="text-sm font-medium">첫 추천을 위한 기본 설정</p>
           <p className="mt-1 text-xs text-muted-foreground">
             좋아하는 음식, 덜 선호하는 음식, 알레르기 주의 항목과 끼니를 저장하면 기록이 적어도
@@ -335,10 +336,19 @@ export const MealPreferenceTab = () => {
 
       <MealDataManagement />
 
-      <div className="flex items-center gap-3">
+      {/* 바뀐 게 있으면 저장 줄을 화면 아래에 붙인다 — 설정이 길어(데스크톱 2,400px) 맨 아래까지 내려가야 저장할 수
+          있었다. 좁은 화면도 같다. 형식 오류도 이 줄에 보여 붙은 상태에서 놓치지 않게. */}
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-x-3 gap-y-1 lg:col-span-2',
+          dirty &&
+            'sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6',
+        )}
+      >
         <Button onClick={onSave} disabled={save.isPending || !dirty}>
           {save.isPending ? '저장 중…' : '저장'}
         </Button>
+        {dirty ? <span className="text-sm text-muted-foreground">바꾼 설정이 있어요.</span> : null}
         {save.isSuccess && !dirty ? (
           <span className="text-sm text-muted-foreground">저장했어요.</span>
         ) : null}
@@ -347,8 +357,8 @@ export const MealPreferenceTab = () => {
             {save.error instanceof Error ? save.error.message : '저장 실패'}
           </span>
         ) : null}
+        {formError ? <span className="text-sm text-destructive">{formError}</span> : null}
       </div>
-      {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
     </div>
   );
 };

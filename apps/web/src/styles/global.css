@@ -36,3 +36,8 @@ body {
 }
 .link-primary { color: var(--color-primary, #f59e0b); }
 .link-primary:hover { text-decoration: underline; }
+
+/* 식단 화면(목록·상세·입력)은 스크롤바 자리를 늘 비워 둔다 — 짧은 상세와 긴 목록을 오갈 때 스크롤바가 생겼다
+   없어지며 본문이 7px 옮겨 갔다. 지도처럼 화면을 꽉 채우는 페이지에 빈 줄이 생기지 않게 식단 틀(.meal-page)이
+   있을 때만. */
+html:has(.meal-page) { scrollbar-gutter: stable; }

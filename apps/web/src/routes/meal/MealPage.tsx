@@ -35,7 +35,9 @@ import {
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { useIsDesktopLg } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
+import { MEAL_MAIN_CLASS, MEAL_PAGE_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
 import { MealNutritionTab } from './MealNutritionTab';
 import { MealPhotoImg } from './MealPhotoImg';
 import { MealPreferenceTab } from './MealPreferenceTab';
@@ -44,6 +46,10 @@ import { MealRecommendTab } from './MealRecommendTab';
 // 내 식단 — 기록/달력/통계/추천/영양/설정. 사진 기록(촬영·인식)은 앱에서만 하고, 웹은 손으로 적는
 // 기록(/me/meals/new)과 상세·수정·삭제까지 한다. 탭은 주소(?tab=)에 둬 상세에서 뒤로 오면 보던
 // 탭으로 돌아온다. 차트 라이브러리를 쓰지 않는 리포 관례대로 막대는 div 폭으로 그린다.
+//
+// 데스크톱(lg, 1024px 이상)은 상세·입력과 같은 틀(mealLayout — max-w-6xl, 왼쪽 본문 + 오른쪽 패널)로 펼친다.
+// 기록은 오른쪽에 검색·최근 7일, 왼쪽에 날짜별 촘촘한 줄 / 달력은 오른쪽에 고른 날. 좁은 화면은 그대로다
+// (lg: 접두로만 바꾸고, 데스크톱에서만 부르는 요청·기본 선택은 useIsDesktopLg 로 가른다).
 
 type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'nutrition' | 'preference';
 
@@ -71,7 +77,7 @@ export const MealPage = () => {
   const setTab = (next: Tab) => setParams(next === 'list' ? {} : { tab: next }, { replace: true });
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+    <div className={MEAL_PAGE_CLASS}>
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex w-full items-start justify-between gap-3">
           <div>
@@ -147,6 +153,17 @@ const MealList = () => {
   const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
   const today = toLocalDateKey(new Date());
   const filtered = Boolean(q.trim() || from || to || slot || mealType || source);
+  const isDesktop = useIsDesktopLg();
+  // 날짜별 묶음 — 데스크톱은 한 날짜를 한 카드의 촘촘한 줄로, 좁은 화면은 예전처럼 끼니마다 카드.
+  const groups = useMemo(() => {
+    const out: { date: string; entries: MealEntryType[] }[] = [];
+    for (const entry of items) {
+      const last = out[out.length - 1];
+      if (last && last.date === entry.eatenDate) last.entries.push(entry);
+      else out.push({ date: entry.eatenDate, entries: [entry] });
+    }
+    return out;
+  }, [items]);
 
   if (list.isLoading) {
     return <Loading />;
@@ -155,93 +172,140 @@ const MealList = () => {
     return <ErrorBox onRetry={() => void list.refetch()} />;
   }
   return (
-    <div className="space-y-3">
-      <Card>
-        <CardContent className="space-y-3 py-4">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              placeholder="음식·장소·메모 검색"
-              maxLength={80}
-              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm"
-            />
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="rounded-md border bg-background px-2 py-2" />
-              <span>~</span>
-              <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="rounded-md border bg-background px-2 py-2" />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {MEAL_SLOTS.map((value) => (
-              <FilterChip key={value} label={MEAL_SLOT_LABEL[value]} selected={slot === value} onClick={() => setSlot(slot === value ? null : value)} />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {MEAL_TYPES.map((value) => (
-              <FilterChip key={value} label={MEAL_TYPE_LABEL[value]} selected={mealType === value} onClick={() => setMealType(mealType === value ? null : value)} />
-            ))}
-            {([
-              ['photo', '사진'],
-              ['manual', '수동'],
-              ['recommendation', '추천'],
-            ] as const).map(([value, label]) => (
-              <FilterChip key={value} label={label} selected={source === value} onClick={() => setSource(source === value ? null : value)} />
-            ))}
-            {filtered ? (
-              <button
-                type="button"
-                className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => { setQ(''); setFrom(''); setTo(''); setSlot(null); setMealType(null); setSource(null); }}
-              >
-                필터 초기화
-              </button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-      {items.length === 0 ? (
+    <div className={MEAL_SPLIT_CLASS}>
+      {/* 데스크톱은 검색·필터와 최근 7일 요약을 오른쪽에 붙여 둔다 — 목록이 첫 화면부터 시작하게(전엔 필터 카드가
+          위를 차지해 첫 화면에 4끼). */}
+      <div className={MEAL_SIDE_CLASS}>
         <Card>
-          <CardContent className="space-y-3 py-10 text-center text-sm text-muted-foreground">
-            {filtered ? (
-              '조건에 맞는 기록이 없어요. 필터를 바꿔 보세요.'
-            ) : (
-              <>
-                <p>아직 기록이 없어요. 첫 끼니를 남겨 보세요.</p>
-                <Button variant="outline" asChild>
-                  <Link to="/me/meals/new">첫 끼니 기록하기</Link>
-                </Button>
-              </>
-            )}
+          <CardContent className="space-y-3 py-4">
+            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+              <input
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                placeholder="음식·장소·메모 검색"
+                maxLength={80}
+                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+              />
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="rounded-md border bg-background px-2 py-2" />
+                <span>~</span>
+                <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="rounded-md border bg-background px-2 py-2" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {MEAL_SLOTS.map((value) => (
+                <FilterChip key={value} label={MEAL_SLOT_LABEL[value]} selected={slot === value} onClick={() => setSlot(slot === value ? null : value)} />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {MEAL_TYPES.map((value) => (
+                <FilterChip key={value} label={MEAL_TYPE_LABEL[value]} selected={mealType === value} onClick={() => setMealType(mealType === value ? null : value)} />
+              ))}
+              {([
+                ['photo', '사진'],
+                ['manual', '수동'],
+                ['recommendation', '추천'],
+              ] as const).map(([value, label]) => (
+                <FilterChip key={value} label={label} selected={source === value} onClick={() => setSource(source === value ? null : value)} />
+              ))}
+              {filtered ? (
+                <button
+                  type="button"
+                  className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => { setQ(''); setFrom(''); setTo(''); setSlot(null); setMealType(null); setSource(null); }}
+                >
+                  필터 초기화
+                </button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
-      ) : null}
-      {items.map((entry, i) => {
-        const prev = items[i - 1];
-        const showDate = !prev || prev.eatenDate !== entry.eatenDate;
-        return (
-          <div key={entry.id} className="space-y-2">
-            {showDate ? (
-              <p className="pt-2 text-xs font-semibold text-muted-foreground">
-                {mealDateLabel(entry.eatenDate, today)} · {entry.eatenDate}
-              </p>
-            ) : null}
-            <MealEntryRow entry={entry} />
+        {isDesktop ? <MealWeekSummary /> : null}
+      </div>
+
+      <div className={cn(MEAL_MAIN_CLASS, 'space-y-3')}>
+        {items.length === 0 ? (
+          <Card>
+            <CardContent className="space-y-3 py-10 text-center text-sm text-muted-foreground">
+              {filtered ? (
+                '조건에 맞는 기록이 없어요. 필터를 바꿔 보세요.'
+              ) : (
+                <>
+                  <p>아직 기록이 없어요. 첫 끼니를 남겨 보세요.</p>
+                  <Button variant="outline" asChild>
+                    <Link to="/me/meals/new">첫 끼니 기록하기</Link>
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+        {groups.map((group) => (
+          <section key={group.date} className="space-y-2">
+            <p className="pt-2 text-xs font-semibold text-muted-foreground">
+              {mealDateLabel(group.date, today)} · {group.date}
+            </p>
+            <div className="space-y-3 lg:space-y-0 lg:divide-y lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-sm">
+              {group.entries.map((entry) => (
+                <MealEntryRow key={entry.id} entry={entry} dense />
+              ))}
+            </div>
+          </section>
+        ))}
+        {list.hasNextPage ? (
+          <div className="pt-2 text-center">
+            <Button
+              variant="outline"
+              onClick={() => void list.fetchNextPage()}
+              disabled={list.isFetchingNextPage}
+            >
+              {list.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
+            </Button>
           </div>
-        );
-      })}
-      {list.hasNextPage ? (
-        <div className="pt-2 text-center">
-          <Button
-            variant="outline"
-            onClick={() => void list.fetchNextPage()}
-            disabled={list.isFetchingNextPage}
-          >
-            {list.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
-          </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
+  );
+};
+
+// 최근 7일 요약(데스크톱 기록 탭 오른쪽) — 목록 옆에서 요즘 얼마나 적고 먹었는지. 자세한 건 통계 탭.
+const MealWeekSummary = () => {
+  const { from, to } = useMemo(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 6);
+    return { from: toLocalDateKey(start), to: toLocalDateKey(end) };
+  }, []);
+  const stats = useMealStats(from, to);
+  const data = stats.data;
+  if (!data) return null;
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">최근 7일</CardTitle>
+        <Link to="/me/meals?tab=stats" className="text-xs text-muted-foreground hover:text-foreground">
+          통계 보기
+        </Link>
+      </CardHeader>
+      <CardContent className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-lg font-semibold">{data.entryCount}끼</p>
+          <p className="text-xs text-muted-foreground">{data.recordedDays}/7일 기록</p>
+        </div>
+        <div>
+          <p className="text-lg font-semibold">
+            {data.nutrition.avgKcalPerDay !== null
+              ? Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')
+              : '-'}
+          </p>
+          <p className="text-xs text-muted-foreground">하루 평균 kcal</p>
+        </div>
+        <div>
+          <p className="text-lg font-semibold">{data.streakDays}일</p>
+          <p className="text-xs text-muted-foreground">연속 기록</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -260,19 +324,35 @@ const FilterChip = ({ label, selected, onClick }: { label: string; selected: boo
 );
 
 // 한 끼 카드 — 누르면 상세(수정·삭제). 카드 전체가 링크라 식당 링크는 상세에서 연다(링크 중첩 금지).
-const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
+// dense: 데스크톱 목록에서 한 줄(끼니·시각·장소 | 음식 | kcal)로 접어 날짜 묶음 카드 안의 줄이 된다 — 메모는 줄에서
+// 빼고 마우스를 올리면 보인다. 좁은 화면과 달력 패널은 예전 카드 그대로.
+const MealEntryRow = ({ entry, dense = false }: { entry: MealEntryType; dense?: boolean }) => {
   const mains = entry.items.filter((i) => i.isMain);
   const sides = entry.items.filter((i) => !i.isMain);
   // 카탈로그에 영양이 없는 음식이 흔해서(외식 브랜드 메뉴 등) 값이 하나도 없으면 줄을 그리지 않는다.
   const kcalText = mealNutritionLabel(summarizeMealNutrition(entry.items));
   return (
-    <Card className="transition-colors hover:bg-accent/40">
-      <Link to={`/me/meals/${entry.id}`} className="flex gap-3 px-4 py-4 sm:px-6">
+    <Card
+      className={cn(
+        'transition-colors hover:bg-accent/40',
+        dense && 'lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none lg:hover:bg-accent/40',
+      )}
+    >
+      <Link
+        to={`/me/meals/${entry.id}`}
+        title={dense && entry.memo ? entry.memo : undefined}
+        className={cn('flex gap-3 px-4 py-4 sm:px-6', dense && 'lg:items-center lg:gap-4 lg:px-4 lg:py-2.5')}
+      >
         {entry.photos.length > 0 ? (
-          <MealPhotoImg token={entry.photos[0]!.token} className="size-20 shrink-0" />
+          <MealPhotoImg token={entry.photos[0]!.token} className={cn('size-20 shrink-0', dense && 'lg:size-10')} />
         ) : null}
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className={cn('min-w-0 flex-1 space-y-1', dense && 'lg:flex lg:items-center lg:gap-4 lg:space-y-0')}>
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-2 text-xs text-muted-foreground',
+              dense && 'lg:w-56 lg:shrink-0 lg:flex-nowrap lg:overflow-hidden',
+            )}
+          >
             <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
               {MEAL_SLOT_LABEL[entry.slot]}
             </span>
@@ -280,12 +360,20 @@ const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
             {entry.mealType ? <span>{MEAL_TYPE_LABEL[entry.mealType]}</span> : null}
             {entry.placeName ? <span className="truncate">· {entry.placeName}</span> : null}
           </div>
-          <p className="truncate text-sm font-medium">{mains.map((i) => i.name).join(', ') || '(음식 없음)'}</p>
-          {sides.length > 0 ? (
-            <p className="truncate text-xs text-muted-foreground">곁들임 {sides.map((i) => i.name).join(', ')}</p>
+          <div className={cn('min-w-0 space-y-1', dense && 'lg:flex-1 lg:space-y-0')}>
+            <p className="truncate text-sm font-medium">{mains.map((i) => i.name).join(', ') || '(음식 없음)'}</p>
+            {sides.length > 0 ? (
+              <p className="truncate text-xs text-muted-foreground">곁들임 {sides.map((i) => i.name).join(', ')}</p>
+            ) : null}
+          </div>
+          {kcalText ? (
+            <p className={cn('text-xs text-muted-foreground', dense && 'lg:w-28 lg:shrink-0 lg:text-right')}>
+              {kcalText}
+            </p>
           ) : null}
-          {kcalText ? <p className="text-xs text-muted-foreground">{kcalText}</p> : null}
-          {entry.memo ? <p className="truncate text-xs italic text-muted-foreground">{entry.memo}</p> : null}
+          {entry.memo ? (
+            <p className={cn('truncate text-xs italic text-muted-foreground', dense && 'lg:hidden')}>{entry.memo}</p>
+          ) : null}
         </div>
       </Link>
     </Card>
@@ -296,8 +384,12 @@ const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 const MealCalendar = () => {
+  const isDesktop = useIsDesktopLg();
+  const today = toLocalDateKey(new Date());
   const [month, setMonth] = useState(() => toLocalMonthKey(new Date()));
-  const [selected, setSelected] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  // 데스크톱은 오른쪽 패널이 비지 않게, 고른 날이 없으면 오늘(이번 달을 볼 때) — 좁은 화면은 예전처럼 고를 때만.
+  const selected = picked ?? (isDesktop && today.startsWith(month) ? today : null);
   const cal = useMealCalendar(month);
   const dayList = useMealEntries(
     selected ? { from: selected, to: selected, limit: 20 } : {},
@@ -319,87 +411,104 @@ const MealCalendar = () => {
   const shift = (delta: number) => {
     const [y, m] = month.split('-').map(Number);
     setMonth(toLocalMonthKey(new Date(y!, (m ?? 1) - 1 + delta, 1)));
-    setSelected(null);
+    setPicked(null);
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <Button variant="ghost" size="sm" onClick={() => shift(-1)}>
-            ◀
-          </Button>
-          <CardTitle className="text-base">{month.replace('-', '년 ')}월</CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => shift(1)}>
-            ▶
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {cal.isLoading ? (
-            <Loading />
-          ) : (
-            <>
-              <div className="grid grid-cols-7 text-center text-xs text-muted-foreground">
-                {WEEKDAYS.map((w) => (
-                  <div key={w} className="py-1">
-                    {w}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {cells.map((date, i) => {
-                  const info = date ? byDate.get(date) : undefined;
-                  const isSel = date !== null && date === selected;
-                  return (
-                    <button
-                      key={date ?? `pad-${i}`}
-                      type="button"
-                      disabled={!date}
-                      onClick={() => setSelected(isSel ? null : date)}
-                      className={cn(
-                        'flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-transparent text-sm',
-                        date ? 'hover:bg-accent' : 'cursor-default',
-                        isSel && 'border-primary bg-accent',
-                      )}
-                    >
-                      {date ? (
-                        <>
-                          <span className={info ? '' : 'text-muted-foreground'}>{Number(date.slice(-2))}</span>
-                          <span className="flex h-1.5 gap-0.5">
-                            {(info?.slots ?? [])
-                              .slice()
-                              .sort((a, b) => MEAL_SLOT_ORDER[a] - MEAL_SLOT_ORDER[b])
-                              .slice(0, 3)
-                              .map((s: MealSlotType) => (
-                                <span key={s} className="size-1.5 rounded-full bg-primary" />
-                              ))}
-                          </span>
-                        </>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {selected ? (
+    <div className={MEAL_SPLIT_CLASS}>
+      <div className={MEAL_MAIN_CLASS}>
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{selected} 기록</CardTitle>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <Button variant="ghost" size="sm" onClick={() => shift(-1)}>
+              ◀
+            </Button>
+            <CardTitle className="text-base">{month.replace('-', '년 ')}월</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => shift(1)}>
+              ▶
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {dayList.isLoading ? (
+          <CardContent>
+            {cal.isLoading ? (
               <Loading />
-            ) : (dayList.data?.items.length ?? 0) === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">이 날은 기록이 없어요.</p>
             ) : (
-              dayList.data!.items.map((e) => <MealEntryRow key={e.id} entry={e} />)
+              <>
+                <div className="grid grid-cols-7 text-center text-xs text-muted-foreground">
+                  {WEEKDAYS.map((w) => (
+                    <div key={w} className="py-1">
+                      {w}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {cells.map((date, i) => {
+                    const info = date ? byDate.get(date) : undefined;
+                    const isSel = date !== null && date === selected;
+                    return (
+                      <button
+                        key={date ?? `pad-${i}`}
+                        type="button"
+                        disabled={!date}
+                        onClick={() => setPicked(isSel ? null : date)}
+                        className={cn(
+                          'flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-transparent text-sm',
+                          date ? 'hover:bg-accent' : 'cursor-default',
+                          isSel && 'border-primary bg-accent',
+                        )}
+                      >
+                        {date ? (
+                          <>
+                            <span className={info ? '' : 'text-muted-foreground'}>{Number(date.slice(-2))}</span>
+                            <span className="flex h-1.5 gap-0.5">
+                              {(info?.slots ?? [])
+                                .slice()
+                                .sort((a, b) => MEAL_SLOT_ORDER[a] - MEAL_SLOT_ORDER[b])
+                                .slice(0, 3)
+                                .map((s: MealSlotType) => (
+                                  <span key={s} className="size-1.5 rounded-full bg-primary" />
+                                ))}
+                            </span>
+                            {info?.kcal != null ? (
+                              <span className="hidden text-[11px] leading-none text-muted-foreground lg:block">
+                                {Math.round(info.kcal).toLocaleString('ko-KR')}kcal
+                              </span>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {selected ? (
+        <div className={MEAL_SIDE_CLASS}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{selected} 기록</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {dayList.isLoading ? (
+                <Loading />
+              ) : (dayList.data?.items.length ?? 0) === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">이 날은 기록이 없어요.</p>
+              ) : (
+                dayList.data!.items.map((e) => <MealEntryRow key={e.id} entry={e} />)
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : isDesktop ? (
+        <div className={MEAL_SIDE_CLASS}>
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              날짜를 고르면 그날 기록이 여기에 보여요.
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
     </div>
   );

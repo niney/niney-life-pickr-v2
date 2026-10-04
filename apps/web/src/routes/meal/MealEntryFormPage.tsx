@@ -33,6 +33,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { MealItemInputRow } from './MealItemInputRow';
+import { MEAL_MAIN_CLASS, MEAL_PAGE_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
 import { MealPhotoImg } from './MealPhotoImg';
 import { useMealDraftReady } from './useMealDraftReady';
 
@@ -270,194 +271,201 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
         </p>
       </header>
 
-      <div className="space-y-4">
-        {draft.originRecommendationId ? (
-          <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-            추천에서 고른 메뉴예요. 저장하면 그 추천을 실제로 먹은 것으로 이어요.
-          </p>
-        ) : null}
-
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base">먹은 음식</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              이름을 치면 음식 목록에서 골라 분류·영양을 붙일 수 있어요. 목록에 없으면 그대로 적어도 돼요.
+      <div className={MEAL_SPLIT_CLASS}>
+        <div className={MEAL_MAIN_CLASS}>
+          {draft.originRecommendationId ? (
+            <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              추천에서 고른 메뉴예요. 저장하면 그 추천을 실제로 먹은 것으로 이어요.
             </p>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <QuickAddChips slot={draft.slot} />
-            {draft.items.length === 0 ? (
-              <p className="text-sm text-muted-foreground">음식을 추가해 주세요.</p>
-            ) : (
-              draft.items.map((item) => (
-                <MealItemInputRow
-                  key={item.clientId}
-                  item={item}
-                  autoFocus={item.clientId === focusItemId}
-                  onChange={(patch) => draft.updateItem(item.clientId, patch)}
-                  onRemove={() => draft.removeItem(item.clientId)}
-                />
-              ))
-            )}
-            {draft.items.length < MEAL_MAX_ITEMS_PER_ENTRY ? (
-              <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="size-4" />
-                음식 추가
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
+          ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">언제 먹었나요</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                value={draft.eatenDate}
-                max={today}
-                onChange={(event) => changeDate(event.target.value)}
-                aria-label="먹은 날짜"
-                className="rounded-md border bg-background px-3 py-2 text-sm"
-              />
-              <input
-                type="time"
-                value={timeValue(draft.eatenAt)}
-                onChange={(event) => changeTime(event.target.value)}
-                aria-label="먹은 시각"
-                className="rounded-md border bg-background px-3 py-2 text-sm"
-              />
-              <Chip
-                label="지금"
-                onClick={() => {
-                  const now = new Date();
-                  setEatenAt(now);
-                  draft.setField('slot', guessMealSlot(now));
-                }}
-              />
-            </div>
-            {(timePresets.data?.presets.length ?? 0) > 0 ? (
-              <Field label="끼니별 평소 시각">
-                {timePresets.data!.presets.map((preset) => (
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-base">먹은 음식</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                이름을 치면 음식 목록에서 골라 분류·영양을 붙일 수 있어요. 목록에 없으면 그대로 적어도 돼요.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <QuickAddChips slot={draft.slot} />
+              {draft.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">음식을 추가해 주세요.</p>
+              ) : (
+                draft.items.map((item) => (
+                  <MealItemInputRow
+                    key={item.clientId}
+                    item={item}
+                    autoFocus={item.clientId === focusItemId}
+                    onChange={(patch) => draft.updateItem(item.clientId, patch)}
+                    onRemove={() => draft.removeItem(item.clientId)}
+                  />
+                ))
+              )}
+              {draft.items.length < MEAL_MAX_ITEMS_PER_ENTRY ? (
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                  <Plus className="size-4" />
+                  음식 추가
+                </Button>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {draft.photos.length > 0 ? (
+            <Card>
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-base">사진</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  사진은 앱에서 추가·삭제해요. 여기서 저장해도 사진은 그대로 남아요.
+                </p>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {draft.photos.map((photo) => (
+                  <MealPhotoImg key={photo.token} token={photo.token} className="size-20" />
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+
+        {/* 데스크톱은 언제·어떻게를 오른쪽 패널에 붙여 두고 저장 줄은 화면 아래에 둔다 — 한 단일 땐 저장 버튼이
+            1,251px 아래였다. 패널 높이는 저장 줄(약 60px)에 끝이 가리지 않게 그만큼 줄인다. */}
+        <div className={cn(MEAL_SIDE_CLASS, 'lg:max-h-[calc(100dvh-10rem)]')}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">언제 먹었나요</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  value={draft.eatenDate}
+                  max={today}
+                  onChange={(event) => changeDate(event.target.value)}
+                  aria-label="먹은 날짜"
+                  className="rounded-md border bg-background px-3 py-2 text-sm"
+                />
+                <input
+                  type="time"
+                  value={timeValue(draft.eatenAt)}
+                  onChange={(event) => changeTime(event.target.value)}
+                  aria-label="먹은 시각"
+                  className="rounded-md border bg-background px-3 py-2 text-sm"
+                />
+                <Chip
+                  label="지금"
+                  onClick={() => {
+                    const now = new Date();
+                    setEatenAt(now);
+                    draft.setField('slot', guessMealSlot(now));
+                  }}
+                />
+              </div>
+              {(timePresets.data?.presets.length ?? 0) > 0 ? (
+                <Field label="끼니별 평소 시각">
+                  {timePresets.data!.presets.map((preset) => (
+                    <Chip
+                      key={preset.slot}
+                      label={`${MEAL_SLOT_LABEL[preset.slot]} ${preset.time}`}
+                      // 시각과 끼니를 함께 정하고 날짜는 건드리지 않는다.
+                      onClick={() => {
+                        changeTime(preset.time);
+                        draft.setField('slot', preset.slot);
+                      }}
+                    />
+                  ))}
+                </Field>
+              ) : null}
+              <Field label="끼니">
+                {MEAL_SLOTS.map((slot) => (
                   <Chip
-                    key={preset.slot}
-                    label={`${MEAL_SLOT_LABEL[preset.slot]} ${preset.time}`}
-                    // 시각과 끼니를 함께 정하고 날짜는 건드리지 않는다.
-                    onClick={() => {
-                      changeTime(preset.time);
-                      draft.setField('slot', preset.slot);
-                    }}
+                    key={slot}
+                    label={MEAL_SLOT_LABEL[slot]}
+                    selected={draft.slot === slot}
+                    onClick={() => draft.setField('slot', slot)}
                   />
                 ))}
               </Field>
-            ) : null}
-            <Field label="끼니">
-              {MEAL_SLOTS.map((slot) => (
-                <Chip
-                  key={slot}
-                  label={MEAL_SLOT_LABEL[slot]}
-                  selected={draft.slot === slot}
-                  onClick={() => draft.setField('slot', slot)}
-                />
-              ))}
-            </Field>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">어떻게 먹었나요</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field label="식사 방식">
-              {MEAL_TYPES.map((type) => (
-                <Chip
-                  key={type}
-                  label={MEAL_TYPE_LABEL[type]}
-                  selected={draft.mealType === type}
-                  onClick={() => draft.setField('mealType', draft.mealType === type ? null : type)}
-                />
-              ))}
-            </Field>
-            {draft.placeName ? (
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">식당 / 장소</p>
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-sm">
-                    {draft.placeName}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      draft.setField('placeId', null);
-                      draft.setField('placeName', null);
-                    }}
-                  >
-                    지우기
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            <div className="space-y-1.5">
-              <label htmlFor="meal-memo" className="text-xs font-medium text-muted-foreground">
-                메모
-              </label>
-              <textarea
-                id="meal-memo"
-                value={draft.memo}
-                onChange={(event) => draft.setField('memo', event.target.value)}
-                maxLength={500}
-                rows={3}
-                placeholder="선택 — 같이 먹은 사람, 기분 등"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {draft.photos.length > 0 ? (
-          <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-base">사진</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                사진은 앱에서 추가·삭제해요. 여기서 저장해도 사진은 그대로 남아요.
-              </p>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {draft.photos.map((photo) => (
-                <MealPhotoImg key={photo.token} token={photo.token} className="size-20" />
-              ))}
             </CardContent>
           </Card>
-        ) : null}
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">어떻게 먹었나요</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field label="식사 방식">
+                {MEAL_TYPES.map((type) => (
+                  <Chip
+                    key={type}
+                    label={MEAL_TYPE_LABEL[type]}
+                    selected={draft.mealType === type}
+                    onClick={() => draft.setField('mealType', draft.mealType === type ? null : type)}
+                  />
+                ))}
+              </Field>
+              {draft.placeName ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">식당 / 장소</p>
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-sm">
+                      {draft.placeName}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        draft.setField('placeId', null);
+                        draft.setField('placeName', null);
+                      }}
+                    >
+                      지우기
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="space-y-1.5">
+                <label htmlFor="meal-memo" className="text-xs font-medium text-muted-foreground">
+                  메모
+                </label>
+                <textarea
+                  id="meal-memo"
+                  value={draft.memo}
+                  onChange={(event) => draft.setField('memo', event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  placeholder="선택 — 같이 먹은 사람, 기분 등"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* 저장 줄 — 데스크톱은 화면 아래에 붙여 둔다(오른쪽 패널 맨 아래면 첫 화면 밖이었다). 좁은 화면은 예전처럼
+          맨 끝에 오류 → 버튼. */}
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2 lg:sticky lg:bottom-0 lg:z-10 lg:-mx-6 lg:border-t lg:bg-background/95 lg:px-6 lg:py-3 lg:backdrop-blur">
         {error ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="basis-full text-sm text-destructive lg:mr-auto lg:basis-auto">
             {error}
           </p>
         ) : null}
-
-        <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => {
-              draft.clear();
-              leave();
-            }}
-          >
-            취소
-          </Button>
-          <Button type="button" onClick={save} disabled={!canSave}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-            {saving ? '저장 중…' : '저장'}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={saving}
+          onClick={() => {
+            draft.clear();
+            leave();
+          }}
+        >
+          취소
+        </Button>
+        <Button type="button" onClick={save} disabled={!canSave}>
+          {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+          {saving ? '저장 중…' : '저장'}
+        </Button>
       </div>
     </PageFrame>
   );
@@ -499,7 +507,7 @@ const QuickAddChips = ({ slot }: { slot: MealSlotType }) => {
 };
 
 const PageFrame = ({ children }: { children: ReactNode }) => (
-  <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">{children}</div>
+  <div className={MEAL_PAGE_CLASS}>{children}</div>
 );
 
 const BackLink = ({ to, label }: { to: string; label: string }) => (
