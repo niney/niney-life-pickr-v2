@@ -509,6 +509,18 @@ describe('meal routes (격리 DB)', () => {
     const cal = res.json<MealCalendarResultType>();
     expect(cal.days.map((d) => d.date)).toEqual(['2026-08-20', '2026-08-21']);
     expect(cal.days[0]).toMatchObject({ count: 1, slots: ['lunch'], hasPhoto: false });
+    // 날짜별 kcal = 그날 항목 영양 스냅샷 합(값이 있는 항목만, 없으면 null) — 목록 응답과 같은 데이터.
+    for (const day of cal.days) {
+      const dayEntries = (
+        await app.inject({
+          method: 'GET',
+          url: `${ENTRIES}?from=${day.date}&to=${day.date}`,
+          headers: auth,
+        })
+      ).json<ListMealEntriesResultType>().items;
+      const kcals = dayEntries.flatMap((e) => e.items.map((i) => i.kcal)).filter((k): k is number => k !== null);
+      expect(day.kcal).toBe(kcals.length > 0 ? Math.round(kcals.reduce((a, b) => a + b, 0)) : null);
+    }
     expect(
       (await app.inject({ method: 'GET', url: `${ENTRIES}/calendar?month=202608`, headers: auth }))
         .statusCode,

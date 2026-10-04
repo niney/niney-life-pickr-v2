@@ -787,19 +787,31 @@ export class MealService {
     if (!range) throw new MealServiceError('invalid', '월 형식이 올바르지 않습니다.');
     const rows = await this.prisma.mealEntry.findMany({
       where: { userId, eatenDate: { gte: range.from, lte: range.to } },
-      select: { eatenDate: true, slot: true, photos: { select: { token: true }, take: 1 } },
+      select: {
+        eatenDate: true,
+        slot: true,
+        photos: { select: { token: true }, take: 1 },
+        items: { select: { kcal: true } },
+      },
       orderBy: { eatenAt: 'asc' },
     });
-    const byDate = new Map<string, { count: number; slots: Set<string>; hasPhoto: boolean }>();
+    const byDate = new Map<
+      string,
+      { count: number; slots: Set<string>; hasPhoto: boolean; kcal: number | null }
+    >();
     for (const r of rows) {
       let d = byDate.get(r.eatenDate);
       if (!d) {
-        d = { count: 0, slots: new Set(), hasPhoto: false };
+        d = { count: 0, slots: new Set(), hasPhoto: false, kcal: null };
         byDate.set(r.eatenDate, d);
       }
       d.count += 1;
       d.slots.add(r.slot);
       if (r.photos.length > 0) d.hasPhoto = true;
+      // 값이 있는 항목만 더한다(없는 값을 0 으로 채우면 '안 먹었다'가 된다) — 하나도 없으면 null 그대로.
+      for (const item of r.items) {
+        if (item.kcal !== null) d.kcal = (d.kcal ?? 0) + item.kcal;
+      }
     }
     return {
       month,
@@ -810,6 +822,7 @@ export class MealService {
           count: v.count,
           slots: [...v.slots].filter((s): s is MealSlotType => MealSlot.safeParse(s).success),
           hasPhoto: v.hasPhoto,
+          kcal: v.kcal === null ? null : Math.round(v.kcal),
         })),
     };
   }

@@ -352,6 +352,8 @@ export const MealCalendarResult = z.object({
       count: z.number().int(),
       slots: z.array(MealSlot),
       hasPhoto: z.boolean(),
+      // 그날 항목 영양 스냅샷의 열량 합(값이 있는 항목만 — 목록 카드의 "약 N kcal"과 같은 규칙). 하나도 없으면 null.
+      kcal: z.number().nullable(),
     }),
   ),
 });

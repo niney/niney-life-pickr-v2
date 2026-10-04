@@ -11186,13 +11186,18 @@
                           },
                           "hasPhoto": {
                             "type": "boolean"
+                          },
+                          "kcal": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
                           "date",
                           "count",
                           "slots",
-                          "hasPhoto"
+                          "hasPhoto",
+                          "kcal"
                         ],
                         "additionalProperties": false
                       }
