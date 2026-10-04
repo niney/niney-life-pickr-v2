@@ -48,6 +48,13 @@ const MISSING: MealServingNutrition = {
 const portionLabel = (key: string): string =>
   FOOD_DISH_TYPE_LABEL[key as FoodDishTypeType] ?? RAW_PORTION_LABEL[key] ?? key;
 
+/** 100g당 열량(에너지 밀도) — 원본 단위 값이 있으면 그것, 없으면 카탈로그 1인분 열량·중량으로 역산한다. */
+export const kcalPer100gOf = (
+  row: Pick<ServingCatalogRow, 'kcal' | 'kcalPer100g' | 'servingG'>,
+): number | null =>
+  row.kcalPer100g ??
+  (row.kcal !== null && row.servingG && row.servingG > 0 ? (row.kcal * 100) / row.servingG : null);
+
 export const mealServingNutrition = (
   row: ServingCatalogRow | null,
   opts: { isMain: boolean },
@@ -69,7 +76,7 @@ export const mealServingNutrition = (
   // 100g당 — 열량은 원본 단위 값을 쓰고, 단백질·나트륨은 카탈로그 1인분 중량이 있을 때만 역산한다.
   const per100 = (v: number | null): number | null =>
     v !== null && row.servingG && row.servingG > 0 ? (v * 100) / row.servingG : null;
-  const kcal100 = row.kcalPer100g ?? per100(row.kcal);
+  const kcal100 = kcalPer100gOf(row);
   const protein100 = per100(row.proteinG);
   const sodium100 = per100(row.sodiumMg);
   const at = (grams: number): Pick<MealServingNutrition, 'kcal' | 'proteinG' | 'sodiumMg'> => ({

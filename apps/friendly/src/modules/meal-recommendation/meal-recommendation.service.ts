@@ -35,6 +35,7 @@ import {
   describeProfile,
   filterForSlot,
   filterForFocus,
+  recentDishTypeCounts,
   recommendationFocus,
   scoreCandidate,
   type ScoredCandidate,
@@ -348,6 +349,7 @@ export class MealRecommendationService {
         dislikedFoods: preference.dislikedFoods,
         note: input.note ?? null,
         entryCount: profile.entryCount,
+        recentDishCounts: recentDishTypeCounts(profile),
       });
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), LLM_TIMEOUT_MS);

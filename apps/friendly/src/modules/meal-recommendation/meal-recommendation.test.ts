@@ -12,17 +12,20 @@ import type {
   LLMCompleteResult,
   LLMProvider,
 } from '../ai/adapters/llm-provider.js';
+import { DEFAULT_LEXICON } from '../food/engine/index.js';
 import { allergensInFoodName } from '../food/food-allergen.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
 import {
   MealPatternService,
   allergenData,
   buildProfile,
+  describeProfile,
   filterForSlot,
   filterForFocus,
   hitsUserAllergen,
   isExcluded,
   isSideLikeCatalogRow,
+  recentDishTypeCounts,
   recommendationFocus,
   scoreCandidate,
   type CandidateInput,
@@ -34,6 +37,7 @@ import {
   parseRecommendationOutput,
   type MealRecommendationDeps,
 } from './meal-recommendation.service.js';
+import { MORNING_ONLY_MEALS, commonMealNorms } from './common-meals.js';
 import { buildMealRecommendationUserPrompt } from './meal-recommendation.prompts.js';
 
 // 추천 — 결정적 절반(프로필·점수·후보 매핑)은 순수 함수로, LLM 절반은 FakeProvider 로 검증한다.
@@ -120,6 +124,20 @@ describe('buildProfile', () => {
     expect(profile.slotFoods).toEqual(['김치찌개']);
     expect(profile.dishTypeShare['stew']).toBeCloseTo(2 / 3, 2);
     expect(profile.entryCount).toBe(3);
+  });
+
+  it('LLM 요약 — 2주 분포는 먹은 것을 다 개수로, 안 먹은 조리형태·주재료는 따로 적는다', () => {
+    // 축마다 상위 3개만 줬더니 LLM 이 나머지를 안 먹은 것으로 읽어 "국물 요리를 전혀 안 드셨다"고 썼다.
+    const text = describeProfile(profile, 'lunch');
+    expect(text).toContain('최근 2주 주메뉴 3개');
+    expect(text).toContain('- 조리형태: 찌개·전골 2, 밥·죽 1');
+    expect(text).toContain('- 주재료: 돼지고기 2, 채소 1');
+    expect(text).toMatch(/- 안 먹은 조리형태: .*국·탕/);
+    expect(text).not.toMatch(/- 안 먹은 조리형태: .*(찌개·전골|밥·죽|음료|김치)/);
+    expect(text).toMatch(/- 안 먹은 주재료: .*해산물/);
+    expect(text).not.toMatch(/- 안 먹은 주재료: .*(돼지고기|과일|유제품)/);
+    // 2주 기록이 없으면 분포·안 먹은 줄을 쓰지 않는다(모든 축이 '안 먹은'이 된다).
+    expect(describeProfile(buildProfile([], 'lunch', TODAY), 'lunch')).not.toContain('안 먹은');
   });
 });
 
@@ -311,8 +329,15 @@ describe('scoreCandidate', () => {
       '달걀찜',
       '콩나물국',
     ]);
-    // 아침이 아니면 그대로.
-    expect(filterForSlot(pool, p, 'lunch')).toHaveLength(pool.length);
+    // 아침이 아니면 무거운 요리는 그대로 두고, 아침·간식 전용(토스트)만 뺀다 — 아침에 먹던 거여도 빼고, 좋아함이면 남긴다.
+    expect(names(filterForSlot(pool, p, 'lunch'))).toEqual(
+      names(pool).filter((n) => n !== '토스트'),
+    );
+    const myToast = pool.map((c) => (c.name === '토스트' ? { ...c, fromHistory: true } : c));
+    expect(names(filterForSlot(myToast, p, 'dinner'))).not.toContain('토스트');
+    const likedToast = pool.map((c) => (c.name === '토스트' ? { ...c, liked: true } : c));
+    expect(filterForSlot(likedToast, p, 'dinner')).toHaveLength(pool.length);
+    expect(filterForSlot(pool, p, 'snack')).toHaveLength(pool.length);
     // 가벼운 것이 모자라면 앞에 두고 무거운 것을 뒤에 붙인다(추천이 비지 않게).
     const few = [
       candidate('스테이크', { dishType: 'grill' }),
@@ -469,6 +494,40 @@ describe('scoreCandidate', () => {
     expect(taste(TODAY)).toBeGreaterThan(taste('2026-07-23'));
   });
 
+  it('균형 태그는 2주간 실제로 안 먹은 축에만 — 볶음을 먹었으면 오징어볶음엔 볶음이 아니라 해산물', () => {
+    const p = buildProfile(
+      [
+        item('제육볶음', '2026-08-20', { dishType: 'stir_fry', mainIngredient: 'pork' }),
+        ...['김밥', '라면', '비빔밥', '우동', '주먹밥', '짜장면', '덮밥'].map((name, i) =>
+          item(name, `2026-08-1${i}`, {
+            dishType: i % 2 ? 'noodle' : 'rice',
+            mainIngredient: 'grain',
+          }),
+        ),
+      ],
+      'lunch',
+      TODAY,
+    );
+    const tags = (c: CandidateInput): string =>
+      scoreCandidate(c, { ...ctx, profile: p }).tags.join(' / ');
+    const squid = tags(
+      candidate('오징어볶음', { dishType: 'stir_fry', mainIngredient: 'seafood' }),
+    );
+    expect(squid).toContain('2주간 안 먹은 해산물');
+    expect(squid).not.toContain('안 먹은 볶음');
+    expect(tags(candidate('고등어구이', { dishType: 'grill', mainIngredient: 'fish' }))).toContain(
+      '2주간 안 먹은 구이',
+    );
+    // 2주 기록이 없으면 붙이지 않는다(모든 축이 '안 먹은'이 된다).
+    const empty = buildProfile([], 'lunch', TODAY);
+    expect(
+      scoreCandidate(candidate('고등어구이', { dishType: 'grill', mainIngredient: 'fish' }), {
+        ...ctx,
+        profile: empty,
+      }).tags.join(),
+    ).not.toContain('안 먹은');
+  });
+
   it('건강 — 튀김은 감점, 채소·저나트륨은 가점', () => {
     const fried = scoreCandidate(
       candidate('감자튀김', { dishType: 'fried', sodiumMg: 1600, kcal: 950 }),
@@ -487,6 +546,42 @@ describe('scoreCandidate', () => {
     expect(
       salad.tags.some((t) => t.includes('가벼운') || t.includes('채소') || t.includes('단백질')),
     ).toBe(true);
+  });
+
+  it('건강 — 찜이라고 가볍게 치지 않고, 전과 100g당 200kcal 이상(고밀도)은 깎는다', () => {
+    const health = (name: string, over: Partial<CandidateInput>): number =>
+      scoreCandidate(candidate(name, over), ctx).features['health'] ?? 0;
+    // 식약처 1회 제공량 기준이라 족발도 1인분 583kcal(500~900 사이) — 밀도로 가린다.
+    const jokbal = health('족발', {
+      dishType: 'steam',
+      mainIngredient: 'pork',
+      kcal: 583,
+      proteinG: 65,
+      sodiumMg: 863,
+      kcalPer100g: 233,
+    });
+    const salad = health('닭가슴살 샐러드', {
+      dishType: 'salad',
+      mainIngredient: 'chicken',
+      kcal: 111,
+      sodiumMg: 400,
+      kcalPer100g: 37,
+    });
+    const stew = health('된장찌개', {
+      dishType: 'stew',
+      mainIngredient: 'tofu_bean',
+      kcal: 92,
+      sodiumMg: 900,
+      kcalPer100g: 46,
+    });
+    expect(jokbal).toBeLessThan(0.5); // 건강 중심이면 후보에서 빠지는 쪽
+    expect(salad).toBeGreaterThan(jokbal);
+    expect(stew).toBeGreaterThan(jokbal);
+    // 전은 같은 재료·영양의 볶음보다 낮다.
+    const same = { mainIngredient: 'vegetable', kcal: 201, sodiumMg: 360 } as const;
+    expect(health('김치전', { ...same, dishType: 'pancake' })).toBeLessThan(
+      health('김치볶음', { ...same, dishType: 'stir_fry' }),
+    );
   });
 
   it('계절 — 여름엔 시원한 것, 겨울엔 국물', () => {
@@ -1270,7 +1365,14 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
         mainIngredient: 'pork',
         sourceCategory: '볶음류',
         servingG: 100,
-        nutrition: { kcal: 151, carbG: null, proteinG: 12, fatG: null, sodiumMg: 220, sugarG: null },
+        nutrition: {
+          kcal: 151,
+          carbG: null,
+          proteinG: 12,
+          fatG: null,
+          sodiumMg: 220,
+          sugarG: null,
+        },
         source: 'mfds-nutrition',
         popularity: 99,
       },
@@ -1281,6 +1383,14 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
         mainIngredient: 'seafood',
         source: 'mfds-nutrition',
         popularity: 0,
+      },
+      // 흔한 한 끼 목록 밖의 희귀 메뉴 — 인기가 높아도 목록 음식 뒤에 온다.
+      {
+        name: '해신탕',
+        dishType: 'stew',
+        mainIngredient: 'chicken',
+        source: 'mfds-nutrition',
+        popularity: 200,
       },
       // 인기가 같은(0) 요리 여럿 — 가나다순 앞쪽만 뽑히면 안 된다.
       ...Array.from({ length: 60 }, (_, i) => ({
@@ -1360,12 +1470,14 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
 
   it('후보 영양(건강 판정)은 식단 저장과 같은 한 끼 1인분 기준이다', async () => {
     const pattern = new MealPatternService(app.prisma);
-    const jeyuk = (await pattern.buildCandidates(buildProfile([], 'dinner', TODAY), prefs(), TODAY)).find(
-      (c) => c.name === '제육볶음',
-    );
+    const jeyuk = (
+      await pattern.buildCandidates(buildProfile([], 'dinner', TODAY), prefs(), TODAY)
+    ).find((c) => c.name === '제육볶음');
     // 100g 151kcal → 볶음 통상 250g.
     expect(jeyuk?.kcal).toBeCloseTo(377.5);
     expect(jeyuk?.sodiumMg).toBeCloseTo(550);
+    // 건강의 무거움 판정은 1인분이 아니라 100g당 열량으로.
+    expect(jeyuk?.kcalPer100g).toBeCloseTo(151);
   });
 
   it('내가 먹던 반찬급 음식은 후보에 남는다(탐색 후보에만 적용)', async () => {
@@ -1373,6 +1485,32 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
     const profile = buildProfile([item('해파리냉채', '2026-08-10')], 'dinner', TODAY);
     const names = (await pattern.buildCandidates(profile, prefs(), TODAY)).map((c) => c.name);
     expect(names).toContain('해파리냉채');
+  });
+
+  it('흔한 한 끼(목록)가 먼저 — 목록 밖 희귀 메뉴는 인기가 높아도 뒤에, 모자랄 때만 채운다', async () => {
+    const pattern = new MealPatternService(app.prisma);
+    const names = (
+      await pattern.buildCandidates(buildProfile([], 'dinner', TODAY), prefs(), TODAY)
+    ).map((c) => c.name);
+    const rare = names.indexOf('해신탕');
+    // 목록 음식(김치찌개·제육볶음·육개장·물회·닭가슴살 샐러드)은 인기 200 인 해신탕보다 앞선다.
+    for (const common of ['김치찌개', '제육볶음', '육개장', '물회', '닭가슴살 샐러드']) {
+      expect(names.indexOf(common)).toBeGreaterThanOrEqual(0);
+      if (rare >= 0) expect(names.indexOf(common)).toBeLessThan(rare);
+    }
+    // 이 시험 카탈로그엔 목록 음식이 적어 목록 밖(테스트요리)이 뒤를 채운다.
+    expect(names.some((n) => n.includes('테스트요리'))).toBe(true);
+  });
+
+  it('흔한 한 끼 목록은 표기 변형으로도 맞고, 아침·간식 전용을 따로 안다', () => {
+    const norms = commonMealNorms(DEFAULT_LEXICON);
+    expect(norms.has('돈가스')).toBe(true);
+    expect(norms.has('돈까스')).toBe(true); // 어휘 돈까스↔돈가스
+    expect(norms.has('북엇국')).toBe(true);
+    expect(norms.has('무어묵조림')).toBe(false);
+    expect(norms.has('가지전')).toBe(false);
+    expect(MORNING_ONLY_MEALS.has('시리얼')).toBe(true);
+    expect(MORNING_ONLY_MEALS.has('김치찌개')).toBe(false);
   });
 
   it('알레르기는 재료 정보가 없어도 음식명으로 거른다 — 좋아함·내 기록이어도', async () => {
@@ -1433,10 +1571,12 @@ describe('isSideLikeCatalogRow · 프롬프트 알레르기', () => {
     expect(
       isSideLikeCatalogRow(row('마카로니 샐러드', 'salad', '생채·무침류', 220, 'vegetable')),
     ).toBe(true);
-    expect(isSideLikeCatalogRow(row('참치 샐러드', 'salad', '생채·무침류', 203, 'fish'))).toBe(false);
-    expect(
-      isSideLikeCatalogRow(row('감자샐러드 샌드위치', 'bakery', null, 410, 'vegetable')),
-    ).toBe(false);
+    expect(isSideLikeCatalogRow(row('참치 샐러드', 'salad', '생채·무침류', 203, 'fish'))).toBe(
+      false,
+    );
+    expect(isSideLikeCatalogRow(row('감자샐러드 샌드위치', 'bakery', null, 410, 'vegetable'))).toBe(
+      false,
+    );
     expect(isSideLikeCatalogRow(row('연근튀김', 'fried', '튀김류', 187, 'vegetable'))).toBe(true);
     expect(isSideLikeCatalogRow(row('치즈스틱', 'fried', '튀김류', 300, 'dairy'))).toBe(true);
     expect(isSideLikeCatalogRow(row('닭튀김', 'fried', '튀김류', 903, 'chicken'))).toBe(false);
@@ -1461,6 +1601,48 @@ describe('isSideLikeCatalogRow · 프롬프트 알레르기', () => {
       entryCount: 10,
     });
     expect(prompt).toMatch(/\[알레르기[^\]]*\] 새우, 게/);
+  });
+
+  it('후보 줄에 그 조리형태를 최근 2주 몇 번 먹었는지 붙인다 — 2주 기록이 있을 때만', () => {
+    // 태그 '2주간 안 먹은 해산물'만 보고 오징어볶음에 "해산물·볶음 형태가 없다"고 넓혀 썼다.
+    const profile = buildProfile(
+      [
+        item('제육볶음', '2026-08-20', { dishType: 'stir_fry', mainIngredient: 'pork' }),
+        item('김밥', '2026-08-19', { dishType: 'rice', mainIngredient: 'grain' }),
+      ],
+      'lunch',
+      TODAY,
+    );
+    const scored = (c: CandidateInput) => ({
+      ...c,
+      score: 0.5,
+      tags: [],
+      lastEatenDate: null,
+      features: {},
+    });
+    const promptWith = (counts: Record<string, number> | null) =>
+      buildMealRecommendationUserPrompt({
+        profileText: '요약',
+        candidates: [
+          scored(candidate('오징어볶음', { dishType: 'stir_fry', mainIngredient: 'seafood' })),
+          scored(candidate('모듬회', { dishType: 'raw_fish', mainIngredient: 'fish' })),
+        ],
+        targetSlot: 'lunch',
+        targetDate: TODAY,
+        mealType: null,
+        weights: MEAL_DEFAULT_WEIGHTS,
+        excludedFoods: [],
+        dislikedFoods: [],
+        allergens: [],
+        note: null,
+        entryCount: 2,
+        recentDishCounts: counts,
+      });
+    const prompt = promptWith(recentDishTypeCounts(profile));
+    expect(prompt).toContain('- 오징어볶음 | score 0.50 | 먹은 적 없음 | 볶음 2주 1번');
+    expect(prompt).toContain('- 모듬회 | score 0.50 | 먹은 적 없음 | 회 2주 0번');
+    expect(recentDishTypeCounts(buildProfile([], 'lunch', TODAY))).toBeNull();
+    expect(promptWith(null)).not.toContain('2주');
   });
 
   it('가장 높은 중요도(4 이상)를 이번 추천의 중심으로 적는다', () => {
@@ -1525,6 +1707,21 @@ describe('이번 추천의 중심 — recommendationFocus · filterForFocus', ()
     expect(names(filterForFocus(pool, health))).toEqual(['닭가슴살 샐러드', '비빔밥', '된장찌개']);
     const liked = [scored('양념치킨', 0.35, 0.8, true), ...pool.slice(1)];
     expect(names(filterForFocus(liked, health))).toContain('양념치킨');
+  });
+
+  it('건강 중심 — 후보 대부분이 중립 위면 중앙값 아래(무거운 쪽 절반)를 뺀다', () => {
+    const fine = [
+      scored('제육볶음', 0.6),
+      scored('삼겹살', 0.5),
+      scored('생선구이', 0.95),
+      scored('비빔밥', 0.7),
+      scored('된장찌개', 0.85),
+    ];
+    expect(names(filterForFocus(fine, new Set(['health'] as const)))).toEqual([
+      '생선구이',
+      '비빔밥',
+      '된장찌개',
+    ]);
   });
 
   it('균형 중심이면 균형 점수가 후보 중앙값 아래인 후보(최근 많이 먹은 쪽)를 뺀다', () => {
