@@ -48,6 +48,9 @@ interface Props {
 
 const NEARBY_RADIUS_M = 20_000;
 const NEARBY_LIMIT = 5;
+// 주변 조회가 꺼져 있거나(위치 없음) 아직 안 온 동안의 빈 목록 — 렌더마다 새 [] 를 만들면 지도의 라벨 대상
+// Set 과 마커(전국 650여 개) useMemo 가 매번 깨져, 검색창에 한 글자 칠 때마다 마커를 전부 다시 만들었다.
+const NO_NEARBY: AirNearbyStationItemType[] = [];
 
 const sidoOptionFor = (s: { sidoName: string | null }): string | null =>
   AIR_SIDO_OPTIONS.find(
@@ -89,7 +92,7 @@ export const AirNearbySection = ({
     radius: NEARBY_RADIUS_M,
     limit: NEARBY_LIMIT,
   });
-  const nearby: AirNearbyStationItemType[] = nearbyQ.data?.items ?? [];
+  const nearby: AirNearbyStationItemType[] = nearbyQ.data?.items ?? NO_NEARBY;
 
   // 검색 — 입력값은 즉시, 쿼리는 디바운스.
   const [q, setQ] = useState('');

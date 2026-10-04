@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useState, type RefCallback } from 'react';
 
 // 날씨 페이지 비-컴포넌트 헬퍼 — 차트 보조 훅/눈금만 여기 남고, 발표 시각 포맷은 @repo/utils
 // (formatKmaBaseLabel/formatKmaTmFcLabel), 업스트림 에러 문구는 @repo/shared(weatherUpstreamMessage)로
@@ -7,14 +7,13 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 export { formatKmaBaseLabel as formatBaseLabel, formatKmaTmFcLabel as formatTmFcLabel } from '@repo/utils';
 export { weatherUpstreamMessage } from '@repo/shared';
 
-// 컨테이너 실측 폭 — SVG 를 픽셀 단위로 그려 글자가 늘어나지 않게 한다. ResizeObserver 는
-// 외부 시스템이라 useEffect 가 맞는 자리(대기정보 차트와 같은 훅).
-export const useElementWidth = (): [RefObject<HTMLDivElement | null>, number] => {
-  const ref = useRef<HTMLDivElement | null>(null);
+// 컨테이너 실측 폭 — SVG 를 픽셀 단위로 그려 글자가 늘어나지 않게 한다. 요소가 붙는 순간(ref 콜백) 재고
+// ResizeObserver 로 따라간다(대기정보 차트와 같은 훅). 마운트 때 한 번만 보는 effect 였을 때는, 빈 예보로 먼저
+// 마운트돼 이 요소가 아직 없으면 뒤에 데이터가 와도 관찰이 시작되지 않아 폭이 0 에 머물렀다.
+export const useElementWidth = (): [RefCallback<HTMLDivElement>, number] => {
   const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return undefined;
     const update = () => setWidth(el.clientWidth);
     update();
     const ro = new ResizeObserver(update);

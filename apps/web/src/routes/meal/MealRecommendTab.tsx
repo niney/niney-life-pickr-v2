@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   Loader2,
   NotebookPen,
@@ -53,6 +54,18 @@ import { useMealDraftReady } from './useMealDraftReady';
 // "먹은 메뉴 기록"은 앱과 같이 추천을 draft 로 옮겨 입력 화면으로 보낸다. 실제 추천↔기록 연결
 // (`logged`)은 저장이 성공할 때 서버가 만든다.
 
+// 노출(shown)을 이미 보낸 추천 id. 컴포넌트 안에 두면 탭을 다시 열 때마다(재마운트) 비워져 같은 추천에 노출이
+// 또 나간다 — 화면 밖에, QueryClient 단위로 둔다(로그인·로그아웃이 캐시를 비우는 그 클라이언트와 수명이 같다).
+const shownEventIdsByClient = new WeakMap<QueryClient, Set<string>>();
+const shownEventIdsOf = (client: QueryClient): Set<string> => {
+  let ids = shownEventIdsByClient.get(client);
+  if (!ids) {
+    ids = new Set();
+    shownEventIdsByClient.set(client, ids);
+  }
+  return ids;
+};
+
 export const MealRecommendTab = () => {
   const now = new Date();
   const navigate = useNavigate();
@@ -80,7 +93,7 @@ export const MealRecommendTab = () => {
   const recommendationEvent = useMealRecommendationEvent();
   const removeOne = useDeleteMealRecommendation();
   const removeAll = useDeleteAllMealRecommendations();
-  const shownEventIds = useRef(new Set<string>());
+  const shownEventIds = shownEventIdsOf(useQueryClient());
 
   const today = toLocalDateKey(now);
   const notRemoved = (
@@ -103,12 +116,13 @@ export const MealRecommendTab = () => {
 
   useEffect(() => {
     // 노출은 새로 받은(또는 화면 진입 때 보인) 추천만 — 목록에서 예전 추천을 다시 여는 건 새 노출이 아니다.
-    if (!shown || viewingPast || shownEventIds.current.has(shown.id)) return;
-    shownEventIds.current.add(shown.id);
-    recommendationEvent.mutate(
-      { id: shown.id, input: { kind: 'shown', platform: 'web' } },
-      { onError: () => shownEventIds.current.delete(shown.id) },
-    );
+    if (!shown || viewingPast || shownEventIds.has(shown.id)) return;
+    const id = shown.id;
+    shownEventIds.add(id);
+    // 실패하면 다음에 다시 보내게 지운다. mutate 의 호출별 콜백은 응답 전에 탭을 떠나면 불리지 않아 promise 로 받는다.
+    void recommendationEvent
+      .mutateAsync({ id, input: { kind: 'shown', platform: 'web' } })
+      .catch(() => shownEventIds.delete(id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown?.id, viewingPast]);
 

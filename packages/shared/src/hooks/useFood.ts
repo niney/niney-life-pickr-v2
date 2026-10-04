@@ -114,8 +114,10 @@ export const useFoodRecognitionQuality = (input: FoodRecognitionQualityInput = {
     staleTime: 5 * 60_000,
   });
 
+// 음식 항목을 만들거나 고치면 카탈로그 목록과 통계만 다시 받는다. ['food','admin'] 통째 무효화는 항목과 무관한
+// 메뉴 어휘·인식 품질 집계(식단 기록만 읽는 무거운 조회)까지 편집할 때마다 다시 불렀다.
 const invalidateCatalog = (qc: ReturnType<typeof useQueryClient>): void => {
-  void qc.invalidateQueries({ queryKey: ['food', 'admin'] });
+  void qc.invalidateQueries({ queryKey: ['food', 'admin', 'list'] });
   void qc.invalidateQueries({ queryKey: ['food', 'stats'] });
 };
 
@@ -132,7 +134,11 @@ export const useUpdateFoodItem = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: FoodAdminUpdateInputType }) =>
       foodApi.adminUpdate(id, input),
-    onSuccess: () => invalidateCatalog(qc),
+    onSuccess: () => {
+      invalidateCatalog(qc);
+      // 병합 검토 목록은 음식 이름을 조인해 보여 준다 — 이름을 고쳤을 수 있는 수정 때만 함께.
+      void qc.invalidateQueries({ queryKey: ['food', 'admin', 'merge-conflicts'] });
+    },
   });
 };
 

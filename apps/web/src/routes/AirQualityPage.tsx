@@ -1,8 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, RefreshCw } from 'lucide-react';
-import type { AirForecastCodeType, AirHistoryTermType } from '@repo/api-contract';
+import type {
+  AirForecastCodeType,
+  AirHistoryTermType,
+  AirMeasureItemType,
+  AirStationInfoItemType,
+} from '@repo/api-contract';
 import {
   ApiError,
   useAirBadStations,
@@ -41,6 +46,11 @@ import { AirNearbySection, AirStationsErrorBlock } from '~/components/air/AirNea
 // 히어로·띠·차트 공용, MONTH/3MONTH 는 차트만) + 나쁨 이상·예보·주간예보는 전역.
 
 const DEFAULT_SIDO = '서울';
+// 측정소 지도에 넘기는 빈 폴백 — 렌더마다 새 [] 를 넘기면 지도가 마커(전국 650여 개)를 매번 다시 만든다.
+const NO_MEASURES: AirMeasureItemType[] = [];
+const NO_STATIONS: AirStationInfoItemType[] = [];
+// 측정소명 가나다순 — localeCompare(…, 'ko') 와 같은 순서, 비교기는 한 번만 만든다.
+const KO_COLLATOR = new Intl.Collator('ko');
 const TERM_LABEL: Record<AirHistoryTermType, string> = {
   DAILY: '24시간',
   MONTH: '30일',
@@ -70,7 +80,8 @@ export const AirQualityPage = () => {
   const airLocation = useAirLocation();
   const sidoParam = searchParams.get('sido');
   const stationParam = searchParams.get('station');
-  const useSavedDefault = !sidoParam && !stationParam && airLocation.location !== null;
+  const noUrlTarget = !sidoParam && !stationParam;
+  const useSavedDefault = noUrlTarget && airLocation.location !== null;
   const savedNearestQ = useAirNearbyStations(
     useSavedDefault ? airLocation.location!.lat : null,
     useSavedDefault ? airLocation.location!.lng : null,
@@ -81,6 +92,10 @@ export const AirQualityPage = () => {
     savedNearest?.sidoName !== null && savedNearest !== null
       ? (AIR_SIDO_OPTIONS.find((o) => o.value !== '전국' && airSidoMatches(o.value, savedNearest.sidoName!))?.value ?? null)
       : null;
+  // URL 에 시도·측정소가 없으면 저장 위치(로그인은 서버 조회)와 그 가장 가까운 측정소가 정해진 뒤에 시도 조회를
+  // 시작한다 — 기다리지 않으면 기본 시도(서울)와 그 첫 측정소를 먼저 받았다가 저장 지점 것으로 다시 받는다. 게스트는
+  // 저장 위치가 로컬이라 측정소 조회(상단바 칩과 같은 쿼리)만 기다리고, 그 조회가 실패하면 기본 시도로 연다.
+  const waitingSaved = noUrlTarget && (airLocation.isLoading || (useSavedDefault && savedNearestQ.isLoading));
 
   // URL 이 유일한 진실 — 유효하지 않은 값은 기본값으로 읽는다(URL 은 건드리지 않음).
   const sido = AIR_SIDO_OPTIONS.some((o) => o.value === sidoParam)
@@ -113,15 +128,17 @@ export const AirQualityPage = () => {
   const todayYmd = todayKst();
 
   // ── 조회 ────────────────────────────────────────────────────────────────
-  const sidoQ = useAirSidoRealtime(sido);
+  const sidoQ = useAirSidoRealtime(waitingSaved ? null : sido);
   // 전국 비교용 — 선택 시도가 전국이면 같은 쿼리를 재사용(키 동일).
   const nationQ = useAirSidoRealtime(sido === '전국' ? null : '전국');
   const nationItems = sido === '전국' ? sidoQ.data?.items : nationQ.data?.items;
 
-  const stations = (sidoQ.data?.items ?? [])
-    .map((m) => m.stationName)
-    .filter((v, i, arr) => arr.indexOf(v) === i)
-    .sort((a, b) => a.localeCompare(b, 'ko'));
+  // 시도의 측정소명(중복 제거·가나다순) — '전국'은 673곳이라 렌더마다 다시 만들지 않는다.
+  const sidoItems = sidoQ.data?.items;
+  const stations = useMemo(
+    () => [...new Set((sidoItems ?? []).map((m) => m.stationName))].sort(KO_COLLATOR.compare),
+    [sidoItems],
+  );
   // 선택 측정소 — URL 값이 목록에 있으면 그것, 없으면 저장 지점의 가장 가까운 측정소, 그것도
   // 없으면 목록 첫 번째(URL 은 그대로 둔다).
   const station =
@@ -153,18 +170,34 @@ export const AirQualityPage = () => {
   const latest = dailyQ.data?.latest ?? null;
   const fetchedLabel = sidoQ.data?.fetchedAt ? formatRelativeMin(sidoQ.data.fetchedAt) : null;
 
+  const pageHead = (
+    <div>
+      <h1 className="text-2xl font-bold tracking-tight">대기정보</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        한국환경공단 에어코리아 대기오염정보 API 하나로 보여줄 수 있는 것들 — 지금 공기, 24시간 추이,
+        시도·전국 현황, 나쁨 지역, 예보와 주간예보.
+      </p>
+    </div>
+  );
+
+  // 어느 시도·측정소로 열지 아직 모른다 — 기본 시도 화면을 잠깐 보였다 바꾸지 않고 머리와 로딩만 둔다.
+  if (waitingSaved) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+        <div className="flex flex-col gap-5">
+          <header className="flex flex-col gap-3">{pageHead}</header>
+          <AirStateBlock kind="loading" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
       <div className="flex flex-col gap-5">
         {/* 머리 + 컨트롤(한 줄, 아래 모든 섹션의 범위) */}
         <header className="flex flex-col gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">대기정보</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              한국환경공단 에어코리아 대기오염정보 API 하나로 보여줄 수 있는 것들 — 지금 공기, 24시간 추이,
-              시도·전국 현황, 나쁨 지역, 예보와 주간예보.
-            </p>
-          </div>
+          {pageHead}
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-sm">
               <span className="text-xs text-muted-foreground">시도</span>
@@ -262,8 +295,8 @@ export const AirQualityPage = () => {
             />
           ) : (
             <AirNearbySection
-              stations={stationsQ.data?.items ?? []}
-              measures={nationItems ?? []}
+              stations={stationsQ.data?.items ?? NO_STATIONS}
+              measures={nationItems ?? NO_MEASURES}
               selectedStation={station}
               onSelect={(name, sidoValue) => selectStation(name, sidoValue)}
               savedLocation={airLocation.location}

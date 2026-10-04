@@ -12,8 +12,11 @@ import { AirNearbySection, AirStationsErrorBlock } from './AirNearbySection';
 // 카메라 핸들(flyToZoomIn 등)은 no-op 으로 채워 둔다(위치/선택 effect 가 부른다).
 // 여기서 검증하는 건 지도 주변의 계약: 검색 → 선택 콜백(측정소명 + 시도 옵션),
 // 내 위치 → 주변 목록, 위치 미지원 안내, 활용신청 전(인증 30) 안내 분기.
+// 지도에 넘어온 markers 는 렌더마다 기록해 둔다 — 참조가 바뀌면 지도가 마커를 다시 만든다.
+const seenMarkers = vi.hoisted(() => [] as unknown[]);
 vi.mock('~/components/restaurant/MapCanvas', () => ({
-  MapCanvas: forwardRef(function MockMapCanvas(_props, ref) {
+  MapCanvas: forwardRef(function MockMapCanvas(props: { markers?: unknown }, ref) {
+    seenMarkers.push(props.markers);
     useImperativeHandle(ref, () => ({
       flyTo: () => {},
       flyToZoomIn: () => {},
@@ -156,6 +159,29 @@ describe('AirNearbySection', () => {
       label: '종로구',
       source: 'station',
     });
+  });
+
+  // 회귀: 위치가 없어 주변 조회가 꺼져 있으면 빈 목록 폴백([])이 렌더마다 새로 만들어져, 검색창에 한 글자 칠
+  // 때마다 지도 마커(전국 650여 개)를 전부 다시 만들었다.
+  it('검색창에 입력해 다시 그려져도 지도에 넘기는 마커 배열은 같은 참조다', async () => {
+    server.use(
+      http.get('/api/v1/settings/map/public', () => HttpResponse.json({ apiKey: 'test-vworld-key' })),
+      http.get('/api/v1/air/stations/search', () =>
+        HttpResponse.json({ q: '종로', items: [], total: 0, fetchedAt: '2026-08-21T05:00:00.000Z', stale: false }),
+      ),
+    );
+    renderSection();
+    await screen.findByTestId('map-canvas');
+    const rendersBefore = seenMarkers.length;
+    const markers = seenMarkers.at(-1);
+    expect(markers).toHaveLength(1);
+
+    const input = screen.getByLabelText('측정소 검색');
+    fireEvent.change(input, { target: { value: '종' } });
+    fireEvent.change(input, { target: { value: '종로' } });
+    // 지도는 다시 그려졌지만(검색어 state) 마커 배열은 그대로다.
+    expect(seenMarkers.length).toBeGreaterThan(rendersBefore);
+    expect(seenMarkers.slice(rendersBefore).every((m) => m === markers)).toBe(true);
   });
 
   it('위치를 가져올 수 없는 환경(jsdom)에서는 버튼을 누르면 안내 문구가 뜨고 주변 조회는 하지 않는다', async () => {

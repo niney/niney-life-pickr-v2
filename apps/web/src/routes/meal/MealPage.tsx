@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   CalendarDays,
@@ -130,26 +130,45 @@ export const MealPage = () => {
 };
 
 // ── 기록 ────────────────────────────────────────────────────────────────────
+const SEARCH_DEBOUNCE_MS = 250;
+
 const MealList = () => {
+  // 입력칸에 보이는 검색어(q)와 조회에 쓰는 검색어(appliedQ)를 나눈다 — 키 입력마다 요청하지 않게 타이핑이
+  // 잠잠해진 뒤에 반영하고, 비우는 것만 바로 반영한다(공용 useDebounced 는 즉시 반영할 길이 없어 '필터 초기화'가
+  // 검색어만 한 박자 늦게 풀린다).
   const [q, setQ] = useState('');
+  const [appliedQ, setAppliedQ] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [slot, setSlot] = useState<MealSlotType | null>(null);
   const [mealType, setMealType] = useState<MealTypeType | null>(null);
   const [source, setSource] = useState<MealEntrySourceType | null>(null);
+  // 타이머는 외부 시스템이라 effect — 다음 키 입력이 오면 앞선 예약을 취소한다.
+  useEffect(() => {
+    const next = q.trim();
+    if (!next) return undefined;
+    const timer = setTimeout(() => setAppliedQ(next), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [q]);
+  const changeQ = (value: string) => {
+    setQ(value);
+    if (!value.trim()) setAppliedQ('');
+  };
   const filters = useMemo(
     () => ({
       limit: 30,
-      ...(q.trim() ? { q: q.trim() } : {}),
+      ...(appliedQ ? { q: appliedQ } : {}),
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
       ...(slot ? { slot } : {}),
       ...(mealType ? { mealType } : {}),
       ...(source ? { source } : {}),
     }),
-    [from, mealType, q, slot, source, to],
+    [appliedQ, from, mealType, slot, source, to],
   );
-  const list = useInfiniteMealEntries(filters);
+  // 조건이 바뀌는 동안 이전 목록을 흐리게 둔다 — 화면을 로딩으로 통째 바꾸면 검색 입력칸까지 사라져 한 글자마다
+  // 포커스를 잃었다.
+  const list = useInfiniteMealEntries(filters, true, { keepPrevious: true });
   const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
   const today = toLocalDateKey(new Date());
   const filtered = Boolean(q.trim() || from || to || slot || mealType || source);
@@ -165,12 +184,15 @@ const MealList = () => {
     return out;
   }, [items]);
 
-  if (list.isLoading) {
-    return <Loading />;
-  }
-  if (list.error) {
-    return <ErrorBox onRetry={() => void list.refetch()} />;
-  }
+  const status = list.isLoading ? (
+    <Loading />
+  ) : list.error ? (
+    <ErrorBox onRetry={() => void list.refetch()} />
+  ) : null;
+  // 조건을 걸기 전(첫 화면)에는 예전처럼 로딩·오류만 보인다. 조건을 하나라도 건 뒤에는 아래 목록 자리에서만 보여
+  // 검색·필터 카드가 조건을 바꾸는 내내 그대로 있게 한다.
+  if (status && !filtered) return status;
+
   return (
     <div className={MEAL_SPLIT_CLASS}>
       {/* 데스크톱은 검색·필터와 최근 7일 요약을 오른쪽에 붙여 둔다 — 목록이 첫 화면부터 시작하게(전엔 필터 카드가
@@ -181,7 +203,7 @@ const MealList = () => {
             <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
               <input
                 value={q}
-                onChange={(event) => setQ(event.target.value)}
+                onChange={(event) => changeQ(event.target.value)}
                 placeholder="음식·장소·메모 검색"
                 maxLength={80}
                 className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm"
@@ -212,7 +234,7 @@ const MealList = () => {
                 <button
                   type="button"
                   className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => { setQ(''); setFrom(''); setTo(''); setSlot(null); setMealType(null); setSource(null); }}
+                  onClick={() => { changeQ(''); setFrom(''); setTo(''); setSlot(null); setMealType(null); setSource(null); }}
                 >
                   필터 초기화
                 </button>
@@ -223,46 +245,51 @@ const MealList = () => {
         {isDesktop ? <MealWeekSummary /> : null}
       </div>
 
-      <div className={cn(MEAL_MAIN_CLASS, 'space-y-3')}>
-        {items.length === 0 ? (
-          <Card>
-            <CardContent className="space-y-3 py-10 text-center text-sm text-muted-foreground">
-              {filtered ? (
-                '조건에 맞는 기록이 없어요. 필터를 바꿔 보세요.'
-              ) : (
-                <>
-                  <p>아직 기록이 없어요. 첫 끼니를 남겨 보세요.</p>
-                  <Button variant="outline" asChild>
-                    <Link to="/me/meals/new">첫 끼니 기록하기</Link>
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        ) : null}
-        {groups.map((group) => (
-          <section key={group.date} className="space-y-2">
-            <p className="pt-2 text-xs font-semibold text-muted-foreground">
-              {mealDateLabel(group.date, today)} · {group.date}
-            </p>
-            <div className="space-y-3 lg:space-y-0 lg:divide-y lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-sm">
-              {group.entries.map((entry) => (
-                <MealEntryRow key={entry.id} entry={entry} dense />
-              ))}
-            </div>
-          </section>
-        ))}
-        {list.hasNextPage ? (
-          <div className="pt-2 text-center">
-            <Button
-              variant="outline"
-              onClick={() => void list.fetchNextPage()}
-              disabled={list.isFetchingNextPage}
-            >
-              {list.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
-            </Button>
-          </div>
-        ) : null}
+      <div className={cn(MEAL_MAIN_CLASS, 'space-y-3', list.isPlaceholderData && 'opacity-60')}>
+        {status ?? (
+          <>
+            {items.length === 0 ? (
+              <Card>
+                <CardContent className="space-y-3 py-10 text-center text-sm text-muted-foreground">
+                  {filtered ? (
+                    '조건에 맞는 기록이 없어요. 필터를 바꿔 보세요.'
+                  ) : (
+                    <>
+                      <p>아직 기록이 없어요. 첫 끼니를 남겨 보세요.</p>
+                      <Button variant="outline" asChild>
+                        <Link to="/me/meals/new">첫 끼니 기록하기</Link>
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+            {groups.map((group) => (
+              <section key={group.date} className="space-y-2">
+                <p className="pt-2 text-xs font-semibold text-muted-foreground">
+                  {mealDateLabel(group.date, today)} · {group.date}
+                </p>
+                <div className="space-y-3 lg:space-y-0 lg:divide-y lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-sm">
+                  {group.entries.map((entry) => (
+                    <MealEntryRow key={entry.id} entry={entry} dense />
+                  ))}
+                </div>
+              </section>
+            ))}
+            {/* 이전 조건의 목록을 보여 주는 동안엔 '더 보기'를 숨긴다 — 그 다음 쪽은 이전 조건의 것이다. */}
+            {list.hasNextPage && !list.isPlaceholderData ? (
+              <div className="pt-2 text-center">
+                <Button
+                  variant="outline"
+                  onClick={() => void list.fetchNextPage()}
+                  disabled={list.isFetchingNextPage}
+                >
+                  {list.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
+                </Button>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );
@@ -490,7 +517,8 @@ const MealCalendar = () => {
             <CardHeader>
               <CardTitle className="text-base">{selected} 기록</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            {/* 날짜를 바꾸면 새 날짜 응답이 올 때까지 이전 날짜 기록이 남아 있다(keepPreviousData) — 흐리게 해 구분한다. */}
+            <CardContent className={cn('space-y-3', dayList.isPlaceholderData && 'opacity-60')}>
               {dayList.isLoading ? (
                 <Loading />
               ) : (dayList.data?.items.length ?? 0) === 0 ? (

@@ -323,4 +323,60 @@ describe('WeatherPage', () => {
     renderPage();
     expect(await screen.findByText(/서버에 기상청 API 키가 없거나 일일 한도가 찼습니다/)).toBeInTheDocument();
   });
+
+  // 회귀: 로그인 사용자는 저장 위치(서버 조회)가 오기 전에 서울로 실황·예보·중기를 먼저 받고, 온 뒤 다시 받았다.
+  it('로그인 사용자 — 저장 위치 응답이 오기 전에는 지점 조회를 하지 않고, 온 뒤 그 좌표로만 조회한다', async () => {
+    useHandlers();
+    let openGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    let locationAsked = false;
+    server.use(
+      http.get('/api/v1/air/location', async () => {
+        locationAsked = true;
+        await gate;
+        return HttpResponse.json({
+          location: { lat: 35.1801, lng: 129.0754, label: '부산', source: 'place', updatedAt: '2026-08-21T00:00:00.000Z' },
+        });
+      }),
+    );
+    useAuthStore.setState({ token: 't', user: null, isGuest: false });
+    renderPage();
+    await waitFor(() => expect(locationAsked).toBe(true));
+    // 기다리는 동안 — 머리와 로딩만 있고, 지점에 딸린 조회는 나가지 않는다.
+    expect(screen.getByRole('heading', { name: '날씨' })).toBeInTheDocument();
+    expect(screen.getByText('불러오는 중…')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /지금/ })).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(seen.nowcast).toEqual([]);
+    expect(seen.mid).toEqual([]);
+    expect(seen.sea).toEqual([]);
+
+    openGate();
+    await screen.findByRole('region', { name: /지금 · 내 위치\(부산\)/ });
+    await waitFor(() => expect(seen.mid.length).toBeGreaterThan(0));
+    // 서울(60,127)로는 한 번도 묻지 않았다.
+    expect(seen.nowcast).toEqual(['?nx=98&ny=76']);
+    expect(seen.mid).toEqual(['?land=11H20000&ta=11H20201&stn=159']);
+  });
+
+  it('로그인 사용자에게 저장 위치가 없으면 응답 뒤 기본 지점(서울)으로 연다', async () => {
+    useHandlers();
+    server.use(http.get('/api/v1/air/location', () => HttpResponse.json({ location: null })));
+    useAuthStore.setState({ token: 't', user: null, isGuest: false });
+    renderPage();
+    await screen.findByRole('region', { name: /지금 · 서울/ });
+    expect(seen.nowcast).toEqual(['?nx=60&ny=127']);
+  });
+
+  it('로그인 사용자라도 URL 에 지점이 있으면 저장 위치를 기다리지 않는다', async () => {
+    useHandlers();
+    // 응답하지 않는 저장 위치 조회 — 기다렸다면 화면이 열리지 않는다.
+    server.use(http.get('/api/v1/air/location', () => new Promise<never>(() => {})));
+    useAuthStore.setState({ token: 't', user: null, isGuest: false });
+    renderPage('/weather?p=11H20201');
+    await screen.findByRole('region', { name: /지금 · 부산$/ });
+    expect(seen.nowcast).toEqual(['?nx=98&ny=76']);
+  });
 });

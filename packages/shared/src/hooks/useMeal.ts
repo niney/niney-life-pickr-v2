@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
 import {
   keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from '@tanstack/react-query';
 import type {
   CreateMealEntryInputType,
@@ -92,9 +92,12 @@ export const useMealEntries = (query: ListMealEntriesInput = {}, enabled = true)
 
 // 목록 화면용 cursor 누적 조회. 서버 cursor 는 구조를 해석하지 않는 opaque string 으로
 // 취급하고, 응답의 nextCursor 를 다음 요청에 그대로 전달한다.
+// keepPrevious: 검색어·필터가 바뀌는 동안 이전 목록을 들고 있는다 — 웹 목록은 조건이 바뀔 때마다 화면이 로딩으로
+// 비면 검색 입력창까지 사라졌다. 기본은 끔(앱 목록은 조건이 바뀌면 빈 목록 + 로딩을 보여 주는 지금 동작 그대로).
 export const useInfiniteMealEntries = (
   query: Omit<ListMealEntriesInput, 'cursor'> = {},
   enabled = true,
+  opts: { keepPrevious?: boolean } = {},
 ) =>
   useInfiniteQuery({
     queryKey: [...KEY, 'list', 'infinite', query],
@@ -102,6 +105,7 @@ export const useInfiniteMealEntries = (
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled,
+    placeholderData: opts.keepPrevious ? keepPreviousData : undefined,
   });
 
 export const useMealEntry = (id: string | null | undefined) =>
@@ -259,58 +263,90 @@ export const useUpdateMealPreference = () => {
 
 // 사진 URL — 서버가 JWT 를 요구해 <img src>/<Image source> 로 직접 못 쓴다. blob 을 받아
 // 플랫폼별로 URL 을 만든다: 웹은 objectURL(메모리 해제 필요), RN 은 data URL(Image 가
-// objectURL 을 못 읽는다). 외부 리소스 수명 관리라 useEffect 가 맞는 자리.
+// objectURL 을 못 읽는다).
+//
+// 만든 URL 은 쿼리 캐시(['meal','photo-url',token,variant])에 둔다 — 같은 사진을 그리는 화면이 다시 마운트돼도
+// (탭 전환, 상세에서 뒤로, 목록 필터 변경) 다시 받지 않고 바로 그린다. 예전엔 화면마다 effect 로 받아 매번
+// 회색 자리표시자부터 다시 깜빡였다. 토큰이 가리키는 사진은 바뀌지 않아 stale 이 없고, 마지막 화면이 떠난 뒤
+// PHOTO_URL_GC_MS 가 지나거나 캐시가 비워지면(로그인·로그아웃·식단 전체 삭제) objectURL 을 해제한다.
+const PHOTO_URL_GC_MS = 10 * 60_000;
+
+const photoUrlKey = (token: string | null | undefined, variant: 'full' | 'thumb') =>
+  [...KEY, 'photo-url', token ?? null, variant] as const;
+
+const revokePhotoUrl = (url: unknown): void => {
+  if (typeof url !== 'string' || !url.startsWith('blob:')) return;
+  if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
+};
+
+// 캐시에서 빠지는 사진 URL 을 해제한다 — QueryClient 마다 한 번만 구독(첫 사진을 받을 때).
+const photoUrlCleanupBound = new WeakSet<QueryClient>();
+const bindPhotoUrlCleanup = (qc: QueryClient): void => {
+  if (photoUrlCleanupBound.has(qc)) return;
+  photoUrlCleanupBound.add(qc);
+  qc.getQueryCache().subscribe((event) => {
+    if (event.type !== 'removed') return;
+    const key = event.query.queryKey;
+    if (key[0] === KEY[0] && key[1] === 'photo-url') revokePhotoUrl(event.query.state.data);
+  });
+};
+
+const loadMealPhotoUrl = async (token: string, variant: 'full' | 'thumb'): Promise<string> => {
+  const blob = await mealApi.photoBlob(token, variant);
+  // RN 에는 URL.createObjectURL 이 없다(또는 Image 가 못 읽는다) → FileReader data URL.
+  const canObjectUrl =
+    typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof document !== 'undefined';
+  if (canObjectUrl) return URL.createObjectURL(blob);
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('사진 변환 실패'));
+    };
+    reader.onerror = () => reject(new Error('사진 변환 실패'));
+    reader.readAsDataURL(blob);
+  });
+};
+
+// enabled=false 면 새로 받지 않는다(보일 때만 받는 화면용). 이미 받아 둔 URL 이 있으면 그대로 돌려준다.
 export const useMealPhotoUrl = (
   token: string | null | undefined,
   opts: { variant?: 'full' | 'thumb'; enabled?: boolean } = {},
 ): { url: string | null; error: string | null } => {
   const variant = opts.variant ?? 'thumb';
   const enabled = opts.enabled ?? true;
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: photoUrlKey(token, variant),
+    queryFn: async () => {
+      bindPhotoUrlCleanup(qc);
+      const key = photoUrlKey(token, variant);
+      const cache = qc.getQueryCache();
+      const running = cache.find({ queryKey: key });
+      const previous = qc.getQueryData<string>(key);
+      const url = await loadMealPhotoUrl(token!, variant);
+      // 받는 사이 이 조회가 캐시에서 빠졌으면(사진을 받는 중 로그아웃·식단 전체 삭제) 결과는 버려진다 — 캐시에
+      // 들어가지 못한 URL 은 위 구독이 해제해 줄 수 없으니 만든 자리에서 해제한다.
+      if (cache.find({ queryKey: key }) !== running) revokePhotoUrl(url);
+      // 다시 받은 경우(['meal'] 통째 무효화) 앞서 만든 objectURL 은 더 쓰이지 않는다.
+      else if (previous !== url) revokePhotoUrl(previous);
+      return url;
+    },
+    enabled: enabled && !!token,
+    staleTime: Infinity,
+    gcTime: PHOTO_URL_GC_MS,
+    // 실패는 바로 화면에 알린다(예전 동작 그대로) — 다시 마운트되면 그때 다시 시도한다.
+    retry: false,
+  });
 
-  useEffect(() => {
-    if (!token || !enabled) {
-      setUrl(null);
-      return undefined;
-    }
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    setUrl(null);
-    setError(null);
-    void (async () => {
-      try {
-        const blob = await mealApi.photoBlob(token, variant);
-        if (cancelled) return;
-        // RN 에는 URL.createObjectURL 이 없다(또는 Image 가 못 읽는다) → FileReader data URL.
-        const canObjectUrl =
-          typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof document !== 'undefined';
-        if (canObjectUrl) {
-          objectUrl = URL.createObjectURL(blob);
-          setUrl(objectUrl);
-          return;
-        }
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (cancelled) return;
-          if (typeof reader.result === 'string') setUrl(reader.result);
-          else setError('사진 변환 실패');
-        };
-        reader.onerror = () => {
-          if (!cancelled) setError('사진 변환 실패');
-        };
-        reader.readAsDataURL(blob);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '사진을 불러오지 못했습니다');
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [token, variant, enabled]);
-
-  return { url, error };
+  return {
+    url: token ? (query.data ?? null) : null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : '사진을 불러오지 못했습니다'
+      : null,
+  };
 };
 
 // ── 추천 ────────────────────────────────────────────────────────────────────
@@ -385,7 +421,10 @@ export const useMealRecommendationEvent = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: MealRecommendationEventInputType }) =>
       mealApi.recommendationEvent(id, input),
-    onSuccess: () => {
+    onSuccess: (_event, { input }) => {
+      // 노출·식당 열기는 추천 응답(선택·평가·후보별 평가)을 바꾸지 않는다 — 무효화하면 추천 화면에 들어오거나
+      // '파는 곳'을 펼칠 때마다 context·목록을 한 번씩 더 받는다.
+      if (input.kind === 'shown' || input.kind === 'restaurant_opened') return;
       void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
     },
   });
@@ -394,12 +433,15 @@ export const useMealRecommendationEvent = () => {
 // ── 영양소 점검·영양제 조언 ─────────────────────────────────────────────────────
 // 점검은 기록·선호가 바뀌면 무효화된다(['meal','nutrition']). 조언은 LLM 이라 사용자가 눌렀을 때만 만든다 —
 // 같은 날·같은 기록이면 서버가 저장본을 주므로 다시 눌러도 한도를 쓰지 않는다(force 만 새로).
-export const useMealNutrition = (days = 14, enabled = true) =>
+// keepPrevious: 기간을 바꾸는 동안 이전 기간 결과를 들고 있는다(화면이 isPlaceholderData 로 흐리게 표시). 기본은
+// 끔 — 켜지 않은 화면(앱)은 기간이 바뀌면 로딩을 보여 주는 지금 동작 그대로.
+export const useMealNutrition = (days = 14, enabled = true, opts: { keepPrevious?: boolean } = {}) =>
   useQuery({
     queryKey: [...KEY, 'nutrition', 'analysis', days],
     queryFn: () => mealApi.nutrition(days),
     enabled,
     staleTime: 60_000,
+    placeholderData: opts.keepPrevious ? keepPreviousData : undefined,
   });
 
 export const useLatestMealNutritionAdvice = (enabled = true) =>

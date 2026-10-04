@@ -2,12 +2,20 @@ import { useId, useState } from 'react';
 import { X } from 'lucide-react';
 import { useFoodSearch, type MealDraftItem } from '@repo/shared';
 import { FOOD_DISH_TYPE_LABEL, MEAL_PORTIONS, MEAL_PORTION_LABEL } from '@repo/utils';
+import { useDebounced } from '~/lib/useDebounced';
 import { cn } from '~/lib/utils';
 
 // 식단 항목 한 줄(웹) — 이름(카탈로그 자동완성) + 주식/반찬 + 양 + 인분 + 삭제.
 // 앱 MealItemRow 와 같은 규칙이다: 카탈로그 항목을 고르면 foodId·분류를 함께 채워 통계가 바로
 // 분류를 얻고, 이름을 손으로 고치면 그 매칭을 푼다. 목록에 없는 이름도 그대로 저장된다.
 // 사진 인식 후보·"지난번대로"(사진 복제)는 앱에서만 한다.
+
+// 자동완성 검색어 — 입력칸은 바로 바뀌고 요청만 타이핑이 잠잠해진 뒤에 보낸다(키 입력마다 요청하면 "김치찌개"
+// 하나에 여섯 번 나갔다). 끝에 붙은 낱자모는 한글 조합 중간 상태("김ㅊ")라 뗀다 — 카탈로그 이름에는 낱자모가
+// 없어 맞는 게 없고, 떼면 직전 완성 글자("김")의 결과가 그대로 남는다. 조합 이벤트(isComposing)로 거르지 않는
+// 이유: 한글은 마지막 글자가 계속 조합 중이라 다 치고 멈춰도 검색이 나가지 않는다.
+const SEARCH_DEBOUNCE_MS = 200;
+const TRAILING_JAMO = /[ㄱ-ㆎ]+$/;
 
 export const MealItemInputRow = ({
   item,
@@ -24,9 +32,11 @@ export const MealItemInputRow = ({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [servingsText, setServingsText] = useState(item.servings == null ? '' : String(item.servings));
-  const searchable = item.name.trim().length >= 2;
-  // 자동완성은 입력칸이 열린 상태이고 2자 이상일 때만 부른다(요청 절약).
-  const search = useFoodSearch(item.name, { limit: 6, enabled: open && searchable });
+  const searchTerm = useDebounced(item.name, SEARCH_DEBOUNCE_MS).replace(TRAILING_JAMO, '').trim();
+  // 자동완성은 입력칸이 열린 상태이고 2자 이상일 때만 부른다(요청 절약). 입력을 지우면 디바운스를 기다리지 않고
+  // 바로 닫히게 지금 입력 길이도 함께 본다.
+  const searchable = searchTerm.length >= 2 && item.name.trim().length >= 2;
+  const search = useFoodSearch(searchTerm, { limit: 6, enabled: open && searchable });
   const suggestions = open && searchable ? (search.data?.items ?? []) : [];
   const lowConfidence = item.confidence !== null && item.confidence < 0.4;
 

@@ -24,8 +24,11 @@ import { ParkingPage } from './ParkingPage';
 // ④ 충전소 탭 → 목록·상세(충전기 상태) ⑤ 공항 탭 → 거리순 목록·인천 상세(터미널 묶음·초과 주차 만차).
 // MapCanvas 목은 viewport 를 올리지 않으므로 points 요청은 나가지 않는다(뷰포트 없음 = 비활성).
 
+// 지도에 넘어온 overlayMarkers 는 렌더마다 기록해 둔다 — 참조가 바뀌면 지도가 오버레이를 다시 그린다.
+const seenOverlays = vi.hoisted(() => [] as unknown[]);
 vi.mock('~/components/restaurant/MapCanvas', () => ({
-  MapCanvas: forwardRef(function MockMapCanvas(_props, ref) {
+  MapCanvas: forwardRef(function MockMapCanvas(props: { overlayMarkers?: unknown }, ref) {
+    seenOverlays.push(props.overlayMarkers);
     useImperativeHandle(ref, () => ({ flyTo: () => {}, flyToZoomIn: () => {}, fitToMarkers: () => {}, fitToCoords: () => {} }));
     return <div data-testid="map-canvas" />;
   }),
@@ -289,5 +292,63 @@ describe('ParkingPage', () => {
     expect(within(card).getByText('제2여객터미널')).toBeInTheDocument();
     expect(card).toHaveTextContent('534/520');
     expect(card).toHaveTextContent('103% 사용 · 평소 이 시간 90%');
+  });
+
+  // 회귀: 저장 위치를 { lat, lng } 로 매번 새로 만들어 넘겨, 페이지가 다시 그려질 때마다 지도 오버레이(내 위치 점)를
+  // 다시 그렸다.
+  it('저장 위치가 있을 때 페이지가 다시 그려져도 지도에 넘기는 오버레이 마커 배열은 같은 참조다', async () => {
+    useAirLocationStore.getState().setLocation({ lat: 37.5665, lng: 126.978, label: '시청', source: 'place' });
+    renderPage();
+    await within(await screen.findByTestId('parking-lot-list')).findByText('세종로 공영주차장(시)');
+    const rendersBefore = seenOverlays.length;
+    const overlays = seenOverlays.at(-1);
+    expect(overlays).toHaveLength(1);
+
+    // 필터 칩 → 스토어·조회가 바뀌어 페이지가 여러 번 다시 그려진다.
+    fireEvent.click(within(screen.getByTestId('parking-filters')).getByRole('button', { name: '무료만' }));
+    await waitFor(() => expect(within(screen.getByTestId('parking-lot-list')).queryByText('세종로 공영주차장(시)')).not.toBeInTheDocument());
+    expect(seenOverlays.length).toBeGreaterThan(rendersBefore);
+    expect(seenOverlays.slice(rendersBefore).every((o) => o === overlays)).toBe(true);
+  });
+
+  // 회귀: 로그인 사용자는 저장 위치(서버 조회)가 오기 전에 서울시청으로 지도·주변을 받고, 온 뒤 옮겨 다시 받았다.
+  it('로그인 사용자 — 저장 위치 응답 전에는 지도를 띄우지 않고, 온 뒤 그 좌표로 주변을 조회한다', async () => {
+    let openGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    let locationAsked = false;
+    server.use(
+      http.get('/api/v1/air/location', async () => {
+        locationAsked = true;
+        await gate;
+        return HttpResponse.json({
+          location: { lat: 35.1801, lng: 129.0754, label: '부산', source: 'place', updatedAt: FETCHED },
+        });
+      }),
+    );
+    useAuthStore.setState({ token: 't', user: null, isGuest: false });
+    renderPage();
+    expect(screen.getByTestId('parking-waiting-location')).toBeInTheDocument();
+    await waitFor(() => expect(locationAsked).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(screen.queryByTestId('map-canvas')).not.toBeInTheDocument();
+    expect(seen.lotNearby).toEqual([]);
+
+    openGate();
+    expect(await screen.findByTestId('map-canvas')).toBeInTheDocument();
+    await waitFor(() => expect(seen.lotNearby.length).toBeGreaterThan(0));
+    // 서울시청(37.5665)으로는 한 번도 묻지 않았다.
+    expect(seen.lotNearby.map((u) => u.searchParams.get('lat'))).toEqual(['35.1801']);
+  });
+
+  it('로그인 사용자라도 URL 에 좌표가 있으면 저장 위치를 기다리지 않는다', async () => {
+    // 응답하지 않는 저장 위치 조회 — 기다렸다면 지도가 뜨지 않는다.
+    server.use(http.get('/api/v1/air/location', () => new Promise<never>(() => {})));
+    useAuthStore.setState({ token: 't', user: null, isGuest: false });
+    renderPage('/parking?ll=37.50000,127.03000&z=15');
+    expect(await screen.findByTestId('map-canvas')).toBeInTheDocument();
+    await waitFor(() => expect(seen.lotNearby.length).toBeGreaterThan(0));
+    expect(seen.lotNearby[0]!.searchParams.get('lat')).toBe('37.5');
   });
 });

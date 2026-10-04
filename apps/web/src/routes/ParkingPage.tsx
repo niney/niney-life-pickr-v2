@@ -12,7 +12,12 @@ import {
   useParkingStatus,
   useUserLocation,
 } from '@repo/shared';
-import type { EvStationNearbyItemType, ParkingAirportType, ParkingLotNearbyItemType } from '@repo/api-contract';
+import type {
+  AirLocationItemType,
+  EvStationNearbyItemType,
+  ParkingAirportType,
+  ParkingLotNearbyItemType,
+} from '@repo/api-contract';
 import {
   EV_POINT_MIN_ZOOM,
   PARKING_NEARBY_RADIUS_M,
@@ -76,7 +81,30 @@ interface InitialView {
   source: 'url' | 'saved' | 'default';
 }
 
+// 저장한 내 위치(로그인 사용자는 서버 조회)가 올 때까지 지도를 띄우지 않는다 — 먼저 띄우면 서울시청으로 타일·점·주변을
+// 받았다가 저장 위치로 옮기며 전부 다시 받는다. URL 에 좌표(ll)가 있으면 저장 위치를 쓰지 않으니 기다리지 않고, 게스트는
+// 저장 위치가 로컬이라 기다림이 없다.
 export const ParkingPage = () => {
+  const { headerHeight } = usePublicLayout();
+  const [searchParams] = useSearchParams();
+  const airLocation = useAirLocation();
+  const waitingSaved = airLocation.isLoading && parseLatLngParam(searchParams.get('ll')) === null;
+  if (waitingSaved) {
+    return (
+      <div
+        className="flex w-full items-center justify-center text-sm text-muted-foreground"
+        style={{ height: `calc(100dvh - ${headerHeight}px)` }}
+        data-testid="parking-waiting-location"
+      >
+        불러오는 중…
+      </div>
+    );
+  }
+  return <ParkingPageBody saved={airLocation.location} />;
+};
+
+// saved: 저장한 내 위치(날씨·대기·일상지도와 공유) — 위 ParkingPage 가 조회해 내려준다.
+const ParkingPageBody = ({ saved }: { saved: AirLocationItemType | null }) => {
   const { setSubBar, headerHeight } = usePublicLayout();
   const isDesktop = useIsDesktopXl();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -104,11 +132,10 @@ export const ParkingPage = () => {
   const toggleLotFilter = useParkingPrefsStore((s) => s.toggleLotFilter);
   const toggleEvFilter = useParkingPrefsStore((s) => s.toggleEvFilter);
 
-  const airLocation = useAirLocation();
-  const saved = airLocation.location;
   const savedForGoTo = useMemo(() => (saved ? { lat: saved.lat, lng: saved.lng, label: saved.label } : null), [saved]);
 
-  // 진입 중심 — 마운트 1회 결정(이후엔 지도가 진실). 저장 위치가 늦게 오면(로그인 사용자) 사용자가 안 움직였을 때 1회 이동.
+  // 진입 중심 — 마운트 1회 결정(이후엔 지도가 진실). 로그인 사용자의 저장 위치 조회는 ParkingPage 가 기다려 주므로
+  // 보통 여기서 이미 정해져 있다. 그래도 늦게 오면(로그인 직후 게스트 저장분 업로드 등) 사용자가 안 움직였을 때 1회 이동.
   const [initial] = useState<InitialView>(() => {
     const ll = parseLatLngParam(searchParams.get('ll'));
     if (ll) return { ...ll, zoom: parseZoom(searchParams.get('z')) ?? DEFAULT_ZOOM, source: 'url' };
@@ -372,7 +399,9 @@ export const ParkingPage = () => {
           selectedMarkerId={selectedMarkerId}
           initialCenter={{ lat: initial.lat, lng: initial.lng, zoom: initial.zoom }}
           myLocation={myLocation}
-          savedLocation={saved ? { lat: saved.lat, lng: saved.lng } : null}
+          // 저장 위치 객체를 그대로 넘긴다 — 여기서 { lat, lng } 를 새로 만들면 렌더마다 참조가 바뀌어 지도 뷰의
+          // 오버레이 마커 useMemo 가 매번 깨진다(지도를 한 번 움직일 때마다 오버레이를 서너 번 다시 그렸다).
+          savedLocation={saved}
           locationStatus={userLoc.status}
           onLocate={userLoc.refetch}
           loading={mapLoading}

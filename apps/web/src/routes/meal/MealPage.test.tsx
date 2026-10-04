@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -103,16 +103,25 @@ const stats = {
   ],
 };
 
-const renderPage = () =>
+const renderPage = (
+  client: QueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) =>
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <MealPage />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+
+// 응답을 테스트가 풀어 줄 때까지 붙잡아 두는 문 — "응답이 오기 전" 화면을 본다.
+const deferred = () => {
+  let open: () => void = () => {};
+  const promise = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { promise, open: () => open() };
+};
 
 describe('MealPage', () => {
   beforeEach(() => {
@@ -266,6 +275,178 @@ describe('MealPage', () => {
     );
     renderPage();
     expect(await screen.findByAltText('식단 사진')).toBeInTheDocument();
+  });
+
+  // 회귀: 조건이 바뀔 때마다 화면 전체가 로딩으로 바뀌어 검색 입력칸이 언마운트됐고(한 글자마다 포커스 유실),
+  // 키 입력마다 요청이 나갔다.
+  it('검색 — 타이핑하는 동안 입력칸이 그대로 있고(포커스 유지) 요청은 타이핑이 멈춘 뒤 한 번만 나간다', async () => {
+    const queries: (string | null)[] = [];
+    server.use(
+      http.get(ENTRIES_URL, ({ request }) => {
+        const q = new URL(request.url).searchParams.get('q');
+        queries.push(q);
+        return HttpResponse.json({
+          items: q
+            ? [entry({ id: 'e2', items: [{ ...entry().items[0], id: 'i9', name: '김치볶음밥' }] })]
+            : [entry()],
+          nextCursor: null,
+        });
+      }),
+    );
+    renderPage();
+    const input = await screen.findByPlaceholderText('음식·장소·메모 검색');
+    input.focus();
+    fireEvent.change(input, { target: { value: '김' } });
+    fireEvent.change(input, { target: { value: '김치' } });
+    fireEvent.change(input, { target: { value: '김치볶' } });
+    // 같은 DOM 노드가 그대로 — 언마운트됐다면 새 노드로 바뀌고 포커스는 body 로 떨어진다.
+    expect(screen.getByPlaceholderText('음식·장소·메모 검색')).toBe(input);
+    expect(input).toHaveFocus();
+    // 새 응답이 올 때까지 이전 목록이 남아 있다.
+    expect(screen.getByText('김치찌개')).toBeInTheDocument();
+
+    expect(await screen.findByText('김치볶음밥')).toBeInTheDocument();
+    expect(screen.queryByText('김치찌개')).not.toBeInTheDocument();
+    // 중간 글자('김', '김치')로는 요청하지 않았다.
+    expect(queries).toEqual([null, '김치볶']);
+    expect(screen.getByPlaceholderText('음식·장소·메모 검색')).toBe(input);
+    expect(input).toHaveFocus();
+
+    // 비우는 건 기다리지 않는다 — 곧바로 전체 목록으로 돌아온다.
+    fireEvent.change(input, { target: { value: '' } });
+    expect(screen.getByText('김치찌개')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('음식·장소·메모 검색')).toBe(input);
+  });
+
+  it('필터 칩을 눌러도 검색·필터 카드는 그대로 있고, 새 응답이 올 때까지 이전 목록을 흐리게 둔다', async () => {
+    const gate = deferred();
+    server.use(
+      http.get(ENTRIES_URL, async ({ request }) => {
+        const slot = new URL(request.url).searchParams.get('slot');
+        if (slot) await gate.promise;
+        return HttpResponse.json({ items: slot ? [] : [entry()], nextCursor: null });
+      }),
+    );
+    renderPage();
+    const food = await screen.findByText('김치찌개');
+    const input = screen.getByPlaceholderText('음식·장소·메모 검색');
+    fireEvent.click(screen.getByRole('button', { name: '저녁' }));
+    // 응답 전 — 입력칸은 같은 노드, 이전 목록은 흐리게 남는다.
+    await waitFor(() => expect(food.closest('.opacity-60')).not.toBeNull());
+    expect(screen.getByPlaceholderText('음식·장소·메모 검색')).toBe(input);
+    gate.open();
+    expect(await screen.findByText(/조건에 맞는 기록이 없어요/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('음식·장소·메모 검색')).toBe(input);
+  });
+
+  it('달력 — 다른 날짜를 고르면 새 응답이 올 때까지 이전 날짜 기록을 흐리게 둔다', async () => {
+    const gate = deferred();
+    server.use(
+      http.get(ENTRIES_URL, async ({ request }) => {
+        const from = new URL(request.url).searchParams.get('from');
+        if (from?.endsWith('-06')) await gate.promise;
+        return HttpResponse.json({
+          items: from
+            ? [entry({ id: from, placeName: from.endsWith('-05') ? '오일식당' : '육일식당' })]
+            : [],
+          nextCursor: null,
+        });
+      }),
+      http.get(CALENDAR_URL, ({ request }) => {
+        const month = new URL(request.url).searchParams.get('month') ?? '';
+        return HttpResponse.json({
+          month,
+          days: ['05', '06'].map((day) => ({
+            date: `${month}-${day}`,
+            count: 1,
+            slots: ['lunch'],
+            hasPhoto: false,
+          })),
+        });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /달력/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '5' }));
+    const first = await screen.findByText(/오일식당/);
+    expect(first.closest('.opacity-60')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '6' }));
+    // 6일 응답 전 — 5일 기록이 남아 있되 흐리게.
+    await waitFor(() => expect(screen.getByText(/오일식당/).closest('.opacity-60')).not.toBeNull());
+    gate.open();
+    const second = await screen.findByText(/육일식당/);
+    expect(second.closest('.opacity-60')).toBeNull();
+  });
+
+  const photoEntry = () =>
+    entry({ photos: [{ token: 'a'.repeat(8), width: 40, height: 30, byteSize: 100, sortOrder: 0 }] });
+
+  // 회귀: 사진 URL 을 화면마다 따로 받아, 목록이 다시 마운트될 때마다 같은 썸네일을 또 받고 깜빡였다.
+  it('같은 사진은 탭을 오가도 한 번만 받는다 — 받아 둔 URL 을 다시 쓴다', async () => {
+    let photoRequests = 0;
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [photoEntry()], nextCursor: null })),
+      http.get(CALENDAR_URL, ({ request }) =>
+        HttpResponse.json({ month: new URL(request.url).searchParams.get('month') ?? '', days: [] }),
+      ),
+      http.get(PHOTO_THUMB_URL, () => {
+        photoRequests += 1;
+        return HttpResponse.arrayBuffer(new ArrayBuffer(8), { headers: { 'Content-Type': 'image/jpeg' } });
+      }),
+    );
+    renderPage();
+    const firstSrc = (await screen.findByAltText('식단 사진')).getAttribute('src');
+    fireEvent.click(screen.getByRole('button', { name: /달력/ }));
+    await screen.findByRole('button', { name: '5' });
+    expect(screen.queryByAltText('식단 사진')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '기록' }));
+    expect((await screen.findByAltText('식단 사진')).getAttribute('src')).toBe(firstSrc);
+    expect(photoRequests).toBe(1);
+  });
+
+  it('IntersectionObserver 가 있으면 사진은 화면 가까이 왔을 때 받는다', async () => {
+    const observers: Array<{ callback: IntersectionObserverCallback }> = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(public callback: IntersectionObserverCallback) {
+          observers.push(this);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    try {
+      let photoRequests = 0;
+      server.use(
+        http.get(ENTRIES_URL, () => HttpResponse.json({ items: [photoEntry()], nextCursor: null })),
+        http.get(PHOTO_THUMB_URL, () => {
+          photoRequests += 1;
+          return HttpResponse.arrayBuffer(new ArrayBuffer(8), { headers: { 'Content-Type': 'image/jpeg' } });
+        }),
+      );
+      renderPage();
+      await screen.findByText('김치찌개');
+      // 아직 화면 가까이 오지 않았다 — 자리표시자만 있고 요청은 나가지 않는다.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(observers).toHaveLength(1);
+      expect(photoRequests).toBe(0);
+      expect(screen.queryByAltText('식단 사진')).not.toBeInTheDocument();
+
+      act(() =>
+        observers[0]!.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          observers[0] as unknown as IntersectionObserver,
+        ),
+      );
+      expect(await screen.findByAltText('식단 사진')).toBeInTheDocument();
+      expect(photoRequests).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -529,6 +710,46 @@ describe('MealPage — 추천·설정 탭', () => {
     await waitFor(() => expect(shownIds).toEqual(['r3']));
   });
 
+  // 회귀: 노출 이벤트가 성공할 때마다 추천 조회(context·목록)를 통째로 다시 받았고, 탭을 다시 열 때마다(재마운트)
+  // 같은 추천의 노출을 또 보냈다.
+  it('노출 이벤트는 추천당 한 번 — 보낸 뒤 추천 조회를 다시 받지 않고, 탭을 다시 열어도 또 보내지 않는다', async () => {
+    let contextCalls = 0;
+    let listCalls = 0;
+    const shownIds: string[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () => {
+        contextCalls += 1;
+        return HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: recommendation });
+      }),
+      http.get(RECOMMENDATIONS_URL, () => {
+        listCalls += 1;
+        return HttpResponse.json({ items: [recommendation] });
+      }),
+      http.post(`${RECOMMENDATIONS_URL}/:id/events`, async ({ params, request }) => {
+        const body = (await request.json()) as { kind: string };
+        if (body.kind === 'shown') shownIds.push(String(params['id']));
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    await screen.findByRole('button', { name: '연어초밥 먹은 메뉴로 기록' });
+    await waitFor(() => expect(shownIds).toEqual(['r1']));
+    // 노출은 화면에 보이는 추천 데이터를 바꾸지 않는다 — 응답 뒤에도 context·목록은 한 번씩만.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(contextCalls).toBe(1);
+    expect(listCalls).toBe(1);
+
+    // 기록 탭에 갔다 와도 같은 추천의 노출을 또 보내지 않는다(탭 버튼이 필터 칩 '추천'보다 앞에 있다).
+    fireEvent.click(screen.getByRole('button', { name: '기록' }));
+    await screen.findByPlaceholderText('음식·장소·메모 검색');
+    fireEvent.click(screen.getAllByRole('button', { name: '추천' })[0]!);
+    await screen.findByRole('button', { name: '연어초밥 먹은 메뉴로 기록' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(shownIds).toEqual(['r1']);
+  });
+
   it('최근 추천 삭제 — 확인창을 거쳐 지우고, 보던 추천이면 남은 최신으로, 모두 삭제도', async () => {
     await setMealDraftPrincipal('u1');
     // 지울 추천에서 시작한 기록 초안 — 지우면 출처만 떼어 낸다.
@@ -667,6 +888,37 @@ describe('MealPage — 추천·설정 탭', () => {
     await waitFor(() => expect(saved).not.toBeNull());
     expect(saved).toMatchObject({ sex: 'female', birthYear: 1990 });
   });
+
+  it('설정 탭 — 손대기 전에는 서버 값을 따라가고, 손댄 뒤에는 서버 값이 다시 와도 입력을 덮어쓰지 않으며, 저장하면 서버 응답으로 돌아간다', async () => {
+    let served: Record<string, unknown> = preference;
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(PREFERENCE_URL, () => HttpResponse.json(served)),
+      // 서버가 보낸 값과 다르게 정리해 돌려주는 경우 — 저장 뒤 화면은 손댄 값이 아니라 이 응답을 보여야 한다.
+      http.put(PREFERENCE_URL, () => HttpResponse.json({ ...preference, excludedFoods: ['정리된값'] })),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+    const excluded = () => screen.getByLabelText('취향상 제외할 음식');
+    await waitFor(() => expect(excluded()).toHaveValue('오이'));
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+
+    served = { ...preference, excludedFoods: ['가지'] };
+    await act(() => client.invalidateQueries({ queryKey: ['meal', 'preference'] }));
+    await waitFor(() => expect(excluded()).toHaveValue('가지'));
+
+    fireEvent.change(excluded(), { target: { value: '가지, 땅콩' } });
+    expect(screen.getByText('바꾼 설정이 있어요.')).toBeInTheDocument();
+    served = { ...preference, excludedFoods: ['버섯'] };
+    await act(() => client.invalidateQueries({ queryKey: ['meal', 'preference'] }));
+    expect(excluded()).toHaveValue('가지, 땅콩');
+
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByText('저장했어요.')).toBeInTheDocument();
+    expect(excluded()).toHaveValue('정리된값');
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+  });
 });
 
 describe('MealPage — 영양 탭', () => {
@@ -803,5 +1055,30 @@ describe('MealPage — 영양 탭', () => {
     fireEvent.click(screen.getByRole('button', { name: '영양' }));
     expect(await screen.findByText(/두 끼 이상 기록한 날이 2일/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '최근 14일로 조언 받기' })).toBeDisabled();
+  });
+
+  // 회귀: 기간을 바꿀 때마다 점검 목록이 로딩 문구로 접혔다 펴지며 화면이 튀었다.
+  it('기간을 바꾸는 동안 이전 기간 결과를 흐리게 두고 로딩으로 접지 않는다', async () => {
+    const gate = deferred();
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(NUTRITION_URL, async ({ request }) => {
+        const days = Number(new URL(request.url).searchParams.get('days'));
+        if (days === 28) await gate.promise;
+        return HttpResponse.json(analysis(days));
+      }),
+      http.get(ADVICE_URL, () => HttpResponse.json({ advice: null })),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+    const before = await screen.findByText(/최근 14일 중/);
+    expect(before.closest('.opacity-60')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '28일' }));
+    await waitFor(() => expect(screen.getByText(/최근 14일 중/).closest('.opacity-60')).not.toBeNull());
+    expect(screen.queryByText(/기록을 살펴보는 중/)).not.toBeInTheDocument();
+    gate.open();
+    const after = await screen.findByText(/최근 28일 중/);
+    expect(after.closest('.opacity-60')).toBeNull();
   });
 });

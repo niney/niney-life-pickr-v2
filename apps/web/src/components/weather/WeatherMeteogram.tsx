@@ -132,7 +132,9 @@ export const WeatherMeteogram = ({ hours, todayYmd, dim }: Props) => {
           aria-label={`3일 시간별 예보 (${n}시각): 기온 선과 강수확률 막대`}
           aria-describedby={hovered ? tooltipId : undefined}
           tabIndex={0}
-          className="block touch-none select-none rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          // touch-pan-y: 세로로 미는 건 페이지 스크롤로 넘기고 가로로 긋는 것만 값 읽기(pointermove)로 받는다 —
+          // touch-none 이면 차트 위에서 시작한 스와이프로 페이지가 스크롤되지 않았다.
+          className="block touch-pan-y select-none rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           onPointerMove={onMove}
           onPointerLeave={() => setHover(null)}
           onKeyDown={onKey}

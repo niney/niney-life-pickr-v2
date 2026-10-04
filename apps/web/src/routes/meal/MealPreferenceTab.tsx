@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   MEAL_DATA_DELETE_CONFIRMATION,
@@ -6,6 +6,7 @@ import {
   MEAL_WEIGHT_PRESETS,
   MealAllergen,
   type MealAllergenType,
+  type MealPreferenceType,
   type MealSexType,
   type MealSlotType,
   type MealTypeType,
@@ -42,34 +43,39 @@ const WEIGHT_FIELDS: ReadonlyArray<{ key: keyof MealWeightsType; label: string; 
   { key: 'convenience', label: '간편함', desc: '집밥은 손 덜 가는 쪽, 외식은 흔한 메뉴' },
 ];
 
+// 폼 값 — 서버 선호를 입력칸 모양(쉼표로 이은 문자열·연도 문자열)으로 편 것.
+interface PreferenceForm {
+  weights: MealWeightsType;
+  excluded: string;
+  allergens: MealAllergenType[];
+  disliked: string;
+  liked: string;
+  slots: MealSlotType[];
+  mealTypes: MealTypeType[];
+  sex: MealSexType | null;
+  birthYear: string;
+}
+
+const toForm = (pref: MealPreferenceType): PreferenceForm => ({
+  weights: pref.weights,
+  excluded: pref.excludedFoods.join(', '),
+  allergens: pref.allergens ?? [],
+  disliked: pref.dislikedFoods.join(', '),
+  liked: pref.likedFoods.join(', '),
+  slots: pref.slots,
+  mealTypes: pref.mealTypes,
+  sex: pref.sex ?? null,
+  birthYear: pref.birthYear ? String(pref.birthYear) : '',
+});
+
 export const MealPreferenceTab = () => {
   const pref = useMealPreference();
   const save = useUpdateMealPreference();
-  const [weights, setWeights] = useState<MealWeightsType | null>(null);
-  const [excluded, setExcluded] = useState('');
-  const [allergens, setAllergens] = useState<MealAllergenType[]>([]);
-  const [disliked, setDisliked] = useState('');
-  const [liked, setLiked] = useState('');
-  const [slots, setSlots] = useState<MealSlotType[]>([]);
-  const [mealTypes, setMealTypes] = useState<MealTypeType[]>([]);
-  const [sex, setSex] = useState<MealSexType | null>(null);
-  const [birthYear, setBirthYear] = useState('');
-  const [dirty, setDirty] = useState(false);
+  // 손댄 값만 state 로 든다(null = 손대지 않음). 화면 값은 렌더 중에 "손댄 값 ?? 서버 값"으로 정한다 — 서버 값을
+  // effect 로 state 에 복사하던 때는 탭을 열 때마다 '설정 준비 중'을 한 번 거쳐 두 번 그렸다. 손대는 동안에는
+  // 서버 값이 다시 와도(재조회) 덮어쓰지 않고, 저장에 성공하면 손댄 값을 버려 서버 응답으로 돌아간다.
+  const [edited, setEdited] = useState<PreferenceForm | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-
-  // 서버 값이 도착하면 폼 초기화(사용자가 이미 손댔으면 덮어쓰지 않는다).
-  useEffect(() => {
-    if (!pref.data || dirty) return;
-    setWeights(pref.data.weights);
-    setExcluded(pref.data.excludedFoods.join(', '));
-    setAllergens(pref.data.allergens ?? []);
-    setDisliked(pref.data.dislikedFoods.join(', '));
-    setLiked(pref.data.likedFoods.join(', '));
-    setSlots(pref.data.slots);
-    setMealTypes(pref.data.mealTypes);
-    setSex(pref.data.sex ?? null);
-    setBirthYear(pref.data.birthYear ? String(pref.data.birthYear) : '');
-  }, [pref.data, dirty]);
 
   if (pref.isLoading) {
     return (
@@ -88,7 +94,7 @@ export const MealPreferenceTab = () => {
       </div>
     );
   }
-  if (!weights) {
+  if (!pref.data) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" /> 설정 준비 중…
@@ -96,9 +102,13 @@ export const MealPreferenceTab = () => {
     );
   }
 
+  const form = edited ?? toForm(pref.data);
+  const { weights, excluded, allergens, disliked, liked, slots, mealTypes, sex, birthYear } = form;
+  const dirty = edited !== null;
+  const edit = (patch: Partial<PreferenceForm>) => setEdited({ ...form, ...patch });
+
   const setWeight = (key: keyof MealWeightsType, value: number) => {
-    setWeights({ ...weights, [key]: value });
-    setDirty(true);
+    edit({ weights: { ...weights, [key]: value } });
   };
 
   const parseList = (raw: string): string[] =>
@@ -128,7 +138,7 @@ export const MealPreferenceTab = () => {
         birthYear: year,
         onboarded: true,
       },
-      { onSuccess: () => setDirty(false) },
+      { onSuccess: () => setEdited(null) },
     );
   };
 
@@ -158,10 +168,7 @@ export const MealPreferenceTab = () => {
                 key={key}
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setWeights(preset.weights);
-                  setDirty(true);
-                }}
+                onClick={() => edit({ weights: preset.weights })}
               >
                 {preset.label}
               </Button>
@@ -204,14 +211,13 @@ export const MealPreferenceTab = () => {
                   key={allergen}
                   label={MEAL_ALLERGEN_LABEL[allergen]}
                   selected={allergens.includes(allergen)}
-                  onClick={() => {
-                    setAllergens(
-                      allergens.includes(allergen)
+                  onClick={() =>
+                    edit({
+                      allergens: allergens.includes(allergen)
                         ? allergens.filter((value) => value !== allergen)
                         : [...allergens, allergen],
-                    );
-                    setDirty(true);
-                  }}
+                    })
+                  }
                 />
               ))}
             </div>
@@ -224,28 +230,19 @@ export const MealPreferenceTab = () => {
             label="취향상 제외할 음식"
             hint="이름과 알려진 재료가 맞으면 추천 후보에서 빼지만, 재료 정보가 없는 음식은 남을 수 있어요."
             value={excluded}
-            onChange={(v) => {
-              setExcluded(v);
-              setDirty(true);
-            }}
+            onChange={(v) => edit({ excluded: v })}
           />
           <Field
             label="덜 선호하는 음식"
             hint="후보에서 지우지 않고 점수를 크게 낮춰 가능하면 피해요. 대안이 부족하면 나올 수 있어요."
             value={disliked}
-            onChange={(v) => {
-              setDisliked(v);
-              setDirty(true);
-            }}
+            onChange={(v) => edit({ disliked: v })}
           />
           <Field
             label="좋아하는 음식"
             hint="쉼표로 구분. 추천 후보에 항상 넣되, 알레르기 주의 항목에 걸리는 음식은 빼요."
             value={liked}
-            onChange={(v) => {
-              setLiked(v);
-              setDirty(true);
-            }}
+            onChange={(v) => edit({ liked: v })}
           />
           <div className="space-y-2">
             <p className="text-sm font-medium">주로 하는 식사</p>
@@ -255,12 +252,13 @@ export const MealPreferenceTab = () => {
                   key={t}
                   label={MEAL_TYPE_LABEL[t]}
                   selected={mealTypes.includes(t)}
-                  onClick={() => {
-                    setMealTypes(
-                      mealTypes.includes(t) ? mealTypes.filter((x) => x !== t) : [...mealTypes, t],
-                    );
-                    setDirty(true);
-                  }}
+                  onClick={() =>
+                    edit({
+                      mealTypes: mealTypes.includes(t)
+                        ? mealTypes.filter((x) => x !== t)
+                        : [...mealTypes, t],
+                    })
+                  }
                 />
               ))}
             </div>
@@ -278,9 +276,8 @@ export const MealPreferenceTab = () => {
                       setFormError('기록·추천할 끼니는 하나 이상 남겨 주세요.');
                       return;
                     }
-                    setSlots(slots.includes(s) ? slots.filter((x) => x !== s) : [...slots, s]);
+                    edit({ slots: slots.includes(s) ? slots.filter((x) => x !== s) : [...slots, s] });
                     setFormError(null);
-                    setDirty(true);
                   }}
                 />
               ))}
@@ -306,10 +303,7 @@ export const MealPreferenceTab = () => {
                   key={o.label}
                   label={o.label}
                   selected={sex === o.value}
-                  onClick={() => {
-                    setSex(o.value);
-                    setDirty(true);
-                  }}
+                  onClick={() => edit({ sex: o.value })}
                 />
               ))}
             </div>
@@ -321,10 +315,7 @@ export const MealPreferenceTab = () => {
             <input
               id="meal-birth-year"
               value={birthYear}
-              onChange={(e) => {
-                setBirthYear(e.target.value.replace(/\D/g, '').slice(0, 4));
-                setDirty(true);
-              }}
+              onChange={(e) => edit({ birthYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
               inputMode="numeric"
               placeholder="예: 1990"
               className="w-32 rounded-md border bg-background px-3 py-2 text-sm"

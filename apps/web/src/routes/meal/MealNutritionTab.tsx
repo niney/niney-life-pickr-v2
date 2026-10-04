@@ -59,7 +59,8 @@ const adviceSourceLabel = (advice: MealNutritionAdviceType): string =>
 
 export const MealNutritionTab = () => {
   const [days, setDays] = useState<(typeof PERIODS)[number]>(14);
-  const analysis = useMealNutrition(days);
+  // 기간을 바꾸는 동안 이전 기간 결과를 흐리게 둔다 — 로딩으로 바꾸면 긴 목록이 접혔다 펴지며 화면이 튄다.
+  const analysis = useMealNutrition(days, true, { keepPrevious: true });
 
   // 데스크톱은 점검과 조언을 나란히 — 조언(이 탭의 결론)이 점검 목록 아래(1,440px)로 밀리지 않게.
   return (
@@ -102,7 +103,7 @@ export const MealNutritionTab = () => {
               </Button>
             </div>
           ) : (
-            <NutritionAnalysisView data={analysis.data} />
+            <NutritionAnalysisView data={analysis.data} dim={analysis.isPlaceholderData} />
           )}
         </CardContent>
       </Card>
@@ -112,10 +113,11 @@ export const MealNutritionTab = () => {
   );
 };
 
-const NutritionAnalysisView = ({ data }: { data: MealNutritionAnalysisType }) => {
+// dim: 기간 전환 중 이전 기간 결과를 보여 주는 동안(재조회가 끝나면 풀린다).
+const NutritionAnalysisView = ({ data, dim }: { data: MealNutritionAnalysisType; dim?: boolean }) => {
   if (data.status === 'insufficient') {
     return (
-      <div className="space-y-3 rounded-lg border border-dashed p-5 text-sm">
+      <div className={cn('space-y-3 rounded-lg border border-dashed p-5 text-sm', dim && 'opacity-60')}>
         <p>{data.insufficientReason ?? '기록이 더 쌓이면 볼 수 있어요.'}</p>
         <Button asChild size="sm" variant="outline">
           <Link to="/me/meals/new">기록하러 가기</Link>
@@ -127,7 +129,7 @@ const NutritionAnalysisView = ({ data }: { data: MealNutritionAnalysisType }) =>
     (a, b) => MEAL_NUTRIENT_STATUS_ORDER[a.status] - MEAL_NUTRIENT_STATUS_ORDER[b.status],
   );
   return (
-    <div className="space-y-4">
+    <div className={cn('space-y-4', dim && 'opacity-60')}>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <span>
           최근 {data.days}일 중 <b>{data.analyzedDays}일</b> · 끼니 {data.mealCount}개

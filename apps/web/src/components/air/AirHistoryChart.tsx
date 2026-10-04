@@ -1,11 +1,10 @@
 import {
-  useEffect,
+  useCallback,
   useId,
-  useRef,
   useState,
   type KeyboardEvent,
   type PointerEvent,
-  type RefObject,
+  type RefCallback,
 } from 'react';
 import type { AirHistoryPointType } from '@repo/api-contract';
 import {
@@ -46,14 +45,13 @@ interface Props {
   dim?: boolean;
 }
 
-// 컨테이너 실측 폭 — SVG 를 픽셀 단위로 그려 글자가 늘어나지 않게 한다. ResizeObserver
-// 는 외부 시스템이라 useEffect 가 맞는 자리.
-const useElementWidth = (): [RefObject<HTMLDivElement | null>, number] => {
-  const ref = useRef<HTMLDivElement | null>(null);
+// 컨테이너 실측 폭 — SVG 를 픽셀 단위로 그려 글자가 늘어나지 않게 한다. 요소가 붙는 순간(ref 콜백) 재고
+// ResizeObserver 로 따라간다. 마운트 때 한 번만 보는 effect 였을 때는, 빈 시계열로 먼저 마운트돼 이 요소가
+// 아직 없으면 뒤에 데이터가 와도 관찰이 시작되지 않아 폭이 0(→ 최소 폭으로 그려 늘어남)에 머물렀다.
+const useElementWidth = (): [RefCallback<HTMLDivElement>, number] => {
   const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return undefined;
     const update = () => setWidth(el.clientWidth);
     update();
     const ro = new ResizeObserver(update);
@@ -194,7 +192,9 @@ export const AirHistoryChart = ({ points, unit, metric, todayYmd, dim }: Props) 
           aria-label={`${series.map((s) => s.label).join('·')} ${unit === 'hour' ? '시간별' : '일별'} 추이 (${n}개 지점)`}
           aria-describedby={hovered ? tooltipId : undefined}
           tabIndex={0}
-          className="block touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-md"
+          // touch-pan-y: 세로로 미는 건 페이지 스크롤로 넘기고 가로로 긋는 것만 값 읽기(pointermove)로 받는다 —
+          // touch-none 이면 차트 위에서 시작한 스와이프로 페이지가 스크롤되지 않았다.
+          className="block touch-pan-y select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-md"
           onPointerMove={onMove}
           onPointerLeave={() => setHover(null)}
           onKeyDown={onKey}

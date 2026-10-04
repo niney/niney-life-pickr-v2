@@ -127,9 +127,16 @@ export const WeatherPage = () => {
   // 저장한 내 위치(대기정보·상단바 칩과 공유, 로그인 서버/게스트 로컬).
   const airLocation = useAirLocation();
   const saved = airLocation.location;
+  const pParam = searchParams.get('p');
+  const llParam = searchParams.get('ll');
 
   // URL 이 유일한 진실 — 없으면 저장 위치, 그것도 없으면 서울.
-  const loc = resolveLocation(searchParams.get('p'), searchParams.get('ll'), saved);
+  const loc = resolveLocation(pParam, llParam, saved);
+  // 저장 위치를 쓸 차례인데(URL 에 지점·좌표 없음) 로그인 사용자의 저장 위치 조회가 아직 안 끝났다 — 서울로 먼저
+  // 조회했다가 저장 지점으로 다시 받지 않게, 지점이 정해질 때까지 지점에 딸린 조회를 미룬다. 게스트는 저장 위치가
+  // 로컬이라 기다림이 없다.
+  const waitingSaved = airLocation.isLoading && !pParam && parseLatLngParam(llParam) === null;
+  const target = waitingSaved ? null : loc;
   // 지금 보는 지점이 저장 위치와 같은가(좌표 근사 ≈50m) — 저장 버튼/해제 분기.
   const savedHere =
     saved !== null && Math.abs(saved.lat - loc.lat) < 0.0005 && Math.abs(saved.lng - loc.lng) < 0.0005;
@@ -142,15 +149,15 @@ export const WeatherPage = () => {
   const [outlookScope, setOutlookScope] = useState<OutlookScope>('region');
   const [locating, setLocating] = useState<'idle' | 'pending' | 'denied' | 'timeout' | 'unavailable'>('idle');
 
-  // ── 조회 ──
-  const nowcastQ = useWeatherNowcast(loc.nx, loc.ny);
+  // ── 조회 ── (target 이 null 인 동안 — 저장 위치 대기 — 지점에 딸린 조회는 비활성)
+  const nowcastQ = useWeatherNowcast(target?.nx ?? null, target?.ny ?? null);
   // AWS 매분 관측(API허브) — 가장 가까운 관측소 2곳. 서버 키가 없으면 enabled=false 로 조용히 생략.
-  const awsQ = useWeatherAws(loc.lat, loc.lng, { limit: 2, radius: 15_000 });
-  const forecastQ = useWeatherForecast(loc.nx, loc.ny);
-  const midQ = useWeatherMid(landRegId, loc.place.taRegId, stnId);
+  const awsQ = useWeatherAws(target?.lat ?? null, target?.lng ?? null, { limit: 2, radius: 15_000 });
+  const forecastQ = useWeatherForecast(target?.nx ?? null, target?.ny ?? null);
+  const midQ = useWeatherMid(target ? landRegId : null, loc.place.taRegId, stnId);
   // 전국 전망은 토글했을 때만(같은 육상/기온 + stn=108 — 서버 캐시 키가 달라 업스트림 2콜 추가).
   const nationQ = useWeatherMid(outlookScope === 'nation' ? landRegId : null, loc.place.taRegId, WEATHER_MID_NATION_STN_ID);
-  const seaQ = useWeatherMidSea(seaRegId);
+  const seaQ = useWeatherMidSea(target ? seaRegId : null);
   const versionsQ = useWeatherVersions();
 
   const refreshAll = () => queryClient.invalidateQueries({ queryKey: ['weather'] });
@@ -201,18 +208,34 @@ export const WeatherPage = () => {
   const outlookActive = outlookScope === 'nation' ? nationQ : midQ;
   const sidoPlaces = weatherPlacesBySido(loc.place.sido);
 
+  const pageHead = (
+    <div>
+      <h1 className="text-2xl font-bold tracking-tight">날씨</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        기상청 단기예보·중기예보 API 두 개로 보여줄 수 있는 것들 — 지금 실황과 6시간, 3일 시간별, 열흘, 중기전망,
+        해상예보, 발표 정보.
+      </p>
+    </div>
+  );
+
+  // 어느 지점으로 열지 아직 모른다 — 서울 화면을 잠깐 보였다 바꾸지 않고 머리와 로딩만 둔다.
+  if (waitingSaved) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+        <div className="flex flex-col gap-5">
+          <header className="flex flex-col gap-3">{pageHead}</header>
+          <AirStateBlock kind="loading" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
       <div className="flex flex-col gap-5">
         {/* 머리 + 지점 컨트롤 */}
         <header className="flex flex-col gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">날씨</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              기상청 단기예보·중기예보 API 두 개로 보여줄 수 있는 것들 — 지금 실황과 6시간, 3일 시간별, 열흘, 중기전망,
-              해상예보, 발표 정보.
-            </p>
-          </div>
+          {pageHead}
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-sm">
               <span className="text-xs text-muted-foreground">시도</span>

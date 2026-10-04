@@ -204,6 +204,46 @@ describe('MealEntryFormPage', () => {
     expect(useMealDraftStore.getState().eatenDate).toBe('');
   });
 
+  // 회귀: 키 입력마다 자동완성 요청이 나갔다("김치찌개" 하나에 여섯 번, 절반은 한글 조합 중간 상태).
+  it('자동완성 — 타이핑이 멈춘 뒤 한 번만 묻고, 조합 중인 끝 낱자모는 떼고 묻는다', async () => {
+    const asked: (string | null)[] = [];
+    server.use(
+      http.get(FOOD_SEARCH_URL, ({ request }) => {
+        asked.push(new URL(request.url).searchParams.get('q'));
+        return HttpResponse.json({
+          items: [
+            {
+              id: 'f1',
+              name: '김치찌개',
+              repName: null,
+              dishType: 'stew',
+              mainIngredient: 'pork',
+              cuisine: 'korean',
+              popularity: 10,
+            },
+          ],
+        });
+      }),
+    );
+    renderAt('/me/meals/new');
+
+    const name = await screen.findByLabelText('음식 이름');
+    fireEvent.focus(name);
+    fireEvent.change(name, { target: { value: '김ㅊ' } });
+    fireEvent.change(name, { target: { value: '김치' } });
+    fireEvent.change(name, { target: { value: '김치ㅉ' } });
+    expect(await screen.findByRole('option', { name: /김치찌개/ })).toBeInTheDocument();
+    // 중간 입력('김ㅊ', '김치')으로는 묻지 않고, 마지막 입력('김치ㅉ')은 끝 낱자모를 뗀 '김치'로 한 번만.
+    expect(asked).toEqual(['김치']);
+
+    fireEvent.change(name, { target: { value: '김치찌' } });
+    await waitFor(() => expect(asked).toEqual(['김치', '김치찌']));
+
+    // 입력을 지우면 디바운스를 기다리지 않고 목록이 바로 닫힌다.
+    fireEvent.change(name, { target: { value: '' } });
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+  });
+
   it('빠른 추가 — 고른 끼니로 자주 먹는 음식을 받아, 누르면 빈 첫 줄을 채우고 다시 누르면 뺀다', async () => {
     const slots: (string | null)[] = [];
     let body: { items: Array<Record<string, unknown>> } | null = null;

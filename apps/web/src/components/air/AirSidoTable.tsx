@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import type { AirMeasureItemType } from '@repo/api-contract';
 import { airPollutantMeta, formatAirValue, type AirGradeLevel, type AirPollutant } from '@repo/utils';
@@ -28,6 +28,8 @@ const VALUE_COLS: Array<{ key: Exclude<AirPollutant, 'khai'>; grade: (m: AirMeas
   { key: 'so2', grade: (m) => m.so2Grade },
 ];
 const PAGE = 50;
+// 측정소명 가나다순 — localeCompare(…, 'ko') 와 같은 순서, 비교기는 한 번만 만든다.
+const KO_COLLATOR = new Intl.Collator('ko');
 
 const mean = (xs: Array<number | null>): number | null => {
   const v = xs.filter((x): x is number => x !== null);
@@ -43,32 +45,45 @@ export const AirSidoTable = ({ items, selectedStation, onSelectStation, dim }: P
   const [desc, setDesc] = useState(true);
   const [limit, setLimit] = useState(PAGE);
 
-  const mangs = [...new Set(items.map((m) => m.mangName ?? '기타'))];
-  const filtered = mang === '전체' ? items : items.filter((m) => (m.mangName ?? '기타') === mang);
-
-  const sorted = [...filtered].sort((a, b) => {
-    if (sortKey === 'name') {
-      const c = a.stationName.localeCompare(b.stationName, 'ko');
-      return desc ? -c : c;
+  // 아래 집계·정렬은 '전국'(673곳)에서도 페이지가 다시 그려질 때마다 돌지 않게 입력이 바뀔 때만 다시 한다
+  // (이 표는 대기 페이지의 어느 조회 상태가 바뀌어도 함께 다시 그려진다).
+  const { mangs, mangCounts, avgPm10, avgPm25, badCount, flaggedCount, worst } = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of items) {
+      const key = m.mangName ?? '기타';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    const av = a[sortKey];
-    const bv = b[sortKey];
-    // 결측은 정렬 방향과 무관하게 항상 뒤로.
-    if (av === null && bv === null) return 0;
-    if (av === null) return 1;
-    if (bv === null) return -1;
-    return desc ? bv - av : av - bv;
-  });
-  const visible = sorted.slice(0, limit);
+    return {
+      mangs: [...counts.keys()],
+      mangCounts: counts,
+      avgPm10: mean(items.map((m) => m.pm10)),
+      avgPm25: mean(items.map((m) => m.pm25)),
+      badCount: items.filter((m) => (m.khaiGrade ?? 0) >= 3).length,
+      flaggedCount: items.filter(hasFlag).length,
+      worst: items.reduce<AirMeasureItemType | null>(
+        (acc, m) => (m.khai !== null && (acc === null || (acc.khai ?? -1) < m.khai) ? m : acc),
+        null,
+      ),
+    };
+  }, [items]);
 
-  const avgPm10 = mean(items.map((m) => m.pm10));
-  const avgPm25 = mean(items.map((m) => m.pm25));
-  const badCount = items.filter((m) => (m.khaiGrade ?? 0) >= 3).length;
-  const flaggedCount = items.filter(hasFlag).length;
-  const worst = items.reduce<AirMeasureItemType | null>(
-    (acc, m) => (m.khai !== null && (acc === null || (acc.khai ?? -1) < m.khai) ? m : acc),
-    null,
-  );
+  const sorted = useMemo(() => {
+    const filtered = mang === '전체' ? items : items.filter((m) => (m.mangName ?? '기타') === mang);
+    return [...filtered].sort((a, b) => {
+      if (sortKey === 'name') {
+        const c = KO_COLLATOR.compare(a.stationName, b.stationName);
+        return desc ? -c : c;
+      }
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      // 결측은 정렬 방향과 무관하게 항상 뒤로.
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      return desc ? bv - av : av - bv;
+    });
+  }, [items, mang, sortKey, desc]);
+  const visible = sorted.slice(0, limit);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) setDesc((d) => !d);
@@ -112,7 +127,7 @@ export const AirSidoTable = ({ items, selectedStation, onSelectStation, dim }: P
           <span className="text-muted-foreground">측정망</span>
           {['전체', ...mangs].map((mg) => {
             const active = mg === mang;
-            const count = mg === '전체' ? items.length : items.filter((m) => (m.mangName ?? '기타') === mg).length;
+            const count = mg === '전체' ? items.length : (mangCounts.get(mg) ?? 0);
             return (
               <button
                 key={mg}
