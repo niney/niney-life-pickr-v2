@@ -12,7 +12,7 @@ import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
-import Feature from 'ol/Feature';
+import Feature, { type FeatureLike } from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import LineString from 'ol/geom/LineString';
 import { fromLonLat, toLonLat } from 'ol/proj';
@@ -29,6 +29,8 @@ import {
 } from '@repo/utils';
 import { useThemeStore, type ThemeMode } from '~/stores/theme';
 import { MapLayerControl } from './MapLayerControl';
+import { markerIcon, type IconAnchor } from './mapIconRaster';
+import { MARKER_PROP, syncMarkerFeatures } from './mapMarkerSync';
 
 export interface MapMarker {
   id: string;
@@ -44,7 +46,9 @@ export interface MapMarker {
   // 식당 외 마커(버스 정류장 등)용 아이콘 data URL 직접 지정. 지정 시
   // variant/categoryKey 빌더 대신 사용. 비선택/선택 이미지는 식당 마커와
   // 동일 규격(26×26 원 / 32×48 핀)이어야 라벨 offset·축소 스케일이 유효.
-  icon?: { src: string; selectedSrc: string };
+  // perMarker: 마커마다 그림이 다른 아이콘(가격·건수를 새긴 배지)이면 true — 사전 래스터화(mapIconRaster)에서
+  // 뺀다. 장마다 canvas 를 쥐면 수천 장이 되기 때문. 여러 마커가 같이 쓰는 아이콘은 지정하지 않는다.
+  icon?: { src: string; selectedSrc: string; perMarker?: boolean };
   // 줌에 따른 축소(SMALL_ICON_SCALE)·라벨 숨김을 건너뛰고 아이콘을 원본 크기로 그린다 — 크기
   // 자체가 의미인 작은 점(12px)·숫자를 새긴 집계 버블용(일상지도). 선택 시 핀 전환은 동일.
   fixedScale?: boolean;
@@ -133,6 +137,39 @@ const projectPathS = (pts: XY[], cum: number[], p: XY): { s: number; dist: numbe
     }
   }
   return { s: bestS, dist: bestD };
+};
+
+// 차량 한 대의 진행 중 tween — 웨이포인트(pts)와 누적 길이(cum) 위를 s0 에서 끝까지 dur 동안.
+interface VehicleAnim {
+  pts: XY[];
+  cum: number[];
+  s0: number;
+  start: number;
+  dur: number;
+}
+
+// 차량 좌표를 다시 쓰는 최소 간격(ms). 좌표를 바꾸면 소스 change → 타일·노선·정류장까지 지도 전체
+// 재그리기가 따라오는데, tween 은 폴링 주기 대부분(버스 14초/15초) 동안 돈다. 버스 5m/s 는 z15 에서
+// 프레임당 0.02px 라 매 프레임 다시 그릴 이유가 없다 — 화면에서 가장 빠른 차량이 VEHICLE_STEP_PX 만큼
+// 움직일 시간만큼 건너뛴다(확대하면 해상도가 작아져 자동으로 촘촘해진다).
+const VEHICLE_STEP_PX = 0.5;
+const VEHICLE_APPLY_MIN_MS = 16;
+const VEHICLE_APPLY_MAX_MS = 250;
+const vehicleApplyIntervalMs = (
+  anims: ReadonlyMap<string, VehicleAnim>,
+  resolution: number | undefined,
+): number => {
+  if (!resolution || resolution <= 0) return VEHICLE_APPLY_MIN_MS;
+  let maxSpeed = 0; // 지도 단위(≈m)/ms
+  for (const a of anims.values()) {
+    const speed = a.dur > 0 ? (a.cum[a.cum.length - 1]! - a.s0) / a.dur : 0;
+    if (speed > maxSpeed) maxSpeed = speed;
+  }
+  if (maxSpeed <= 0) return VEHICLE_APPLY_MAX_MS;
+  return Math.min(
+    VEHICLE_APPLY_MAX_MS,
+    Math.max(VEHICLE_APPLY_MIN_MS, (VEHICLE_STEP_PX * resolution) / maxSpeed),
+  );
 };
 
 // 면(폴리곤) 오버레이 — 시군구 경계 choropleth 처럼 "배경" 으로 까는 면들. 호출자가 GeoJSON 을
@@ -237,6 +274,8 @@ interface Props {
 }
 
 const DEFAULT_ZOOM = 15;
+// 겸표시 미지정일 때의 빈 배열 — 매 렌더 새 [] 를 만들지 않는다.
+const EMPTY_MARKERS: readonly MapMarker[] = [];
 
 // 아래쪽 inset(px — 예: 바텀시트가 덮는 높이)만큼 지도 중심을 남쪽으로 밀어, 목표 지점이 "보이는
 // 영역" 의 세로 가운데에 오게 한다. inset 이 없으면 그대로. (지도 중심 = 뷰포트 중심이라 inset/2 만큼.)
@@ -279,9 +318,25 @@ const LABEL_VISIBLE_ZOOM = 14;
 // LABEL_VISIBLE_ZOOM 미만에서 아이콘 축소 배율. 26×26 → ~14px. 작아질수록
 // 도심 밀집 지역에서도 핀 충돌 거의 없음.
 const SMALL_ICON_SCALE = 0.55;
+// 아이콘 기준점 — 비선택(원·점·배지)은 그림 중앙, 선택(핀·꼬리 배지)은 아래 꼭지점.
+const CENTER_ANCHOR: IconAnchor = [0.5, 0.5];
+const PIN_ANCHOR: IconAnchor = [0.5, 1];
 // 마커 Style 캐시(makeMarkerStyle 참조) — 같은 입력이면 같은 인스턴스를 재사용.
 const markerStyleCache = new Map<string, Style>();
 const MARKER_STYLE_CACHE_MAX = 6000;
+// 아이콘 data URL → 짧은 번호. 캐시 키에 data URL(장당 0.5~1.5KB)을 그대로 이어 붙이면 style function 이
+// 불릴 때마다 긴 문자열을 새로 만들고 해시한다(6,000개에 12ms 실측). 같은 문자열 인스턴스로 다시 조회하면
+// 엔진이 해시를 재사용하므로 번호 조회는 사실상 상수 시간이다. 캐시를 비울 때 같이 비운다.
+const iconSrcIds = new Map<string, number>();
+const iconSrcId = (src: string | undefined): number => {
+  if (!src) return 0;
+  let id = iconSrcIds.get(src);
+  if (id === undefined) {
+    id = iconSrcIds.size + 1;
+    iconSrcIds.set(src, id);
+  }
+  return id;
+};
 
 // ── 지도 인스턴스 풀 ─────────────────────────────────────────────────────────
 // 탭 전환(버스↔지하철)은 라우트 언마운트라 지도가 매번 재생성 → 타일 재로드
@@ -303,6 +358,19 @@ interface PooledMap {
   userPickedLayer: boolean;
 }
 const mapPool = new Map<string, PooledMap>();
+// 풀 상한 — 지도마다 OL Map 과 타일 캐시(기본 512장)가 딸려 있어, 들른 지도 페이지를 전부 쥐고 있으면
+// 탭을 닫을 때까지 메모리가 쌓인다(키 7종). 최근에 쓴 것만 남기고 가장 오래된 것부터 dispose 한다.
+// Map 은 삽입 순서를 지키고 take 는 delete, 반납은 set 이라 첫 키가 가장 오래된 것이다.
+const MAP_POOL_MAX = 3;
+const releaseToPool = (key: string, entry: PooledMap): void => {
+  mapPool.set(key, entry);
+  while (mapPool.size > MAP_POOL_MAX) {
+    const oldest = mapPool.keys().next().value;
+    if (oldest === undefined) break;
+    mapPool.get(oldest)?.map.dispose();
+    mapPool.delete(oldest);
+  }
+};
 
 // vworld WMTS 타일을 OpenLayers 가 직접 받아 그리는 저레벨 캔버스. 단일/다중
 // 마커 모두 처리 — 마커 배열만 넘겨주면 된다. 좌표 없는 상태 / 키 없는 상태
@@ -354,10 +422,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // feature 를 재사용하고 geometry 만 rAF 로 갱신한다(프레임 단위 clear 금지).
   const vehicleSourceRef = useRef<VectorSource | null>(null);
   const vehicleFeaturesRef = useRef(new Map<string, Feature>());
-  const vehicleAnimRef = useRef(
-    new Map<string, { pts: XY[]; cum: number[]; s0: number; start: number; dur: number }>(),
-  );
+  const vehicleAnimRef = useRef(new Map<string, VehicleAnim>());
   const vehicleRafRef = useRef<number | null>(null);
+  // 차량 좌표를 마지막으로 다시 쓴 시각 — tick 이 vehicleApplyIntervalMs 만큼 건너뛰는 기준.
+  const vehicleLastApplyRef = useRef(0);
   // 방향 화살표 — 알약 feature 와 Point geometry 를 공유해(이동 자동 동기)
   // 회전만 Icon 인스턴스를 직접 돌린다. src 는 재생성 판별용.
   const vehicleArrowsRef = useRef(
@@ -406,6 +474,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const selectedIdRef = useRef(selectedMarkerId);
   const prevSelectedIdRef = useRef(selectedMarkerId);
   const featureByIdRef = useRef(new Map<string, Feature>());
+  // 겸표시 마커의 id → feature 색인, 그리고 두 색인이 어느 소스 기준인지(소스가 새로 만들어지면 버린다).
+  const overlayByIdRef = useRef(new Map<string, Feature>());
+  const markerSyncSourceRef = useRef<VectorSource | null>(null);
+  const overlaySyncSourceRef = useRef<VectorSource | null>(null);
   // 사용자 인터랙션이 시작된 적 있는지. 처음 렌더 직후 발생하는 자동 moveend
   // 이벤트(setCenter/animate 호출) 는 무시하기 위함.
   const userInteractedRef = useRef(false);
@@ -581,10 +653,29 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     vehicleAnimRef.current.clear();
     vehicleArrowsRef.current.clear();
 
+    // 마커 레이어 공용 style function — feature 가 들고 있는 MapMarker(MARKER_PROP)와 선택 id·배경
+    // 밝기를 평가 시점에 읽는다. 스타일은 function 이라 줌 변화 시 OL 이 자동 재평가(라벨 on/off)하고,
+    // feature 마다 클로저를 따로 만들지 않는다. 겸표시는 선택 개념이 없어 항상 비선택 스타일.
+    const markerStyleOf = (selectable: boolean) => (feature: FeatureLike, resolution: number) => {
+      const m = feature.get(MARKER_PROP) as MapMarker | undefined;
+      if (!m) return undefined;
+      const zoom = mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
+      return makeMarkerStyle(
+        m.label,
+        selectable && selectedIdRef.current === m.id,
+        m.variant ?? 'primary',
+        m.categoryKey ?? null,
+        zoom,
+        isDarkBaseRef.current,
+        m.icon,
+        m.fixedScale ?? false,
+      );
+    };
+
     const areaLayer = new VectorLayer({ source: areaSource });
     const routeLineLayer = new VectorLayer({ source: routeLineSource });
-    const overlayMarkerLayer = new VectorLayer({ source: overlayMarkerSource });
-    const markerLayer = new VectorLayer({ source: vectorSource });
+    const overlayMarkerLayer = new VectorLayer({ source: overlayMarkerSource, style: markerStyleOf(false) });
+    const markerLayer = new VectorLayer({ source: vectorSource, style: markerStyleOf(true) });
     const vehicleLayer = new VectorLayer({ source: vehicleSource });
     map.addLayer(areaLayer);
     map.addLayer(routeLineLayer);
@@ -723,7 +814,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         if (mapPool.has(poolKey)) {
           map.dispose();
         } else {
-          mapPool.set(poolKey, {
+          releaseToPool(poolKey, {
             map,
             tileSource,
             apiKey,
@@ -762,91 +853,59 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     tileSourceRef.current?.setUrl(buildVworldTileUrl(apiKey, layer));
     // 라벨 색을 새 배경에 맞게 — feature 재생성 없이 style function 재평가만.
     vectorSourceRef.current?.changed();
+    overlayMarkerSourceRef.current?.changed();
   }, [layer, apiKey]);
 
-  // 마커 갱신 — markers 가 바뀔 때만 vectorSource 를 새로 칠한다 (map 재생성 X).
-  // 선택 상태는 deps 에 넣지 않는다: style function 이 selectedIdRef 에서 읽으므로
-  // 선택만 바뀔 때 전체 feature 재생성 + 아이콘 재디코드(N개)를 막는다. 스타일은
-  // function 으로 둬 줌 변화 시 OL 이 자동 재평가(라벨 on/off).
+  // 마커 갱신 — markers 가 바뀌면 id 기준 차분으로 소스에 반영한다(syncMarkerFeatures). 호출자가
+  // 내용이 같은 새 배열을 넘겨도(쿼리 재조회·라벨 대상 변경·부모 리렌더) feature 를 다시 만들지 않고,
+  // 달라진 것만 추가·제거·다시 칠한다. 선택 상태는 deps 에 넣지 않는다: 레이어 style function 이
+  // selectedIdRef 에서 읽으므로 선택만 바뀔 때는 아래 선택 effect 가 feature 2개만 다시 칠한다.
+  // apiKey 는 map-create effect 가 소스를 새로 만들었을 때 다시 채우기 위한 의존(면 레이어와 같은 이유).
   useEffect(() => {
     const src = vectorSourceRef.current;
     if (!src) return;
-    src.clear();
-    const byId = new Map<string, Feature>();
-    for (const m of markers) {
-      const f = new Feature({ geometry: new Point(fromLonLat([m.lng, m.lat])) });
-      f.set('markerId', m.id);
-      const variant = m.variant ?? 'primary';
-      const categoryKey = m.categoryKey ?? null;
-      f.setStyle((_feature, resolution) => {
-        const zoom =
-          mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
-        const isSelected = selectedIdRef.current === m.id;
-        return makeMarkerStyle(
-          m.label,
-          isSelected,
-          variant,
-          categoryKey,
-          zoom,
-          isDarkBaseRef.current,
-          m.icon,
-          m.fixedScale ?? false,
-        );
-      });
-      src.addFeature(f);
-      byId.set(m.id, f);
+    if (markerSyncSourceRef.current !== src) {
+      // 소스가 새로 만들어졌다(재마운트·키 변경) — 이전 소스의 feature 색인은 버린다.
+      markerSyncSourceRef.current = src;
+      featureByIdRef.current = new Map();
     }
-    featureByIdRef.current = byId;
-  }, [markers]);
+    syncMarkerFeatures(src, featureByIdRef.current, markers);
+  }, [markers, apiKey]);
 
-  // 겸표시 마커 갱신 — overlayMarkers 가 바뀔 때만 전용 소스를 다시 칠한다. 별도
-  // 소스라 fitToMarkers extent 에 안 들어간다(겸표시가 화면을 넓히지 않음). 선택
-  // 개념이 없어(상대 도메인 prefix id 라 selectedMarkerId 와 안 겹침) 항상 비선택
-  // 스타일이고, label 미지정이라 라벨도 없다. clear 로 이전 겸표시를 확실히 제거해
-  // 주변 모드 이탈/토글 off 시 잔상이 남지 않는다.
+  // 겸표시 마커 갱신 — 별도 소스라 fitToMarkers extent 에 안 들어간다(겸표시가 화면을 넓히지
+  // 않음). 선택 개념이 없어(상대 도메인 prefix id 라 selectedMarkerId 와 안 겹침) 레이어가 항상
+  // 비선택 스타일로 그린다. 마커와 같은 차분 동기화 — 빠진 겸표시는 제거돼 주변 모드 이탈/토글 off
+  // 시 잔상이 남지 않는다.
   useEffect(() => {
     const src = overlayMarkerSourceRef.current;
     if (!src) return;
-    src.clear();
-    for (const m of overlayMarkers ?? []) {
-      const f = new Feature({ geometry: new Point(fromLonLat([m.lng, m.lat])) });
-      f.set('markerId', m.id);
-      const variant = m.variant ?? 'primary';
-      const categoryKey = m.categoryKey ?? null;
-      f.setStyle((_feature, resolution) => {
-        const zoom =
-          mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
-        return makeMarkerStyle(
-          m.label,
-          false,
-          variant,
-          categoryKey,
-          zoom,
-          isDarkBaseRef.current,
-          m.icon,
-          m.fixedScale ?? false,
-        );
-      });
-      src.addFeature(f);
+    if (overlaySyncSourceRef.current !== src) {
+      overlaySyncSourceRef.current = src;
+      overlayByIdRef.current = new Map();
     }
-  }, [overlayMarkers]);
+    syncMarkerFeatures(src, overlayByIdRef.current, overlayMarkers ?? EMPTY_MARKERS);
+  }, [overlayMarkers, apiKey]);
 
   // 면 오버레이 갱신 — areas 가 바뀔 때만(배경 토글·메트릭 전환·선택 변경) 전용 소스를 다시 칠한다.
   // 250개 clone + 스타일은 수 ms. 소스가 아직 없으면(map 생성 전) 다음 map-create 가 아니라 이 effect 가
   // areas 변경으로 다시 돌 때 그린다 — 그래서 map-create 직후에도 areas 를 한 번 더 반영한다(아래 deps).
+  // 비우기·채우기는 한 번씩만 알린다(clear(true) + addFeatures) — 면마다 remove/add 이벤트와 공간 인덱스
+  // 갱신을 따로 내지 않는다.
   useEffect(() => {
     const src = areaSourceRef.current;
     if (!src) return;
-    src.clear();
+    src.clear(true);
     if (!areas) return;
+    const next: Feature[] = [];
     for (const f of areas.features) {
       const style = areas.styleOf(f);
       if (!style) continue;
       const c = f.clone();
       c.set('areaKey', areas.keyOf(f));
       c.setStyle(style);
-      src.addFeature(c);
+      next.push(c);
     }
+    src.addFeatures(next);
   }, [areas, apiKey]);
 
   // 노선 형상 갱신 — routeLine 이 바뀔 때만 전용 소스를 다시 칠한다. 점이 2개
@@ -1005,6 +1064,17 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     if (anims.size > 0 && vehicleRafRef.current == null) {
       const tick = () => {
         const t = performance.now();
+        // 따라가기 중이 아니면 눈에 보일 만큼 움직였을 때만 좌표를 다시 쓴다(위 vehicleApplyIntervalMs).
+        // 따라가기는 카메라가 매 프레임 차량을 쫓아야 해서 건너뛰지 않는다.
+        if (
+          !followIdRef.current &&
+          t - vehicleLastApplyRef.current <
+            vehicleApplyIntervalMs(anims, mapRef.current?.getView().getResolution())
+        ) {
+          vehicleRafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        vehicleLastApplyRef.current = t;
         let active = false;
         for (const [id, a] of anims) {
           const f = feats.get(id);
@@ -1174,26 +1244,30 @@ const makeMarkerStyle = (
   // 같은 Style 인스턴스를 돌려준다(OL 권장 패턴 — Style 은 feature 간 공유해도 안전). 라벨
   // 문자열까지 키에 넣으므로 항목 수만큼만 불어나고, 상한을 넘으면 통째로 비운다.
   const showLabel = !!label && !compact;
-  const cacheKey = `${icon?.src ?? ''}|${icon?.selectedSrc ?? ''}|${categoryKey ?? ''}|${variant}|${selected ? 1 : 0}|${compact ? 1 : 0}|${showLabel ? label : ''}|${darkBg ? 1 : 0}`;
+  // 아이콘은 data URL 대신 번호(iconSrcId)로 — 긴 문자열을 호출마다 이어 붙이지 않는다.
+  const cacheKey = `${iconSrcId(icon?.src)}|${iconSrcId(icon?.selectedSrc)}|${categoryKey ?? ''}|${variant}|${selected ? 1 : 0}|${compact ? 1 : 0}|${showLabel ? label : ''}|${darkBg ? 1 : 0}`;
   const cached = markerStyleCache.get(cacheKey);
   if (cached) return cached;
   // 어두운 베이스맵(야간/위성) 위에서는 글자/외곽선을 반전 — 흰 글자 + 어두운
   // 외곽선이라야 가독성이 산다. 밝은 맵에서는 기존 어두운 글자 + 흰 외곽선.
   const labelFill = darkBg ? '#f8fafc' : '#0f172a';
   const labelStroke = darkBg ? '#0f172a' : '#fff';
+  const src = icon
+    ? selected
+      ? icon.selectedSrc
+      : icon.src
+    : buildRestaurantMarkerDataUrl(categoryKey, selected, variant);
+  const scale = compact ? SMALL_ICON_SCALE : 1;
+  const anchor = selected ? PIN_ANCHOR : CENTER_ANCHOR;
   const style = new Style({
     // 선택 마커는 다른 마커 위로 — feature 들이 겹칠 때 강조 핀이 가려지지 않게
     // 렌더 순서를 끌어올린다 (OL 은 zIndex 큰 Style 을 나중에=위에 그린다).
     zIndex: selected ? 1000 : 0,
-    image: new Icon({
-      anchor: selected ? [0.5, 1] : [0.5, 0.5],
-      src: icon
-        ? selected
-          ? icon.selectedSrc
-          : icon.src
-        : buildRestaurantMarkerDataUrl(categoryKey, selected, variant),
-      scale: compact ? SMALL_ICON_SCALE : 1,
-    }),
+    // 여러 마커가 같이 쓰는 아이콘은 한 번 구운 canvas 로 그린다(mapIconRaster). 그림이 아직 로드 전이면
+    // 예전과 같은 src 아이콘이 오고, 구울 수 있게 됐을 때 이 Style 을 버려 다음 평가에서 다시 만들게 한다.
+    image: icon?.perMarker
+      ? new Icon({ anchor: [anchor[0], anchor[1]], src, scale })
+      : markerIcon(src, scale, anchor, () => markerStyleCache.delete(cacheKey)),
     text:
       showLabel
         ? new OlText({
@@ -1205,7 +1279,13 @@ const makeMarkerStyle = (
           })
         : undefined,
   });
-  if (markerStyleCache.size >= MARKER_STYLE_CACHE_MAX) markerStyleCache.clear();
+  if (markerStyleCache.size >= MARKER_STYLE_CACHE_MAX) {
+    // 번호표도 같이 비운다 — 캐시가 비었으니 번호가 다시 1부터 매겨져도 옛 키와 부딪힐 일이 없다.
+    // (이 호출의 cacheKey 는 비우기 전 번호로 만든 것이라, 새 번호 체계와 섞이지 않게 저장을 건너뛴다.)
+    markerStyleCache.clear();
+    iconSrcIds.clear();
+    return style;
+  }
   markerStyleCache.set(cacheKey, style);
   return style;
 };

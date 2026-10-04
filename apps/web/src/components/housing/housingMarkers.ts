@@ -42,9 +42,12 @@ const badgeUrl = (kind: BadgeKind, text: string, dealType: HousingDealType, sele
   }
   return url;
 };
+// 가격을 새긴 배지·셀 알약은 마커마다 그림이 다르다 — 사전 래스터화에서 뺀다(perMarker, MapCanvas 참조).
+// 회색 점(EMPTY_ICON)은 여러 단지가 같이 쓰므로 그대로 둔다.
 const badgeIcon = (kind: BadgeKind, text: string, dealType: HousingDealType, flood: HousingFloodLevel) => ({
   src: badgeUrl(kind, text, dealType, false, flood),
   selectedSrc: badgeUrl(kind, text, dealType, true, flood),
+  perMarker: true,
 });
 // 셀 알약은 단지 수 버킷(1~9/10~49/50+)별로만 크기가 달라 대표값으로 키를 줄인다.
 const cellBucketCount = (count: number): number => (count < 10 ? 1 : count < 50 ? 10 : 50);
@@ -103,7 +106,7 @@ export const buildHousingMarkers = (result: HousingPointsResultType | undefined)
     return result.cells.map((c, index) => {
       const text = c.unitPrice !== null ? formatHousingUnitPriceShort(c.unitPrice) : `${c.count}단지`;
       const src = cellUrl(text, c.count, dealType);
-      return { id: `cell:${index}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src }, fixedScale: true };
+      return { id: `cell:${index}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src, perMarker: true }, fixedScale: true };
     });
   }
   return result.items.map((p) => ({

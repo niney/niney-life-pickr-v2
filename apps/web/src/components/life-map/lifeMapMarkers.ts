@@ -66,7 +66,8 @@ export const buildLifeMarkers = (
   if (result.mode === 'cells') {
     return result.cells.map((c, index) => {
       const src = cellIcon(layer, c.count);
-      return { id: `cell:${layer}:${index}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src }, fixedScale: true };
+      // 건수를 새긴 버블이라 셀마다 그림이 다르다 — 사전 래스터화에서 뺀다(perMarker). 점 아이콘은 공유라 그대로.
+      return { id: `cell:${layer}:${index}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src, perMarker: true }, fixedScale: true };
     });
   }
   if (layer === 'cctv') {

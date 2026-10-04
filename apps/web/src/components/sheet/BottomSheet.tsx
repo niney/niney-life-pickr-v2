@@ -236,7 +236,7 @@ export const BottomSheet = ({
     if (snap === 'full' && mode === 'fixed') {
       const t = window.setTimeout(() => {
         if (snapRef.current === 'full') {
-          // scroll 모드로 전환하기 직전(innerContentRef가 언마운트되기 전) 스크롤 상태 저장
+          // scroll 모드로 전환하기 직전(내용 칸이 자체 스크롤을 잃기 전) 스크롤 상태 저장
           if (innerContentRef.current) {
             scrollPosRef.current = innerContentRef.current.scrollTop;
           }
@@ -263,61 +263,58 @@ export const BottomSheet = ({
     </div>
   );
 
-  if (mode === 'fixed') {
-    return (
-      <div
-        className={cn(
-          'pointer-events-none fixed inset-x-0 bottom-0',
-          hidden && 'invisible pointer-events-none',
-        )}
-        style={{ top: `${topOffset}px`, zIndex }}
-      >
-        <div
-          ref={sheetRef}
-          className={cn(
-            'pointer-events-auto absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-2xl border-t bg-background shadow-2xl',
-            !isDragging && 'transition-transform duration-200 ease-out',
-          )}
-          style={{
-            height: `${availableH}px`,
-            transform: `translateY(${translatePx}px)`,
-          }}
-        >
-          {dragHandle}
-          <div
-            ref={innerContentRef}
-            className="flex-1 overflow-y-auto overscroll-contain"
-            // 시트 DOM 높이는 항상 availableH 라 half/peek 에선 하단이 viewport
-            // 아래로 흘러나간다. maxHeight 를 가시 영역(currentH - handle)에
-            // 묶어두면 content 가 그 안에 안 들어갈 때 overflow-y-auto 가 발화해
-            // 사용자가 스크롤로 끝까지 도달 가능. full snap 일 땐 currentH ===
-            // availableH 라 maxHeight = availableH - 48 = flex-1 자연크기와 동일.
-            style={{ maxHeight: `${currentH - 48}px` }}
-            onScroll={handleScroll}
-          >
-            {children}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // mode === 'scroll' : 시트가 normal flow 의 일부 → body 스크롤 → 주소창 minify.
+  // 두 모드는 같은 트리(루트 > 시트 > [핸들 줄, 내용 칸])를 쓰고 클래스·스타일만 바꾼다. 모드마다
+  // 구조가 다르면 children 의 부모·위치가 달라져, 모드가 바뀔 때마다(full 도달 220ms 뒤, full 에서
+  // 끌어내리는 첫 프레임, 상세 진입으로 목록이 peek 될 때) React 가 내용을 통째로 언마운트·재마운트한다 —
+  // 카드 80장이나 상세 전체가 다시 만들어지고 탭의 로컬 상태(필터·펼침)까지 초기화됐다.
+  //   fixed  : 루트가 viewport 에 고정, 시트는 transform 으로 오르내리고 내용 칸이 자체 스크롤.
+  //   scroll : 루트·시트·내용 칸이 normal flow → body 스크롤 → 주소창 minify. 핸들 줄만 sticky.
+  const fixed = mode === 'fixed';
   return (
     <div
       className={cn(
-        'relative bg-background',
+        fixed ? 'pointer-events-none fixed inset-x-0 bottom-0' : 'relative bg-background',
         hidden && 'invisible',
       )}
-      style={{ minHeight: `calc(100dvh - ${topOffset}px)`, zIndex }}
+      style={
+        fixed
+          ? { top: `${topOffset}px`, zIndex }
+          : { minHeight: `calc(100dvh - ${topOffset}px)`, zIndex }
+      }
     >
       <div
-        className="sticky z-10 bg-background"
-        style={{ top: `${topOffset}px` }}
+        ref={sheetRef}
+        className={cn(
+          fixed &&
+            'pointer-events-auto absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-2xl border-t bg-background shadow-2xl',
+          fixed && !isDragging && 'transition-transform duration-200 ease-out',
+        )}
+        style={
+          fixed
+            ? { height: `${availableH}px`, transform: `translateY(${translatePx}px)` }
+            : undefined
+        }
       >
-        {dragHandle}
+        <div
+          className={fixed ? 'shrink-0' : 'sticky z-10 bg-background'}
+          style={fixed ? undefined : { top: `${topOffset}px` }}
+        >
+          {dragHandle}
+        </div>
+        <div
+          ref={innerContentRef}
+          className={fixed ? 'flex-1 overflow-y-auto overscroll-contain' : undefined}
+          // fixed: 시트 DOM 높이는 항상 availableH 라 half/peek 에선 하단이 viewport
+          // 아래로 흘러나간다. maxHeight 를 가시 영역(currentH - handle)에
+          // 묶어두면 content 가 그 안에 안 들어갈 때 overflow-y-auto 가 발화해
+          // 사용자가 스크롤로 끝까지 도달 가능. full snap 일 땐 currentH ===
+          // availableH 라 maxHeight = availableH - 48 = flex-1 자연크기와 동일.
+          style={fixed ? { maxHeight: `${currentH - 48}px` } : undefined}
+          onScroll={handleScroll}
+        >
+          {children}
+        </div>
       </div>
-      {children}
     </div>
   );
 };

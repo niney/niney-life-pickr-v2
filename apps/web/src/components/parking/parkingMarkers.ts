@@ -65,7 +65,8 @@ export const parseParkingMarkerId = (markerId: string): ParsedParkingMarkerId | 
 const cellMarkers = (layer: 'lot' | 'ev', cells: ParkingCellType[]): MapMarker[] =>
   cells.map((c, index) => {
     const src = cellIcon(layer, c.count);
-    return { id: `cell:${layer}:${index}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src }, fixedScale: true };
+    // 건수를 새긴 버블이라 셀마다 그림이 다르다 — 사전 래스터화에서 뺀다(perMarker).
+    return { id: `cell:${layer}:${index}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src, perMarker: true }, fixedScale: true };
   });
 
 // 주차장 — 라벨은 labeledIds(주변 목록 + 선택)만. 실시간 여석이 있으면 라벨에 붙인다.
