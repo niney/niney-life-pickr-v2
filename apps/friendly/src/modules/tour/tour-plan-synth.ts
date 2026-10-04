@@ -133,19 +133,20 @@ export interface PickedPlanSkeleton extends PlanSkeleton {
 }
 const DEFAULT_LEN: Record<PlanDayPos, number> = { only: 4, first: 3, mid: 4, last: 2 };
 
-// 일차 뼈대 고르기 — 비슷한 여행의 뼈대를 먼저, 없으면 지역 전체, 그것도 없으면 기본. 하루 길이는 비슷한 여행의 속도(중앙)에
-// 가까운 것을 앞세우고, 가운데 날이 여럿이면 nth 로 다음 순위를 돌려 써서 날마다 흐름이 달라지게 한다.
-export const pickPlanSkeleton = (pos: PlanDayPos, nth: number, similar: PlanSkeletonSet, region: PlanSkeletonSet): PickedPlanSkeleton => {
-  const target = similar.targetLen[pos] ?? region.targetLen[pos] ?? DEFAULT_LEN[pos];
-  const rank = (xs: PlanSkeleton[]): PlanSkeleton[] =>
-    [...xs].sort((a, b) => Math.abs(a.types.length - target) - Math.abs(b.types.length - target) || b.trips - a.trips || skeletonKey(a.types).localeCompare(skeletonKey(b.types)));
+// 일차 뼈대 고르기 — 하루 길이가 비슷한 여행의 속도(하루 자리 수 중앙)에 가까운 것부터, 같은 길이면 비슷한 여행의 뼈대를 지역
+// 전체보다 앞에, 그다음 여행 수 순. 하나도 없으면 기본 뼈대. 가운데 날이 여럿이면 nth 로 다음 순위를 돌려 써서 날마다 흐름이
+// 달라지게 한다.
+// lenShift(11차) — 속도 입력. 중앙에서 하나 줄이거나 늘린 길이를 목표로 삼는다(그 길이의 실제 뼈대가 있을 때만 달라진다).
+export const pickPlanSkeleton = (pos: PlanDayPos, nth: number, similar: PlanSkeletonSet, region: PlanSkeletonSet, lenShift = 0): PickedPlanSkeleton => {
+  const [lo, hi] = LEN_BOUNDS[pos];
+  const target = clamp((similar.targetLen[pos] ?? region.targetLen[pos] ?? DEFAULT_LEN[pos]) + lenShift, lo, hi);
   const seen = new Set<string>();
   const list: PickedPlanSkeleton[] = [];
   for (const [basis, set] of [
     ['similar', similar],
     ['region', region],
   ] as const) {
-    for (const s of rank(set.byPos[pos])) {
+    for (const s of set.byPos[pos]) {
       const key = skeletonKey(s.types);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -153,6 +154,9 @@ export const pickPlanSkeleton = (pos: PlanDayPos, nth: number, similar: PlanSkel
     }
   }
   if (list.length === 0) return { ...DEFAULT_SKELETON[pos], trips: 0, basis: 'default' };
+  const off = (s: PlanSkeleton): number => Math.abs(s.types.length - target);
+  const rankOf = (b: PlanPatternBasis): number => (b === 'similar' ? 0 : 1);
+  list.sort((a, b) => off(a) - off(b) || rankOf(a.basis) - rankOf(b.basis) || b.trips - a.trips || skeletonKey(a.types).localeCompare(skeletonKey(b.types)));
   return list[nth % list.length]!;
 };
 
@@ -165,6 +169,9 @@ export const pickPlanSkeleton = (pos: PlanDayPos, nth: number, similar: PlanSkel
 export interface PlanLegModel {
   points: Array<{ km: number; min: number }>;
   observed: boolean;
+  // 다른 수단의 모델을 빌려 쓸 때의 보정(대중교통 기록이 모자라면 차 모델 × factor + extra 분).
+  factor?: number;
+  extra?: number;
 }
 const LEG_BUCKET_EDGES = [1, 3, 6, 10, 15, 25, 40, 70] as const;
 const LEG_MIN_SAMPLES = 20;
@@ -211,7 +218,7 @@ export const planLegMin = (model: PlanLegModel, km: number): number => {
       raw = a.min + ((b.min - a.min) * (km - a.km)) / Math.max(0.1, b.km - a.km);
     }
   }
-  return Math.max(5, Math.round(raw / 5) * 5);
+  return Math.max(5, Math.round((raw * (model.factor ?? 1) + (model.extra ?? 0)) / 5) * 5);
 };
 
 // ── 하루 권역 ───────────────────────────────────────────────────────────────────
@@ -247,7 +254,7 @@ export interface PlanCandidate {
   slot: string;
   lat: number;
   lng: number;
-  // 추천 점수(목록과 같은 값 — 보정 만족도·방문 수·비슷한 여행자 선호).
+  // 추천 점수(목록과 같은 값 — 보정 만족도·방문 수·비슷한 여행자 선호·취향).
   score: number;
   stayMin: number | null;
   // 시간대별 방문 수(5칸) · 여러 날 여행에서의 일차 위치별 방문 수.
@@ -255,6 +262,8 @@ export interface PlanCandidate {
   pos: { first: number; mid: number; last: number };
   // 등록된 맛집 — 식당 자리에서 조금 앞세운다(상세·리뷰 분석으로 이어진다).
   registered: boolean;
+  // 사실상 같은 곳 묶음(13차 — "대왕암공원" 과 "대왕암공원 출렁다리"). 한 일정에는 묶음에서 한 곳만 쓴다. 없으면 자기 혼자.
+  group?: string;
 }
 export interface PlanSynthInput {
   days: number;
@@ -268,6 +277,29 @@ export interface PlanSynthInput {
   legModel: PlanLegModel;
   // 유형별 체류 중앙(분) — 장소 값이 없을 때.
   typeStay: ReadonlyMap<string, number>;
+  // ── 11차 입력 확장(전부 선택) ──
+  // 속도 — 하루 자리 수를 중앙에서 가감(여유 −1 · 빽빽 +1).
+  lenShift?: number;
+  // 앞 장소와의 거리 감쇠 척도(km). 기본 8, 대중교통은 더 좁게.
+  proxKm?: number;
+  // 꼭 갈 곳(후보 id) — 그 장소가 든 권역을 먼저 날에 주고 자리에 고정한다. 권역 반경(pinReachKm) 안이면 reachKm 밖이어도 넣는다.
+  pinned?: ReadonlySet<string>;
+  pinReachKm?: number;
+  // 숙소 동네 중심 — 가까운 권역을 앞세우고 숙소에서/까지의 이동을 붙인다. stayScaleKm = 숙소에서 먼 권역의 감쇠 척도(이 거리에서
+  // 절반. 기본 45km — 제주는 끝에서 끝도 하루에 다녀온다. 동선이 좁은 지역은 그만큼 좁게 준다).
+  stay?: { lat: number; lng: number } | null;
+  stayScaleKm?: number;
+  // ── 12차 날씨 ──
+  // 비 오는 일차 번호(1부터)와 그날 후보 점수에 곱할 유형별 배수(야외는 1 미만, 실내에 가까운 유형은 1 초과, 없는 유형은 1).
+  wetDays?: ReadonlySet<number>;
+  wetFactor?: ReadonlyMap<string, number>;
+  // ── 13차 제주 밖 지역 ──
+  // 일정 전체가 머무는 반경(km). 거점 권역 중심에서 이 거리 안의 권역만 날에 준다(꼭 갈 곳이 든 권역은 멀어도 준다). 거점은
+  // 숙소 동네 → 꼭 갈 곳이 든 권역 → 며칠을 가장 알차게 채우는 권역 순으로 정한다. 날을 다 못 채우면 두 배까지 넓혀 본다.
+  // null·생략 = 제한 없음(제주 — 섬 전체가 하루 거리).
+  hubKm?: number | null;
+  // 식사 자리에 넣을 식당 후보가 그 권역에 없으면 볼거리로 채운다(식당마다 표본이 얇은 지역).
+  mealFallback?: boolean;
 }
 export interface PlanSynthStop {
   id: string;
@@ -275,15 +307,31 @@ export interface PlanSynthStop {
   stayMin: number;
   moveMin: number | null;
   moveKm: number | null;
+  pinned: boolean;
   altIds: string[];
 }
 export interface PlanSynthDay {
   pos: PlanDayPos;
   basis: PlanPatternBasis;
   stops: PlanSynthStop[];
+  // 숙소에서 첫 장소까지 / 마지막 장소에서 숙소까지(분). 숙소 입력이 없거나 도착·출발하는 쪽이면 null.
+  fromStayMin: number | null;
+  toStayMin: number | null;
+  // 비 오는 날로 짰는가.
+  wet: boolean;
+}
+export interface PlanSynthResult {
+  days: PlanSynthDay[];
+  // 일정에 넣지 못한 꼭 갈 곳(id).
+  unplaced: string[];
+  // 거점(13차) — 거점 반경(hubKm)을 쓰지 않았으면 null. zone = 거점 권역(zones 의 번호), lat·lng = 그 권역에서 하루를 채웠을 때
+  // 들르는 곳들의 중심(예보 지점을 고를 자리), day = 거점 권역에서 보내는 날(days 의 번호 — 숙소로 정한 거점이거나 그날을 못
+  // 채웠으면 null).
+  hub: { zone: number; lat: number; lng: number; day: number | null } | null;
 }
 
 const MIN_STOPS = 2;
+const MAX_SLOTS = 7;
 const ALT_PER_STOP = 2;
 const ALT_RANK_KEEP = 10;
 // 대안은 고른 장소에서 이 거리 안 — 같은 자리를 대신할 수 있을 만큼 가까운 곳만.
@@ -298,6 +346,12 @@ const PROX_KM = 8;
 const PROX_FIRST_KM = 20;
 // 같은 날 볼거리 자리에 같은 세부 유형이 또 오면 조금 깎는다(해수욕장만 세 곳이 되지 않게).
 const SAME_KIND_FACTOR = 0.85;
+// 숙소에서 먼 권역의 감쇠(45km 에서 절반) — 제주 끝에서 끝도 하루에 다녀오므로 완만하게.
+const STAY_SCALE_KM = 45;
+// 꼭 갈 곳 때문에 자리를 늘릴 때의 시각 — 그 장소에 가장 많이 가는 시간대의 대표 시각.
+const BAND_HOUR = [9, 12, 15, 18, 21] as const;
+// 거점 반경 안에서 날을 다 못 채우면 이 배수까지 넓혀 한 번 더 짠다(그래도 모자라면 채운 날만 낸다).
+const HUB_RELAX = 2;
 
 const hourFit = (c: PlanCandidate, band: number): number => {
   const total = c.bands.reduce((a, b) => a + b, 0);
@@ -311,150 +365,387 @@ const posFit = (c: PlanCandidate, pos: PlanDayPos, base: PlanSynthInput['posBase
   return clamp((c.pos[pos] + POS_PRIOR * b) / (total + POS_PRIOR) / b, 0.6, 1.8);
 };
 const prox = (km: number, scale: number): number => 1 / (1 + km / scale);
+const peakHour = (c: PlanCandidate): number => {
+  let best = -1;
+  for (let i = 0; i < c.bands.length; i += 1) if (c.bands[i]! > 0 && (best < 0 || c.bands[i]! > c.bands[best]!)) best = i;
+  return best < 0 ? (c.slot === PLAN_SLOT_MEAL ? 12 : 15) : BAND_HOUR[best]!;
+};
 
+interface Slot {
+  type: string;
+  hour: number;
+  fixed: PlanCandidate | null;
+}
 interface FilledSlot {
   c: PlanCandidate;
-  slot: number;
+  hour: number;
   score: number;
   ranked: PlanCandidate[];
+  pinned: boolean;
+}
+interface DayFill {
+  slots: FilledSlot[];
+  total: number;
 }
 interface DayPlan {
   pos: PlanDayPos;
   sk: PickedPlanSkeleton;
   zone: number;
+  wet: boolean;
 }
 
 const permutations = <T>(xs: T[]): T[][] => (xs.length <= 1 ? [xs] : xs.flatMap((x, i) => permutations([...xs.slice(0, i), ...xs.slice(i + 1)]).map((rest) => [x, ...rest])));
 
-export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthDay[] => {
+export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult => {
   const n = clamp(Math.round(input.days), 1, TOUR_ITINERARY_MAX_DAYS);
-  if (input.zones.length === 0 || input.candidates.length === 0) return [];
-  const reachByZone = input.zones.map((z) => input.candidates.filter((c) => planKmBetween(z, c) <= input.reachKm));
+  const pinned: ReadonlySet<string> = input.pinned ?? new Set<string>();
+  const unplacedAll = (): string[] => [...pinned];
+  if (input.zones.length === 0 || input.candidates.length === 0) return { days: [], unplaced: unplacedAll(), hub: null };
+  const proxKm = input.proxKm ?? PROX_KM;
+  const pinReachKm = Math.max(input.reachKm, input.pinReachKm ?? input.reachKm);
+  const stay = input.stay ?? null;
+  const reachByZone = input.zones.map((z) =>
+    input.candidates.filter((c) => {
+      const km = planKmBetween(z, c);
+      return km <= input.reachKm || (pinned.has(c.id) && km <= pinReachKm);
+    }),
+  );
+  const stayFactor = input.zones.map((z) => (stay ? prox(planKmBetween(z, stay), input.stayScaleKm ?? STAY_SCALE_KM) : 1));
+  // 같은 묶음의 후보 id — 한 곳을 쓰면 묶음 전체를 쓴 것으로 친다.
+  const groupIds = new Map<string, string[]>();
+  for (const c of input.candidates) {
+    const key = c.group ?? c.id;
+    const ids = groupIds.get(key) ?? [];
+    ids.push(c.id);
+    groupIds.set(key, ids);
+  }
+  const markAll = (set: Set<string>, c: PlanCandidate): void => {
+    for (const id of groupIds.get(c.group ?? c.id) ?? [c.id]) set.add(id);
+  };
 
-  // 한 권역에서 뼈대 자리를 앞에서부터 채운다 — 자리 묶음이 같은 후보 중 점수 × 시간대 적합 × 일차 위치 적합 × 가까움이 큰 곳.
-  const fillDay = (zi: number, sk: PickedPlanSkeleton, pos: PlanDayPos, used: ReadonlySet<string>): { slots: FilledSlot[]; total: number } => {
+  // 한 권역에서 하루를 채운다. ① 꼭 갈 곳을 묶음이 같은 자리 중 그 장소의 시간대에 가장 맞는 자리에 먼저 놓고(맞는 자리가 없으면
+  // 그 장소에 가장 많이 가는 시각에 자리를 하나 늘린다) ② 남은 자리를 앞에서부터 — 묶음이 같은 후보 중 점수 × 시간대 적합 ×
+  // 일차 위치 적합 × 가까움이 큰 곳으로 채운다.
+  const wetOf = (c: PlanCandidate, wet: boolean): number => (wet ? (input.wetFactor?.get(c.kind) ?? 1) : 1);
+  const fillDay = (zi: number, sk: PickedPlanSkeleton, pos: PlanDayPos, used: ReadonlySet<string>, wet: boolean): DayFill => {
     const zone = input.zones[zi]!;
     const reach = reachByZone[zi]!.filter((c) => !used.has(c.id));
-    const taken = new Set<string>();
-    const sightKinds = new Set<string>();
-    const slots: FilledSlot[] = [];
-    let prev: PlanCandidate | null = null;
-    for (let slot = 0; slot < sk.types.length; slot += 1) {
-      const type = sk.types[slot]!;
-      const meal = type === PLAN_SLOT_MEAL;
-      const band = planBandOf(sk.hours[slot]!);
-      const from: PlanCandidate | null = prev;
-      const near = (c: PlanCandidate): number => (from ? prox(planKmBetween(from, c), PROX_KM) : prox(planKmBetween(zone, c), PROX_FIRST_KM));
-      const extra = (c: PlanCandidate): number => (meal ? (c.registered ? REGISTERED_BONUS : 1) : sightKinds.has(c.kind) ? SAME_KIND_FACTOR : 1);
-      const ranked = reach
-        .filter((c) => c.slot === type && !taken.has(c.id))
-        .map((c) => ({ c, s: c.score * hourFit(c, band) * posFit(c, pos, input.posBase) * near(c) * extra(c) }))
-        .sort((a, b) => b.s - a.s || a.c.id.localeCompare(b.c.id));
-      const top = ranked[0];
-      if (!top) continue;
-      slots.push({ c: top.c, slot, score: top.s, ranked: ranked.slice(1, 1 + ALT_RANK_KEEP).map((r) => r.c) });
-      taken.add(top.c.id);
-      if (!meal) sightKinds.add(top.c.kind);
-      prev = top.c;
-    }
-    // 자리를 다 못 채운 권역은 그만큼 깎는다(인기 장소 하나로 하루를 차지하지 않게).
-    return { slots, total: slots.reduce((a, s) => a + s.score, 0) * (slots.length / sk.types.length) };
-  };
-  const rankZones = (p: DayPlan, used: ReadonlySet<string>) =>
-    input.zones
-      .map((_, zi) => ({ zi, ...fillDay(zi, p.sk, p.pos, used) }))
-      .filter((r) => r.slots.length >= MIN_STOPS)
-      .sort((a, b) => b.total - a.total || a.zi - b.zi);
-
-  const positions: PlanDayPos[] = n === 1 ? ['only'] : ['first', ...Array.from({ length: n - 2 }, () => 'mid' as const), 'last'];
-  let midNth = 0;
-  const plans: DayPlan[] = positions.map((pos) => ({ pos, sk: pickPlanSkeleton(pos, pos === 'mid' ? midNth++ : 0, input.skeletons.similar, input.skeletons.region), zone: -1 }));
-
-  // 권역 배정 — 첫날·마지막 날을 먼저(그날 유독 많이 가는 동네가 따로 있다), 가운데 날은 남은 권역 중 점수 순. 권역이 모자라면 다시 쓴다.
-  const none: ReadonlySet<string> = new Set();
-  const takenZones = new Set<number>();
-  const order = [0, ...(n > 1 ? [n - 1] : []), ...Array.from({ length: Math.max(0, n - 2) }, (_, i) => i + 1)];
-  for (const di of order) {
-    const ranked = rankZones(plans[di]!, none);
-    const pick = ranked.find((r) => !takenZones.has(r.zi)) ?? ranked[0];
-    if (!pick) continue;
-    plans[di]!.zone = pick.zi;
-    takenZones.add(pick.zi);
-  }
-
-  // 가운데 날 순서 — 첫날 → … → 마지막 날 권역 중심을 잇는 길이가 가장 짧은 순열(가운데 날은 많아야 3개).
-  if (n > 3) {
-    const mids = plans.slice(1, n - 1);
-    const pathKm = (seq: DayPlan[]): number => {
-      const pts = [plans[0]!, ...seq, plans[n - 1]!].filter((p) => p.zone >= 0).map((p) => input.zones[p.zone]!);
-      let km = 0;
-      for (let i = 1; i < pts.length; i += 1) km += planKmBetween(pts[i - 1]!, pts[i]!);
-      return km;
-    };
-    let best = mids;
-    let bestKm = pathKm(mids);
-    for (const perm of permutations(mids)) {
-      const km = pathKm(perm);
-      if (km < bestKm - 1e-9) {
-        best = perm;
-        bestKm = km;
+    const slots: Slot[] = sk.types.map((type, i) => ({ type, hour: sk.hours[i]!, fixed: null }));
+    const pins = reach.filter((c) => pinned.has(c.id)).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+    for (const pin of pins) {
+      let best = -1;
+      let bestFit = -1;
+      slots.forEach((s, i) => {
+        if (s.fixed || s.type !== pin.slot) return;
+        const fit = hourFit(pin, planBandOf(s.hour));
+        if (fit > bestFit) {
+          bestFit = fit;
+          best = i;
+        }
+      });
+      if (best >= 0) slots[best]!.fixed = pin;
+      else if (slots.length < MAX_SLOTS) {
+        const hour = peakHour(pin);
+        const at = slots.findIndex((s) => s.hour > hour);
+        slots.splice(at < 0 ? slots.length : at, 0, { type: pin.slot, hour, fixed: pin });
       }
     }
-    plans.splice(1, n - 2, ...best);
-  }
-
-  // 채우기 → 시간표. 한 번 쓴 장소는 다시 쓰지 않는다. 배정과 같은 순서(첫날 → 마지막 날 → 가운데 날)로 채워, 후보가 모자랄 때
-  // 가운데 날이 마지막 날 동네의 장소를 먼저 가져가지 않게 한다(못 채운 날은 뺀다). 도착은 앞 장소 출발 + 이동과 그 자리의 흔한 시각 중 늦은 쪽.
-  type BuiltStop = Omit<PlanSynthStop, 'altIds'> & { c: PlanCandidate; ranked: PlanCandidate[] };
-  const used = new Set<string>();
-  const built: Array<{ plan: DayPlan; stops: BuiltStop[] } | null> = plans.map(() => null);
-  for (const di of order) {
-    const plan = plans[di]!;
-    let fill = plan.zone >= 0 ? fillDay(plan.zone, plan.sk, plan.pos, used) : null;
-    if (!fill || fill.slots.length < MIN_STOPS) fill = rankZones(plan, used)[0] ?? null;
-    if (!fill) continue;
-    const stops: BuiltStop[] = [];
-    let t = 0;
+    const taken = new Set<string>();
+    for (const s of slots) if (s.fixed) markAll(taken, s.fixed);
+    const sightKinds = new Set<string>();
+    const filled: FilledSlot[] = [];
     let prev: PlanCandidate | null = null;
-    for (const s of fill.slots) {
-      const target = plan.sk.hours[s.slot]! * 60;
-      let moveMin: number | null = null;
-      let moveKm: number | null = null;
-      if (prev) {
-        const km = planKmBetween(prev, s.c);
-        moveMin = planLegMin(input.legModel, km);
-        moveKm = Math.round(km * 10) / 10;
-        t = Math.max(t + moveMin, target);
-      } else t = target;
-      const arriveMin = Math.round(t / 10) * 10;
-      if (arriveMin > LAST_ARRIVE_MIN) break;
-      const stayMin = clamp(Math.round((s.c.stayMin ?? input.typeStay.get(s.c.kind) ?? STAY_DEFAULT) / 10) * 10, STAY_RANGE[0], STAY_RANGE[1]);
-      stops.push({ id: s.c.id, arriveMin, stayMin, moveMin, moveKm, c: s.c, ranked: s.ranked });
-      t = arriveMin + stayMin;
-      prev = s.c;
+    for (const s of slots) {
+      const band = planBandOf(s.hour);
+      const from: PlanCandidate | null = prev;
+      // 식당은 등록된 맛집을 조금 앞세우고, 볼거리는 그날 이미 나온 세부 유형이면 조금 깎는다.
+      const scoreOf = (c: PlanCandidate): number =>
+        c.score *
+        wetOf(c, wet) *
+        hourFit(c, band) *
+        posFit(c, pos, input.posBase) *
+        (from ? prox(planKmBetween(from, c), proxKm) : prox(planKmBetween(zone, c), PROX_FIRST_KM)) *
+        (c.slot === PLAN_SLOT_MEAL ? (c.registered ? REGISTERED_BONUS : 1) : sightKinds.has(c.kind) ? SAME_KIND_FACTOR : 1);
+      const rankFor = (slot: string): Array<{ c: PlanCandidate; s: number }> =>
+        reach
+          .filter((c) => c.slot === slot && !taken.has(c.id))
+          .map((c) => ({ c, s: scoreOf(c) }))
+          .sort((a, b) => b.s - a.s || a.c.id.localeCompare(b.c.id));
+      let ranked = rankFor(s.type);
+      // 식사 자리인데 이 권역에 남은 식당 후보가 없다(13차) — 그 시각에 맞는 볼거리로 채운다. 식사는 일정 밖으로 남는다.
+      if (!s.fixed && ranked.length === 0 && s.type === PLAN_SLOT_MEAL && input.mealFallback) ranked = rankFor(PLAN_SLOT_SIGHT);
+      const pick = s.fixed ?? ranked[0]?.c;
+      if (!pick) continue;
+      filled.push({
+        c: pick,
+        hour: s.hour,
+        score: s.fixed ? scoreOf(s.fixed) : ranked[0]!.s,
+        ranked: ranked.slice(s.fixed ? 0 : 1, (s.fixed ? 0 : 1) + ALT_RANK_KEEP).map((r) => r.c),
+        pinned: s.fixed !== null,
+      });
+      markAll(taken, pick);
+      if (pick.slot !== PLAN_SLOT_MEAL) sightKinds.add(pick.kind);
+      prev = pick;
     }
-    if (stops.length < MIN_STOPS) continue;
-    for (const s of stops) used.add(s.id);
-    built[di] = { plan, stops };
-  }
+    // 자리를 다 못 채운 권역은 그만큼 깎는다(인기 장소 하나로 하루를 차지하지 않게).
+    return { slots: filled, total: filled.reduce((a, s) => a + s.score, 0) * (filled.length / slots.length) };
+  };
+  // 꼭 갈 곳이 든 날은 한 곳뿐이어도 살린다.
+  const enough = (f: DayFill): boolean => f.slots.length >= (f.slots.some((s) => s.pinned) ? 1 : MIN_STOPS);
+  const none: ReadonlySet<string> = new Set();
+  const positions: PlanDayPos[] = n === 1 ? ['only'] : ['first', ...Array.from({ length: n - 2 }, () => 'mid' as const), 'last'];
+  // 대안은 고른 장소에서 가까운 곳만 — 하루 권역이 좁은 지역은 그 반경까지.
+  const altKm = Math.min(ALT_MAX_KM, input.reachKm);
 
-  // 자리별 대안 — 일정에 쓰이지 않았고 고른 장소에서 가까운 후보를 그 자리 점수 순으로(같은 날 안에서는 겹치지 않게).
-  const out: PlanSynthDay[] = [];
-  for (const day of built) {
-    if (!day) continue;
-    const altSeen = new Set<string>();
-    out.push({
-      pos: day.plan.pos,
-      basis: day.plan.sk.basis,
-      stops: day.stops.map(({ ranked, c: chosen, ...stop }) => {
-        const altIds = ranked
-          .filter((c) => !used.has(c.id) && !altSeen.has(c.id) && planKmBetween(chosen, c) <= ALT_MAX_KM)
-          .slice(0, ALT_PER_STOP)
-          .map((c) => c.id);
-        for (const id of altIds) altSeen.add(id);
-        return { ...stop, altIds };
-      }),
+  // 꼭 갈 곳이 든 권역(가장 가까운 권역 중심) — 점수 합이 큰 순.
+  const pinScore = new Map<number, number>();
+  for (const c of input.candidates) {
+    if (!pinned.has(c.id)) continue;
+    let best = -1;
+    let bestKm = Number.POSITIVE_INFINITY;
+    input.zones.forEach((z, zi) => {
+      const km = planKmBetween(z, c);
+      if (km < bestKm) {
+        bestKm = km;
+        best = zi;
+      }
     });
+    if (best >= 0 && bestKm <= pinReachKm) pinScore.set(best, (pinScore.get(best) ?? 0) + c.score);
   }
-  return out;
+  const pinZones = [...pinScore.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([zi]) => zi);
+
+  // 거점 반경 하나(limitKm)로 일정을 짠다. null 이면 반경 제한 없이(제주).
+  const attempt = (limitKm: number | null): PlanSynthResult => {
+    let midNth = 0;
+    const plans: DayPlan[] = positions.map((pos, di) => ({
+      pos,
+      sk: pickPlanSkeleton(pos, pos === 'mid' ? midNth++ : 0, input.skeletons.similar, input.skeletons.region, input.lenShift ?? 0),
+      zone: -1,
+      wet: input.wetDays?.has(di + 1) ?? false,
+    }));
+
+    // 거점(13차) — 숙소 동네가 있으면 그곳, 꼭 갈 곳이 있으면 그 권역(점수 합이 가장 큰 곳), 아니면 며칠을 가장 알차게 채우는 동네:
+    // 권역마다 하루를 채운 점수를 내고(첫 일차 뼈대 기준. 날씨는 보지 않는다 — 예보가 거점을 흔들면 예보 지점도 따라 바뀐다),
+    // 반경의 절반 안에 있는 권역의 점수를 높은 것부터 일수만큼 더한 값이 가장 큰 묶음을 찾아, 그 묶음에서 하루 점수가 가장 높은
+    // 권역을 거점으로 삼는다. 절반으로 재는 이유 — 반경 전체로 재면 두 도시의 중간(강릉과 속초 사이의 주문진)이 양쪽을 다 품어
+    // 일정이 두 도시를 오간다. 묶음의 중심이 아니라 가장 센 권역을 거점으로 삼는 이유 — 중심은 이름 없는 길목이기 쉽다.
+    // 날에 줄 수 있는 권역은 거점에서 반경 안 + 꼭 갈 곳이 든 권역.
+    // 거리는 권역 중심이 아니라 "그 권역에서 하루를 채웠을 때 들르는 곳들의 중심" 끼리 잰다 — 권역 중심은 군집의 씨앗일 뿐이고
+    // 후보는 반경 안에서 고르므로, 이웃 권역의 인기 장소로 하루를 채우는 권역은 중심과 실제 동선이 반경만큼 어긋난다
+    // (강릉 북쪽 권역: 중심에서는 속초가 38km 안인데 하루는 강문해변에서 보낸다). 재는 대상도 표본의 "날짜 사이 이동 거리" 와 같아진다.
+    let hubZone: number | null = null;
+    let hubSpot: { lat: number; lng: number } | null = null;
+    let within: boolean[] | null = null;
+    if (limitKm !== null) {
+      const first = plans[0]!;
+      const fills = input.zones.map((_, zi) => fillDay(zi, first.sk, first.pos, none, false));
+      const dayValue = fills.map((f) => (enough(f) ? f.total : 0));
+      const spot = input.zones.map((z, zi) => {
+        const cs = dayValue[zi]! > 0 ? fills[zi]!.slots.map((x) => x.c) : [];
+        return cs.length > 0 ? { lat: cs.reduce((a, c) => a + c.lat, 0) / cs.length, lng: cs.reduce((a, c) => a + c.lng, 0) / cs.length } : { lat: z.lat, lng: z.lng };
+      });
+      const gapKm = (a: number, b: number): number => planKmBetween(spot[a]!, spot[b]!);
+      if (stay) {
+        let bestKm = Number.POSITIVE_INFINITY;
+        for (let zi = 0; zi < input.zones.length; zi += 1) {
+          const km = planKmBetween(input.zones[zi]!, stay);
+          if (km < bestKm) {
+            bestKm = km;
+            hubZone = zi;
+          }
+        }
+      } else if (pinZones.length > 0) hubZone = pinZones[0]!;
+      else {
+        let center = -1;
+        let bestValue = 0;
+        for (let zi = 0; zi < input.zones.length; zi += 1) {
+          if (!(dayValue[zi]! > 0)) continue;
+          const value = dayValue
+            .map((v, wi) => (gapKm(zi, wi) <= limitKm / 2 ? v : 0))
+            .sort((a, b) => b - a)
+            .slice(0, n)
+            .reduce((a, b) => a + b, 0);
+          if (value > bestValue) {
+            bestValue = value;
+            center = zi;
+          }
+        }
+        if (center >= 0) {
+          hubZone = center;
+          for (let zi = 0; zi < input.zones.length; zi += 1) {
+            if (gapKm(center, zi) <= limitKm / 2 && dayValue[zi]! > dayValue[hubZone]!) hubZone = zi;
+          }
+        }
+      }
+      if (hubZone !== null) {
+        const hub = hubZone;
+        hubSpot = spot[hub]!;
+        within = input.zones.map((_, zi) => pinZones.includes(zi) || gapKm(hub, zi) <= limitKm);
+      }
+    }
+    const rankZones = (p: DayPlan, used: ReadonlySet<string>) =>
+      input.zones
+        .map((_, zi) => zi)
+        .filter((zi) => within === null || within[zi]!)
+        .map((zi) => ({ zi, ...fillDay(zi, p.sk, p.pos, used, p.wet) }))
+        .filter(enough)
+        .map((r) => ({ ...r, total: r.total * stayFactor[r.zi]! }))
+        .sort((a, b) => b.total - a.total || a.zi - b.zi);
+    const takenZones = new Set<number>();
+
+    // 권역 배정 ① 꼭 갈 곳이 든 권역을 먼저 날에 준다 — 가운데 날부터, 없으면 첫날·마지막 날. 그 권역을 가장 잘 채우는 날에
+    // 놓는다. 날보다 권역이 많으면 점수 합이 큰 권역부터.
+    for (const zi of pinZones) {
+      const free = plans.map((_, di) => di).filter((di) => plans[di]!.zone < 0);
+      const mids = free.filter((di) => plans[di]!.pos === 'mid');
+      const pool = mids.length > 0 ? mids : free;
+      if (pool.length === 0) break;
+      let bestDay = pool[0]!;
+      let bestTotal = -1;
+      for (const di of pool) {
+        const total = fillDay(zi, plans[di]!.sk, plans[di]!.pos, none, plans[di]!.wet).total;
+        if (total > bestTotal) {
+          bestTotal = total;
+          bestDay = di;
+        }
+      }
+      plans[bestDay]!.zone = zi;
+      takenZones.add(zi);
+    }
+
+    // 권역 배정 ①′ 거점 권역에도 하루를 준다(13차) — 거점은 그 여행의 중심 동네다. 그 권역을 가장 잘 채우는 날에 놓는다.
+    // 숙소로 정한 거점은 잠자리일 뿐이라 주지 않는다(가까운 권역이 점수로 앞설 뿐).
+    if (hubZone !== null && !stay && !takenZones.has(hubZone)) {
+      let bestDay = -1;
+      let bestTotal = -1;
+      plans.forEach((plan, di) => {
+        if (plan.zone >= 0) return;
+        const fill = fillDay(hubZone!, plan.sk, plan.pos, none, plan.wet);
+        if (enough(fill) && fill.total > bestTotal) {
+          bestTotal = fill.total;
+          bestDay = di;
+        }
+      });
+      if (bestDay >= 0) {
+        plans[bestDay]!.zone = hubZone;
+        takenZones.add(hubZone);
+      }
+    }
+
+    // 권역 배정 ② 나머지 — 첫날·마지막 날을 먼저(그날 유독 많이 가는 동네가 따로 있다), 가운데 날은 남은 권역 중 점수 순.
+    // 권역이 모자라면 다시 쓴다(거점 반경이 좁은 지역은 같은 동네에서 이틀을 보내기도 한다).
+    const order = [0, ...(n > 1 ? [n - 1] : []), ...Array.from({ length: Math.max(0, n - 2) }, (_, i) => i + 1)];
+    for (const di of order) {
+      if (plans[di]!.zone >= 0) continue;
+      const ranked = rankZones(plans[di]!, none);
+      const pick = ranked.find((r) => !takenZones.has(r.zi)) ?? ranked[0];
+      if (!pick) continue;
+      plans[di]!.zone = pick.zi;
+      takenZones.add(pick.zi);
+    }
+
+    // 가운데 날 순서 — 첫날 → … → 마지막 날 권역 중심을 잇는 길이가 가장 짧은 순열(가운데 날은 많아야 3개). 비 오는 날과 아닌 날이
+    // 섞여 있으면 바꾸지 않는다 — 권역을 그날 날씨에 맞춰 골랐으므로 날짜를 옮기면 안 된다.
+    if (n > 3 && new Set(plans.slice(1, n - 1).map((p) => p.wet)).size === 1) {
+      const mids = plans.slice(1, n - 1);
+      const pathKm = (seq: DayPlan[]): number => {
+        const pts = [plans[0]!, ...seq, plans[n - 1]!].filter((p) => p.zone >= 0).map((p) => input.zones[p.zone]!);
+        let km = 0;
+        for (let i = 1; i < pts.length; i += 1) km += planKmBetween(pts[i - 1]!, pts[i]!);
+        return km;
+      };
+      let best = mids;
+      let bestKm = pathKm(mids);
+      for (const perm of permutations(mids)) {
+        const km = pathKm(perm);
+        if (km < bestKm - 1e-9) {
+          best = perm;
+          bestKm = km;
+        }
+      }
+      plans.splice(1, n - 2, ...best);
+    }
+
+    // 채우기 → 시간표. 한 번 쓴 장소는 다시 쓰지 않는다. 배정과 같은 순서(첫날 → 마지막 날 → 가운데 날)로 채워, 후보가 모자랄 때
+    // 가운데 날이 마지막 날 동네의 장소를 먼저 가져가지 않게 한다(못 채운 날은 뺀다). 도착은 앞 장소 출발 + 이동과 그 자리의 흔한 시각 중 늦은 쪽.
+    type BuiltStop = Omit<PlanSynthStop, 'altIds'> & { c: PlanCandidate; ranked: PlanCandidate[] };
+    // used = 쓴 장소와 그 묶음(다시 고르지 않는다) · placed = 실제로 일정에 든 장소(못 넣은 꼭 갈 곳을 가릴 때).
+    const used = new Set<string>();
+    const placed = new Set<string>();
+    const built: Array<{ plan: DayPlan; stops: BuiltStop[]; zone: number } | null> = plans.map(() => null);
+    for (const di of order) {
+      const plan = plans[di]!;
+      let zone = plan.zone;
+      let fill: DayFill | null = zone >= 0 ? fillDay(zone, plan.sk, plan.pos, used, plan.wet) : null;
+      if (!fill || !enough(fill)) {
+        // 배정한 권역에 남은 후보가 모자라다 — 지금 남은 후보로 가장 잘 채워지는 권역으로.
+        const next = rankZones(plan, used)[0];
+        fill = next ?? null;
+        zone = next?.zi ?? -1;
+      }
+      if (!fill) continue;
+      const stops: BuiltStop[] = [];
+      let t = 0;
+      let prev: PlanCandidate | null = null;
+      for (const s of fill.slots) {
+        const target = s.hour * 60;
+        let moveMin: number | null = null;
+        let moveKm: number | null = null;
+        if (prev) {
+          const km = planKmBetween(prev, s.c);
+          moveMin = planLegMin(input.legModel, km);
+          moveKm = Math.round(km * 10) / 10;
+          t = Math.max(t + moveMin, target);
+        } else t = target;
+        const arriveMin = Math.round(t / 10) * 10;
+        if (arriveMin > LAST_ARRIVE_MIN) break;
+        const stayMin = clamp(Math.round((s.c.stayMin ?? input.typeStay.get(s.c.kind) ?? STAY_DEFAULT) / 10) * 10, STAY_RANGE[0], STAY_RANGE[1]);
+        stops.push({ id: s.c.id, arriveMin, stayMin, moveMin, moveKm, pinned: s.pinned, c: s.c, ranked: s.ranked });
+        t = arriveMin + stayMin;
+        prev = s.c;
+      }
+      if (stops.length < (stops.some((s) => s.pinned) ? 1 : MIN_STOPS)) continue;
+      for (const s of stops) {
+        markAll(used, s.c);
+        placed.add(s.id);
+      }
+      built[di] = { plan, stops, zone };
+    }
+
+    // 자리별 대안 — 일정에 쓰이지 않았고 고른 장소에서 가까운 후보를 그 자리 점수 순으로(같은 날 안에서는 겹치지 않게).
+    // 숙소 이동 — 도착한 날은 숙소로 돌아가는 쪽만, 떠나는 날은 숙소에서 나오는 쪽만, 당일은 없다.
+    const days: PlanSynthDay[] = [];
+    let hubDay: number | null = null;
+    for (const day of built) {
+      if (!day) continue;
+      if (hubDay === null && !stay && day.zone === hubZone) hubDay = days.length;
+      const altSeen = new Set<string>();
+      const pos = day.plan.pos;
+      const first = day.stops[0]!.c;
+      const last = day.stops[day.stops.length - 1]!.c;
+      days.push({
+        pos,
+        basis: day.plan.sk.basis,
+        stops: day.stops.map(({ ranked, c: chosen, ...stop }) => {
+          const altIds = ranked
+            .filter((c) => !used.has(c.id) && !altSeen.has(c.id) && planKmBetween(chosen, c) <= altKm)
+            .slice(0, ALT_PER_STOP)
+            .map((c) => c.id);
+          for (const id of altIds) altSeen.add(id);
+          return { ...stop, altIds };
+        }),
+        fromStayMin: stay && (pos === 'mid' || pos === 'last') ? planLegMin(input.legModel, planKmBetween(stay, first)) : null,
+        toStayMin: stay && (pos === 'mid' || pos === 'first') ? planLegMin(input.legModel, planKmBetween(last, stay)) : null,
+        wet: day.plan.wet,
+      });
+    }
+    return { days, unplaced: [...pinned].filter((id) => !placed.has(id)), hub: hubZone !== null && hubSpot ? { zone: hubZone, ...hubSpot, day: hubDay } : null };
+  };
+
+  const hubKm = input.hubKm ?? null;
+  if (hubKm === null) return attempt(null);
+  const tight = attempt(hubKm);
+  if (tight.days.length >= n) return tight;
+  const wide = attempt(hubKm * HUB_RELAX);
+  return wide.days.length > tight.days.length ? wide : tight;
 };

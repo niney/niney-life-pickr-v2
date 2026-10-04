@@ -1,7 +1,9 @@
 // 여행로그 공개 화면 e2e — 미리 띄운 friendly(3000) + Vite 웹(5173)에 헤드리스 크로미움으로 붙어 실동작을 본다.
 //   ① 공개 API 계약·소셀 억제(여행자 5명 미만 셀 없음, 응답 키에 식별자 없음) · 관리자 라우트 무인증 차단
 //   ② /travel/jeju — 필터 칩 → URL 쿼리 → 집계 갱신 → 초기화, 지역 비교·숙소 섹션, 출처 문구, 모바일 폭 가로 넘침 없음
-//   ③ /travel/plan — 제출 → 일정표(일차·시각·이동)·추천 카드·완화 안내, 식당만 토글, 그룹투표 버튼(미선택 → 비활성), 미지원 지역 안내
+//   ③ /travel/plan — 제출 → 일정표(일차·시각·이동)·추천 카드·완화 안내, 식당만 토글, 그룹투표 버튼(미선택 → 비활성), 제주 밖 지역의
+//      일정표·거점 안내(13차), '전체' 는 장소만,
+//      일정 편집(11차 — 빼기·꼭 갈 곳·숙소 동네가 고르는 즉시 다시 짜인다)
 //   ④ /life-map — 배경 "여행자 밀도" 토글 → 제주로 이동·요약 카드·푸터 출처, 칸 클릭 → 선택 칸 카드, 종류 칩, 범죄 통계와 배타
 // 페이지 JS 오류·콘솔 error 는 전부 모아 마지막에 보고한다(리소스 404 는 따로).
 //
@@ -93,17 +95,29 @@ const apiChecks = async (): Promise<void> => {
   interface PlanStop {
     name: string;
     kind: string;
+    emd: string | null;
     n: number;
     arriveMin: number;
     moveMin: number | null;
-    alternatives: Array<{ n: number }>;
+    pinned: boolean;
+    alternatives: Array<{ name: string; n: number }>;
   }
   interface Plan {
+    regionTrips: number;
     matchedTrips: number;
     relaxed: string[];
-    places: Array<{ n: number; kind: string; similarN: number | null }>;
+    places: Array<{ name: string; emd: string | null; n: number; kind: string; similarN: number | null }>;
     templates: unknown[];
-    itinerary: { legBasis: string; days: Array<{ day: number; area: string; pattern: string; stops: PlanStop[] }> } | null;
+    itinerary: {
+      legBasis: string;
+      transport: string;
+      stayArea: string | null;
+      unplaced: string[];
+      base: string | null;
+      weatherPlaceId: string | null;
+      days: Array<{ day: number; area: string; pattern: string; stops: PlanStop[]; fromStayMin: number | null; toStayMin: number | null; wet: boolean }>;
+    } | null;
+    areas: Array<{ label: string; n: number }>;
   }
   const postPlan = async (payload: object): Promise<{ status: number; body: Plan }> => {
     const res = await fetch(`${API}/api/v1/tour/public/plan`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
@@ -118,7 +132,7 @@ const apiChecks = async (): Promise<void> => {
     if (body.places.some((p) => p.kind === '교통' || p.kind === '숙소')) throw new Error('교통·숙소 포함');
     const leaked = [...scanKeys(body), ...(/"(lat|lng|latitude|longitude)"/.test(JSON.stringify(body)) ? ['좌표 키'] : [])];
     if (leaked.length) throw new Error(`식별자·좌표 키 ${leaked.join(',')}`);
-    return `matched ${body.matchedTrips} · relaxed [${body.relaxed.join(',')}] · places ${body.places.length}(식당 ${body.places.filter((p) => p.kind === '식당').length}) · templates ${body.templates.length}`;
+    return `region ${body.regionTrips} · matched ${body.matchedTrips} · relaxed [${body.relaxed.join(',')}] · places ${body.places.length}(식당 ${body.places.filter((p) => p.kind === '식당').length}) · templates ${body.templates.length}`;
   });
   await step('API plan 일정표(10차) — 제주 2박은 3일·장소 중복 없음·시각 오름차순·첫 장소 이동 null', async () => {
     const { body } = await postPlan({ ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 });
@@ -135,11 +149,62 @@ const apiChecks = async (): Promise<void> => {
     }
     return `${it.days.map((d) => `${d.day}일차 ${d.area} ${d.pattern}`).join(' / ')} · 이동 ${it.legBasis}`;
   });
-  await step('API plan — 일정표 미지원 지역(부산)은 itinerary null', async () => {
-    const { status, body } = await postPlan({ region: 'busan', nights: 2 });
+  await step("API plan — '전체' 는 일정표 없이 장소만(itinerary null)", async () => {
+    const { status, body } = await postPlan({ region: 'all', nights: 2 });
     if (status !== 200) throw new Error(`status ${status}`);
     if (body.itinerary !== null) throw new Error('itinerary 있음');
+    if (body.areas.length !== 0) throw new Error('areas 있음');
     return `places ${body.places.length}`;
+  });
+  await step('API plan 제주 밖(13차) — 부산 1박은 이틀·거점 동네와 예보 지점이 오고, 제주는 거점 없이 제주시 예보', async () => {
+    const { status, body } = await postPlan({ region: 'busan', nights: 1 });
+    if (status !== 200) throw new Error(`status ${status}`);
+    const it = body.itinerary;
+    if (!it) throw new Error('itinerary 없음');
+    if (it.days.length !== 2) throw new Error(`일수 ${it.days.length}`);
+    if (!it.base) throw new Error('거점 없음');
+    if (!it.weatherPlaceId) throw new Error('예보 지점 없음');
+    const names = it.days.flatMap((d) => d.stops.map((x) => x.name));
+    if (new Set(names).size !== names.length) throw new Error('장소 중복');
+    const leaked = [...scanKeys(body), ...(/"(lat|lng|latitude|longitude)"/.test(JSON.stringify(body)) ? ['좌표 키'] : [])];
+    if (leaked.length) throw new Error(`식별자·좌표 키 ${leaked.join(',')}`);
+    const jeju = (await postPlan({ region: 'jeju', nights: 1 })).body.itinerary;
+    if (!jeju || jeju.base !== null || jeju.weatherPlaceId !== '11G00201') throw new Error(`제주 거점 ${jeju?.base} · 예보 ${jeju?.weatherPlaceId}`);
+    return `거점 ${it.base} · 예보 ${it.weatherPlaceId} · ${it.days.map((d) => `[${d.area}] ${d.stops.length}곳`).join(' / ')}`;
+  });
+  await step('API plan 입력 확장(11·12차) — 속도·이동수단·숙소 동네·꼭 갈 곳·뺄 곳·비 오는 날이 일정에 반영, 잘못된 값 400', async () => {
+    const seg = { ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 };
+    const base = (await postPlan(seg)).body;
+    const it = base.itinerary;
+    if (!it || base.areas.length === 0) throw new Error('기준 일정·숙소 동네 선택지 없음');
+    const count = (p: Plan): number => p.itinerary!.days.reduce((a, d) => a + d.stops.length, 0);
+    const relaxed = (await postPlan({ ...seg, pace: 'relaxed' })).body;
+    const packed = (await postPlan({ ...seg, pace: 'packed' })).body;
+    if (count(relaxed) > count(base) || count(packed) < count(base)) throw new Error(`속도 ${count(relaxed)}/${count(base)}/${count(packed)}`);
+    const transit = (await postPlan({ ...seg, transport: 'transit' })).body.itinerary!;
+    if (transit.transport !== 'transit') throw new Error('transport 표시');
+    // 숙소 동네 — 도착한 날은 숙소까지, 떠나는 날은 숙소에서만.
+    const stay = (await postPlan({ ...seg, stayArea: base.areas[0]!.label })).body.itinerary!;
+    const first = stay.days[0]!;
+    const last = stay.days[stay.days.length - 1]!;
+    if (stay.stayArea !== base.areas[0]!.label || first.fromStayMin !== null || first.toStayMin === null || last.toStayMin !== null || last.fromStayMin === null) throw new Error('숙소 이동');
+    // 뺄 곳 — 일정의 첫 장소. 꼭 갈 곳 — 기준 일정에 없던 목록 장소(못 넣으면 unplaced 로 알려 준다).
+    const gone = it.days[0]!.stops[0]!;
+    const inPlan = new Set(it.days.flatMap((d) => d.stops.map((x) => x.name)));
+    const want = base.places.find((p) => !inPlan.has(p.name) && p.kind !== '상점' && p.kind !== '기타');
+    if (!want) throw new Error('꼭 갈 곳으로 쓸 장소 없음');
+    const edited = (await postPlan({ ...seg, must: [{ name: want.name, emd: want.emd }], avoid: [{ name: gone.name, emd: gone.emd }] })).body.itinerary!;
+    const names = edited.days.flatMap((d) => d.stops.flatMap((x) => [x.name, ...x.alternatives.map((a) => a.name)]));
+    if (names.includes(gone.name)) throw new Error(`뺀 곳이 남음: ${gone.name}`);
+    const pinned = edited.days.flatMap((d) => d.stops.filter((x) => x.pinned).map((x) => x.name));
+    if (!pinned.includes(want.name) && !edited.unplaced.includes(want.name)) throw new Error(`꼭 갈 곳 누락: ${want.name}`);
+    // 날씨(12차) — 비 오는 일차만 wet, 일정 밖 번호는 무시.
+    const wet = (await postPlan({ ...seg, wetDays: [2, 5] })).body.itinerary!;
+    if (wet.days.map((d) => d.wet).join() !== wet.days.map((d) => d.day === 2).join()) throw new Error(`비 오는 날 표시 ${wet.days.map((d) => d.wet).join()}`);
+    for (const bad of [{ pace: 'slow' }, { focus: ['food'] }, { transport: 'bike' }, { wetDays: [0] }]) {
+      if ((await postPlan(bad)).status !== 400) throw new Error(`400 아님: ${JSON.stringify(bad)}`);
+    }
+    return `자리 ${count(relaxed)}/${count(base)}/${count(packed)} · 대중교통 ${transit.legBasis} · 숙소 ${stay.stayArea}(→${first.toStayMin}분) · 꼭 ${pinned.join(',') || `못 넣음 ${edited.unplaced.join(',')}`} · 뺌 ${gone.name}`;
   });
   let allCells = 0;
   await step('API density — 칸 여행자 ≥ 5·경계 4개·kind=restaurant 부분집합·bbox 절단', async () => {
@@ -354,10 +419,44 @@ const planPage = async (page: Page): Promise<void> => {
     const notice = (await page.getByText(/같은 조건의 여행/).textContent())?.replace(/\s+/g, ' ').trim();
     return notice ?? '';
   });
-  await step('/travel/plan 미지원 지역(동부권) → 일정표 대신 안내, 장소 추천은 그대로', async () => {
+  await step('/travel/plan 일정 편집(11차) — 빼기·꼭 갈 곳·숙소 동네를 고르면 바로 다시 짜고 칩으로 되돌린다', async () => {
+    await page.getByRole('heading', { name: '추천 일정' }).waitFor({ timeout: 10_000 });
+    const days = page.getByRole('article', { name: /일차$/ });
+    const firstStop = (await days.first().getByRole('button', { name: /일정에서 빼기$/ }).first().getAttribute('aria-label'))!.replace(' 일정에서 빼기', '');
+    await days.first().getByRole('button', { name: `${firstStop} 일정에서 빼기`, exact: true }).click();
+    // 칩은 누르는 즉시 뜨고 일정은 응답이 온 뒤 바뀐다 — 뺀 장소가 일정에서 사라질 때까지 기다린다.
+    await page.getByRole('button', { name: `${firstStop} 뺀 곳에서 되돌리기` }).waitFor({ timeout: 10_000 });
+    await days.getByRole('button', { name: `${firstStop} 일정에서 빼기`, exact: true }).waitFor({ state: 'detached', timeout: 10_000 });
+    // 목록의 핀 — 방금 뺀 곳이 아닌 첫 장소(뺀 곳에 핀을 꽂으면 뺀 곳에서 빠진다). 일정에 들거나 못 넣었다는 안내가 뜬다.
+    const pinLabels = await page.getByRole('button', { name: /꼭 갈 곳$/ }).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? ''));
+    const pinName = pinLabels.map((l) => l.replace(' 꼭 갈 곳', '')).find((name) => name !== firstStop);
+    if (!pinName) throw new Error('핀을 꽂을 장소 없음');
+    await page.getByRole('button', { name: `${pinName} 꼭 갈 곳`, exact: true }).click();
+    await page.getByRole('button', { name: `${pinName} 꼭 갈 곳에서 되돌리기` }).waitFor({ timeout: 10_000 });
+    await page.getByRole('button', { name: `${pinName} 꼭 갈 곳`, exact: true, pressed: true }).waitFor({ timeout: 10_000 });
+    await page.getByRole('button', { name: '비슷한 여행 찾기' }).and(page.locator(':enabled')).waitFor({ timeout: 10_000 });
+    // 숙소 동네 — 둘째 선택지(첫째는 "정하지 않음").
+    await page.getByRole('combobox', { name: '숙소 동네' }).selectOption({ index: 1 });
+    await page.getByText(/숙소까지 약/).first().waitFor({ timeout: 10_000 });
+    // 되돌리기.
+    await page.getByRole('button', { name: `${firstStop} 뺀 곳에서 되돌리기` }).click();
+    await page.getByRole('button', { name: `${firstStop} 뺀 곳에서 되돌리기` }).waitFor({ state: 'detached', timeout: 10_000 });
+    return `뺌·되돌림 ${firstStop} · 꼭 ${pinName} · 숙소 ${await page.getByRole('combobox', { name: '숙소 동네' }).inputValue()}`;
+  });
+  await step('/travel/plan 제주 밖(13차) — 동부권 → 일정표와 거점 안내', async () => {
     await page.getByRole('button', { name: '동부권', exact: true }).click();
     await page.getByRole('button', { name: '비슷한 여행 찾기' }).click();
-    await page.getByText(/일정표는 지금 제주만 만들어 드립니다/).waitFor({ timeout: 30_000 });
+    const note = page.getByText(/주변에서 짰습니다/);
+    await note.waitFor({ timeout: 30_000 });
+    const days = await page.getByRole('article', { name: /일차$/ }).count();
+    if (days === 0) throw new Error('일차 0');
+    return `${days}일 · ${(await note.textContent())?.split(' — ')[0]}`;
+  });
+  await step("/travel/plan '전체' → 일정표 대신 안내, 장소 추천은 그대로", async () => {
+    // 결과 목록에도 '전체' 토글이 있다 — 지역 칩은 폼 안에서 찾는다.
+    await page.locator('form').getByRole('button', { name: '전체', exact: true }).click();
+    await page.getByRole('button', { name: '비슷한 여행 찾기' }).click();
+    await page.getByText(/일정표는 지역을 골라야 만들어 드립니다/).waitFor({ timeout: 30_000 });
     if ((await page.getByRole('heading', { name: '추천 일정' }).count()) !== 0) throw new Error('일정표가 남아 있음');
     const cards = await page.locator('li:has-text("팀 · 만족")').count();
     if (cards === 0) throw new Error('추천 0');

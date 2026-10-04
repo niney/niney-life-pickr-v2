@@ -179,14 +179,81 @@ export const TOUR_RESTAURANT_TYPE_SHORTS = ['식당', '상업', '상점'] as con
 export const TOUR_K_MIN = 5;
 export const TOUR_RATING_MIN_N = 3;
 
-// ── 10차 코스 일정표 ──────────────────────────────────────────────────────────
-// 일정표(일차·순서·시각)를 합성해 주는 지역과 하루 권역 반경(km). 표본이 두껍고 하루 동선이 지역 안에서 닫히는 곳부터 연다 —
-// 그 밖의 지역은 장소 추천만 나간다(itinerary null). 권역(여러 시도 합)은 하루 동선이 닫히지 않아 넣지 않는다.
-export const TOUR_ITINERARY_REGIONS: Partial<Record<TourRegionKey, { zoneKm: number }>> = { jeju: { zoneKm: 12 } };
+// ── 10차 코스 일정표(13차에서 제주 밖으로) ─────────────────────────────────────
+// 일정표(일차·순서·시각)를 합성해 주는 지역과 그 지역의 동선 규모. '전체' 는 어디로 갈지 정하지 않은 것이라 넣지 않는다(장소만).
+// 값은 2026-10-04 적재 표본에서 잰 것이다(docs/PLAN-tour-log.md 부록 D) — 제주는 하루에 섬 절반을 도는데 본토 여행은 한 도시
+// 안팎에서 끝난다(하루 동선 반경 75% 선: 제주 20km, 본토 4~11km · 날짜 사이 이동 90% 선: 제주 35km, 본토 7~38km).
+export interface TourItineraryRegionDef {
+  // 하루 권역 반경(km) — 그 지역 여행의 하루 동선 반경(그날 들른 곳들의 중심에서 가장 먼 곳) 75% 선을 5~12km 로 자른 값.
+  zoneKm: number;
+  // 일정 전체가 머무는 반경(km) — 거점 권역에서 이 거리 안의 권역만 쓴다(날짜 사이 이동 거리 90% 선을 15~40km 로 자른 값).
+  // 이게 없으면 "강원 2박" 이 강릉 → 춘천 → 속초로 튄다. null = 제한 없음(제주 — 섬 전체가 하루 거리다).
+  hubKm: number | null;
+  // 부속섬(isIsland) 장소를 일정에서 뺀다. 이 열은 제주 세트에서만 뜻이 맞는다(다른 세트에서는 전주한옥마을·강릉 시내에도 붙어 있다).
+  skipIslands: boolean;
+  // 식사 자리에 넣을 식당 후보가 없으면 볼거리로 채운다. 제주 밖은 식당마다 표본이 얇아(여행 5건 이상인 식당이 드물다) 이렇게
+  // 하지 않으면 볼거리가 많은 동네도 하루가 비어 버린다.
+  mealFallback: boolean;
+  // 예보 지점(12차 — weatherRegions.ts 의 지점 id). null 이면 서버가 일정의 거점에서 가장 가까운 지점을 응답으로 알려 준다.
+  // 제주는 섬 중심에서 가까운 지점이 성판악(산간)이라 사람이 모이는 제주시를 직접 적는다.
+  weatherPlaceId: string | null;
+}
+const mainland = (zoneKm: number, hubKm: number): TourItineraryRegionDef => ({ zoneKm, hubKm, skipIslands: false, mealFallback: true, weatherPlaceId: null });
+export const TOUR_ITINERARY_REGIONS: Partial<Record<TourRegionKey, TourItineraryRegionDef>> = {
+  jeju: { zoneKm: 12, hubKm: null, skipIslands: true, mealFallback: false, weatherPlaceId: '11G00201' },
+  west: mainland(9, 36),
+  jeonbuk: mainland(8, 28),
+  jeonnam: mainland(8, 32),
+  chungnam: mainland(11, 32),
+  daejeon: mainland(5, 15),
+  chungbuk: mainland(9, 24),
+  gwangju: mainland(5, 15),
+  sejong: mainland(5, 15),
+  east: mainland(9, 35),
+  gangwon: mainland(9, 38),
+  gyeongbuk: mainland(10, 31),
+  gyeongnam: mainland(10, 31),
+  busan: mainland(7, 15),
+  daegu: mainland(5, 15),
+  ulsan: mainland(9, 16),
+  capital: mainland(7, 24),
+  seoul: mainland(5, 15),
+  gyeonggi: mainland(6, 26),
+  incheon: mainland(6, 20),
+};
 export const isTourItineraryRegion = (key: TourRegionKey): boolean => key in TOUR_ITINERARY_REGIONS;
 // 일정표 일수 = 박수 + 1(당일은 하루), 4박 이상은 5일로 묶는다(박수 필터의 "4박 이상" 과 같은 상한).
 export const TOUR_ITINERARY_MAX_DAYS = 5;
 export const tourItineraryDays = (nights: number): number => Math.max(1, Math.min(TOUR_ITINERARY_MAX_DAYS, Math.round(nights) + 1));
+
+// ── 11차 코스 입력 확장 ────────────────────────────────────────────────────────
+// 일정표를 내 사정에 맞추는 선택 입력. 키 목록은 @repo/api-contract 의 zod enum 과 같아야 한다(순환 금지라 리터럴을 다시 적고
+// friendly 테스트가 동일성을 검증 — TOUR_REGION_KEYS 와 같은 규약).
+// 속도 — 하루에 들르는 곳 수를 비슷한 여행의 중앙에서 하나 줄이거나 늘린다.
+export const TOUR_PLAN_PACE_KEYS = ['relaxed', 'normal', 'packed'] as const;
+export type TourPlanPaceKey = (typeof TOUR_PLAN_PACE_KEYS)[number];
+export const TOUR_PLAN_PACES: Record<TourPlanPaceKey, { label: string; lenShift: number }> = {
+  relaxed: { label: '여유롭게', lenShift: -1 },
+  normal: { label: '보통', lenShift: 0 },
+  packed: { label: '빽빽하게', lenShift: 1 },
+};
+// 취향 — 고른 묶음의 유형에 가중을 준다(목록 순위와 일정표의 볼거리 자리 모두). 식당은 대상이 아니다.
+export const TOUR_PLAN_FOCUS_KEYS = ['nature', 'city', 'activity', 'culture'] as const;
+export type TourPlanFocusKey = (typeof TOUR_PLAN_FOCUS_KEYS)[number];
+export const TOUR_PLAN_FOCUSES: Record<TourPlanFocusKey, { label: string; kinds: readonly TourTypeShort[] }> = {
+  nature: { label: '자연·바다', kinds: ['자연', '산책'] },
+  city: { label: '시장·쇼핑', kinds: ['상업'] },
+  activity: { label: '체험·액티비티', kinds: ['체험', '레저', '테마'] },
+  culture: { label: '문화·역사', kinds: ['문화', '역사'] },
+};
+export const TOUR_PLAN_FOCUS_BOOST = 1.5;
+// 이동수단 — 대중교통은 구간 이동 분을 버스 기록으로 보고(없으면 차 × 1.8 + 10분) 하루 권역을 좁힌다.
+export const TOUR_PLAN_TRANSPORT_KEYS = ['car', 'transit'] as const;
+export type TourPlanTransportKey = (typeof TOUR_PLAN_TRANSPORT_KEYS)[number];
+export const TOUR_PLAN_TRANSPORTS: Record<TourPlanTransportKey, { label: string }> = {
+  car: { label: '차(렌터카·택시)' },
+  transit: { label: '대중교통' },
+};
 
 // 출처 표기(AI 허브 이용정책 — NIA 사업결과·데이터명·aihub.or.kr 필수). 집계를 쓰는 모든 섹션 하단에 그대로.
 // 세트를 합쳐 집계하므로 데이터명은 적재 가능한 세트 전부를 적는다(TOUR_DATASETS 순서).

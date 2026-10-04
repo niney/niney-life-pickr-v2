@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { TourPlanResultType } from '@repo/api-contract';
+import { TourPlanFocus, TourPlanPace, TourPlanTransport, type TourPlanResultType } from '@repo/api-contract';
+import { TOUR_PLAN_FOCUSES, TOUR_PLAN_FOCUS_KEYS, TOUR_PLAN_PACES, TOUR_PLAN_PACE_KEYS, TOUR_PLAN_TRANSPORTS, TOUR_PLAN_TRANSPORT_KEYS, tourSyncLayer } from '@repo/utils';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import sensiblePlugin from '../../plugins/sensible.js';
@@ -13,6 +14,9 @@ import tourPublicRoutes from './tour-public.route.js';
 // ① 후보는 지역 표본 전체 기준(n·보정 만족도), 비슷한 여행은 가중치로만 ② 유형·표본·평가·폐업 제외 ③ 일정표 합성
 // ④ 조건 없음(가중 없음·지역 뼈대) ⑤ 완화 사다리 + 소수 세그먼트 ⑥ 일정 미지원 지역·빈 지역 ⑦ 라우트·식별자·좌표 없음.
 // 뼈대는 식사·볼거리 두 묶음의 순서이고, 장소 유형은 방문 기록에 가장 많이 적힌 것이다(⑧).
+// 11차 입력 확장 — ⑨ 숙소 동네 선택지 ⑩ 속도 ⑪ 취향 ⑫ 이동수단 ⑬ 숙소 동네 ⑭ 꼭 갈 곳·뺄 곳 ⑮ 선택지 키 동일성. 12차 — 비 오는 날.
+// 프로필 캐시 — 빈 프로필은 남기지 않고, 적재 이력(데이터 버전)이 바뀌면 버린다.
+// 제주 밖 지역의 일정표(13차 — 거점 반경·같은 곳 합치기·식사 자리 대체)는 tour-plan.service.mainland.test.ts.
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId|lat|lng|latitude|longitude)$/;
 const scanKeys = (v: unknown, path: string[] = [], out: string[] = []): string[] => {
@@ -83,6 +87,12 @@ const MINOR_DAYS: Stop[][] = [
   [['C1', '자연', 10], ['C2', '자연', 11], ['C3', '식당', 13], ['X-air', '교통', 17]],
 ];
 // 구간 기록 [from, to, 분] — 1km 미만·1~3km·25~40km 세 구간에 20건씩 넘게 쌓여 이동 모델이 실측이 된다.
+// 버스 구간 기록(대중교통 모델) — 세 거리 구간에 24건씩.
+const MAIN_BUS_LEGS: Array<[string, string, number]> = [
+  ['A3', 'A2', 20],
+  ['A2', 'A1', 30],
+  ['A1', 'B1', 120],
+];
 const MAIN_LEGS: Array<[string, string, number]> = [
   ['A3', 'A2', 10],
   ['A2', 'A1', 10],
@@ -223,7 +233,10 @@ describe('tour plan (격리 DB)', () => {
     await p.tourTransition.createMany({
       data: trips
         .filter((t) => t.seg === MAIN)
-        .flatMap((t) => MAIN_LEGS.map(([from, to, travelMin]) => ({ travelId: t.id, fromVisitId: from, toVisitId: to, fromPlaceId: from, toPlaceId: to, travelMin, sameDay: true, viaPrivate: false, bothJeju: true }))),
+        .flatMap((t) => [
+          ...MAIN_LEGS.map(([from, to, travelMin]) => ({ travelId: t.id, fromVisitId: from, toVisitId: to, fromPlaceId: from, toPlaceId: to, travelMin, sameDay: true, viaPrivate: false, bothJeju: true })),
+          ...MAIN_BUS_LEGS.map(([from, to, travelMin]) => ({ travelId: t.id, fromVisitId: from, toVisitId: to, fromPlaceId: from, toPlaceId: to, travelMin, mvmnNm: '시내/마을버스', sameDay: true, viaPrivate: false, bothJeju: true })),
+        ]),
     });
     await p.tourDaySequence.createMany({
       data: trips.flatMap((t) =>
@@ -259,7 +272,7 @@ describe('tour plan (격리 DB)', () => {
 
   it('추천 장소 — 숫자는 지역 표본 전체 기준, 비슷한 여행은 가중치(5건 이상 간 곳에만 similarN·lift)', async () => {
     const r = await service.plan({ region: 'jeju', ...MAIN });
-    expect(r).toMatchObject({ matchedTrips: 24, relaxed: [], insufficient: false, excludedClosed: 1 });
+    expect(r).toMatchObject({ regionTrips: 30, matchedTrips: 24, relaxed: [], insufficient: false, excludedClosed: 1 });
 
     // 우진해장국 — 지역 24건·보정 4.6, 비슷한 여행 24건 전부 방문 → (24+3) ÷ (24×24/30+3) = 1.2배.
     expect(place(r, '우진해장국')).toEqual({ name: '우진해장국', kind: '식당', sigungu: '제주시', emd: '삼도이동', n: 24, mean: 4.6, score: 7.7, similarN: 24, lift: 1.2, peak: '점심', stayMin: 50, spendPp: 11000, placeId: 'n-ujin' });
@@ -297,6 +310,8 @@ describe('tour plan (격리 DB)', () => {
     const r = await service.plan({ region: 'jeju', ...MAIN });
     const it = r.itinerary!;
     expect(it.legBasis).toBe('observed');
+    // 제주는 거점 반경을 쓰지 않는다(섬 전체가 하루 거리) — 거점 없음, 예보 지점은 지역에 적어 둔 제주시.
+    expect(it).toMatchObject({ base: null, weatherPlaceId: '11G00201' });
     // 뼈대는 식사·볼거리 두 묶음의 순서다(첫날 "식당>볼거리>볼거리") — 볼거리 자리에 어떤 유형이 올지는 후보가 정한다.
     // 첫날 두 볼거리는 둘 다 오후 방문이라 점수가 높은 시장이 먼저 온다. pattern 은 실제로 고른 장소의 유형.
     expect(it.days.map((d) => [d.day, d.area, d.pattern, d.patternBasis, d.stops.map((s) => s.name)])).toEqual([
@@ -365,7 +380,159 @@ describe('tour plan (격리 DB)', () => {
     expect(all.places.length).toBeGreaterThan(0);
 
     const none = await service.plan({ region: 'busan' });
-    expect(none).toMatchObject({ matchedTrips: 0, relaxed: [], insufficient: true, places: [], templates: [], itinerary: null, excludedClosed: 0 });
+    // 적재된 여행이 없는 지역 — regionTrips 0 으로 "조건 탓이 아니라 데이터가 없다" 를 화면이 구분한다.
+    expect(none).toMatchObject({ regionTrips: 0, matchedTrips: 0, relaxed: [], insufficient: true, places: [], templates: [], itinerary: null, excludedClosed: 0 });
+    // 조건을 줘도 풀 만큼 풀고 0건으로 끝난다.
+    expect(await service.plan({ region: 'busan', ageGrp: '30', nights: 2 })).toMatchObject({ regionTrips: 0, matchedTrips: 0, relaxed: ['nights', 'ageGrp'] });
+  });
+
+  it('미적재 지역의 빈 프로필은 캐시에 남기지 않는다 — 여행이 적재되면 10분을 기다리지 않고 곧바로 잡힌다', async () => {
+    const p = app.prisma;
+    expect(await service.plan({ region: 'gangwon' })).toMatchObject({ regionTrips: 0, places: [] });
+    await p.tourTrip.create({
+      data: { id: 'G0', dataset: 'east', travelerLabel: 'G0', startDate: '2023-06-01', endDate: '2023-06-02', nights: 1, month: 6, gender: '여', ageGrp: '30', accompany: '나홀로 여행', nVisits: 1, nPublic: 1, nJeju: 0, nIsland: 0, nPhotos: 0, nActivities: 0, hasGps: false, visitSidos: ',강원,' },
+    });
+    try {
+      expect(await service.plan({ region: 'gangwon' })).toMatchObject({ regionTrips: 1, matchedTrips: 1 });
+      // 적재된 지역의 프로필은 그대로 캐시된다 — 적재 이력 없이 지우면 10분 안에는 옛 프로필(이력이 남는 적재·제거는 아래 테스트).
+      await p.tourTrip.delete({ where: { id: 'G0' } });
+      expect(await service.plan({ region: 'gangwon' })).toMatchObject({ regionTrips: 1 });
+      service.invalidate();
+      expect(await service.plan({ region: 'gangwon' })).toMatchObject({ regionTrips: 0 });
+    } finally {
+      await p.tourTrip.deleteMany({ where: { id: 'G0' } });
+      service.invalidate();
+    }
+  });
+
+  it('데이터 버전 — 적재 이력 행이 추가되면 캐시된 프로필을 버리고 곧바로 새로 만든다', async () => {
+    const p = app.prisma;
+    // 프로필을 데운다 — 지역 여행 30건, 용두암은 30건이 간 곳.
+    const before = await service.plan({ region: 'jeju' });
+    expect(before).toMatchObject({ regionTrips: 30, matchedTrips: 30 });
+    expect(place(before, '용두암')).toMatchObject({ n: 30 });
+    // 재적재를 흉내 — 여행 1건을 더하고 장소 표의 집계 열을 고친다.
+    await p.tourTrip.create({
+      data: { id: 'N0', travelerLabel: 'N0', startDate: '2023-06-01', endDate: '2023-06-03', ...MAIN, nVisits: 0, nPublic: 0, nJeju: 1, nIsland: 0, nPhotos: 0, nActivities: 0, hasGps: false },
+    });
+    await p.tourPlace.update({ where: { id: 'A2' }, data: { nTravelers: 31 } });
+    try {
+      // 이력 행이 없으면 버전이 그대로 — 비슷한 여행은 매번 새로 세지만(31) 프로필은 캐시된 옛것(30)이다.
+      const stale = await service.plan({ region: 'jeju' });
+      expect(stale).toMatchObject({ regionTrips: 30, matchedTrips: 31 });
+      expect(place(stale, '용두암')).toMatchObject({ n: 30 });
+      // load:tour·unload:tour(다른 프로세스)가 데이터와 같은 트랜잭션에서 남기는 이력 행 — 버전이 올라 프로필을 새로 만든다.
+      await p.lifeMasterSync.create({ data: { layer: tourSyncLayer('jeju'), count: PLACES.length } });
+      const fresh = await service.plan({ region: 'jeju' });
+      expect(fresh).toMatchObject({ regionTrips: 31, matchedTrips: 31 });
+      expect(place(fresh, '용두암')).toMatchObject({ n: 31 });
+    } finally {
+      await p.tourTrip.delete({ where: { id: 'N0' } });
+      await p.tourPlace.update({ where: { id: 'A2' }, data: { nTravelers: 30 } });
+      await p.lifeMasterSync.deleteMany();
+      service.invalidate();
+    }
+  });
+
+  // ── 11차 입력 확장 ──────────────────────────────────────────────────────────
+  it('숙소 동네 선택지(areas) — 후보가 3곳 이상인 권역을 방문 많은 순으로, 옵션이 없으면 일정에 흔적이 없다', async () => {
+    const r = await service.plan({ region: 'jeju', ...MAIN });
+    expect(r.areas).toEqual([
+      { label: '제주시 한림읍', n: 4 },
+      { label: '제주시 용담이동·삼도이동', n: 4 },
+      { label: '서귀포시 성산읍', n: 3 },
+    ]);
+    expect(r.itinerary).toMatchObject({ transport: 'car', stayArea: null, unplaced: [] });
+    expect(r.itinerary!.days.every((d) => d.fromStayMin === null && d.toStayMin === null && d.stops.every((s) => !s.pinned))).toBe(true);
+    expect((await service.plan({ region: 'all', ...MAIN })).areas).toEqual([]);
+  });
+
+  it('속도 — 여유롭게는 하루 자리 수를 하나 줄이고 빽빽하게는 늘린다(그 길이의 실제 뼈대가 있을 때만)', async () => {
+    const stops = async (pace: 'relaxed' | 'normal' | 'packed') => (await service.plan({ region: 'jeju', ...MAIN, pace })).itinerary!.days.map((d) => [d.stops.length, d.patternBasis]);
+    expect(await stops('normal')).toEqual([[3, 'similar'], [4, 'similar'], [2, 'similar']]);
+    // 첫날 3곳 → 2곳(소수 세그먼트가 만든 지역 뼈대 "식당>볼거리"). 가운데 날은 4곳짜리 뼈대뿐이라 그대로.
+    expect(await stops('relaxed')).toEqual([[2, 'region'], [4, 'similar'], [2, 'similar']]);
+    // 마지막 날 2곳 → 3곳(지역 뼈대 "볼거리>볼거리>식당").
+    expect(await stops('packed')).toEqual([[3, 'similar'], [4, 'similar'], [3, 'region']]);
+  });
+
+  it('취향 — 고른 묶음의 유형에 1.5배(목록 점수·순위)', async () => {
+    const base = await service.plan({ region: 'jeju', ...MAIN });
+    const act = await service.plan({ region: 'jeju', ...MAIN, focus: ['activity'] });
+    // 한림공원(테마) — (4.1 − 3.3) × √24 × 1.2 = 4.8 → × 1.5 = 7.1. 자연은 그대로.
+    expect(place(base, '한림공원')!.score).toBe(4.8);
+    expect(place(act, '한림공원')!.score).toBe(7.1);
+    expect(place(act, '협재해수욕장')!.score).toBe(place(base, '협재해수욕장')!.score);
+    const rank = (r: TourPlanResultType) => r.places.findIndex((x) => x.name === '한림공원');
+    expect(rank(act)).toBeLessThan(rank(base));
+  });
+
+  it('이동수단 — 대중교통은 버스 구간 기록으로 이동 분을 낸다', async () => {
+    const car = (await service.plan({ region: 'jeju', ...MAIN })).itinerary!;
+    const bus = (await service.plan({ region: 'jeju', ...MAIN, transport: 'transit' })).itinerary!;
+    expect(car).toMatchObject({ transport: 'car', legBasis: 'observed' });
+    expect(bus).toMatchObject({ transport: 'transit', legBasis: 'observed' });
+    expect(car.days[0]!.stops.map((s) => s.moveMin)).toEqual([null, 5, 10]);
+    expect(bus.days[0]!.stops.map((s) => s.moveMin)).toEqual([null, 15, 30]);
+    // 도착 시각은 자리의 흔한 시각이 더 늦어 그대로다.
+    expect(bus.days[0]!.stops.map((s) => s.arriveMin)).toEqual([720, 840, 960]);
+  });
+
+  it('숙소 동네 — 라벨로 받은 권역을 숙소로 보고 숙소에서·숙소까지 이동 분을 붙인다', async () => {
+    const r = await service.plan({ region: 'jeju', ...MAIN, stayArea: '제주시 한림읍' });
+    expect(r.itinerary!.stayArea).toBe('제주시 한림읍');
+    expect(r.itinerary!.days.map((d) => [d.area, d.fromStayMin, d.toStayMin])).toEqual([
+      // 도착한 날은 숙소로 가는 쪽만(용두암 → 한림 약 29km).
+      ['제주시 삼도이동·일도일동', null, 55],
+      ['제주시 한림읍', 5, 5],
+      // 떠나는 날은 숙소에서 나오는 쪽만(한림 → 성산 약 66km).
+      ['서귀포시 성산읍', 110, null],
+    ]);
+    // 모르는 라벨은 무시한다.
+    const unknown = await service.plan({ region: 'jeju', ...MAIN, stayArea: '없는 동네' });
+    expect(unknown.itinerary).toMatchObject({ stayArea: null });
+    expect(unknown.itinerary!.days.every((d) => d.fromStayMin === null && d.toStayMin === null)).toBe(true);
+  });
+
+  it('꼭 갈 곳·뺄 곳 — 이름으로 받아 그 동네를 가운데 날에 놓고 자리에 고정, 뺀 곳은 일정에서만 사라진다', async () => {
+    const must = await service.plan({ region: 'jeju', ...MAIN, must: [{ name: '섭지코지', emd: '성산읍' }] });
+    expect(must.itinerary!.unplaced).toEqual([]);
+    expect(must.itinerary!.days.map((d) => d.stops.map((s) => (s.pinned ? `*${s.name}` : s.name)))).toEqual([
+      ['우진해장국', '동문재래시장', '용두암'],
+      // 성산이 마지막 날에서 가운데 날로 옮겨 온다.
+      ['*섭지코지', '성산 해녀의집', '성산일출봉'],
+      ['협재해수욕장', '협재 흑돼지'],
+    ]);
+
+    const avoid = await service.plan({ region: 'jeju', ...MAIN, avoid: [{ name: '우진해장국' }] });
+    const names = avoid.itinerary!.days.flatMap((d) => d.stops.flatMap((s) => [s.name, ...s.alternatives.map((a) => a.name)]));
+    expect(names).not.toContain('우진해장국');
+    expect(avoid.itinerary!.days[0]!.stops[0]!.name).toBe('올래국수');
+    expect(place(avoid, '우진해장국')).toBeDefined();
+
+    // 섬(배편)·없는 이름은 못 넣었다고 알려 주고, 꼭 갈 곳과 뺄 곳에 같이 있으면 꼭 갈 곳이 이긴다.
+    const mixed = await service.plan({ region: 'jeju', ...MAIN, must: [{ name: '우도' }, { name: '없는곳' }, { name: '한림공원' }], avoid: [{ name: '한림공원' }] });
+    expect(mixed.itinerary!.unplaced).toEqual(['우도', '없는곳']);
+    expect(mixed.itinerary!.days.flatMap((d) => d.stops.filter((s) => s.pinned).map((s) => s.name))).toEqual(['한림공원']);
+    expect(scanKeys(mixed)).toEqual([]);
+  });
+
+  it('날씨(12차) — 비 오는 일차만 wet 으로 표시되고 일정 밖 번호는 무시된다', async () => {
+    const dry = await service.plan({ region: 'jeju', ...MAIN });
+    expect(dry.itinerary!.days.map((d) => d.wet)).toEqual([false, false, false]);
+    const wet = await service.plan({ region: 'jeju', ...MAIN, wetDays: [2, 5] });
+    expect(wet.itinerary!.days.map((d) => d.wet)).toEqual([false, true, false]);
+    // 한림에는 볼거리가 해수욕장과 한림공원뿐이라 장소는 그대로다(유형 배수의 효과는 tour-plan-synth.test 가 고정).
+    expect(wet.itinerary!.days[1]!.stops.map((s) => s.name)).toEqual(['협재해수욕장', '협재 흑돼지', '한림공원', '금능 카페']);
+  });
+
+  it('입력 선택지 키 — 계약(zod enum)과 utils 상수가 같다(순서 포함)', () => {
+    expect(TourPlanPace.options).toEqual([...TOUR_PLAN_PACE_KEYS]);
+    expect(TourPlanFocus.options).toEqual([...TOUR_PLAN_FOCUS_KEYS]);
+    expect(TourPlanTransport.options).toEqual([...TOUR_PLAN_TRANSPORT_KEYS]);
+    expect(Object.keys(TOUR_PLAN_PACES)).toEqual([...TOUR_PLAN_PACE_KEYS]);
+    expect(Object.keys(TOUR_PLAN_FOCUSES)).toEqual([...TOUR_PLAN_FOCUS_KEYS]);
+    expect(Object.keys(TOUR_PLAN_TRANSPORTS)).toEqual([...TOUR_PLAN_TRANSPORT_KEYS]);
   });
 
   it('라우트 — POST plan 200(식별자·좌표 키 없음), 잘못된 입력 400', async () => {
@@ -378,5 +545,17 @@ describe('tour plan (격리 DB)', () => {
     expect(scanKeys(r)).toEqual([]);
     expect(r.sourceNote).toContain('aihub.or.kr');
     expect((await app.inject({ method: 'POST', url: '/api/v1/tour/public/plan', payload: { nights: 9 } })).statusCode).toBe(400);
+
+    // 11차 입력 — 옵션이 계약대로 검증되고(모르는 속도·꼭 갈 곳 9곳 400) 응답에 반영된다.
+    const post = (payload: object) => app.inject({ method: 'POST', url: '/api/v1/tour/public/plan', payload });
+    const opt = (await post({ ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2, pace: 'relaxed', focus: ['nature'], transport: 'transit', stayArea: '서귀포시 성산읍', must: [{ name: '한림공원' }] })).json() as TourPlanResultType;
+    expect(opt.itinerary).toMatchObject({ transport: 'transit', stayArea: '서귀포시 성산읍', unplaced: [] });
+    expect(scanKeys(opt)).toEqual([]);
+    expect((await post({ pace: 'slow' })).statusCode).toBe(400);
+    expect((await post({ focus: ['food'] })).statusCode).toBe(400);
+    expect((await post({ must: Array.from({ length: 9 }, (_, i) => ({ name: `곳${i}` })) })).statusCode).toBe(400);
+    expect((await post({ wetDays: [0] })).statusCode).toBe(400);
+    expect((await post({ wetDays: [6] })).statusCode).toBe(400);
+    expect(((await post({ nights: 2, wetDays: [1] })).json() as TourPlanResultType).itinerary!.days[0]!.wet).toBe(true);
   });
 });

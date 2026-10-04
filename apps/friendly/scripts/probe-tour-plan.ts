@@ -2,16 +2,18 @@
 // 그대로 부르고 읽기만 한다(DB 에 쓰지 않는다). 출력은 공개 응답과 같은 집계뿐이다.
 //   ① 조건 없음(기준) 일정표 전체
 //   ② 대표 조건 몇 개의 일정표·상위 장소
-//   ③ 동반 × 박수 훑기 — 조건마다 비슷한 여행 수·완화·일수(채운/바란)·뼈대 근거·하루 평균 이동·기준 대비 상위 10곳 겹침
+//   ③ 입력 확장(11차) — 속도별 하루 자리 수, 대중교통의 이동 분, 숙소 동네별 숙소 이동, 꼭 갈 곳·뺄 곳
+//   ④ 동반 × 박수 훑기 — 조건마다 비슷한 여행 수·완화·일수(채운/바란)·뼈대 근거·하루 평균 이동·기준 대비 상위 10곳 겹침
 //      (겹침이 늘 10이면 비슷한 여행 가중이 순위를 못 바꾸는 것, 일수가 모자라면 후보·권역이 모자란 것)
+//   ⑤ 지역 훑기(13차, --regions) — 일정표를 여는 지역 전부를 당일·1박·2박으로 돌려 거점·채운 일수·하루 자리 수·식사 자리 유무를 한 줄씩
 //
-// 실행: pnpm --filter friendly probe:tour-plan [--region=jeju] [--sweep-only]
+// 실행: pnpm --filter friendly probe:tour-plan [--region=jeju] [--sweep-only] [--regions]
 //   .env 의 DB 를 읽는다. 일정표는 utils TOUR_ITINERARY_REGIONS 지역만 나온다(그 밖은 장소만).
 /* eslint-disable no-console */
 
 import { PrismaClient } from '@prisma/client';
 import type { TourPlanBodyType, TourPlanResultType } from '@repo/api-contract';
-import { isTourRegionKey, tourItineraryDays, tourRegionLabel } from '@repo/utils';
+import { TOUR_REGION_KEYS, isTourItineraryRegion, isTourRegionKey, tourItineraryDays, tourRegionLabel, weatherPlaceById, weatherPlaceLabel } from '@repo/utils';
 import { TourPlanService } from '../src/modules/tour/tour-plan.service.js';
 
 const args = process.argv.slice(2);
@@ -23,6 +25,7 @@ const regionArg = opt('region', 'jeju');
 if (!isTourRegionKey(regionArg)) throw new Error(`모르는 지역: ${regionArg}`);
 const region = regionArg;
 const SWEEP_ONLY = args.includes('--sweep-only');
+const REGIONS_ONLY = args.includes('--regions');
 
 const ACCOMPANY = ['나홀로 여행', '2인 여행(가족 외)', '2인 가족 여행', '3인 이상 여행(가족 외)', '3인 이상 가족 여행(친척 포함)', '자녀 동반 여행', '부모 동반 여행', '3대 동반 여행(친척 포함)'];
 const NIGHTS = [0, 1, 2, 3, 4];
@@ -34,7 +37,9 @@ const SAMPLES: Array<{ label: string; body: Partial<TourPlanBodyType> }> = [
 
 const clock = (min: number): string => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const head = (r: TourPlanResultType): string =>
-  `비슷한 여행 ${r.matchedTrips}건${r.relaxed.length ? ` · 완화 [${r.relaxed.join(',')}]` : ''}${r.insufficient ? ' · 표본 부족' : ''} · 장소 ${r.places.length}곳(식당 ${r.places.filter((p) => p.kind === '식당').length}) · 폐업 제외 ${r.excludedClosed}`;
+  r.regionTrips === 0
+    ? '이 DB 에 이 지역 여행로그가 없습니다(load:tour 로 적재한 뒤 다시 실행)'
+    : `비슷한 여행 ${r.matchedTrips}건${r.relaxed.length ? ` · 완화 [${r.relaxed.join(',')}]` : ''}${r.insufficient ? ' · 표본 부족' : ''} · 장소 ${r.places.length}곳(식당 ${r.places.filter((p) => p.kind === '식당').length}) · 폐업 제외 ${r.excludedClosed}`;
 
 const printPlan = (label: string, r: TourPlanResultType, topN = 12): void => {
   console.log(`\n■ ${label}\n  ${head(r)}`);
@@ -46,14 +51,17 @@ const printPlan = (label: string, r: TourPlanResultType, topN = 12): void => {
     console.log('  일정표 없음');
     return;
   }
-  console.log(`  일정표(${r.itinerary.days.length}일 · 이동 근거 ${r.itinerary.legBasis})`);
+  const wx = weatherPlaceById(r.itinerary.weatherPlaceId);
+  console.log(`  일정표(${r.itinerary.days.length}일 · 이동 근거 ${r.itinerary.legBasis}${r.itinerary.base ? ` · 거점 ${r.itinerary.base}` : ''}${wx ? ` · 예보 ${weatherPlaceLabel(wx)}` : ''})`);
   for (const d of r.itinerary.days) {
     console.log(`  ${d.day}일차 [${d.area}] ${d.pattern} (${d.patternBasis}) — 이동 ${d.moveMin}분·${d.moveKm}km · 머묾 ${d.stayMin}분${d.spendPp !== null ? ` · 1인 ${d.spendPp.toLocaleString('ko-KR')}원` : ''}`);
+    if (d.fromStayMin !== null) console.log(`     (숙소에서 ${d.fromStayMin}분)`);
     for (const s of d.stops) {
       const move = s.moveMin === null ? '' : ` ← ${s.moveMin}분·${s.moveKm}km`;
       const alts = s.alternatives.length ? ` (대신: ${s.alternatives.map((a) => a.name).join(', ')})` : '';
-      console.log(`     ${clock(s.arriveMin)} ${s.kind.padEnd(3)} ${s.name} ${s.stayMin}분 · ${s.n}건 · 만족 ${s.mean}${move}${alts}`);
+      console.log(`     ${clock(s.arriveMin)} ${s.kind.padEnd(3)} ${s.pinned ? '[꼭] ' : ''}${s.name} ${s.stayMin}분 · ${s.n}건 · 만족 ${s.mean}${move}${alts}`);
     }
+    if (d.toStayMin !== null) console.log(`     (숙소까지 ${d.toStayMin}분)`);
   }
 };
 
@@ -61,6 +69,23 @@ const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
   try {
     const service = new TourPlanService(prisma);
+    if (REGIONS_ONLY) {
+      console.log('지역 훑기 — 지역 | 여행 | 후보(식당) | 박수: 채운/바란 일수 · 일차별 자리 수(식당 수) · 거점 · 예보 지점');
+      for (const key of TOUR_REGION_KEYS.filter(isTourItineraryRegion)) {
+        const first = await service.plan({ region: key });
+        console.log(`\n${tourRegionLabel(key)}(${key}) | 여행 ${first.regionTrips} | 목록 ${first.places.length}곳(식당 ${first.places.filter((x) => x.kind === '식당').length}) | 숙소 동네 ${first.areas.length}곳`);
+        for (const nights of [0, 1, 2]) {
+          const r = await service.plan({ region: key, nights });
+          const it = r.itinerary;
+          const wx = weatherPlaceById(it?.weatherPlaceId);
+          const days = it ? it.days.map((d) => `${d.stops.length}(${d.stops.filter((x) => x.kind === '식당').length})`).join(' ') : '-';
+          console.log(
+            `  ${nights === 0 ? '당일' : `${nights}박`}: ${it?.days.length ?? 0}/${tourItineraryDays(nights)}일 · 자리 ${days} · 거점 ${it?.base ?? '-'} · 예보 ${wx ? weatherPlaceLabel(wx) : '-'}${it ? ` · ${it.days.map((d) => `[${d.area}] ${d.stops.map((x) => x.name).join('→')}`).join(' / ')}` : ''}`,
+          );
+        }
+      }
+      return;
+    }
     const base = await service.plan({ region });
     console.log(`코스 추천 점검 — ${tourRegionLabel(region)}(${region})`);
     if (base.places.length === 0) {
@@ -70,6 +95,27 @@ const main = async (): Promise<void> => {
     if (!SWEEP_ONLY) {
       printPlan('조건 없음(기준)', base);
       for (const s of SAMPLES) printPlan(s.label, await service.plan({ region, ...s.body }));
+    }
+
+    if (!SWEEP_ONLY && base.itinerary) {
+      const seg = { region, ...SAMPLES[0]!.body };
+      const line = (r: TourPlanResultType): string =>
+        r.itinerary ? r.itinerary.days.map((d) => `${d.day}일차 ${d.stops.length}곳·이동 ${d.moveMin}분${d.fromStayMin !== null ? `·숙소에서 ${d.fromStayMin}분` : ''}${d.toStayMin !== null ? `·숙소까지 ${d.toStayMin}분` : ''}`).join(' / ') : '일정표 없음';
+      console.log(`\n■ 입력 확장 — ${SAMPLES[0]!.label} 기준`);
+      for (const pace of ['relaxed', 'normal', 'packed'] as const) console.log(`  속도 ${pace.padEnd(7)} ${line(await service.plan({ ...seg, pace }))}`);
+      const transit = await service.plan({ ...seg, transport: 'transit' });
+      console.log(`  대중교통(이동 근거 ${transit.itinerary?.legBasis ?? '-'})  ${line(transit)}`);
+      console.log(`  숙소 동네 선택지 ${base.areas.length}곳: ${base.areas.map((a) => `${a.label}(${a.n})`).join(' · ')}`);
+      for (const area of base.areas.slice(0, 3)) console.log(`  숙소 ${area.label}  ${line(await service.plan({ ...seg, stayArea: area.label }))}`);
+      // 꼭 갈 곳 — 기준 일정에 없던 상위 장소 둘, 뺄 곳 — 기준 일정의 첫 장소.
+      const segBase = await service.plan(seg);
+      const inPlan = new Set(segBase.itinerary?.days.flatMap((d) => d.stops.map((x) => x.name)) ?? []);
+      const must = segBase.places.filter((p) => !inPlan.has(p.name)).slice(0, 2).map((p) => ({ name: p.name, emd: p.emd }));
+      const gone = segBase.itinerary?.days[0]?.stops[0];
+      if (must.length > 0 && gone) {
+        const edited = await service.plan({ ...seg, must, avoid: [{ name: gone.name, emd: gone.emd }] });
+        printPlan(`꼭 갈 곳 [${must.map((m) => m.name).join(', ')}] · 뺄 곳 [${gone.name}]${edited.itinerary?.unplaced.length ? ` · 못 넣음 [${edited.itinerary.unplaced.join(', ')}]` : ''}`, edited, 0);
+      }
     }
 
     const baseTop = new Set(base.places.slice(0, 10).map((p) => p.name));

@@ -6,7 +6,7 @@ import { TOUR_ACCOMPANY_OPTIONS, TOUR_AGE_OPTIONS, TOUR_MONTH_OPTIONS, TOUR_NIGH
 // 인사이트·코스 추천 공통 필터 — 지역·연령·성별·동반·월·박수. 값은 URL 쿼리(인사이트) 또는 폼 상태(코스)가 쥔다.
 // 지역은 두 줄(8차): 1행 권역(제주·서부권·동부권·전체), 2행은 고른 권역의 시도 — 값은 여전히 region 키 하나.
 
-const Chip = ({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) => (
+export const Chip = ({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) => (
   <button
     type="button"
     onClick={onClick}
@@ -19,7 +19,7 @@ const Chip = ({ active, children, onClick }: { active: boolean; children: React.
   </button>
 );
 
-const Group = ({ label, children }: { label: string; children: React.ReactNode }) => (
+export const Group = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="flex flex-wrap items-center gap-1.5">
     <span className="mr-1 text-[11px] font-medium text-muted-foreground">{label}</span>
     {children}

@@ -1,14 +1,15 @@
 // 여행로그 공개 인사이트(5차) — 필터(지역·연령·성별·동반·월·박수)를 걸어 여행·방문·전이·하루 코스·소비를
 // 집계한다. 공개 층이라 응답에 식별자가 없고(계약), 집단 셀은 TOUR_K_MIN 미만이면 뺀다. 필터 후 여행이 20건 미만이면
 // insufficient — 화면은 "표본 부족" 을 붙인다. 여행 속성(gender·ageGrp·accompany·nights·month)이 방문·전이·일차·소비
-// 표에 비정규화돼 있어 대부분 한 표 조회로 끝나고, 결과는 필터 키로 10분 캐시한다(재적재는 배포 단위).
+// 표에 비정규화돼 있어 대부분 한 표 조회로 끝나고, 결과는 필터 키로 10분 캐시한다. 적재·제거(다른 프로세스)로 데이터 버전이
+// 바뀌면 캐시를 버리고 다음 요청부터 새로 집계한다(tour-data-version.ts).
 //
 // 코스 추천은 tour-plan.service.ts(10차에 분리) — 여기의 필터 조각(attrWhere)·통계 함수·표본 하한을 같이 쓴다.
 
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { TourInsightsQueryType, TourInsightsResultType, TourPlaceRefType } from '@repo/api-contract';
 import { TOUR_K_MIN, TOUR_RATING_MIN_N, TOUR_SAMPLE_LABEL, TOUR_SOURCE_NOTE } from '@repo/utils';
-import { LRUCache } from 'lru-cache';
+import { TourVersionedCache, tourDataVersion } from './tour-data-version.js';
 import { registeredNaverIds } from './tour-public.service.js';
 import { tourRegionDayWhere, tourRegionHubLabel, tourRegionHubs, tourRegionTransitionWhere, tourRegionTripWhere, tourRegionVisitWhere } from './tour-region-filter.js';
 
@@ -48,7 +49,7 @@ export const attrWhere = (q: TourInsightsQueryType): Record<string, unknown> => 
 const cacheKey = (q: TourInsightsQueryType): string => JSON.stringify([q.region, q.ageGrp ?? '', q.gender ?? '', q.accompany ?? '', q.month ?? '', q.nights ?? '']);
 
 export class TourInsightsService {
-  private readonly cache = new LRUCache<string, TourInsightsResultType>({ max: 200, ttl: CACHE_TTL_MS });
+  private readonly cache = new TourVersionedCache<TourInsightsResultType>({ max: 200, ttl: CACHE_TTL_MS });
 
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -57,11 +58,13 @@ export class TourInsightsService {
   }
 
   async insights(q: TourInsightsQueryType): Promise<TourInsightsResultType> {
+    // 집계보다 먼저 읽는다 — 버전이 바뀌었으면 캐시가 비워져 새로 집계한다.
+    const version = await tourDataVersion(this.prisma);
     const key = cacheKey(q);
-    const hit = this.cache.get(key);
+    const hit = this.cache.get(version, key);
     if (hit) return hit;
     const out = await this.computeInsights(q);
-    this.cache.set(key, out);
+    this.cache.set(version, key, out);
     return out;
   }
 

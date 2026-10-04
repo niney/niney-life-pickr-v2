@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TourDensityResultType, TourLodgingResultType, TourRegionsResultType } from '@repo/api-contract';
-import { TOUR_DENSITY_CELL_DEG } from '@repo/utils';
+import { TOUR_DENSITY_CELL_DEG, tourSyncLayer } from '@repo/utils';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import sensiblePlugin from '../../plugins/sensible.js';
@@ -11,7 +11,8 @@ import tourPublicRoutes from './tour-public.route.js';
 import { TourRegionService } from './tour-region.service.js';
 
 // 6차 밀도·숙소·지역 비교 — 격리 DB 에 여행 28건(주 세그먼트 20 · 부속섬 5 · 억제 대상 3)을 심고 ① 격자(여행 5건 미만 칸
-// 제외, kind=restaurant, bbox) ② 숙소 유형별 1박 추정·예약률·만족도 ③ 3집단 + 읍면동 ④ 라우트 200/400 + 응답 키 스캔.
+// 제외, kind=restaurant, bbox) ② 숙소 유형별 1박 추정·예약률·만족도 ③ 3집단 + 읍면동 ④ 적재 이력(데이터 버전)이 바뀌면
+// 캐시를 버림 ⑤ 라우트 200/400 + 응답 키 스캔.
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId|placeId)$/;
 const scanKeys = (v: unknown, path: string[] = [], out: string[] = []): string[] => {
@@ -208,6 +209,40 @@ describe('tour density / lodging / regions (격리 DB)', () => {
       ['우도면', true, 10, 5],
     ]);
     expect(scanKeys(d)).toEqual([]);
+  });
+
+  it('데이터 버전 — 적재 이력 행이 추가되면 밀도·숙소·지역 비교를 같은 인스턴스가 곧바로 새로 집계한다', async () => {
+    const p = app.prisma;
+    // 캐시를 데운다.
+    expect((await service.density({ kind: 'all' })).total).toEqual({ cells: 3, visits: 70 });
+    expect((await service.lodging({ region: 'jeju' })).total.trips).toBe(28);
+    expect((await service.regions({ region: 'jeju' })).groups[0]).toMatchObject({ key: 'jeju-si', trips: 23, visits: 43 });
+    // 억제되던 칸 D(여행 3건)에 여행 2건을 더한다 — 새로 집계하면 여행 5건이 돼 칸이 드러난다.
+    const extra = ['Y0', 'Y1'];
+    await p.tourTrip.createMany({
+      data: extra.map((id) => ({ id, travelerLabel: id, startDate: '2023-06-01', endDate: '2023-06-03', ...MAIN, nVisits: 1, nPublic: 1, nJeju: 1, nIsland: 0, nPhotos: 0, nActivities: 0, hasGps: false })),
+    });
+    await p.tourVisit.createMany({
+      data: extra.map((id) => ({ id: `${id}:1`, travelId: id, visitAreaId: '1', visitOrder: 1, visitDate: '2023-06-01', typeCd: '11', typeShort: '자연', isPrivate: false, placeId: 'P-억제칸', name: '억제칸', lat: D.lat, lng: D.lng, sigungu: '제주시', emd: '애월읍', isJeju: true, isIsland: false, dgstfn: 3, stayMin: 60, nPhotos: 0, nActivities: 0, ...MAIN })),
+    });
+    try {
+      // 이력 행이 없으면 버전이 그대로 — 캐시된 집계가 나온다.
+      expect((await service.density({ kind: 'all' })).total).toEqual({ cells: 3, visits: 70 });
+      expect((await service.lodging({ region: 'jeju' })).total.trips).toBe(28);
+      expect((await service.regions({ region: 'jeju' })).groups[0]).toMatchObject({ trips: 23, visits: 43 });
+      // load:tour·unload:tour(다른 프로세스)가 데이터와 같은 트랜잭션에서 남기는 이력 행 — 세 캐시가 다 버려진다.
+      await p.lifeMasterSync.create({ data: { layer: tourSyncLayer('jeju'), count: 1 } });
+      const den = await service.density({ kind: 'all' });
+      expect(den.total).toEqual({ cells: 4, visits: 75 });
+      expect(den.cells[3]).toEqual({ ...cellOf(D.lng, D.lat), n: 5, travelers: 5 });
+      expect((await service.lodging({ region: 'jeju' })).total.trips).toBe(30);
+      expect((await service.regions({ region: 'jeju' })).groups[0]).toMatchObject({ key: 'jeju-si', trips: 25, visits: 45 });
+    } finally {
+      await p.tourVisit.deleteMany({ where: { travelId: { in: extra } } });
+      await p.tourTrip.deleteMany({ where: { id: { in: extra } } });
+      await p.lifeMasterSync.deleteMany();
+      service.invalidate();
+    }
   });
 
   it('라우트 — density/lodging/regions 200, 잘못된 kind 400', async () => {

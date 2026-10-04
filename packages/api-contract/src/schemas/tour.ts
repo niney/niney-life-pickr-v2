@@ -558,6 +558,26 @@ export type TourInsightsResultType = z.infer<typeof TourInsightsResult>;
 
 // 코스 추천 입력 — 조건이 맞는 여행이 20건 미만이면 month → gender → nights → ageGrp 순으로 풀며(relaxed 에 기록) 찾는다.
 // nights 는 비슷한 여행을 고르는 조건이면서 일정표의 일수(박수 + 1, 4박 이상은 5일)다 — 안 주면 비슷한 여행의 박수 중앙값.
+// 11차 — 일정표를 내 사정에 맞추는 선택 입력(전부 선택, 일정표 지원 지역에서만 뜻이 있다. 취향은 목록 순위에도 반영된다).
+//   pace: 하루에 들르는 곳 수(여유 −1 · 빽빽 +1) · focus: 가중을 줄 유형 묶음 · transport: 이동 분·하루 권역의 기준
+//   stayArea: 숙소 동네(응답 areas[].label 중 하나 — 그 근처 동네를 앞세우고 숙소까지 이동 분을 붙인다)
+//   must / avoid: 꼭 넣을 곳 / 일정에서 뺄 곳. 장소는 이름(+읍면동)으로 가리킨다 — 응답에 장소 id 가 없다.
+//   wetDays(12차): 비가 오는 일차 번호(1부터). 화면이 날씨 예보에서 골라 보낸다 — 그날은 실내에 가까운 유형을 앞세운다.
+export const TOUR_PLAN_PACE_KEYS = ['relaxed', 'normal', 'packed'] as const;
+export const TourPlanPace = z.enum(TOUR_PLAN_PACE_KEYS);
+export type TourPlanPaceType = z.infer<typeof TourPlanPace>;
+export const TOUR_PLAN_FOCUS_KEYS = ['nature', 'city', 'activity', 'culture'] as const;
+export const TourPlanFocus = z.enum(TOUR_PLAN_FOCUS_KEYS);
+export type TourPlanFocusType = z.infer<typeof TourPlanFocus>;
+export const TOUR_PLAN_TRANSPORT_KEYS = ['car', 'transit'] as const;
+export const TourPlanTransport = z.enum(TOUR_PLAN_TRANSPORT_KEYS);
+export type TourPlanTransportType = z.infer<typeof TourPlanTransport>;
+export const TourPlanPlaceKey = z.object({
+  name: z.string().trim().min(1).max(80),
+  emd: z.string().trim().max(40).nullable().optional(),
+});
+export type TourPlanPlaceKeyType = z.infer<typeof TourPlanPlaceKey>;
+
 export const TourPlanBody = z.object({
   region: TourRegion.default('jeju'),
   ageGrp: TourAgeGrp.optional(),
@@ -565,6 +585,13 @@ export const TourPlanBody = z.object({
   accompany: z.string().trim().min(1).max(40).optional(),
   month: z.number().int().min(4).max(9).optional(),
   nights: z.number().int().min(0).max(4).optional(),
+  pace: TourPlanPace.optional(),
+  focus: z.array(TourPlanFocus).max(TOUR_PLAN_FOCUS_KEYS.length).optional(),
+  transport: TourPlanTransport.optional(),
+  stayArea: z.string().trim().min(1).max(60).optional(),
+  must: z.array(TourPlanPlaceKey).max(8).optional(),
+  avoid: z.array(TourPlanPlaceKey).max(30).optional(),
+  wetDays: z.array(z.number().int().min(1).max(5)).max(5).optional(),
 });
 export type TourPlanBodyType = z.infer<typeof TourPlanBody>;
 
@@ -575,7 +602,7 @@ export const TourPlanPlace = z.object({
   kind: z.string(),
   sigungu: z.string().nullable(),
   emd: z.string().nullable(),
-  // 이 장소를 다녀간 여행 수(≥5) · 보정 만족도(bayes) · 점수 = (보정 만족도 − 3.3) × √n × 비슷한 여행자 선호.
+  // 이 장소를 다녀간 여행 수(≥5) · 보정 만족도(bayes) · 점수 = (보정 만족도 − 3.3) × √n × 비슷한 여행자 선호 × 취향(focus 를 줬을 때).
   n: z.number().int(),
   mean: z.number().nullable(),
   score: z.number(),
@@ -618,6 +645,8 @@ export const TourPlanStop = z.object({
   moveMin: z.number().int().nullable(),
   moveKm: z.number().nullable(),
   spendPp: z.number().nullable(),
+  // 꼭 갈 곳(must)으로 넣은 장소.
+  pinned: z.boolean(),
   // 같은 자리에 넣을 만한 다른 후보(최대 2).
   alternatives: z.array(TourPlanAlt),
 });
@@ -629,7 +658,7 @@ export type TourPlanPatternBasisType = z.infer<typeof TourPlanPatternBasis>;
 
 export const TourPlanDay = z.object({
   day: z.number().int(),
-  // 그날 도는 동네("제주시 애월읍·한림읍").
+  // 그날 도는 동네("제주시 애월읍·한림읍"). 여러 시도를 묶은 지역(권역)은 시도를 앞에 붙인다("부산 해운대구 우동·중동").
   area: z.string(),
   // 그날 들르는 곳의 유형 순서("자연>식당>상업>식당") — 뼈대(식사·볼거리 자리의 순서)에 장소를 채운 결과 — 와 뼈대의 근거.
   pattern: z.string(),
@@ -640,6 +669,12 @@ export const TourPlanDay = z.object({
   moveKm: z.number(),
   stayMin: z.number().int(),
   spendPp: z.number().nullable(),
+  // 숙소 동네(stayArea)를 줬을 때 — 숙소에서 첫 장소까지 / 마지막 장소에서 숙소까지 이동 분(추정). 도착한 날의 출발·떠나는 날의
+  // 귀환·당일 여행은 null.
+  fromStayMin: z.number().int().nullable(),
+  toStayMin: z.number().int().nullable(),
+  // 비 오는 날로 짰는가(wetDays) — 야외 유형을 낮추고 실내에 가까운 유형을 앞세운 날.
+  wet: z.boolean(),
 });
 export type TourPlanDayType = z.infer<typeof TourPlanDay>;
 
@@ -647,10 +682,26 @@ export const TourPlanItinerary = z.object({
   days: z.array(TourPlanDay),
   // 이동시간 근거 — observed(구간 기록을 거리 구간별 평균으로 집계) | default(기록이 모자라 기본 속도).
   legBasis: z.enum(['observed', 'default']),
+  // 반영된 이동수단·숙소 동네(모르는 라벨이면 null) · 일정에 넣지 못한 꼭 갈 곳 이름(섬·좌표 없음·날이 모자람).
+  transport: TourPlanTransport,
+  stayArea: z.string().nullable(),
+  unplaced: z.array(z.string()),
+  // 거점 동네(13차) — 넓은 지역은 일정 전체를 한 동네 주변(지역별 거점 반경 안)에서 짠다. 숙소 동네를 줬으면 그곳, 꼭 갈 곳이
+  // 있으면 그 동네, 아니면 그 조건에서 며칠을 가장 알차게 채우는 동네. 거점 제한이 없는 지역(제주)은 null.
+  base: z.string().nullable(),
+  // 이 일정의 날씨를 볼 예보 지점(utils weatherRegions 의 지점 id) — 거점에서 가장 가까운 시·군·구. 화면이 이 지점의 예보로
+  // 비 오는 일차(wetDays)를 골라 다시 보낸다.
+  weatherPlaceId: z.string().nullable(),
 });
 export type TourPlanItineraryType = z.infer<typeof TourPlanItinerary>;
 
+// 숙소 동네 선택지 — 일정표의 하루 권역(방문 많은 순). label 을 stayArea 로 되돌려 보낸다. n = 그 권역 후보 장소 수.
+export const TourPlanArea = z.object({ label: z.string(), n: z.number().int() });
+export type TourPlanAreaType = z.infer<typeof TourPlanArea>;
+
 export const TourPlanResult = z.object({
+  // 이 지역에 적재된 여행 수(조건과 무관). 0 이면 이 서버에 그 지역 여행로그가 없다 — 조건을 바꿔도 결과가 나오지 않는다.
+  regionTrips: z.number().int(),
   matchedTrips: z.number().int(),
   relaxed: z.array(z.string()),
   insufficient: z.boolean(),
@@ -658,6 +709,8 @@ export const TourPlanResult = z.object({
   templates: z.array(TourCount),
   // 일정표 — 지원 지역(utils TOUR_ITINERARY_REGIONS)이 아니거나 후보가 모자라면 null.
   itinerary: TourPlanItinerary.nullable(),
+  // 숙소 동네 선택지(일정표 지원 지역만, 그 밖은 빈 배열).
+  areas: z.array(TourPlanArea),
   // 폐업·휴업으로 확인돼 후보에서 뺀 장소 수(국세청 조회 결과가 있는 곳만).
   excludedClosed: z.number().int(),
   sampleLabel: z.string(),

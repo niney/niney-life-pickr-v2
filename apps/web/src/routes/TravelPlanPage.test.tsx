@@ -1,14 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
-import type { TourPlanPlaceType, TourPlanResultType, TourPlanStopType } from '@repo/api-contract';
+import type { TourPlanBodyType, TourPlanDayType, TourPlanPlaceType, TourPlanResultType, TourPlanStopType, WeatherForecastDayType } from '@repo/api-contract';
+import { WEATHER_PLACES, formatYmdWithWeekday, latLngToKmaGrid, todayKst } from '@repo/utils';
 import { server } from '~/test/msw';
 import { TravelPlanPage } from './TravelPlanPage';
 
-// 코스 추천 페이지(10차) — ① 제출 → 일정표(일차·시각·이동·여유·대안·지도 링크)와 추천 장소 카드 ② 식당만 토글·투표 버튼
+// 코스 추천 페이지 — ① 제출 → 일정표(일차·시각·이동·여유·대안·지도 링크)와 추천 장소 카드 ② 식당만 토글·투표 버튼
 // ③ 일정표가 없는 응답(미지원 지역)은 안내만 ④ 요청 본문은 폼 값 그대로.
+// 11차 — ⑤ 일정 옵션(속도·취향·이동수단)은 기본값이 아닐 때만 요청에 실린다 ⑥ 핀(꼭 갈 곳)·×(빼기)·숙소 동네는 고르는
+// 즉시 다시 짜고, 지역을 바꿔 찾으면 비운다.
+// 12차 — ⑦ 출발일을 넣으면 예보(단기·중기)를 불러 비 오는 일차 번호를 보내고, 일차 카드에 날짜·예보·비 표시를 붙인다.
+// 13차 — ⑧ 제주 밖 지역도 일정표·일정 옵션이 나오고('전체' 만 장소만), 거점 동네를 알리고, 예보는 응답이 알려 준 지점으로 불러
+// 다음에 찾을 때부터 비 오는 일차를 보낸다. 식당이 없는 날은 그렇게 알린다.
 
 const PLAN_URL = '/api/v1/tour/public/plan';
 
@@ -36,11 +42,25 @@ const stop = (over: Partial<TourPlanStopType> & Pick<TourPlanStopType, 'name' | 
   moveMin: null,
   moveKm: null,
   spendPp: null,
+  pinned: false,
   alternatives: [],
+  ...over,
+});
+const dayOf = (over: Partial<TourPlanDayType> & Pick<TourPlanDayType, 'day' | 'area' | 'stops'>): TourPlanDayType => ({
+  pattern: over.stops.map((s) => s.kind).join('>'),
+  patternBasis: 'similar',
+  moveMin: 10,
+  moveKm: 0.9,
+  stayMin: 90,
+  spendPp: null,
+  fromStayMin: null,
+  toStayMin: null,
+  wet: false,
   ...over,
 });
 
 const RESULT: TourPlanResultType = {
+  regionTrips: 30,
   matchedTrips: 24,
   relaxed: ['month'],
   insufficient: false,
@@ -52,40 +72,56 @@ const RESULT: TourPlanResultType = {
   templates: [{ label: '교통>식당>자연>숙소', n: 24 }],
   itinerary: {
     legBasis: 'observed',
+    transport: 'car',
+    stayArea: null,
+    unplaced: [],
+    // 제주 — 거점 반경을 쓰지 않고(null), 예보 지점은 제주시.
+    base: null,
+    weatherPlaceId: '11G00201',
     days: [
-      {
+      dayOf({
         day: 1,
         area: '제주시 삼도이동·용담이동',
-        pattern: '식당>자연',
-        patternBasis: 'similar',
         stops: [
-          stop({ name: '우진해장국', kind: '식당', arriveMin: 720, stayMin: 50, spendPp: 11000, placeId: 'n-ujin', alternatives: [{ name: '올래국수', kind: '식당', n: 6, mean: 4.4, placeId: null }] }),
+          stop({ name: '우진해장국', kind: '식당', emd: '삼도이동', arriveMin: 720, stayMin: 50, spendPp: 11000, placeId: 'n-ujin', alternatives: [{ name: '올래국수', kind: '식당', n: 6, mean: 4.4, placeId: null }] }),
           // 12:50 출발 + 이동 10분 = 13:00, 도착 15:00 → 여유 2시간.
-          stop({ name: '용두암', kind: '자연', arriveMin: 900, stayMin: 40, moveMin: 10, moveKm: 0.9 }),
+          stop({ name: '용두암', kind: '자연', emd: '용담이동', arriveMin: 900, stayMin: 40, moveMin: 10, moveKm: 0.9 }),
         ],
-        moveMin: 10,
-        moveKm: 0.9,
-        stayMin: 90,
         spendPp: 11000,
-      },
-      {
+      }),
+      dayOf({
         day: 2,
         area: '제주시 한림읍',
-        pattern: '자연>식당',
         patternBasis: 'region',
         stops: [stop({ name: '협재해수욕장', kind: '자연', arriveMin: 600, stayMin: 90 }), stop({ name: '협재 흑돼지', kind: '식당', arriveMin: 720, moveMin: 5, moveKm: 0.3 })],
         moveMin: 5,
         moveKm: 0.3,
         stayMin: 150,
-        spendPp: null,
-      },
+      }),
     ],
   },
+  areas: [
+    { label: '제주시 한림읍', n: 4 },
+    { label: '서귀포시 성산읍', n: 3 },
+  ],
   excludedClosed: 2,
   sampleLabel: '2023년 4~9월 여행자 표본',
   sourceNote: '출처 문구(aihub.or.kr)',
 };
+const BASE_BODY = { region: 'jeju', ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 };
 
+// 요청 본문을 차례로 모으고, respond 로 요청마다 다른 응답을 준다.
+const usePlan = (respond: (body: Partial<TourPlanBodyType>, nth: number) => TourPlanResultType = () => RESULT) => {
+  const bodies: Array<Partial<TourPlanBodyType>> = [];
+  server.use(
+    http.post(PLAN_URL, async ({ request }) => {
+      const body = (await request.json()) as Partial<TourPlanBodyType>;
+      bodies.push(body);
+      return HttpResponse.json(respond(body, bodies.length));
+    }),
+  );
+  return bodies;
+};
 const renderPage = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
@@ -97,22 +133,17 @@ const renderPage = () => {
   );
 };
 const submit = () => fireEvent.click(screen.getByRole('button', { name: '비슷한 여행 찾기' }));
+const listSection = () => screen.getByRole('heading', { name: '비슷한 여행자가 만족한 곳' }).closest('section')!;
 
 describe('TravelPlanPage', () => {
   it('제출하면 일정표(일차·시각·이동·여유·대안)와 추천 장소가 나온다', async () => {
-    let body: unknown;
-    server.use(
-      http.post(PLAN_URL, async ({ request }) => {
-        body = await request.json();
-        return HttpResponse.json(RESULT);
-      }),
-    );
+    const bodies = usePlan();
     renderPage();
     submit();
 
     expect(await screen.findByRole('heading', { name: '추천 일정' })).toBeInTheDocument();
-    // 기본 폼 값이 그대로 나간다(제주·30대·2인·2박).
-    expect(body).toEqual({ region: 'jeju', ageGrp: '30', accompany: '2인 여행(가족 외)', nights: 2 });
+    // 기본 폼 값이 그대로 나간다(제주·30대·2인·2박) — 옵션은 기본값이라 싣지 않는다.
+    expect(bodies).toEqual([BASE_BODY]);
     expect(screen.getByText(/같은 조건의 여행/).textContent).toContain('24건');
     expect(screen.getByText(/월 조건은 풀었습니다/)).toBeInTheDocument();
     // 2박(3일)을 물었는데 이틀만 채워졌다.
@@ -130,27 +161,32 @@ describe('TravelPlanPage', () => {
     expect(within(day1).getByRole('link', { name: '우진해장국' })).toHaveAttribute('href', '/restaurants-v2/n-ujin');
     expect(within(day1).getByText(/대신 갈 만한 곳/).textContent).toContain('올래국수');
     expect(within(day1).getByRole('link', { name: '용두암 지도에서 찾기' })).toHaveAttribute('href', `https://map.naver.com/p/search/${encodeURIComponent('용두암 제주시')}`);
+    // 숙소 동네를 정하지 않았으니 숙소 이동 줄이 없다.
+    expect(within(day1).queryByText(/숙소/)).not.toBeInTheDocument();
 
     const day2 = screen.getByRole('article', { name: '2일차' });
     expect(within(day2).getByText('이 지역 여행에서 흔한 하루 순서')).toBeInTheDocument();
     // 여유가 1시간 미만이면 말하지 않는다(11:30 출발 + 5분, 12:00 도착).
     expect(within(day2).getByText('이동 약 5분 · 직선 0.3km')).toBeInTheDocument();
-    expect(screen.getByText(/누군가의 실제 일정이 아닙니다/).textContent).toContain('구간 기록을 거리별로 집계한');
+    expect(screen.getByText(/누군가의 실제 일정이 아닙니다/).textContent).toContain('차 기준으로 여행자들의 구간 기록을 거리별로 집계한');
+    // 제주 — 부속섬은 일정에서 빼고, 거점 안내는 없다(섬 전체에서 짠다). 날마다 식당이 있어 식사 자리 안내도 없다.
+    expect(screen.getByText(/누군가의 실제 일정이 아닙니다/).textContent).toContain('숙소와 배를 타야 하는 섬은 넣지 않았습니다');
+    expect(screen.queryByText(/주변에서 짰습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/식사 자리 없이 짰습니다/)).not.toBeInTheDocument();
 
     // 추천 장소 카드 — 근거 줄·비슷한 여행 배지·폐업 제외 안내.
-    const list = screen.getByRole('heading', { name: '비슷한 여행자가 만족한 곳' }).closest('section')!;
-    const cards = within(list).getAllByRole('listitem');
+    const cards = within(listSection()).getAllByRole('listitem');
     expect(cards).toHaveLength(3);
     expect(cards[0]!.textContent).toContain('식당 · 제주시 삼도이동 · 24팀 · 만족 4.6');
     expect(cards[0]!.textContent).toContain('주로 점심 · 50분 머묾 · 1인 1.1만원');
     expect(cards[0]!.textContent).toContain('비슷한 여행 24건 · 평균의 1.2배');
     expect(cards[1]!.textContent).not.toContain('비슷한 여행');
-    expect(within(list).getByText('폐업·휴업이 확인된 2곳은 뺐습니다')).toBeInTheDocument();
+    expect(within(listSection()).getByText('폐업·휴업이 확인된 2곳은 뺐습니다')).toBeInTheDocument();
     expect(screen.getByText('출처 문구(aihub.or.kr)')).toBeInTheDocument();
   });
 
   it('식당만 토글은 식당 카드만 남기고, 투표는 등록 맛집 2곳부터', async () => {
-    server.use(http.post(PLAN_URL, () => HttpResponse.json(RESULT)));
+    usePlan();
     renderPage();
     submit();
     const list = (await screen.findByRole('heading', { name: '비슷한 여행자가 만족한 곳' })).closest('section')!;
@@ -165,15 +201,271 @@ describe('TravelPlanPage', () => {
     expect(within(list).getByRole('button', { name: '그룹투표 만들기 (1)' })).toBeDisabled();
   });
 
-  it('일정표가 없는 지역은 안내만 하고 장소 추천은 그대로', async () => {
-    server.use(http.post(PLAN_URL, () => HttpResponse.json({ ...RESULT, itinerary: null, excludedClosed: 0 } satisfies TourPlanResultType)));
+  it("'전체' 는 일정표 없이 안내만 하고 장소 추천은 그대로 — 속도·이동 옵션과 핀도 없다", async () => {
+    const bodies = usePlan(() => ({ ...RESULT, itinerary: null, areas: [], excludedClosed: 0 }));
     renderPage();
+    expect(screen.getByRole('button', { name: '여유롭게' })).toBeInTheDocument();
+    // 권역(동부권)은 일정표를 만드는 지역이라 옵션이 그대로 있다.
     fireEvent.click(screen.getByRole('button', { name: '동부권' }));
+    expect(screen.getByRole('button', { name: '여유롭게' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    // 취향은 목록 순위에도 쓰이므로 남고, 속도·이동·출발일은 사라진다.
+    expect(screen.queryByRole('button', { name: '여유롭게' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '대중교통' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('여행 시작일')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '자연·바다' })).toBeInTheDocument();
+    expect(screen.getByText(/지역을 고르면 일정표도 짜 드립니다/)).toBeInTheDocument();
     submit();
-    expect(await screen.findByText(/일정표는 지금 제주만 만들어 드립니다/)).toBeInTheDocument();
+    expect(await screen.findByText(/일정표는 지역을 골라야 만들어 드립니다/)).toBeInTheDocument();
+    expect(bodies).toEqual([{ ...BASE_BODY, region: 'all' }]);
     expect(screen.queryByRole('heading', { name: '추천 일정' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '비슷한 여행자가 만족한 곳' })).toBeInTheDocument();
     expect(screen.queryByText(/폐업·휴업이 확인된/)).not.toBeInTheDocument();
     expect(screen.getByText(/식당 자리는 홈의 골라주기/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /꼭 갈 곳$/ })).not.toBeInTheDocument();
+  });
+
+  it('여행로그가 없는 서버(미적재) — "표본이 적다" 가 아니라 데이터가 없다고만 말하고, 빈 일정표·빈 목록은 내지 않는다', async () => {
+    usePlan(() => ({ ...RESULT, regionTrips: 0, matchedTrips: 0, relaxed: ['nights', 'ageGrp'], insufficient: true, places: [], templates: [], itinerary: null, areas: [], excludedClosed: 0 }));
+    renderPage();
+    submit();
+    expect(await screen.findByRole('status')).toHaveTextContent('지금 이 서버에는 제주 여행로그 데이터가 없어 추천을 만들 수 없습니다. 조건을 바꿔도 결과는 같습니다.');
+    // 조건을 풀었다는 안내는 조건을 바꿔 보게 만든다 — 데이터가 없을 땐 내지 않는다.
+    expect(screen.queryByText(/같은 조건의 여행/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/조건은 풀었습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/참고만 하세요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/후보가 모이지 않았습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '비슷한 여행자가 만족한 곳' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /그룹투표 만들기/ })).not.toBeInTheDocument();
+  });
+
+  it('일정 옵션 — 속도·취향·이동수단은 기본값이 아닐 때만 요청에 실린다', async () => {
+    const bodies = usePlan((body) => ({ ...RESULT, itinerary: { ...RESULT.itinerary!, transport: body.transport ?? 'car' } }));
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '여유롭게' }));
+    fireEvent.click(screen.getByRole('button', { name: '자연·바다' }));
+    fireEvent.click(screen.getByRole('button', { name: '문화·역사' }));
+    fireEvent.click(screen.getByRole('button', { name: '대중교통' }));
+    submit();
+    expect(await screen.findByText(/대중교통 기준으로/)).toBeInTheDocument();
+    expect(bodies).toEqual([{ ...BASE_BODY, pace: 'relaxed', focus: ['nature', 'culture'], transport: 'transit' }]);
+    // 취향은 다시 누르면 꺼지고, 속도를 보통으로 되돌리면 실리지 않는다.
+    fireEvent.click(screen.getByRole('button', { name: '자연·바다' }));
+    fireEvent.click(screen.getByRole('button', { name: '보통' }));
+    submit();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual({ ...BASE_BODY, focus: ['culture'], transport: 'transit' });
+  });
+
+  it('꼭 갈 곳·빼기·숙소 동네 — 고르는 즉시 다시 짜고, 칩으로 되돌린다', async () => {
+    const withStay: TourPlanResultType = {
+      ...RESULT,
+      itinerary: {
+        ...RESULT.itinerary!,
+        stayArea: '제주시 한림읍',
+        unplaced: ['우도'],
+        days: [
+          { ...RESULT.itinerary!.days[0]!, toStayMin: 55, stops: RESULT.itinerary!.days[0]!.stops.map((s, i) => (i === 1 ? { ...s, pinned: true } : s)) },
+          { ...RESULT.itinerary!.days[1]!, fromStayMin: 5 },
+        ],
+      },
+    };
+    const bodies = usePlan((_, nth) => (nth >= 4 ? withStay : RESULT));
+    renderPage();
+    submit();
+    await screen.findByRole('heading', { name: '추천 일정' });
+    expect(screen.getByText(/아래 목록의 핀으로 꼭 갈 곳을 넣고/)).toBeInTheDocument();
+
+    // ① 목록의 핀 → must.
+    const pin = within(listSection()).getByRole('button', { name: '협재해수욕장 꼭 갈 곳' });
+    expect(pin).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(pin);
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual({ ...BASE_BODY, must: [{ name: '협재해수욕장', emd: '한림읍' }] });
+    await waitFor(() => expect(within(listSection()).getByRole('button', { name: '협재해수욕장 꼭 갈 곳' })).toHaveAttribute('aria-pressed', 'true'));
+
+    // ② 일정의 × → avoid(꼭 갈 곳이던 장소를 빼면 must 에서도 빠진다).
+    await waitFor(() => expect(screen.getByRole('button', { name: '용두암 일정에서 빼기' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '용두암 일정에서 빼기' }));
+    await waitFor(() => expect(bodies).toHaveLength(3));
+    expect(bodies[2]).toEqual({ ...BASE_BODY, must: [{ name: '협재해수욕장', emd: '한림읍' }], avoid: [{ name: '용두암', emd: '용담이동' }] });
+
+    // ③ 숙소 동네 → stayArea. 응답의 숙소 이동 줄·핀 표시·못 넣은 곳 안내가 보인다.
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '숙소 동네' })).toBeEnabled());
+    fireEvent.change(screen.getByRole('combobox', { name: '숙소 동네' }), { target: { value: '제주시 한림읍' } });
+    await waitFor(() => expect(bodies).toHaveLength(4));
+    expect(bodies[3]).toMatchObject({ stayArea: '제주시 한림읍', must: [{ name: '협재해수욕장', emd: '한림읍' }], avoid: [{ name: '용두암', emd: '용담이동' }] });
+    expect(await within(screen.getByRole('article', { name: '1일차' })).findByText('숙소까지 약 55분')).toBeInTheDocument();
+    expect(within(screen.getByRole('article', { name: '2일차' })).getByText('숙소에서 약 5분')).toBeInTheDocument();
+    expect(within(screen.getByRole('article', { name: '1일차' })).getByText('꼭')).toBeInTheDocument();
+    expect(screen.getByText(/일정에 넣지 못한 곳: 우도/)).toBeInTheDocument();
+
+    // ④ 칩의 × 로 되돌린다.
+    await waitFor(() => expect(screen.getByRole('button', { name: '용두암 뺀 곳에서 되돌리기' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '용두암 뺀 곳에서 되돌리기' }));
+    await waitFor(() => expect(bodies).toHaveLength(5));
+    expect(bodies[4]).toEqual({ ...BASE_BODY, stayArea: '제주시 한림읍', must: [{ name: '협재해수욕장', emd: '한림읍' }] });
+
+    // ⑤ 지역을 바꿔 찾으면 편집을 비운다(그 지역의 숙소·장소였다).
+    await waitFor(() => expect(screen.getByRole('button', { name: '비슷한 여행 찾기' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '동부권' }));
+    submit();
+    await waitFor(() => expect(bodies).toHaveLength(6));
+    expect(bodies[5]).toEqual({ ...BASE_BODY, region: 'east' });
+  });
+
+  it('출발일 — 예보에서 비 오는 일차를 골라 보내고, 일차 카드에 날짜·예보·비 표시를 붙인다', async () => {
+    const TODAY = todayKst();
+    const plus = (n: number): string => {
+      const d = new Date(`${TODAY}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    // 단기예보 — 오늘 맑음, 내일 비(오전 80%·오후 70%), 모레 맑음. 중기는 비어 있다.
+    const fday = (date: string, wet: boolean): WeatherForecastDayType => ({
+      date,
+      tmn: 20,
+      tmx: 25,
+      tmnFromHours: false,
+      tmxFromHours: false,
+      popMax: wet ? 80 : 10,
+      am: { sky: wet ? 4 : 1, pty: wet ? 1 : 0, pop: wet ? 80 : 10, hours: 6 },
+      pm: { sky: wet ? 4 : 1, pty: wet ? 1 : 0, pop: wet ? 70 : 10, hours: 6 },
+      partial: false,
+      hours: 24,
+    });
+    const asked: string[] = [];
+    server.use(
+      http.get('/api/v1/weather/forecast', ({ request }) => {
+        asked.push(new URL(request.url).search);
+        return HttpResponse.json({ grid: { nx: 52, ny: 38 }, base: null, fallback: false, hours: [], days: [fday(TODAY, false), fday(plus(1), true), fday(plus(2), false)], total: 0, fetchedAt: new Date().toISOString(), stale: false });
+      }),
+      http.get('/api/v1/weather/mid', () => HttpResponse.json({ tmFc: '202610040600', announcedAt: null, fallback: false, land: null, ta: null, outlook: null, fetchedAt: new Date().toISOString(), stale: false })),
+    );
+    const bodies = usePlan((body) => ({
+      ...RESULT,
+      itinerary: { ...RESULT.itinerary!, days: RESULT.itinerary!.days.map((d) => ({ ...d, wet: (body.wetDays ?? []).includes(d.day) })) },
+    }));
+    renderPage();
+    expect(screen.getByText(/넣으면 일정에 날짜를 붙이고/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '1박' }));
+    fireEvent.change(screen.getByLabelText('여행 시작일'), { target: { value: TODAY } });
+    // 제주시 격자의 단기예보를 부르고, 1박 2일 가운데 비 오는 날은 하루.
+    expect(await screen.findByText('제주 기준 예보 반영 · 비 예보 1일')).toBeInTheDocument();
+    expect(asked[0]).toMatch(/nx=\d+&ny=\d+/);
+    submit();
+    await screen.findByRole('heading', { name: '추천 일정' });
+    // 날짜가 아니라 비 오는 일차 번호만 간다.
+    expect(bodies).toEqual([{ ...BASE_BODY, nights: 1, wetDays: [2] }]);
+
+    const day1 = screen.getByRole('article', { name: '1일차' });
+    expect(within(day1).getByText(formatYmdWithWeekday(TODAY))).toBeInTheDocument();
+    expect(within(day1).getByText('· 맑음 10%')).toBeInTheDocument();
+    expect(within(day1).queryByText(/실내 위주/)).not.toBeInTheDocument();
+    const day2 = screen.getByRole('article', { name: '2일차' });
+    expect(within(day2).getByText(formatYmdWithWeekday(plus(1)))).toBeInTheDocument();
+    expect(within(day2).getByText('· 비 80%')).toBeInTheDocument();
+    expect(within(day2).getByText('비 예보 · 실내 위주')).toBeInTheDocument();
+
+    // 예보가 닿지 않는 먼 날짜 — 날짜만 붙이고 비 오는 일차는 보내지 않는다.
+    fireEvent.change(screen.getByLabelText('여행 시작일'), { target: { value: plus(40) } });
+    expect(await screen.findByText('예보는 열흘 뒤까지만 나옵니다 — 날짜만 붙입니다')).toBeInTheDocument();
+    submit();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual({ ...BASE_BODY, nights: 1 });
+    expect(await within(screen.getByRole('article', { name: '1일차' })).findByText(formatYmdWithWeekday(plus(40)))).toBeInTheDocument();
+  });
+
+  it('제주 밖 지역 — 일정표와 거점 안내가 나오고, 예보는 응답이 알려 준 지점으로 불러 다음에 찾을 때부터 반영한다', async () => {
+    const TODAY = todayKst();
+    const plus = (n: number): string => {
+      const d = new Date(`${TODAY}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const gangneung = WEATHER_PLACES.find((x) => x.name === '강릉')!;
+    const grid = latLngToKmaGrid(gangneung.lat, gangneung.lng);
+    const fday = (date: string, wet: boolean): WeatherForecastDayType => ({
+      date,
+      tmn: 20,
+      tmx: 25,
+      tmnFromHours: false,
+      tmxFromHours: false,
+      popMax: wet ? 80 : 10,
+      am: { sky: wet ? 4 : 1, pty: wet ? 1 : 0, pop: wet ? 80 : 10, hours: 6 },
+      pm: { sky: wet ? 4 : 1, pty: wet ? 1 : 0, pop: wet ? 70 : 10, hours: 6 },
+      partial: false,
+      hours: 24,
+    });
+    const asked: string[] = [];
+    server.use(
+      http.get('/api/v1/weather/forecast', ({ request }) => {
+        asked.push(new URL(request.url).search);
+        return HttpResponse.json({ grid, base: null, fallback: false, hours: [], days: [fday(TODAY, false), fday(plus(1), true)], total: 0, fetchedAt: new Date().toISOString(), stale: false });
+      }),
+      http.get('/api/v1/weather/mid', () => HttpResponse.json({ tmFc: '202610040600', announcedAt: null, fallback: false, land: null, ta: null, outlook: null, fetchedAt: new Date().toISOString(), stale: false })),
+    );
+    const gangwon: TourPlanResultType = {
+      ...RESULT,
+      itinerary: {
+        ...RESULT.itinerary!,
+        legBasis: 'default',
+        base: '강릉시 강문동',
+        weatherPlaceId: gangneung.id,
+        days: [
+          dayOf({ day: 1, area: '강릉시 강문동', stops: [stop({ name: '초당순두부', kind: '식당', sigungu: '강릉시', emd: '초당동', arriveMin: 720 }), stop({ name: '강문해변', kind: '자연', sigungu: '강릉시', emd: '강문동', arriveMin: 840, moveMin: 10, moveKm: 0.6 })] }),
+          // 식당 후보가 없어 볼거리로만 채운 날.
+          dayOf({ day: 2, area: '강릉시 견소동·성남동', patternBasis: 'region', stops: [stop({ name: '안목해변', kind: '자연', sigungu: '강릉시', emd: '견소동', arriveMin: 600 }), stop({ name: '강릉중앙시장', kind: '상업', sigungu: '강릉시', emd: '성남동', arriveMin: 720, moveMin: 20, moveKm: 4.8 })] }),
+        ],
+      },
+      areas: [
+        { label: '강릉시 강문동·성남동', n: 8 },
+        { label: '속초시 조양동·중앙동', n: 4 },
+      ],
+    };
+    const bodies = usePlan((body) => ({ ...gangwon, itinerary: { ...gangwon.itinerary!, days: gangwon.itinerary!.days.map((d) => ({ ...d, wet: (body.wetDays ?? []).includes(d.day) })) } }));
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '동부권' }));
+    fireEvent.click(screen.getByRole('button', { name: '강원' }));
+    // 일정 옵션이 그대로 있다(속도·이동·출발일).
+    expect(screen.getByRole('button', { name: '여유롭게' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '대중교통' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '1박' }));
+    fireEvent.change(screen.getByLabelText('여행 시작일'), { target: { value: TODAY } });
+    // 예보 지점은 거점에 따라 달라 일정을 만들기 전에는 모른다 — 예보를 부르지 않는다.
+    expect(screen.getByText(/일정을 만들면 그 동네 예보를 붙입니다/)).toBeInTheDocument();
+    submit();
+    await screen.findByRole('heading', { name: '추천 일정' });
+    expect(bodies).toEqual([{ ...BASE_BODY, region: 'gangwon', nights: 1 }]);
+    expect(asked.every((q) => q.includes(`nx=${grid.nx}&ny=${grid.ny}`))).toBe(true);
+
+    // 거점 안내 · 일정 고지(제주 밖은 섬을 따로 빼지 않는다) · 식당 없는 날.
+    expect(screen.getByText(/주변에서 짰습니다/).textContent).toContain('강릉시 강문동 주변에서 짰습니다 — 강원에서 이 조건으로 가장 알차게 채워지는 동네입니다');
+    const note = screen.getByText(/누군가의 실제 일정이 아닙니다/).textContent!;
+    expect(note).toContain('직선거리에 기본 속도를 적용한 추정이고, 숙소는 넣지 않았습니다');
+    expect(note).not.toContain('섬');
+    const day1 = screen.getByRole('article', { name: '1일차' });
+    const day2 = screen.getByRole('article', { name: '2일차' });
+    expect(within(day1).queryByText(/식사 자리 없이 짰습니다/)).not.toBeInTheDocument();
+    expect(within(day2).getByText(/추천할 만큼 표본이 쌓인 식당이 없어 식사 자리 없이 짰습니다/)).toBeInTheDocument();
+
+    // 응답의 예보 지점(강릉)으로 예보를 불러 일차 카드에 붙인다. 이번 일정은 비를 모르고 짰다 — 다시 찾으라고 알린다.
+    expect(await screen.findByText('강릉 기준 예보 반영 · 비 예보 1일')).toBeInTheDocument();
+    expect(asked.length).toBeGreaterThan(0);
+    expect(within(day1).getByText('· 맑음 10%')).toBeInTheDocument();
+    expect(within(day2).getByText('· 비 80%')).toBeInTheDocument();
+    expect(within(day2).getByText(/다시 찾으면 실내 위주로 짭니다/)).toBeInTheDocument();
+
+    // 다시 찾으면 비 오는 일차가 실린다.
+    submit();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual({ ...BASE_BODY, region: 'gangwon', nights: 1, wetDays: [2] });
+    expect(await within(screen.getByRole('article', { name: '2일차' })).findByText('비 예보 · 실내 위주')).toBeInTheDocument();
+
+    // 숙소 동네를 고르면 거점 안내는 사라진다(그곳이 거점이다).
+    usePlan(() => ({ ...gangwon, itinerary: { ...gangwon.itinerary!, stayArea: '속초시 조양동·중앙동', base: '속초시 조양동·중앙동' } }));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '숙소 동네' })).toBeEnabled());
+    fireEvent.change(screen.getByRole('combobox', { name: '숙소 동네' }), { target: { value: '속초시 조양동·중앙동' } });
+    await waitFor(() => expect(screen.queryByText(/주변에서 짰습니다/)).not.toBeInTheDocument());
   });
 });

@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TourInsightsResultType } from '@repo/api-contract';
+import { tourSyncLayer } from '@repo/utils';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import sensiblePlugin from '../../plugins/sensible.js';
@@ -10,7 +11,8 @@ import { TourInsightsService } from './tour-insights.service.js';
 import tourPublicRoutes from './tour-public.route.js';
 
 // 여행로그 인사이트(5차) — 격리 DB 에 여행 25건(주 세그먼트 20 + 소수 5)을 심고 ① 필터 없는 집계 ② 소수
-// 세그먼트 필터(20건 미만 → insufficient, 5명 셀은 남음) ③ 빈 결과 ④ 라우트 응답에 식별자 없음.
+// 세그먼트 필터(20건 미만 → insufficient, 5명 셀은 남음) ③ 빈 결과 ④ 적재 이력(데이터 버전)이 바뀌면 캐시를 버림
+// ⑤ 라우트 응답에 식별자 없음.
 // 코스 추천은 tour-plan.service.test.ts(10차에 분리).
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId)$/;
@@ -198,6 +200,33 @@ describe('tour insights (격리 DB)', () => {
     expect(none.insufficient).toBe(true);
     expect(none.nights).toEqual([]);
     expect(none.tripSpend).toBeNull();
+  });
+
+  it('데이터 버전 — 적재 이력 행이 추가되면 같은 인스턴스가 곧바로 새로 집계한다(이력 없이 고친 표는 TTL 대로)', async () => {
+    const p = app.prisma;
+    // 캐시를 데운다(필터 키 둘).
+    expect((await service.insights({ region: 'jeju' })).scale.trips).toBe(25);
+    expect((await service.insights({ region: 'jeju', ageGrp: '50' })).scale.trips).toBe(5);
+    await p.tourTrip.create({
+      data: { id: 'N0', travelerLabel: 'N0', startDate: '2023-08-01', endDate: '2023-08-02', ...MINOR, nVisits: 0, nPublic: 0, nJeju: 1, nIsland: 0, nPhotos: 0, nActivities: 0, hasGps: false },
+    });
+    try {
+      // 이력 행이 없으면 버전이 그대로 — 캐시된 집계가 나온다.
+      expect((await service.insights({ region: 'jeju' })).scale.trips).toBe(25);
+      // load:tour·unload:tour(다른 프로세스)가 데이터와 같은 트랜잭션에서 남기는 이력 행 — 버전이 올라 캐시 전체가 버려진다.
+      await p.lifeMasterSync.create({ data: { layer: tourSyncLayer('jeju'), count: 4 } });
+      const d = await service.insights({ region: 'jeju' });
+      expect(d.scale.trips).toBe(26);
+      expect(d.nights).toEqual([
+        { label: '1박', n: 6 },
+        { label: '2박', n: 20 },
+      ]);
+      expect((await service.insights({ region: 'jeju', ageGrp: '50' })).scale.trips).toBe(6);
+    } finally {
+      await p.tourTrip.delete({ where: { id: 'N0' } });
+      await p.lifeMasterSync.deleteMany();
+      service.invalidate();
+    }
   });
 
   it('라우트 — GET insights 200, 잘못된 필터 400', async () => {

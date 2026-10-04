@@ -1,5 +1,6 @@
 // 여행로그 공개 화면 공용 상수·포맷 — 컴포넌트 파일과 분리(react-refresh: 컴포넌트만 export).
 
+import type { TourPlanFocusType, TourPlanPaceType, TourPlanPlaceKeyType, TourPlanTransportType } from '@repo/api-contract';
 import { TOUR_REGIONS, type TourRegionKey } from '@repo/utils';
 
 // 지역 라벨(7차) — utils TOUR_REGIONS. 지역 칩(권역 1행 → 시도 2행)은 TourFilterBar 가 utils TOUR_REGION_GROUPS 로 그린다.
@@ -60,3 +61,37 @@ export const naverMapSearchUrl = (name: string, sigungu?: string | null): string
 // 일수 → "당일" · "2박 3일".
 export const tripLengthLabel = (days: number): string => (days <= 1 ? '당일' : `${days - 1}박 ${days}일`);
 export const nightsLabel = (n: number | undefined): string => (n === undefined ? '' : (TOUR_NIGHTS_OPTIONS.find((o) => o.value === n)?.label ?? `${n}박`));
+
+// ── 코스 입력 확장(11차) ──
+// 일정 옵션(속도·취향·이동수단) — 기본값이면 요청에 싣지 않는다.
+export interface TourPlanOptionsValue {
+  pace: TourPlanPaceType;
+  focus: TourPlanFocusType[];
+  transport: TourPlanTransportType;
+  // 여행 시작일 "YYYY-MM-DD"(12차) — 일정에 날짜를 붙이고, 예보가 닿는 날은 비 오는 날을 실내 위주로 짠다. 서버에는 날짜가 아니라
+  // 비 오는 일차 번호(wetDays)만 간다.
+  startDate: string | null;
+}
+export const DEFAULT_TOUR_PLAN_OPTIONS: TourPlanOptionsValue = { pace: 'normal', focus: [], transport: 'car', startDate: null };
+// 꼭 갈 곳·뺄 곳은 이름(+읍면동)으로 가리킨다 — 응답에 장소 id 가 없다.
+export const tourPlaceKey = (p: { name: string; emd?: string | null }): TourPlanPlaceKeyType => ({ name: p.name, emd: p.emd ?? null });
+export const sameTourPlace = (a: { name: string; emd?: string | null }, b: { name: string; emd?: string | null }): boolean => a.name === b.name && (a.emd ?? null) === (b.emd ?? null);
+export const TOUR_PLAN_MUST_MAX = 8;
+export const TOUR_PLAN_AVOID_MAX = 30;
+
+// ── 날씨(12차) ──
+// "YYYY-MM-DD" 에 n 일을 더한다(달력 계산만 — 시간대 무관).
+export const addDaysYmd = (ymd: string, n: number): string => {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+// 일차별 날짜·예보 — forecast 는 "비 70%" 같은 한 줄(예보가 닿지 않는 날은 null), wet 은 비 예보 여부.
+export interface TourDayWeather {
+  date: string;
+  forecast: string | null;
+  wet: boolean;
+}
+// 강수확률이 이만큼이면 날씨 문구와 상관없이 비 오는 날로 본다.
+export const TOUR_WET_POP = 60;
+

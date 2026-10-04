@@ -1,5 +1,5 @@
 // 여행로그 공개 6차 — 지도 밀도 격자·숙소 통계·지역 비교. 인사이트(5차)와 같은 규율: 응답에 식별자 없음, 집단 셀은
-// 여행자 TOUR_K_MIN 미만이면 뺀다, 결과는 키별 캐시(재적재는 배포 단위).
+// 여행자 TOUR_K_MIN 미만이면 뺀다, 결과는 키별로 10분 캐시하고 적재·제거로 데이터 버전이 바뀌면 버린다(tour-data-version.ts).
 //   - density: 공개 방문(좌표 있음)을 0.02° 격자로 세고(SQL group by) 여행 5건 미만 칸 제외. kind=restaurant 는 식당·상업·상점만.
 //   - lodging: 숙박 결제(소비 표) 유형별 결제 중앙·1박 추정·1인·예약률 + 숙소 방문 평가 만족도. 1박 추정 = 결제액 × 그 여행의
 //     숙박 결제 건수 ÷ 박수(체크인·아웃이 export 에 없어 여행 박수를 나눠 쓴다 — 화면에 산식 표기).
@@ -27,7 +27,7 @@ import {
   TOUR_SOURCE_NOTE,
   tourDensityQuantileBreaks,
 } from '@repo/utils';
-import { LRUCache } from 'lru-cache';
+import { TourVersionedCache, tourDataVersion } from './tour-data-version.js';
 import { TOUR_INSIGHTS_MIN_TRIPS, attrWhere, countMap, median, round1, round2 } from './tour-insights.service.js';
 import { tourRegionTripWhere, tourRegionVisitWhere } from './tour-region-filter.js';
 
@@ -76,9 +76,9 @@ const addSat = (a: SatAgg, dgstfn: number | null): void => {
 };
 
 export class TourRegionService {
-  private readonly densityCache = new LRUCache<string, TourDensityResultType>({ max: 20, ttl: CACHE_TTL_MS });
-  private readonly lodgingCache = new LRUCache<string, TourLodgingResultType>({ max: 200, ttl: CACHE_TTL_MS });
-  private readonly regionsCache = new LRUCache<string, TourRegionsResultType>({ max: 200, ttl: CACHE_TTL_MS });
+  private readonly densityCache = new TourVersionedCache<TourDensityResultType>({ max: 20, ttl: CACHE_TTL_MS });
+  private readonly lodgingCache = new TourVersionedCache<TourLodgingResultType>({ max: 200, ttl: CACHE_TTL_MS });
+  private readonly regionsCache = new TourVersionedCache<TourRegionsResultType>({ max: 200, ttl: CACHE_TTL_MS });
 
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -90,8 +90,10 @@ export class TourRegionService {
 
   // ── 밀도 격자 ───────────────────────────────────────────────────────────────
   async density(q: TourDensityQueryType): Promise<TourDensityResultType> {
+    // 집계보다 먼저 읽는다 — 버전이 바뀌었으면 캐시가 비워져 새로 집계한다(아래 숙소·지역 비교도 같다).
+    const version = await tourDataVersion(this.prisma);
     const key = `${q.kind}|${q.bbox ?? ''}`;
-    const hit = this.densityCache.get(key);
+    const hit = this.densityCache.get(version, key);
     if (hit) return hit;
     const deg = TOUR_DENSITY_CELL_DEG;
     const kinds = q.kind === 'restaurant' ? [...TOUR_RESTAURANT_TYPE_SHORTS] : null;
@@ -117,14 +119,15 @@ export class TourRegionService {
       sampleLabel: TOUR_SAMPLE_LABEL,
       sourceNote: TOUR_SOURCE_NOTE,
     };
-    this.densityCache.set(key, out);
+    this.densityCache.set(version, key, out);
     return out;
   }
 
   // ── 숙소 ───────────────────────────────────────────────────────────────────
   async lodging(q: TourInsightsQueryType): Promise<TourLodgingResultType> {
+    const version = await tourDataVersion(this.prisma);
     const key = filterKey(q);
-    const hit = this.lodgingCache.get(key);
+    const hit = this.lodgingCache.get(version, key);
     if (hit) return hit;
     const attrs = attrWhere(q);
     const [trips, spend, lodgeVisits] = await Promise.all([
@@ -212,15 +215,16 @@ export class TourRegionService {
       sampleLabel: TOUR_SAMPLE_LABEL,
       sourceNote: TOUR_SOURCE_NOTE,
     };
-    this.lodgingCache.set(key, out);
+    this.lodgingCache.set(version, key, out);
     return out;
   }
 
   // ── 지역 비교 ──────────────────────────────────────────────────────────────
   // jeju: 제주시·서귀포시·부속섬(고정 3집단). 그 밖: 방문 sido 조건 안에서 시군구별 집단(방문 수 상위 MAX_SIGUNGU_GROUPS).
   async regions(q: TourInsightsQueryType): Promise<TourRegionsResultType> {
+    const version = await tourDataVersion(this.prisma);
     const key = filterKey(q);
-    const hit = this.regionsCache.get(key);
+    const hit = this.regionsCache.get(version, key);
     if (hit) return hit;
     const jeju = q.region === 'jeju';
     const attrs = attrWhere(q);
@@ -332,7 +336,7 @@ export class TourRegionService {
       sampleLabel: TOUR_SAMPLE_LABEL,
       sourceNote: TOUR_SOURCE_NOTE,
     };
-    this.regionsCache.set(key, out);
+    this.regionsCache.set(version, key, out);
     return out;
   }
 }

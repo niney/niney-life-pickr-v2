@@ -86,7 +86,14 @@ tour-c (로컬, Python/DuckDB)                    niney-life-pickr-v2 (운영)
 - **원본 층은 별도 모듈·별도 권한**: `requireTourRaw` 는 `TOUR_RAW_USER_IDS` 에 든 사용자만 통과. 응답 `Cache-Control: private, no-store`,
   `X-Robots-Tag: noindex`. 사진은 nginx 정적이 아니라 인증 라우트가 스트리밍.
 - **원본은 국내 서버에만**, 관리자 원본 화면은 Cloudflare 프록시를 타지 않는 경로(DNS 전용 서브도메인 또는 SSH 터널)로 접근.
-- 성능: SQLite 에 30만 행. 공개 집계는 인덱스 + `lru-cache`(필터 키, TTL 1h) 로 충분. 적재 시 캐시 무효화.
+- 성능: SQLite 에 30만 행. 공개 집계는 인덱스 + `lru-cache`(필터 키, TTL 10분) 로 충분.
+- 캐시 무효화는 **데이터 버전**으로: 적재·제거(`load:tour`·`unload:tour`)는 API 와 다른 프로세스라 서비스의 `invalidate()` 를 부를 수 없다.
+  대신 둘 다 데이터와 같은 트랜잭션에서 적재 이력(`LifeMasterSync layer=tour|tour-<key>`)을 한 행 남기므로, 네 layer 의 가장 큰 이력 id 를
+  버전으로 삼는다(`tour-data-version.ts` 의 `tourDataVersion`). 인사이트·밀도·숙소·지역 비교·코스 프로필 캐시(`TourVersionedCache`)는 요청마다
+  집계보다 **먼저** 버전을 읽고(인덱스만 읽는 조회 한 번 — 0.1ms 미만이라 메모하지 않는다), 버전이 바뀌었으면 담긴 것을 전부 버린다. 그래서
+  떠 있는 API 가 커밋 뒤 첫 요청부터 새로 집계한다 — 환수·폐기(`unload:tour`) 뒤 옛 집계가 TTL 만큼 응답에 남지 않고, 프로세스 메모리에서도
+  그 캐시를 쓰는 다음 요청 때 내려간다. 이력 행을 남기지 않는 변경(표를 직접 고친 경우, `match:restaurant-tour`·`check:tour-biz` 갱신)은
+  버전이 그대로라 TTL(10분)로 따라간다.
 
 ## 데이터 계약 — tour-c export (`exportVersion: 1`)
 
@@ -138,8 +145,8 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 
 | 명령 | 하는 일 |
 |---|---|
-| `load:tour [dir] [--dry-run] [--no-thumbs]` | manifest 검증(exportVersion·sha256) → 정규화 순수 함수(좌표 한국 범위·비공개 마스킹 재검증·필수값) + 사유별 drop 리포트 → Tour* 전량 교체 트랜잭션(청크 500~1,000, 바인드 32,766 아래) → `LifeMasterSync layer=tour` → `TOUR_THUMBS_DIR` 존재 확인 → 공개 집계 캐시 무효화 |
-| `unload:tour` | Tour* 전부 삭제 + RestaurantTourMatch·TourPlaceBizStatus 삭제 + sync 행(count 0) — 환수 대비 |
+| `load:tour [dir] [--dry-run] [--no-thumbs]` | manifest 검증(exportVersion·sha256) → 정규화 순수 함수(좌표 한국 범위·비공개 마스킹 재검증·필수값) + 사유별 drop 리포트 → Tour* 전량 교체 트랜잭션(청크 500~1,000, 바인드 32,766 아래) → 같은 트랜잭션에서 `LifeMasterSync layer=tour` → `TOUR_THUMBS_DIR` 존재 확인. 공개 집계 캐시는 로더가 비우지 않는다(다른 프로세스) — 이력 행이 데이터 버전을 올려, 떠 있는 API 가 다음 요청에 스스로 버린다(§구조) |
+| `unload:tour` | Tour* 전부 삭제 + RestaurantTourMatch·TourPlaceBizStatus 삭제 + sync 행(count 0) — 환수 대비. sync 행이 데이터 버전을 올려, 떠 있는 API 도 재시작 없이 다음 요청부터 빈 집계를 낸다 |
 | `match:restaurant-tour [--dry-run]` | 식당 행이 1개 이상인 canonical(좌표 있음) ↔ TourPlace(식당·상업·상점) — 100m + `storeNameScore ≥ 0.5`, 정규화 이름 완전일치면 300m — 1:1(최고 점수), 재실행 시 이전 매칭 유지(상가 매칭 규칙) |
 | `check:tour-biz [--max-calls=N] [--min-travelers=3]` | TourSpend 에서 장소별 최빈 사업자번호 → 국세청 「사업자등록정보 진위확인 및 상태조회」(data.go.kr 15081808, 100건/콜, `DATA_GO_KR_API_KEY` 활용신청) → TourPlaceBizStatus |
 | `status:life-map` | 기존 한 줄에 `tour=<places> tour_matched=<matched>` 추가(`stat_val` 키 단위 파싱이라 안전) |
@@ -155,7 +162,7 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | `GET /restaurants/public` (기존) | `sort=tour_travelers \| tour_score` 추가, 행에 `tour{nTravelers,bayesScore,spendPpMedian,revisitRate}` | 매칭 없는 행은 null(정렬 시 뒤로) |
 | `POST /restaurants/public/smart-pick` (기존) | `strategy: 'traveler'` 추가. `balanced` 는 세 점수 평균(없는 것은 제외) | 여행자 점수 = `(bayes−1)/4`, nRated≥3 |
 | `GET /tour/public/insights?region&ageGrp&gender&accompany&month&nights` | 규모·박수·월·동반·시간대×유형·유형별 만족/체류/지출·전이 행렬·코스 템플릿·읍면동·이유·지출 구성·이동수단·공항 다음·거주지 | 필터 후 여행 <20건이면 `insufficient: true`, 셀 n<5 null |
-| `POST /tour/public/plan` `{region, ageGrp, accompany, nights, month?, gender?}` | `{matchedTrips, relaxed, places[{name,kind,sigungu,emd,n,mean,score,similarN,lift,peak,stayMin,spendPp,placeId}], templates[{label,n}], itinerary{days[{day,area,pattern,patternBasis,stops[{name,kind,arriveMin,stayMin,moveMin,moveKm,alternatives}]}],legBasis} \| null, excludedClosed}` (10차 — 장소 숫자는 지역 표본 전체 기준, 일정표는 제주만) | 장소 n≥5·평가 3건 이상(지역 전체 기준), `similarN` 은 비슷한 여행 5건 이상일 때만, 뼈대는 여행 5건 이상에서 나온 유형 순서만, 좌표·장소 id 없음. matchedTrips<20 이면 조건 완화 안내 |
+| `POST /tour/public/plan` `{region, ageGrp, accompany, nights, month?, gender?, pace?, focus?, transport?, stayArea?, must?, avoid?, wetDays?}`(pace~avoid 는 11차, wetDays 는 12차) | `{regionTrips, matchedTrips, relaxed, places[{name,kind,sigungu,emd,n,mean,score,similarN,lift,peak,stayMin,spendPp,placeId}], templates[{label,n}], itinerary{days[{day,area,pattern,patternBasis,stops[{name,kind,arriveMin,stayMin,moveMin,moveKm,pinned,alternatives}],fromStayMin,toStayMin,wet}],legBasis,transport,stayArea,unplaced,base,weatherPlaceId} \| null, areas[{label,n}], excludedClosed}` (10차 — 장소 숫자는 지역 표본 전체 기준. 일정표는 13차부터 `region=all` 을 뺀 모든 지역 — 제주 밖은 `base`(거점 동네) 주변에서 짜고 `weatherPlaceId`(예보 지점)를 알려 준다) | 장소 n≥5·평가 3건 이상(지역 전체 기준), `similarN` 은 비슷한 여행 5건 이상일 때만, 뼈대는 여행 5건 이상에서 나온 유형 순서만, 좌표·장소 id 없음. matchedTrips<20 이면 조건 완화 안내. `regionTrips`(그 지역에 적재된 여행 수) 0 이면 미적재 — 화면은 "표본이 적다" 대신 여행로그가 없다고 안내하고, 서버는 빈 프로필을 캐시에 남기지 않는다(적재 직후 곧바로 반영) |
 | `GET /tour/public/density?kind=all\|restaurant[&bbox]` (6차) | 0.02° 격자 `[{x,y,n,travelers}]` + 분위 경계 4개(5등급 색칠) + 규모 — bbox 없으면 전국 칸 전부(수백 개) | 여행자 ≥5 칸만 |
 | `GET /tour/public/lodging?region&ageGrp&gender&accompany&month&nights` (6차) | 숙박 결제 유형별 이용 여행·결제 중앙·1박 추정(결제액 × 숙박 건수 ÷ 박수)·1인 중앙·예약률 + 숙소 방문 만족도 | 여행 ≥5 유형만, 금액·평가 3건 미만 null |
 | `GET /tour/public/regions?region&ageGrp&gender&accompany&month&nights` (6차·7차) | 집단(region=jeju 는 제주시·서귀포시·부속섬 3집단, 시도·서부권은 시군구 상위 8집단: 여행·방문·비중·만족·식당·체류·1인 지출·유형·읍면동) + 읍면동 표(최대 20) | 집단 여행 ≥5, 읍면동 방문 ≥5 |
@@ -220,7 +227,10 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | **8차 동부권(71778) 세 번째 데이터셋** ✅ 2026-09-18 | 원본 146 폴더(93GB, 147 과 배치 동일)를 `niney-tour-pickr/tour-c-east`(tour-c 스크립트 사본 + `source-view` junction 으로 TS_photo·VS_photo·SbL 을 제주식 배치로) 에서 `TOUR_DATA_ROOT` 로 실행 → `lp-east-2023`(파생표 10 + thumbs/s 16,581장, 코드 수정 없음) · utils `TOUR_DATASETS.east`(접두 `east:`, 강원·경북·경남·부산·대구·울산) + `TOUR_REGIONS` 7키(`east` + 시도 6, 거점은 동부권 전이 표 실측 — 강릉역·신경주역·동대구역·부산역·태화강역 등) + `parent`/`TOUR_REGION_GROUPS`/`tourRegionGroupOf`(권역 묶음) + `tourSampleRegionAt`/`nearestTourSampleRegion` 을 데이터셋 전체로 일반화 + `TOUR_SOURCE_NOTE` 데이터명 자동(세트 전부) · 계약 `TourDataset`·`TourRegion` 17키 · env `TOUR_THUMBS_DIR_EAST` · `deploy.sh` 세트 목록 루프(`TOUR_EAST_EXPORT_DIR`) · `status:life-map` `tour_<세트>` 자동 · 웹 TourFilterBar 지역 칩 2행(권역 → 시도)·어드민 시드 필터 데이터셋 목록 자동 · 로더·마이그레이션·region-filter 수정 없음(`--dataset east`, 제주 방문 4/2,880 이라 plausibility 통과) · 테스트 utils 4건 추가(권역 묶음·표본 판정·출처 표기)·friendly east 접두 · e2e step region=gangwon/east |
 | **9차 수도권(71581) 네 번째 데이터셋** ✅ 2026-09-19 | 원본 145 폴더(97GB, 배치 동일)를 `tour-c-capital`(junction 뷰)에서 실행 → `lp-capital-2023`(파생표 10 + thumbs/s). 표본 성격이 다름 — 수도권 거주자(85%)의 근교 나들이(당일 67%, 비공개 집·친지 27%)라 장소당 표본이 얇다(식당 4,761곳 중 여행자 5명↑ 41곳, 서울 6곳) → 시드보다 **운영 맛집 매칭(서울 1,810곳)·서울 밀도 레이어(5명↑ 칸 143)·나들이 코스** 용도. `TOUR_DATASETS.capital`(접두 `capital:`, 서울·경기·인천) + `TOUR_REGIONS` 4키(`capital` + `seoul/gyeonggi/incheon`, 거점은 역·터미널·공항만 — 집 출발 표본이라 "거점 다음" 은 타지 거주자용) · 계약 21키 · env `TOUR_THUMBS_DIR_CAPITAL` · deploy.sh 루프 항목 · 서울이 표본 bbox 안이 되어 밀도 토글이 이동하지 않음(utils 테스트·e2e step 수정) · 4세트 공용 POI·코드표 md5 동일. 공개 장소 통계는 5명 하한에 대부분 억제되므로 매칭의 가치는 관리자 근거, 시드 콘솔은 하한 3명으로 |
 | **10차 코스 보강 — 후보 품질 + 일정표 합성(제주)** ✅ 2026-10-04 (배포는 AI 허브 회신 뒤) | `tour-plan.service.ts`(5차 `plan()` 을 `TourInsightsService` 에서 분리 — `TourPlanService`) + `tour-plan-synth.ts`(순수 함수: 시간대 5칸·하루 뼈대·이동 모델·권역·일정 합성). **후보**: 공개 가능 여부와 표시 숫자(n·보정 만족도)를 비슷한 여행 "안"이 아니라 **지역 표본 전체** 기준으로 바꿨다 — 5차는 조건을 좁힐수록 장소가 사라졌다(여행 20건 기준으로만 완화하는데 장소는 그 안에서 5건을 요구). 비슷한 여행은 정렬 가중치로만: 5건 이상 간 곳은 `(방문+3) ÷ (지역 평균대로라면 갔을 수+3)`(0.5~2배), 그 미만은 유형 선호(0.7~1.5배)로 물러선다. 점수 = `(보정 만족도 − 3.3) × √n × 선호`(tour-c PlanPage 산식 `n × (mean − 3.3)` 과 달라졌다). 장소마다 주 방문 시간대·체류 중앙·1인 지출, 국세청 조회의 폐업·휴업 제외(`excludedClosed`), 목록에 식당·식당 아닌 곳 각 12곳 보장. 장소의 유형은 장소 표가 아니라 방문 기록에 가장 많이 적힌 것(같은 해수욕장이 방문마다 자연·레저·산책으로 갈린다). **일정표**: utils `TOUR_ITINERARY_REGIONS`(지금 `jeju`, 하루 권역 반경 12km)만. 일수 = 박수+1(최대 5일) → 일차 위치(첫날·가운데·마지막·당일)별 뼈대(이동·숙소·상점·기타·축제를 뺀 뒤 **식사 자리(식당·카페)와 볼거리 자리 두 묶음의 순서**로 센 것 — 유형을 그대로 세면 순서마다 표본이 얇다. 여행 5건 이상, 식사·볼거리가 둘 다 있는 날만, 자리별 도착 시각 중앙 — 비슷한 여행 → 지역 → 기본 순) → 권역(방문 많은 곳부터 반경 안이면 합치는 리더 군집) 배정(첫날·마지막 날은 그날 방문 비중이 높은 동네) → 자리 채우기(묶음이 같은 후보 중 점수 × 시간대 적합 × 일차 위치 적합 × 앞 장소와의 가까움, 등록 맛집은 식사 자리에서 1.15배, 같은 날 같은 세부 유형의 볼거리는 0.85배) → 시간표(도착 = 앞 장소 출발 + 이동과 자리의 흔한 시각 중 늦은 쪽) + 자리별 대안 2곳(8km 안). 이동 분은 같은 날 이어진 방문의 직선거리 × 이동 분을 거리 구간별 **평균**(상위 10% 는 눌러서)으로 접은 모델 — 원본 시각이 30분 단위라 이동 분이 0·30·60 으로만 찍혀 중앙값은 계단이 된다(구간 20건 이상인 점 3개 미만이면 기본 속도). **개별 여행의 하루 동선(`TourDaySequence.placeIds`)은 읽지 않는다** — 합성 근거는 전부 5건 이상 집계. 부속섬(배편)·좌표 없는 곳은 일정에서 제외, **좌표는 응답에 싣지 않음**(6차 결정 유지 — 구간 이동 분·직선거리만, 화면은 이름으로 지도 검색 링크). 계약 `TourPlanPlace`(+`similarN`·`lift`·`peak`·`stayMin`·`spendPp`)·`TourPlanStop/Day/Itinerary`·`TourPlanResult.itinerary/excludedClosed` · utils `TOUR_ITINERARY_REGIONS`·`tourItineraryDays` · 웹 `components/tour/TourItinerary.tsx`(일차 카드·시각·이동·여유·대안) + `TravelPlanPage`(일정표 섹션·카드 근거 줄·미지원 지역 안내) · `probe:tour-plan`(대표 조건 + 동반×박수 훑기) · e2e step 4개 · 테스트 `tour-plan-synth.test.ts` 17건·`tour-plan.service.test.ts` 8건·`TravelPlanPage.test.tsx` 3건 | 작성 머신(Mac)에는 여행로그가 없어 **행 단위 실측은 아직**이다. 대신 2026-10-04 운영 공개 집계(`/tour/public/insights·density·regions·plan`, 제주 여행 1,694건·방문 30,500건)로 가정을 맞춰 봤다 — ① 5차 `plan` 의 얇음 확인(30대·2인·2박 94건 → 식당 2곳, 40대 나홀로 3박 51건 → 장소 6곳, 조건 없이도 상위 24곳 중 식당 2곳) ② 식당이 자리 유형 방문의 절반이고 식당→식당 전이가 가장 흔함 → 뼈대를 두 묶음으로 세고 식당만 도는 날을 뺌 ③ 이동수단별 이동 분 중앙이 30·60·0분 → 이동 모델을 평균으로 ④ 같은 장소의 유형이 방문마다 갈림(5차 응답에서 함덕해수욕장=레저, 동문시장=문화) → 유형은 방문 최빈값 ⑤ 밀도 격자를 12km 로 군집하면 방문 2% 이상 권역이 10개(제주시내·한림·서귀포·성산·중문·조천·애월·대정·구좌·중산간) — 반경 유지 ⑥ 만족도 평균이 4.2~4.7 에 몰려 점수는 여전히 방문 수가 먼저, 만족도가 그다음. 남은 것은 새 로직을 실제 행에 돌려 보는 것 — 적재된 머신에서 `pnpm --filter friendly probe:tour-plan`. 좌표 공개(지도에 코스 그리기)는 AI 허브 회신 뒤 결정 |
-| 후속 후보 | 앱 연동(WebView 또는 네이티브 탭) · 여행자 점수의 랭킹 페이지 반영 · 권역 추가는 `TOUR_DATASETS`·`TOUR_REGIONS`(권역+시도, `parent`) 키 + 계약 두 배열 + deploy.sh 루프 한 항목 · 코스 입력 확장(출발 거점·숙소 동네·이동수단·취향 — `TourTrip.style1~8`·`mvmnNm` 은 적재만 돼 있다) · 일정표 지역 확대(시도 단위, `TOUR_ITINERARY_REGIONS` 한 줄) · 여행일 날씨·물때·주차 결합 | — |
+| **11차 코스 입력 확장 — 속도·취향·이동수단·숙소 동네·꼭 갈 곳/뺄 곳** ✅ 2026-10-04 (배포는 AI 허브 회신 뒤) | `TourPlanBody` 에 선택 입력 6개. **속도**(`pace` relaxed/normal/packed) — 하루 자리 수 목표를 비슷한 여행의 중앙에서 −1/+1 하고 그 길이의 실제 뼈대를 고른다(뼈대 고르기를 "길이가 맞는 것 먼저, 같은 길이면 비슷한 여행 → 지역" 으로 정리). **취향**(`focus` nature/city/activity/culture) — 고른 묶음의 유형에 1.5배, 목록 순위와 일정표 후보 점수에 같이 들어간다(utils `TOUR_PLAN_FOCUSES` 가 유형 묶음과 화면 라벨의 원본). **이동수단**(`transport` car/transit) — 구간 기록의 수단 표기로 모델을 따로 맞춘다(차: 버스 구간만 뺀 전부, 대중교통: 버스·지하철 + 도보 구간, 모자라면 차 × 1.8 + 10분). 대중교통은 하루 권역을 반경의 0.7배·거리 감쇠 5km 로 좁힌다. **숙소 동네**(`stayArea`) — 응답 `areas`(권역 라벨, 후보 3곳 이상인 권역을 방문 많은 순으로 12개)에서 골라 되돌려 보낸다. 가까운 권역을 앞세우고(45km 에서 절반) 일차마다 숙소에서·숙소까지 이동 분을 붙인다(도착한 날은 가는 쪽, 떠나는 날은 나오는 쪽만). **꼭 갈 곳/뺄 곳**(`must` ≤8 · `avoid` ≤30) — 응답에 장소 id 가 없어 이름(+읍면동)으로 받는다. 꼭 갈 곳이 든 권역을 가운데 날부터 배정하고(없으면 첫날·마지막 날 중 잘 채워지는 쪽) 그 장소를 시간대가 맞는 자리에 고정, 자리가 모자라면 그 장소에 많이 가는 시각에 자리를 늘린다(하루 7곳까지). 섬·좌표 없음·날 부족으로 못 넣은 곳은 `itinerary.unplaced`. 뺄 곳은 일정(대안 포함)에서만 빠지고 목록에는 남는다. 출발 거점 입력은 넣지 않았다 — 제주는 공항 하나라 첫날·마지막 날 동네가 이미 방문 기록에서 나온다(시도 단위로 일정표를 열 때 필요). 취향을 여행 스타일 설문(`TourTrip.style1~8`)으로 맞추는 방식은 축의 뜻·방향을 이 머신에서 확인할 수 없어 쓰지 않았다. 웹 `TourPlanOptions`(속도·취향·이동 칩) + 일정표의 숙소 동네 선택·꼭/뺌 칩·장소별 ×·목록 카드의 핀 — 고르는 즉시 다시 짜고, 다시 짜는 동안 앞 결과를 유지한다. `probe:tour-plan` 입력 확장 구역 · e2e step 2개 · 테스트 `tour-plan-synth.test.ts` 25건·`tour-plan.service.test.ts` 15건·`TravelPlanPage.test.tsx` 5건 | 10차와 같이 행 단위 실측은 아직 — 운영 집계 분포를 흉내 낸 합성 데이터(여행 1,694건)로 화면·e2e 를 돌렸다. 버스 구간 기록이 실제로 모델을 맞출 만큼 있는지(제주 시내/마을버스 구간 1,347건)는 프로브의 "대중교통(이동 근거 …)" 줄로 확인 |
+| **12차 코스 날씨 반영 — 출발일·비 오는 날** ✅ 2026-10-04 (배포는 AI 허브 회신 뒤) | 웹에서 **출발일**을 넣으면 일차 카드에 날짜를 붙이고, 그 지역 예보 지점(utils `TOUR_ITINERARY_REGIONS[…].weatherPlaceId` — 제주는 제주시. 지역 중심에서 가장 가까운 지점은 성판악(산간)이라 직접 적는다)의 단기(오늘~+3일)·중기(+4~+10일) 예보를 날씨 화면과 같은 훅·병합(`useWeatherForecast`·`useWeatherMid`·`mergeDailyRows`)으로 불러 비 오는 일차를 고른다(강수 상태이거나 강수확률 60% 이상). 서버에는 날짜가 아니라 **비 오는 일차 번호(`wetDays`)** 만 간다 — `TourPlanService` 는 예보를 부르지 않아 외부 의존이 없고 결정적이다. 비 오는 날은 후보 점수에 유형별 배수(자연·산책·레저 0.5, 역사·테마 0.8, 문화 1.5, 상업·체험 1.2)를 곱해 권역과 자리를 고르고 응답 `days[].wet` 으로 표시한다. 가운데 날의 지리적 순서 바꿈은 비 오는 날과 아닌 날이 섞이면 하지 않는다(권역을 그날 날씨에 맞춰 골랐으므로). 예보가 닿지 않는 날짜(열흘 뒤)나 예보 조회 실패는 날짜만 붙인다. 테스트 `tour-plan-synth.test.ts` 27건·`tour-plan.service.test.ts` 16건·`TravelPlanPage.test.tsx` 6건(예보는 MSW 픽스처) | 유형은 장소 단위 실내·야외 정보가 아니라 거친 구분이다(실내 수족관도 '테마'). 작성 머신 `.env` 에 `DATA_GO_KR_API_KEY` 가 없어 실제 예보가 반영되는 화면은 못 봤다 — 예보 실패 경로(날짜만 표시)만 실서버로 확인. **4단계의 나머지는 하지 않았다**: 주변 주차장(작성 머신에 주차장 적재 0건이라 검증 불가, 좌표 비공개 방침과도 닿는다) · 물때(해안 몇 곳에만 의미) · 일정 설명문(LLM — 공개 라우트의 비용·한도 결정이 먼저) |
+| **13차 일정표를 제주 밖으로 — 시도·권역 19개 지역** ✅ 2026-10-04 (배포는 AI 허브 회신 뒤) | utils `TOUR_ITINERARY_REGIONS` 를 `전체` 만 빼고 전 지역으로(`TourItineraryRegionDef{zoneKm,hubKm,skipIslands,mealFallback,weatherPlaceId}` — 값은 부록 D 의 실측). **거점 반경**(`hubKm`, 제주는 null) — 제주는 하루에 섬 절반을 돌지만 본토 여행은 한 도시 안팎에서 끝난다(날짜 사이 이동 90% 선 7~38km). 반경이 없으면 "강원 2박" 이 강릉 → 춘천 → 속초로 튄다. 거점은 숙소 동네(`stayArea`) → 꼭 갈 곳(`must`)이 든 권역 → 그 조건에서 며칠을 가장 알차게 채우는 동네 순으로 정한다: 권역마다 하루를 채운 점수를 내고, 반경의 **절반** 안 권역의 점수를 높은 것부터 일수만큼 더한 값이 가장 큰 묶음에서 하루 점수가 가장 높은 권역(반경 전체로 재면 두 도시의 중간이 거점이 된다). 날에 줄 수 있는 권역은 거점에서 반경 안 + 꼭 갈 곳이 든 권역, 거점 권역에도 하루를 준다(숙소로 정한 거점은 제외). 날을 다 못 채우면 반경을 두 배로 넓혀 한 번 더 짜고, 그래도 모자라면 채운 날만 낸다. **거리는 권역 중심이 아니라 "그 권역에서 하루를 채웠을 때 들르는 곳들의 중심" 끼리** 잰다 — 권역 중심은 군집의 씨앗일 뿐이라 이웃 권역의 인기 장소로 하루를 채우는 권역은 중심과 실제 동선이 반경만큼 어긋난다(강릉 북쪽 권역: 중심에서는 속초가 38km 안인데 하루는 강문해변에서 보낸다). **하루 권역 반경**(`zoneKm` 5~12km)·앞 장소 거리 감쇠(반경 × 2/3)·대안 거리·숙소 감쇠(거점 반경 ÷ 2)도 지역 규모를 따른다. **같은 곳 합치기** — 장소 id 는 세트 안에서만 유일해 제주·도서 세트와 권역 세트에 같이 잡힌 곳(해운대해수욕장 105+19건, 전주한옥마을 126+8건 … 시도 11곳에 109쌍)이 목록·일정에 두 번 나왔다. 이름이 같고 300m 안이면 한 곳으로 센다(여행 수는 합, 보정 만족도는 여행 수 가중, 등록 맛집 연결은 합친 id 전부에서 찾는다). **사실상 같은 곳 묶음** — 한쪽 이름이 다른 쪽 이름 + 공백으로 시작하고 500m 안이면(대왕암공원·대왕암공원 출렁다리, 18쌍) 합치지는 않되 한 일정에 한 곳만 넣는다. **이름으로 거르기** — 유형이 `상업`·`식당` 으로 더 많이 적힌 대형마트·편의점·생활용품점·아파트(이마트 서귀포점 36건 등 23곳)는 목록에만 남기고 일정 자리에는 넣지 않는다. **식사 자리 대체**(`mealFallback`, 제주 밖) — 제주 밖은 식당마다 표본이 얇아(여행 5건 이상인 식당: 서울 8곳·경남 6곳·울산 0곳) 식사 자리에 넣을 식당 후보가 없으면 그 시각에 맞는 볼거리로 채운다. 식당이 하나도 없는 날은 화면이 그렇게 알린다. **섬 표시**(`isIsland`)는 제주 세트에서만 뜻이 맞아(다른 세트에서는 전주한옥마을·강릉 시내에도 붙어 있다) 제주에서만 일정에서 뺀다. **라벨** — 읍면동이 시군구를 넘나들면 읍면동마다 시군구를 붙이고("해운대구 우동·수영구 광안동"), 여러 시도를 묶은 권역은 시도를 앞에 붙인다("부산 수영구 광안동·민락동"). **날씨** — 제주 밖은 예보 지점이 거점에 따라 달라 서버가 응답으로 알려 준다(`itinerary.weatherPlaceId` = 거점에서 가장 가까운 시·군·구, utils `nearestWeatherPlace`). 화면은 첫 결과에 날짜·예보를 붙이고 비 예보는 다음에 찾을 때부터 `wetDays` 로 보낸다. 거점은 날씨를 보지 않고 정해 예보가 거점(=예보 지점)을 흔들지 않는다. **웹** — 일정 옵션(속도·이동·출발일)이 전 지역에서 보이고, 일정표 위에 "○○ 주변에서 짰습니다 — 다른 곳을 중심으로 보려면 숙소 동네를 고르거나 꼭 갈 곳을 넣으세요"(숙소를 고르면 숨김), `전체` 는 "지역을 골라야" 안내. 긴 장소 이름이 일차 카드를 화면 밖으로 밀던 것(격자 칸 `min-w-0`)도 고쳤다. **실측**(`probe:tour-plan --regions` — 일정표 지역 전부를 당일·1박·2박으로) — 20개 지역 × 3 = 60개 중 59개가 일수를 다 채움(세종 2박만 2/3일). 제주 결과는 13차 전과 같다(숙소 동네 라벨 표기만 달라짐). 남긴 것: 원본의 장소명 오류(조천읍 식당이 "도산근린공원" 등)는 손대지 않았고, 다도해(남해·통영처럼 직선 35km 가 차로 80km)는 직선거리 반경이 실제보다 가깝게 본다. | 거점 권역·그 좌표·거점에서 보내는 날은 합성기 안에서만 쓰고 응답에는 동네 라벨과 예보 지점 id(시·군·구 단위)만 나간다. 합친 장소도 각자 여행 5건·평가 3건 이상인 행끼리만 합친다(하한 미만 행을 더해 공개하지 않는다) |
+| 후속 후보 | 앱 연동(WebView 또는 네이티브 탭) · 여행자 점수의 랭킹 페이지 반영 · 권역 추가는 `TOUR_DATASETS`·`TOUR_REGIONS`(권역+시도, `parent`) 키 + 계약 두 배열 + deploy.sh 루프 한 항목 · 여행 스타일 설문(`TourTrip.style1~8`)으로 비슷한 여행 고르기 · 식당 표본이 얇은 지역의 식사 자리를 등록 맛집(자체 DB)으로 채우기 · 거점 반경을 직선거리 대신 도로 거리로(다도해) · 여행일 물때·주차 결합 | — |
 
 ## 테스트
 
@@ -230,8 +240,10 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | `tour-master.service.test.ts` | 정규화 drop 사유(좌표 밖·필수값·마스킹 위반) · 전량 교체 후 건수 · unload 후 0 |
 | `restaurant-tour-match.test.ts` | 점수·반경·완전일치 300m · 1:1 · 재실행 안정성 · 고아 canonical 제외 |
 | `tour-public.test.ts` | 응답 스키마 키에 식별자 없음 · n<5 null · 여행 <20 insufficient · 매칭 없는 식당 `tour: null` |
-| `tour-plan-synth.test.ts` · `tour-plan.service.test.ts` (10차) | 뼈대는 여행 5건 이상만 · 이동 모델 실측/기본 · 권역·일정 합성 결정성 · 후보 숫자는 지역 전체 기준, `similarN` 5건 미만 null · 폐업·유형·표본 제외 · 응답 키에 식별자·좌표 없음 |
+| `tour-plan-synth.test.ts` · `tour-plan.service.test.ts` (10·11차) | 뼈대는 여행 5건 이상만 · 이동 모델 실측/기본 · 권역·일정 합성 결정성 · 후보 숫자는 지역 전체 기준, `similarN` 5건 미만 null · 폐업·유형·표본 제외 · 응답 키에 식별자·좌표 없음 · 속도·취향·이동수단·숙소·꼭 갈 곳/뺄 곳 반영, 입력 선택지 키가 계약과 utils 에서 같음 |
+| `tour-plan.service.mainland.test.ts` · `tour-plan-synth.test.ts` 의 13차 묶음 | 거점 반경 안에서만 짠다(반경 없으면 두 도시를 오감) · 날이 모자라면 두 배까지 · 숙소·꼭 갈 곳이 거점을 옮김 · 거리는 하루 동선의 중심끼리 · 세트가 다른 같은 곳 합치기(여행 수 합·만족도 가중) · 마트·아파트는 목록에만 · 같은 곳 묶음은 한 일정에 하나 · 식당 없는 동네는 볼거리로 · 섬 표시는 제주에서만 · 권역 라벨의 시도 · `전체` 는 장소만 · 응답에 좌표 키 없음 |
 | `tour-admin.test.ts` | allowlist 밖 admin 404 · no-store/noindex 헤더 · 사진 라우트 인증 |
+| `tour-data-version.test.ts` (+ 인사이트·지역·코스 서비스 테스트의 "데이터 버전" 케이스) | 버전 = 여행로그 네 layer 의 가장 큰 이력 id(다른 layer 무시, 없으면 0) · 이력 행이 추가되면 같은 서비스 인스턴스가 곧바로 새로 집계(이력 없는 직접 수정은 TTL) · 버전을 집계보다 먼저 읽음(집계 중 커밋된 적재가 옛 결과를 새 버전으로 남기지 않음) · `unloadTourTables` 직후 떠 있는 공개 라우트 다섯 개가 빈 결과 · 적재·재적재·제거가 버전을 올림(`tour-master.service.test.ts`) |
 
 ## 부록 A — 출처 표기 문구
 
@@ -257,3 +269,37 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 - 프로토타입(2026-09-13): https://claude.ai/code/artifact/1392ba04-af21-4e31-8118-2b799c89ae54 — 화면 6개, 실제 집계값.
 - 이용조건 조사 결과와 항목별 판정표는 2026-09-13 대화 기록. 요지: 공개 = 집계·추천만, 원본 = 승인받은 본인만.
 - dev DB 관측: 제주 등록 맛집 0곳(발굴 시드가 1순위인 이유), 고아 canonical 7,969건(매칭 대상에서 제외).
+
+## 부록 D — 지역별 동선 실측(13차, 2026-10-04 적재본)
+
+`TOUR_ITINERARY_REGIONS` 의 값이 여기서 나왔다. 공개 방문(이동·숙소·상점·기타·축제 제외, 좌표 있음)만 셌다.
+**하루 반경** = 그날 들른 곳들의 중심에서 가장 먼 곳까지, **날짜 사이** = 이어진 두 날의 중심 사이 거리.
+`zoneKm` = 하루 반경 75% 선을 5~12km 로, `hubKm` = 날짜 사이 90% 선을 15~40km 로 자른 값(제주는 섬 전체가 하루 거리라 거점 반경을 두지 않는다).
+후보 = 여행 5건·평가 3건 이상인 장소(이동·숙소 제외, 세트 간 중복을 합치기 전).
+
+| 지역 | 여행 | 박수 당일/1박/2박+ (%) | 후보(식당) | 하루 반경 p50/p75 (km) | 날짜 사이 p50/p75/p90 (km) | zoneKm | hubKm |
+|---|---|---|---|---|---|---|---|
+| 제주 | 1,694 | 15 / 8 / 77 | 925 (513) | 13.1 / 20.2 | 17.0 / 25.5 / 34.6 | 12 | — |
+| 서부권 | 3,864 | 40 / 40 / 19 | 683 (218) | 3.8 / 9.3 | 6.3 / 17.1 / 35.5 | 9 | 36 |
+| 전북 | 811 | 30 / 45 / 24 | 168 (59) | 2.9 / 7.9 | 4.0 / 12.0 / 27.7 | 8 | 28 |
+| 전남 | 906 | 35 / 41 / 24 | 185 (75) | 3.6 / 7.6 | 4.6 / 15.4 / 31.5 | 8 | 32 |
+| 충남 | 1,049 | 40 / 42 / 18 | 132 (20) | 5.0 / 11.0 | 9.5 / 18.2 / 32.3 | 11 | 32 |
+| 대전 | 636 | 52 / 36 / 12 | 95 (46) | 3.3 / 4.6 | 3.2 / 5.2 / 7.3 | 5 | 15 |
+| 충북 | 834 | 30 / 41 / 29 | 79 (15) | 4.3 / 9.4 | 7.0 / 15.2 / 23.5 | 9 | 24 |
+| 광주 | 318 | 30 / 36 / 34 | 15 (2) | 2.3 / 5.1 | 3.7 / 5.0 / 10.0 | 5 | 15 |
+| 세종 | 149 | 69 / 21 / 10 | 9 (1) | 1.7 / 4.1 | 3.3 / 5.1 / 7.0 | 5 | 15 |
+| 동부권 | 3,826 | 39 / 43 / 18 | 669 (199) | 4.2 / 9.4 | 7.3 / 16.6 / 34.9 | 9 | 35 |
+| 강원 | 1,216 | 32 / 54 / 15 | 252 (85) | 4.0 / 9.3 | 6.3 / 18.0 / 37.6 | 9 | 38 |
+| 경북 | 985 | 44 / 41 / 14 | 174 (67) | 4.3 / 10.0 | 7.9 / 17.1 / 30.6 | 10 | 31 |
+| 경남 | 785 | 40 / 42 / 18 | 74 (6) | 4.9 / 10.2 | 10.0 / 18.5 / 30.7 | 10 | 31 |
+| 부산 | 872 | 36 / 37 / 27 | 127 (34) | 3.4 / 6.9 | 5.5 / 9.2 / 12.9 | 7 | 15 |
+| 대구 | 451 | 41 / 35 / 24 | 26 (7) | 2.5 / 4.1 | 3.6 / 5.4 / 9.5 | 5 | 15 |
+| 울산 | 203 | 45 / 37 / 17 | 16 (0) | 4.8 / 9.4 | 7.7 / 13.1 / 16.1 | 9 | 16 |
+| 수도권 | 5,341 | 46 / 32 / 22 | 380 (53) | 2.4 / 6.7 | 6.5 / 13.8 / 23.8 | 7 | 24 |
+| 서울 | 2,532 | 38 / 28 / 35 | 116 (8) | 1.2 / 3.9 | 4.1 / 7.7 / 11.1 | 5 | 15 |
+| 경기 | 2,978 | 53 / 35 / 13 | 191 (33) | 2.2 / 6.3 | 7.4 / 15.9 / 25.8 | 6 | 26 |
+| 인천 | 604 | 49 / 38 / 14 | 73 (12) | 2.3 / 6.4 | 5.0 / 11.6 / 20.0 | 6 | 20 |
+
+읽는 법 — 제주 여행은 2박 이상이 77% 이고 하루에 13~20km 를 돈다. 본토는 당일·1박이 8할이고 하루 동선이 한 동네(3~5km) 안이다. 그래서 제주의
+규칙(권역 12km·섬 전체에서 날마다 다른 동네)을 그대로 쓰면 본토 일정은 날마다 도시를 옮겨 다닌다. 식당 후보가 제주에 몰려 있는 것(전체 식당
+후보의 절반)도 본토에서 식사 자리를 볼거리로 메우는 이유다.

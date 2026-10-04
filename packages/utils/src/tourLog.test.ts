@@ -3,6 +3,7 @@ import {
   TOUR_DATASETS,
   TOUR_DATASET_KEYS,
   TOUR_DENSITY_CELL_DEG,
+  TOUR_ITINERARY_REGIONS,
   TOUR_REGIONS,
   TOUR_REGION_GROUPS,
   TOUR_REGION_KEYS,
@@ -19,6 +20,7 @@ import {
   tourRegionGroupOf,
   tourSampleRegionAt,
 } from './tourLog.js';
+import { weatherPlaceById } from './weatherRegions.js';
 
 describe('tourLog — 데이터셋·지역(7차·8차)', () => {
   it('데이터셋 키는 지역 키이기도 하고, 표본 시도 목록이 같다', () => {
@@ -97,9 +99,30 @@ describe('tourLog — 밀도 격자', () => {
   });
 });
 
-describe('tourLog — 코스 일정표(10차)', () => {
-  it('일정표는 제주만 열려 있고, 일수는 박수 + 1(당일 1일 · 4박 이상 5일)', () => {
-    expect(TOUR_REGION_KEYS.filter(isTourItineraryRegion)).toEqual(['jeju']);
+describe('tourLog — 코스 일정표(10차·13차)', () => {
+  it('일정표는 "전체" 만 빼고 모든 지역에서 열려 있고, 일수는 박수 + 1(당일 1일 · 4박 이상 5일)', () => {
+    expect(TOUR_REGION_KEYS.filter((k) => !isTourItineraryRegion(k))).toEqual(['all']);
     expect([0, 1, 2, 3, 4, 9].map(tourItineraryDays)).toEqual([1, 2, 3, 4, 5, 5]);
+  });
+
+  it('지역별 동선 규모 — 하루 권역 5~12km, 거점 반경은 제주만 없고(섬 전체) 나머지는 15~40km 이며 하루 권역보다 넓다', () => {
+    for (const [key, cfg] of Object.entries(TOUR_ITINERARY_REGIONS)) {
+      expect(cfg.zoneKm, key).toBeGreaterThanOrEqual(5);
+      expect(cfg.zoneKm, key).toBeLessThanOrEqual(12);
+      if (key === 'jeju') {
+        // 제주 — 부속섬을 빼고, 식당 표본이 두꺼워 식사 자리를 볼거리로 메우지 않는다.
+        expect(cfg).toMatchObject({ hubKm: null, skipIslands: true, mealFallback: false });
+        continue;
+      }
+      expect(cfg, key).toMatchObject({ skipIslands: false, mealFallback: true, weatherPlaceId: null });
+      expect(cfg.hubKm, key).toBeGreaterThanOrEqual(15);
+      expect(cfg.hubKm, key).toBeLessThanOrEqual(40);
+      expect(cfg.hubKm!, key).toBeGreaterThan(cfg.zoneKm);
+    }
+  });
+
+  it('예보 지점을 직접 적은 지역은 실제 날씨 지점이다(제주 = 제주시) — 나머지는 서버가 거점에서 가까운 지점을 알려 준다', () => {
+    for (const cfg of Object.values(TOUR_ITINERARY_REGIONS)) if (cfg.weatherPlaceId) expect(weatherPlaceById(cfg.weatherPlaceId)).not.toBeNull();
+    expect(weatherPlaceById(TOUR_ITINERARY_REGIONS.jeju!.weatherPlaceId)).toMatchObject({ name: '제주', sido: '제주' });
   });
 });

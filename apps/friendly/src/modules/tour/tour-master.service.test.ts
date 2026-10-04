@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TourDataset, TourRegion } from '@repo/api-contract';
 import { TOUR_DATASET_KEYS, TOUR_REGION_KEYS } from '@repo/utils';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { tourDataVersion } from './tour-data-version.js';
 import {
   TOUR_TABLES,
   emptyTourReport,
@@ -344,23 +345,31 @@ describe('tour-master replace/unload (isolated db)', () => {
     const dry = await replaceTourTables(prisma, dir, manifest, { dryRun: true });
     expect(dry.report.visits).toMatchObject({ rows: 3, kept: 2, dropped: { privateLeak: 1 } });
     expect(await prisma.tourPlace.count()).toBe(0);
+    // dry-run 은 이력을 남기지 않는다 — 데이터 버전(공개 집계 캐시가 보는 값, tour-data-version.ts)도 그대로.
+    expect(await tourDataVersion(prisma)).toBe(0);
 
     const first = await replaceTourTables(prisma, dir, manifest);
     expect(first.inserted).toMatchObject({ places: 2, trips: 1, visits: 2, codes: 1, photos: 0 });
     let status = await getTourLoadStatus(prisma);
     expect(status).toMatchObject({ loaded: true, places: 2, baseDate: '2026-09-13', sourceFile: expect.stringContaining('#v1') });
     expect(status.counts.visits).toBe(2);
+    const loadedVersion = await tourDataVersion(prisma);
+    expect(loadedVersion).toBeGreaterThan(0);
 
     // 재적재는 이전 행을 남기지 않는다.
     writeExport(dir, { places: [placeRow()], trips: [tripRow()], visits: [visitRow()] });
     await replaceTourTables(prisma, dir, readTourManifest(dir));
     status = await getTourLoadStatus(prisma);
     expect(status.counts).toMatchObject({ places: 1, visits: 1, codes: 0 });
+    const reloadedVersion = await tourDataVersion(prisma);
+    expect(reloadedVersion).toBeGreaterThan(loadedVersion);
 
     await unloadTourTables(prisma);
     status = await getTourLoadStatus(prisma);
     expect(status.loaded).toBe(false);
     expect(Object.values(status.counts).every((n) => n === 0)).toBe(true);
+    // 적재·재적재·제거가 모두 버전을 올린다 — 떠 있는 API 의 캐시가 이 값으로 바뀐 것을 안다.
+    expect(await tourDataVersion(prisma)).toBeGreaterThan(reloadedVersion);
     const last = await prisma.lifeMasterSync.findFirst({ where: { layer: 'tour' }, orderBy: { loadedAt: 'desc' } });
     expect(last).toMatchObject({ count: 0, sourceFile: 'unload' });
   });
