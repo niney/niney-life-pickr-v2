@@ -26,7 +26,8 @@ const fakeLargeHeif = (w: number, h: number): Buffer => {
   ispe.writeUInt32BE(h, 8);
   return Buffer.concat([
     box('ftyp', Buffer.from('heic\0\0\0\0mif1heic', 'latin1')),
-    box('meta', Buffer.concat([Buffer.alloc(4), box('ispe', ispe)])),
+    // 실제 HEIF 처럼 meta → iprp → ipco → ispe(해상도 파서가 이 구조를 따라간다).
+    box('meta', Buffer.concat([Buffer.alloc(4), box('iprp', box('ipco', box('ispe', ispe)))])),
     box('mdat', Buffer.alloc(32)),
   ]);
 };

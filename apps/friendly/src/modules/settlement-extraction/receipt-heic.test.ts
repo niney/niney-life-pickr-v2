@@ -58,14 +58,14 @@ describe('decodeHeicToJpeg (worker)', () => {
     expect(meta.width).toBe(120);
   });
 
-  it('동시 1개 + 대기 4개를 넘는 요청은 HeicBusyError, 나머지는 모두 끝난다', async () => {
-    const jobs = Array.from({ length: 6 }, () => decodeHeicToJpeg(fixture));
+  it('공용 워커 게이트(동시 1 + 대기 8)를 넘는 요청은 HeicBusyError, 나머지는 모두 끝난다', async () => {
+    const jobs = Array.from({ length: 10 }, () => decodeHeicToJpeg(fixture));
     const settled = await Promise.allSettled(jobs);
     const busy = settled.filter((s) => s.status === 'rejected');
     expect(busy).toHaveLength(1);
     expect((busy[0] as PromiseRejectedResult).reason).toBeInstanceOf(HeicBusyError);
-    expect(settled.filter((s) => s.status === 'fulfilled')).toHaveLength(5);
-  }, 30_000);
+    expect(settled.filter((s) => s.status === 'fulfilled')).toHaveLength(9);
+  }, 60_000);
 
   it('디코드 실패는 오류로 끝나고 다음 작업을 막지 않는다', async () => {
     await expect(decodeHeicToJpeg(fakeHeif(10, 10))).rejects.toThrow();
