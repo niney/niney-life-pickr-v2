@@ -22,6 +22,11 @@ import { TourRegionService } from './tour-region.service.js';
 
 // 여행로그 공개 라우트(4~6차·10~14차) — 맛집 상세 "여행자" 탭 집계, 인사이트(필터), 코스 추천(+일정표), 밀도 격자·숙소·지역 비교. 인증 없음,
 // 로컬 DB 뿐. 응답 스키마에 여행·방문·여행자 식별자가 없고 집단 분해는 소셀 억제(서비스). 매칭 없는 식당의 tour-stats 는 404.
+//
+// GET 응답은 사용자와 무관하고 재적재 때만 바뀐다 → 성공 응답에만 공개 캐시 헤더(브라우저·Cloudflare 가 같은 URL 반복을 흡수 —
+// 서버 집계 캐시 앞의 2차 방어선, PLAN-perf-2 D-10). 등록 맛집 링크가 길어야 5분 늦게 바뀐다. POST(코스 추천)는 엣지 캐시 대상이 아니다.
+// 적재·제거 뒤 서버 집계는 곧바로 바뀌지만(tour-data-version.ts) 클라이언트가 이미 받은 사본은 길어야 5분 남는다.
+const PUBLIC_CACHE_CONTROL = 'public, max-age=300';
 
 const PlaceParams = z.object({ placeId: z.string().min(1).max(64) });
 
@@ -36,11 +41,15 @@ const tourPublicRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.tourRead },
     schema: {
       tags: ['tour'],
-      summary: '여행자 방문 밀도 격자(0.02°) — 여행 5건 미만 칸 제외, bbox 선택',
+      summary: '여행자 방문 밀도 격자(0.02°) — 여행 5건 미만 칸 제외, bbox 선택(bbox 와 겹치는 칸만, 칸 값은 칸 전체 기준)',
       querystring: TourDensityQuery,
       response: { 200: TourDensityResult },
     },
-    handler: async (req) => regions.density(req.query),
+    handler: async (req, reply) => {
+      const out = await regions.density(req.query);
+      reply.header('cache-control', PUBLIC_CACHE_CONTROL);
+      return out;
+    },
   });
   typed.get(Routes.Tour.publicLodging, {
     config: { rateLimit: RATE.tourRead },
@@ -50,7 +59,11 @@ const tourPublicRoutes: FastifyPluginAsync = async (app) => {
       querystring: TourInsightsQuery,
       response: { 200: TourLodgingResult },
     },
-    handler: async (req) => regions.lodging(req.query),
+    handler: async (req, reply) => {
+      const out = await regions.lodging(req.query);
+      reply.header('cache-control', PUBLIC_CACHE_CONTROL);
+      return out;
+    },
   });
   typed.get(Routes.Tour.publicRegions, {
     config: { rateLimit: RATE.tourRead },
@@ -60,7 +73,11 @@ const tourPublicRoutes: FastifyPluginAsync = async (app) => {
       querystring: TourInsightsQuery,
       response: { 200: TourRegionsResult },
     },
-    handler: async (req) => regions.regions(req.query),
+    handler: async (req, reply) => {
+      const out = await regions.regions(req.query);
+      reply.header('cache-control', PUBLIC_CACHE_CONTROL);
+      return out;
+    },
   });
 
   typed.get(decodeURIComponent(Routes.Tour.publicRestaurantStats(':placeId')), {
@@ -74,9 +91,10 @@ const tourPublicRoutes: FastifyPluginAsync = async (app) => {
       params: PlaceParams,
       response: { 200: RestaurantTourStats, 404: ErrorResponseSchema },
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const stats = await getRestaurantTourStats(app.prisma, req.params.placeId);
       if (!stats) throw app.httpErrors.notFound('여행로그 통계가 없는 식당입니다');
+      reply.header('cache-control', PUBLIC_CACHE_CONTROL);
       return stats;
     },
   });
@@ -89,7 +107,11 @@ const tourPublicRoutes: FastifyPluginAsync = async (app) => {
       querystring: TourInsightsQuery,
       response: { 200: TourInsightsResult },
     },
-    handler: async (req) => insights.insights(req.query),
+    handler: async (req, reply) => {
+      const out = await insights.insights(req.query);
+      reply.header('cache-control', PUBLIC_CACHE_CONTROL);
+      return out;
+    },
   });
 
   typed.post(Routes.Tour.publicPlan, {

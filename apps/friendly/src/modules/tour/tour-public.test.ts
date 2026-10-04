@@ -234,6 +234,8 @@ describe('tour public routes (격리 DB)', () => {
   it('tour-stats — 집계만(식별자 없음), 동반 5명 미만 제외, 전후 장소·어절·지출; 매칭 없으면 404', async () => {
     const res = await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${MATCHED}/tour-stats` });
     expect(res.statusCode).toBe(200);
+    // 사용자와 무관한 집계 — 성공 응답만 공개 캐시(PLAN-perf-2 D-10), 404 엔 없다.
+    expect(res.headers['cache-control']).toBe('public, max-age=300');
     const s = res.json() as RestaurantTourStatsType;
     expect(scanKeys(s)).toEqual([]);
     expect(s.summary.nTravelers).toBe(8);
@@ -246,7 +248,9 @@ describe('tour public routes (격리 DB)', () => {
       { label: '몸국', n: 3 },
     ]);
     expect(s.spend).toMatchObject({ n: 4, medianPp: 10000, medianAmount: 20000, avgPayNum: 2 });
-    expect((await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${UNMATCHED}/tour-stats` })).statusCode).toBe(404);
+    const missing = await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${UNMATCHED}/tour-stats` });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers['cache-control']).toBeUndefined();
     expect((await app.inject({ method: 'GET', url: '/api/v1/restaurants/public/nope/tour-stats' })).statusCode).toBe(404);
   });
 

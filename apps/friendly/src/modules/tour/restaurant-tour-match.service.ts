@@ -8,7 +8,7 @@
 // 상가 매칭을 훑던 문제를 여기선 처음부터 막는다. 점수 함수는 상가 매칭의 storeNameScore 를 재사용하고 별칭
 // (aliases ' | ' 구분)까지 본다. 실행: scripts/match-restaurant-tour.ts · 어드민 /admin/tour/match/run.
 
-import type { PrismaClient, RestaurantTourMatch, TourPlace, TourPlaceBizStatus } from '@prisma/client';
+import { Prisma, type PrismaClient, type RestaurantTourMatch, type TourPlace, type TourPlaceBizStatus } from '@prisma/client';
 import type { RestaurantTourMatchInfoType } from '@repo/api-contract';
 import { TOUR_RESTAURANT_TYPE_SHORTS, TOUR_SAMPLE_LABEL, haversineM } from '@repo/utils';
 import { storeNameScore } from '../restaurant/restaurant-store-match.service.js';
@@ -20,6 +20,8 @@ export const TOUR_MATCH_MIN_SCORE = 0.5;
 const BBOX_HALF_LAT = 0.003;
 const BBOX_HALF_LNG = 0.0035;
 const BATCH = 500;
+// 후보 격자 칸(도) — bbox 폭(0.006·0.007)보다 커서 canonical 하나가 최대 2×2 칸만 본다.
+const GRID_DEG = 0.01;
 
 // 맛집 이름 ↔ 장소 이름·별칭 최고 점수.
 export const tourPlaceNameScore = (restaurantName: string, placeName: string, aliases: string | null): number => {
@@ -65,10 +67,63 @@ export const TOUR_MATCH_CANONICAL_WHERE = {
   restaurants: { some: {} },
 } as const;
 
+interface TourMatchPlace {
+  id: string;
+  name: string;
+  aliases: string | null;
+  typeShort: string;
+  lat: number;
+  lng: number;
+}
+export interface TourMatchPlaceIndex {
+  places: TourMatchPlace[];
+  // 칸(cy·cx) → places 의 순번(오름차순).
+  cells: Map<number, number[]>;
+}
+// 위도 칸은 4천 미만이라 cy * 1e5 + cx 가 한국 좌표에서 겹치지 않는다.
+const cellKey = (cy: number, cx: number): number => cy * 100_000 + cx;
+
+// 식당류 장소(좌표 있음)를 한 번 읽어 격자로 — 예전엔 canonical 마다 장소 bbox 조회를 돌렸는데(N+1) 플래너가 typeShort 인덱스를
+// 골라 좌표 범위를 못 써 건당 ~74ms 였다(PLAN-perf-2 D-V2). 읽는 순서는 그 조회가 돌려주던 순서(typeShort 인덱스 = 유형·방문자 수·
+// rowid)와 같게 두고, 칸에서 모은 후보도 그 순번으로 되돌린다 — 점수·거리가 같은 후보 중 무엇을 고르는지까지 예전과 같다.
+export const loadTourMatchPlaceIndex = async (prisma: PrismaClient): Promise<TourMatchPlaceIndex> => {
+  const places = await prisma.$queryRaw<TourMatchPlace[]>`
+    SELECT id, name, aliases, typeShort, lat, lng FROM tour_places
+    WHERE typeShort IN (${Prisma.join([...TOUR_RESTAURANT_TYPE_SHORTS])}) AND lat IS NOT NULL AND lng IS NOT NULL
+    ORDER BY typeShort, nTravelers, rowid`;
+  const cells = new Map<number, number[]>();
+  places.forEach((p, i) => {
+    const k = cellKey(Math.floor(p.lat / GRID_DEG), Math.floor(p.lng / GRID_DEG));
+    const list = cells.get(k);
+    if (list) list.push(i);
+    else cells.set(k, [i]);
+  });
+  return { places, cells };
+};
+
+// 좌표 주변 bbox(예전 조회와 같은 경계·같은 비교) 안의 장소 — 예전 조회 결과와 같은 순서.
+export const tourMatchPlacesNear = (index: TourMatchPlaceIndex, lat: number, lng: number): TourMatchPlace[] => {
+  const minLat = lat - BBOX_HALF_LAT;
+  const maxLat = lat + BBOX_HALF_LAT;
+  const minLng = lng - BBOX_HALF_LNG;
+  const maxLng = lng + BBOX_HALF_LNG;
+  const hits: number[] = [];
+  for (let cy = Math.floor(minLat / GRID_DEG); cy <= Math.floor(maxLat / GRID_DEG); cy++) {
+    for (let cx = Math.floor(minLng / GRID_DEG); cx <= Math.floor(maxLng / GRID_DEG); cx++) {
+      for (const i of index.cells.get(cellKey(cy, cx)) ?? []) {
+        const p = index.places[i]!;
+        if (p.lat >= minLat && p.lat <= maxLat && p.lng >= minLng && p.lng <= maxLng) hits.push(i);
+      }
+    }
+  }
+  return hits.sort((a, b) => a - b).map((i) => index.places[i]!);
+};
+
 export const matchRestaurantTour = async (prisma: PrismaClient, opts: TourMatchOptions = {}): Promise<TourMatchReport> => {
   const now = opts.now ?? (() => new Date());
   const report: TourMatchReport = { scanned: 0, created: 0, rematched: 0, kept: 0, newlyMissing: 0, stillMissing: 0, recovered: 0, unmatched: 0 };
   const total = await prisma.canonicalRestaurant.count({ where: TOUR_MATCH_CANONICAL_WHERE });
+  const placeIndex = await loadTourMatchPlaceIndex(prisma);
   const existing = new Map<string, RestaurantTourMatch>();
   // 장소 → 그 장소를 가진 canonical. unique 제약을 코드에서도 지켜 "먼저 온 canonical 이 가져가는" 순서 의존을 피한다.
   const claimed = new Map<string, string>();
@@ -91,17 +146,8 @@ export const matchRestaurantTour = async (prisma: PrismaClient, opts: TourMatchO
       report.scanned += 1;
       const lat = c.latitude!;
       const lng = c.longitude!;
-      const places = await prisma.tourPlace.findMany({
-        where: {
-          typeShort: { in: [...TOUR_RESTAURANT_TYPE_SHORTS] },
-          lat: { gte: lat - BBOX_HALF_LAT, lte: lat + BBOX_HALF_LAT },
-          lng: { gte: lng - BBOX_HALF_LNG, lte: lng + BBOX_HALF_LNG },
-        },
-        select: { id: true, name: true, aliases: true, typeShort: true, lat: true, lng: true },
-      });
       const candidates: Candidate[] = [];
-      for (const p of places) {
-        if (p.lat === null || p.lng === null) continue;
+      for (const p of tourMatchPlacesNear(placeIndex, lat, lng)) {
         const distM = Math.round(haversineM({ lat, lng }, { lat: p.lat, lng: p.lng }));
         const score = tourPlaceNameScore(c.name, p.name, p.aliases);
         if (!isTourMatchAccepted(distM, score)) continue;

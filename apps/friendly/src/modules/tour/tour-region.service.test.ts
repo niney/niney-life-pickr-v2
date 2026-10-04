@@ -11,8 +11,8 @@ import tourPublicRoutes from './tour-public.route.js';
 import { TourRegionService } from './tour-region.service.js';
 
 // 6차 밀도·숙소·지역 비교 — 격리 DB 에 여행 28건(주 세그먼트 20 · 부속섬 5 · 억제 대상 3)을 심고 ① 격자(여행 5건 미만 칸
-// 제외, kind=restaurant, bbox) ② 숙소 유형별 1박 추정·예약률·만족도 ③ 3집단 + 읍면동 ④ 적재 이력(데이터 버전)이 바뀌면
-// 캐시를 버림 ⑤ 라우트 200/400 + 응답 키 스캔.
+// 제외, kind=restaurant, bbox — 전국 격자에서 칸 단위로) ② 숙소 유형별 1박 추정·예약률·만족도 ③ 3집단 + 읍면동 ④ 적재
+// 이력(데이터 버전)이 바뀌면 캐시를 버림 ⑤ 라우트 200/400 + 공개 캐시 헤더 + 응답 키 스캔.
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId|placeId)$/;
 const scanKeys = (v: unknown, path: string[] = [], out: string[] = []): string[] => {
@@ -169,6 +169,14 @@ describe('tour density / lodging / regions (격리 DB)', () => {
 
     const boxed = await service.density({ kind: 'all', bbox: '126.3,33.2,126.4,33.3' });
     expect(boxed.cells).toEqual([{ ...b, n: 20, travelers: 20 }]);
+    expect(boxed.total).toEqual({ cells: 1, visits: 20 });
+  });
+
+  it('밀도 bbox 는 kind 별 전국 격자에서 칸 단위로 고른다 — 걸친 칸은 칸 전체 값, 겹치지 않으면 빈 결과(PLAN-perf-2 D-8)', async () => {
+    // B 칸(126.32~126.34)에 걸치지만 B 방문 좌표(126.331)는 bbox 밖 — 예전 SQL 은 칸을 못 냈고, 이제 칸 전체 값을 낸다.
+    const edge = await service.density({ kind: 'all', bbox: '126.3315,33.2,126.4,33.3' });
+    expect(edge.cells).toEqual([{ ...cellOf(B.lng, B.lat), n: 20, travelers: 20 }]);
+    expect((await service.density({ kind: 'restaurant', bbox: '127.5,35.0,127.6,35.1' })).cells).toEqual([]);
   });
 
   it('숙소 — 유형별 결제·1박 추정·1인·예약률·만족도, 필터, 여행 5건 미만 유형 제외', async () => {
@@ -245,18 +253,24 @@ describe('tour density / lodging / regions (격리 DB)', () => {
     }
   });
 
-  it('라우트 — density/lodging/regions 200, 잘못된 kind 400', async () => {
+  it('라우트 — density/lodging/regions 200(공개 캐시 헤더), 잘못된 kind·동반 400(헤더 없음)', async () => {
     const den = await app.inject({ method: 'GET', url: '/api/v1/tour/public/density?kind=restaurant' });
     expect(den.statusCode).toBe(200);
+    expect(den.headers['cache-control']).toBe('public, max-age=300');
     expect((den.json() as TourDensityResultType).cells).toHaveLength(2);
-    expect((await app.inject({ method: 'GET', url: '/api/v1/tour/public/density?kind=hotel' })).statusCode).toBe(400);
+    const badKind = await app.inject({ method: 'GET', url: '/api/v1/tour/public/density?kind=hotel' });
+    expect(badKind.statusCode).toBe(400);
+    expect(badKind.headers['cache-control']).toBeUndefined();
 
     const lod = await app.inject({ method: 'GET', url: '/api/v1/tour/public/lodging?ageGrp=30' });
     expect(lod.statusCode).toBe(200);
+    expect(lod.headers['cache-control']).toBe('public, max-age=300');
     expect((lod.json() as TourLodgingResultType).types[0]!.label).toBe('호텔');
+    expect((await app.inject({ method: 'GET', url: `/api/v1/tour/public/lodging?accompany=${encodeURIComponent('가족')}` })).statusCode).toBe(400);
 
     const reg = await app.inject({ method: 'GET', url: '/api/v1/tour/public/regions' });
     expect(reg.statusCode).toBe(200);
+    expect(reg.headers['cache-control']).toBe('public, max-age=300');
     const body = reg.json() as TourRegionsResultType;
     expect(body.groups).toHaveLength(3);
     expect(scanKeys(body)).toEqual([]);

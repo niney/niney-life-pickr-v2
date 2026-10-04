@@ -1,6 +1,15 @@
 // 여행로그 공개 화면 공용 상수·포맷 — 컴포넌트 파일과 분리(react-refresh: 컴포넌트만 export).
 
-import type { TourPlanFameType, TourPlanFocusType, TourPlanPaceType, TourPlanPlaceKeyType, TourPlanPurposeType, TourPlanTransportType } from '@repo/api-contract';
+import {
+  TOUR_ACCOMPANY_VALUES,
+  type TourAccompanyType,
+  type TourPlanFameType,
+  type TourPlanFocusType,
+  type TourPlanPaceType,
+  type TourPlanPlaceKeyType,
+  type TourPlanPurposeType,
+  type TourPlanTransportType,
+} from '@repo/api-contract';
 import { TOUR_REGIONS, type TourRegionKey } from '@repo/utils';
 
 // 지역 라벨(7차) — utils TOUR_REGIONS. 지역 칩(권역 1행 → 시도 2행)은 TourFilterBar 가 utils TOUR_REGION_GROUPS 로 그린다.
@@ -30,17 +39,10 @@ export const kindBg = (kind: string): string => KIND_BG[kind] ?? 'bg-zinc-400';
 export const won = (v: number | null | undefined): string =>
   v === null || v === undefined ? '–' : v >= 10000 ? `${(v / 10000).toFixed(v % 10000 === 0 ? 0 : 1)}만원` : `${Math.round(v).toLocaleString('ko-KR')}원`;
 
-// 필터 선택지 — 서버 zod(TourInsightsQuery)와 같은 값. 동반 형태는 원본 데이터의 표기 그대로.
-export const TOUR_ACCOMPANY_OPTIONS = [
-  '나홀로 여행',
-  '2인 여행(가족 외)',
-  '2인 가족 여행',
-  '3인 이상 여행(가족 외)',
-  '3인 이상 가족 여행(친척 포함)',
-  '자녀 동반 여행',
-  '부모 동반 여행',
-  '3대 동반 여행(친척 포함)',
-] as const;
+// 필터 선택지 — 서버 zod(TourInsightsQuery)와 같은 값. 동반 형태는 계약의 허용 목록(원본 데이터 표기 그대로)을 그대로 쓴다.
+export const TOUR_ACCOMPANY_OPTIONS = TOUR_ACCOMPANY_VALUES;
+// URL 쿼리 등 바깥 값 검사 — 목록 밖이면 서버가 400 을 주므로 필터 없음으로 읽는다.
+export const isTourAccompany = (v: string | null | undefined): v is TourAccompanyType => typeof v === 'string' && (TOUR_ACCOMPANY_VALUES as readonly string[]).includes(v);
 export const TOUR_AGE_OPTIONS = ['20', '30', '40', '50', '60'] as const;
 export const TOUR_MONTH_OPTIONS = [4, 5, 6, 7, 8, 9] as const;
 export const TOUR_NIGHTS_OPTIONS: Array<{ value: number; label: string }> = [

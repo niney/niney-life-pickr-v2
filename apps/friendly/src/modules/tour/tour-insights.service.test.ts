@@ -12,7 +12,7 @@ import tourPublicRoutes from './tour-public.route.js';
 
 // 여행로그 인사이트(5차) — 격리 DB 에 여행 25건(주 세그먼트 20 + 소수 5)을 심고 ① 필터 없는 집계 ② 소수
 // 세그먼트 필터(20건 미만 → insufficient, 5명 셀은 남음) ③ 빈 결과 ④ 적재 이력(데이터 버전)이 바뀌면 캐시를 버림
-// ⑤ 라우트 응답에 식별자 없음.
+// ⑤ 라우트 응답에 식별자 없음 ⑥ 동반 허용 목록·공개 캐시 헤더 ⑦ 등록 맛집 링크는 캐시와 별개로 응답 때(PLAN-perf-2 D-2·D-10).
 // 코스 추천은 tour-plan.service.test.ts(10차에 분리).
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId)$/;
@@ -237,4 +237,34 @@ describe('tour insights (격리 DB)', () => {
     expect(scanKeys(d)).toEqual([]);
     expect((await app.inject({ method: 'GET', url: '/api/v1/tour/public/insights?ageGrp=70' })).statusCode).toBe(400);
   });
+
+  it('라우트 — 동반은 허용 목록만(임의 문자열 400), 공개 캐시 헤더는 GET 성공 응답에만(POST·400 은 없음)', async () => {
+    const bad = await app.inject({ method: 'GET', url: `/api/v1/tour/public/insights?accompany=${encodeURIComponent('친구랑 여행')}` });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.headers['cache-control']).toBeUndefined();
+    expect((await app.inject({ method: 'POST', url: '/api/v1/tour/public/plan', payload: { accompany: '친구랑 여행' } })).statusCode).toBe(400);
+
+    const ok = await app.inject({ method: 'GET', url: `/api/v1/tour/public/insights?accompany=${encodeURIComponent('나홀로 여행')}` });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers['cache-control']).toBe('public, max-age=300');
+    expect((ok.json() as TourInsightsResultType).scale.trips).toBe(5);
+    const plan = await app.inject({ method: 'POST', url: '/api/v1/tour/public/plan', payload: { ageGrp: '30' } });
+    expect(plan.statusCode).toBe(200);
+    expect(plan.headers['cache-control']).toBeUndefined();
+  });
+
+  it('등록 맛집 링크는 응답 때 붙인다 — 매칭이 새로 생기면 캐시된 집계에도 바로 보인다', async () => {
+    const before = await service.insights({ region: 'jeju' });
+    expect(before.airportNext.find((x) => x.name === '올래국수')!.placeId).toBeNull();
+    // 올래국수(P3)를 등록 맛집으로(네이버 placeId 'n-olle').
+    await app.prisma.canonicalRestaurant.create({ data: { id: 'C-olle', name: '올래국수', latitude: 33.49, longitude: 126.49 } });
+    await app.prisma.restaurant.create({ data: { source: 'naver', sourceId: 'n-olle', placeId: 'n-olle', canonicalId: 'C-olle', name: '올래국수', rawSourceUrl: 'https://m.place.naver.com/restaurant/2', snapshotJson: '{}' } });
+    await app.prisma.restaurantTourMatch.create({ data: { canonicalId: 'C-olle', tourPlaceId: 'P3', placeName: '올래국수', typeShort: '식당', distM: 10, nameScore: 1, status: 'matched', matchedAt: new Date(), lastSeenAt: new Date() } });
+
+    const after = await service.insights({ region: 'jeju' });
+    expect(after.airportNext.find((x) => x.name === '올래국수')!.placeId).toBe('n-olle');
+    // 집계는 다시 하지 않았다(같은 캐시 객체).
+    expect(after.scale).toBe(before.scale);
+  });
+
 });

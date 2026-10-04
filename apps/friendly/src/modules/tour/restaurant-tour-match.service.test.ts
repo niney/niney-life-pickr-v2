@@ -4,12 +4,15 @@ import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/tem
 import {
   getRestaurantTourMatchInfo,
   isTourMatchAccepted,
+  loadTourMatchPlaceIndex,
   matchRestaurantTour,
+  tourMatchPlacesNear,
   tourPlaceNameScore,
 } from './restaurant-tour-match.service.js';
 
 // 맛집 ↔ 여행로그 장소 매칭 — ① 점수·수락 규칙(100m·0.5 / 완전일치 300m / 별칭) ② 격리 DB 로 생성 → 유지 → 장소 1:1
-// (다른 canonical 이 가진 장소는 건너뜀) → 사라짐(missing) → 복귀 흐름, 식당 행 없는 고아 canonical 제외, dry-run 무쓰기.
+// (다른 canonical 이 가진 장소는 건너뜀) → 사라짐(missing) → 복귀 흐름, 식당 행 없는 고아 canonical 제외, dry-run 무쓰기
+// ③ 후보 격자(PLAN-perf-2 D-V2)가 예전 장소 bbox 조회와 같은 후보·순서.
 
 describe('tourPlaceNameScore / isTourMatchAccepted', () => {
   it('이름 또는 별칭 중 최고 점수', () => {
@@ -130,5 +133,35 @@ describe('matchRestaurantTour (격리 DB)', () => {
     const back = await matchRestaurantTour(prisma);
     expect(back).toMatchObject({ recovered: 1, kept: 1 });
     expect((await prisma.restaurantTourMatch.findUnique({ where: { canonicalId: 'C-a' } }))!.status).toBe('matched');
+  });
+
+  it('후보 격자 — 예전 장소 bbox 조회와 같은 장소를 같은 순서(유형·방문자 수·적재 순)로, 0.01° 칸 경계를 넘어서도 낸다', async () => {
+    // 서귀포 쪽(위 시나리오와 멀리) — 기준점이 위도·경도 칸 경계 근처라 bbox 가 2×2 칸에 걸친다.
+    const O = { lat: 33.2498, lng: 126.5598 };
+    const at = (id: string, name: string, lat: number, lng: number, typeShort: string, nTravelers: number) => ({
+      ...place(id, name, 0, 0, { typeShort, nTravelers }),
+      lat,
+      lng,
+    });
+    await prisma.tourPlace.createMany({
+      data: [
+        at('G-rest-b', '나', O.lat - 0.001, O.lng - 0.003, '식당', 3),
+        at('G-shop', '다', O.lat + 0.0029, O.lng + 0.0034, '상점', 50),
+        at('G-mall', '라', O.lat + 0.0005, O.lng + 0.001, '상업', 10),
+        at('G-rest-a', '가', O.lat + 0.002, O.lng + 0.002, '식당', 3),
+        at('G-edge', '마', O.lat + 0.003, O.lng, '식당', 7),
+        at('G-out', '바', O.lat + 0.0031, O.lng, '식당', 1),
+        at('G-lodge', '사', O.lat, O.lng, '숙소', 9),
+      ],
+    });
+    const index = await loadTourMatchPlaceIndex(prisma);
+    const near = tourMatchPlacesNear(index, O.lat, O.lng).map((p) => p.id);
+    const old = await prisma.tourPlace.findMany({
+      where: { typeShort: { in: ['식당', '상업', '상점'] }, lat: { gte: O.lat - 0.003, lte: O.lat + 0.003 }, lng: { gte: O.lng - 0.0035, lte: O.lng + 0.0035 } },
+      select: { id: true },
+    });
+    expect(near).toEqual(old.map((p) => p.id));
+    // 상업 < 상점 < 식당(바이트 순) → 방문자 수 → 적재 순. bbox 경계(정확히 +0.003)는 포함, 그 밖·숙소는 빠진다.
+    expect(near).toEqual(['G-mall', 'G-shop', 'G-rest-b', 'G-rest-a', 'G-edge']);
   });
 });

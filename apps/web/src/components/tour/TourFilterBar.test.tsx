@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { TOUR_ACCOMPANY_VALUES } from '@repo/api-contract';
 import { TourFilterBar } from './TourFilterBar';
+import { TOUR_ACCOMPANY_OPTIONS, isTourAccompany } from './tourFormat';
 
 // 지역 칩 두 줄(8차) — 1행 권역(제주·서부권·동부권·전체), 2행은 고른 권역의 시도. 값은 region 키 하나로 오간다.
 const chip = (name: string) => screen.getByRole('button', { name });
@@ -43,5 +45,24 @@ describe('TourFilterBar 지역 칩', () => {
     render(<TourFilterBar value={{ region: 'all' }} onChange={vi.fn()} />);
     expect(isActive('전체')).toBe(true);
     expect(screen.queryByText('시도')).not.toBeInTheDocument();
+  });
+});
+
+// 동반은 서버 계약의 허용 목록(PLAN-perf-2 D-2) — 칩은 그 목록 그대로, URL 쿼리의 목록 밖 값은 필터 없음으로 읽는다(400 방지).
+describe('TourFilterBar 동반 칩', () => {
+  it('칩은 계약 허용 목록 8개(짧은 라벨) — 누르면 원래 값으로 나간다', () => {
+    const onChange = vi.fn();
+    render(<TourFilterBar value={{}} onChange={onChange} />);
+    expect(TOUR_ACCOMPANY_OPTIONS).toEqual(TOUR_ACCOMPANY_VALUES);
+    expect(TOUR_ACCOMPANY_OPTIONS).toHaveLength(8);
+    fireEvent.click(chip('2인 여행'));
+    expect(onChange).toHaveBeenLastCalledWith({ accompany: '2인 여행(가족 외)' });
+  });
+
+  it('isTourAccompany — 목록 밖 값은 거른다', () => {
+    expect(isTourAccompany('자녀 동반 여행')).toBe(true);
+    expect(isTourAccompany('친구랑 여행')).toBe(false);
+    expect(isTourAccompany('')).toBe(false);
+    expect(isTourAccompany(null)).toBe(false);
   });
 });

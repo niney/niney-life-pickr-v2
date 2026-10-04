@@ -9,7 +9,7 @@ import { TourLodgingSection } from '~/components/tour/TourLodgingSection';
 import { TourRegionSection } from '~/components/tour/TourRegionSection';
 import { TourSourceNote } from '~/components/tour/TourSourceNote';
 import { BarList, HeatGrid, HourLines, KindDot, Section, SeqChips, StackBar, Stat } from '~/components/tour/charts';
-import { shortAccompany, tourRegionLabel, won } from '~/components/tour/tourFormat';
+import { isTourAccompany, shortAccompany, tourRegionLabel, won } from '~/components/tour/tourFormat';
 
 // 여행 인사이트 — AI 허브 여행로그(2023 제주·서부권 패널)를 지역·필터(연령·성별·동반·월·박수)로 잘라 집계만 보여주는 공개 페이지.
 // 필터는 URL 쿼리에 실어 링크로 공유된다(tour-c 의 "URL 이 상태" 원칙). 표본 20건 미만이면 서버가 insufficient 를 주고
@@ -23,11 +23,13 @@ const readParams = (sp: URLSearchParams): TourInsightsParams => {
   const ageGrp = sp.get('ageGrp');
   const gender = sp.get('gender');
   const region = sp.get('region');
+  const accompany = sp.get('accompany');
   return {
     region: isTourRegionKey(region) ? region : 'jeju',
     ageGrp: ageGrp === '20' || ageGrp === '30' || ageGrp === '40' || ageGrp === '50' || ageGrp === '60' ? ageGrp : undefined,
     gender: gender === '남' || gender === '여' ? gender : undefined,
-    accompany: sp.get('accompany') ?? undefined,
+    // 동반은 허용 목록만(서버 계약) — 옛·손댄 링크의 다른 값은 필터 없음으로.
+    accompany: isTourAccompany(accompany) ? accompany : undefined,
     month: num('month'),
     nights: num('nights'),
   };

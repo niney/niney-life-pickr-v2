@@ -46,6 +46,7 @@ import {
   type TourItineraryRegionDef,
   type TourRegionKey,
 } from '@repo/utils';
+import { withTourColdSlot } from './tour-aggregate-cache.js';
 import { TourVersionedCache, tourDataVersion } from './tour-data-version.js';
 import { TOUR_INSIGHTS_MIN_TRIPS, attrWhere, countMap, median, round2 } from './tour-insights.service.js';
 import {
@@ -309,7 +310,8 @@ export class TourPlanService {
     const version = await tourDataVersion(this.prisma);
     let p = this.profiles.get(version, region);
     if (!p) {
-      p = this.buildProfile(region);
+      // 프로필 빌드(region=all 은 방문 표 전량)는 인사이트·지역 비교 집계와 같은 콜드 게이트에 줄 세운다(PLAN-perf-2 D-2).
+      p = withTourColdSlot(() => this.buildProfile(region));
       this.profiles.set(version, region, p);
       const built = p;
       // 실패한 프로필과 빈 프로필(미적재)은 남기지 않는다 — 적재 이력 없이 넣은 데이터는 버전이 그대로라 비워 줄 신호가 없고,

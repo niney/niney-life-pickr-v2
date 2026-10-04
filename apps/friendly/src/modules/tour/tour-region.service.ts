@@ -1,6 +1,9 @@
 // 여행로그 공개 6차 — 지도 밀도 격자·숙소 통계·지역 비교. 인사이트(5차)와 같은 규율: 응답에 식별자 없음, 집단 셀은
-// 여행자 TOUR_K_MIN 미만이면 뺀다, 결과는 키별로 10분 캐시하고 적재·제거로 데이터 버전이 바뀌면 버린다(tour-data-version.ts).
+// 여행자 TOUR_K_MIN 미만이면 뺀다, 결과는 키별로 10분 캐시하고 적재·제거로 데이터 버전이 바뀌면 버린다(tour-data-version.ts) —
+// 그 위에 같은 키 동시 요청 합류·콜드 계산 공용 게이트(tour-aggregate-cache.ts).
 //   - density: 공개 방문(좌표 있음)을 0.02° 격자로 세고(SQL group by) 여행 5건 미만 칸 제외. kind=restaurant 는 식당·상업·상점만.
+//     kind 별 전국 격자만 세어 캐시하고 bbox 는 그 칸을 메모리에서 거른다 — bbox 가 캐시 키에 들어가면 값만 바꿔 매번 풀스캔을
+//     시킬 수 있었다(PLAN-perf-2 D-8).
 //   - lodging: 숙박 결제(소비 표) 유형별 결제 중앙·1박 추정·1인·예약률 + 숙소 방문 평가 만족도. 1박 추정 = 결제액 × 그 여행의
 //     숙박 결제 건수 ÷ 박수(체크인·아웃이 export 에 없어 여행 박수를 나눠 쓴다 — 화면에 산식 표기).
 //   - regions: region=jeju 는 제주시·서귀포시·부속섬 3집단, 시도·서부권·전체는 시군구 집단(방문 수 상위 8, 여행 5건 이상) + 읍면동 표.
@@ -9,6 +12,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type {
   TourCountType,
+  TourDensityCellType,
   TourDensityQueryType,
   TourDensityResultType,
   TourInsightsQueryType,
@@ -27,11 +31,13 @@ import {
   TOUR_SOURCE_NOTE,
   tourDensityQuantileBreaks,
 } from '@repo/utils';
-import { TourVersionedCache, tourDataVersion } from './tour-data-version.js';
-import { TOUR_INSIGHTS_MIN_TRIPS, attrWhere, countMap, median, round1, round2 } from './tour-insights.service.js';
-import { tourRegionTripWhere, tourRegionVisitWhere } from './tour-region-filter.js';
+import { TourAggregateCache } from './tour-aggregate-cache.js';
+import { TOUR_INSIGHTS_MIN_TRIPS, attrSql, attrWhere, countMap, median, round1, round2, tourFilterKey, whereSql } from './tour-insights.service.js';
+import { tourRegionSpendByTrips, tourRegionTripWhere, tourRegionVisitSql, tourRegionVisitWhere } from './tour-region-filter.js';
 
-const CACHE_TTL_MS = 10 * 60_000;
+// 필터 조합 키는 개수로 묶는다(결과는 top-N 이라 건당 수 KB). 밀도는 kind 2개뿐(버전이 바뀌면 통째로 비운다 — tour-data-version.ts).
+const CACHE_MAX = 200;
+const DENSITY_CACHE_MAX = 4;
 // 제주 3집단(고정 순서·라벨). 다른 지역은 시군구 이름이 키·라벨.
 const JEJU_GROUPS: Array<{ key: string; label: string }> = [
   { key: 'jeju-si', label: '제주시' },
@@ -48,13 +54,22 @@ const filtersOf = (q: TourInsightsQueryType) => ({
   month: q.month ?? null,
   nights: q.nights ?? null,
 });
-const filterKey = (q: TourInsightsQueryType): string => JSON.stringify(filtersOf(q));
 const meanOf = (sum: number, n: number): number | null => (n >= TOUR_RATING_MIN_N ? round2(sum / n) : null);
 const medianOf = (xs: number[]): number | null => (xs.length >= TOUR_RATING_MIN_N ? round1(median(xs)) : null);
 const parseBbox = (s: string): { minLng: number; minLat: number; maxLng: number; maxLat: number } => {
   const [minLng, minLat, maxLng, maxLat] = s.split(',').map(Number) as [number, number, number, number];
   return { minLng, minLat, maxLng, maxLat };
 };
+// 칸 목록 → 응답(분위 경계·합계는 내보내는 칸 기준 — bbox 로 거른 경우도 그 칸들로 다시 센다).
+const densityResult = (kind: TourDensityQueryType['kind'], cells: TourDensityCellType[]): TourDensityResultType => ({
+  kind,
+  cellDeg: TOUR_DENSITY_CELL_DEG,
+  cells,
+  breaks: tourDensityQuantileBreaks(cells.map((c) => c.n)).map((b) => Math.round(b * 10) / 10),
+  total: { cells: cells.length, visits: cells.reduce((a, c) => a + c.n, 0) },
+  sampleLabel: TOUR_SAMPLE_LABEL,
+  sourceNote: TOUR_SOURCE_NOTE,
+});
 const topN = (m: Map<string, number>, n: number): TourCountType[] =>
   [...m.entries()]
     .map(([label, c]) => ({ label, n: c }))
@@ -76,11 +91,15 @@ const addSat = (a: SatAgg, dgstfn: number | null): void => {
 };
 
 export class TourRegionService {
-  private readonly densityCache = new TourVersionedCache<TourDensityResultType>({ max: 20, ttl: CACHE_TTL_MS });
-  private readonly lodgingCache = new TourVersionedCache<TourLodgingResultType>({ max: 200, ttl: CACHE_TTL_MS });
-  private readonly regionsCache = new TourVersionedCache<TourRegionsResultType>({ max: 200, ttl: CACHE_TTL_MS });
+  private readonly densityCache: TourAggregateCache<TourDensityResultType>;
+  private readonly lodgingCache: TourAggregateCache<TourLodgingResultType>;
+  private readonly regionsCache: TourAggregateCache<TourRegionsResultType>;
 
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient) {
+    this.densityCache = new TourAggregateCache(prisma, { max: DENSITY_CACHE_MAX });
+    this.lodgingCache = new TourAggregateCache(prisma, { max: CACHE_MAX });
+    this.regionsCache = new TourAggregateCache(prisma, { max: CACHE_MAX });
+  }
 
   invalidate(): void {
     this.densityCache.clear();
@@ -89,61 +108,63 @@ export class TourRegionService {
   }
 
   // ── 밀도 격자 ───────────────────────────────────────────────────────────────
+  // bbox 는 bbox 와 면적으로 겹치는 칸(선으로만 닿는 칸 제외)만 고른다. 칸 값은 칸 전체 기준이라 bbox 경계에 걸친 칸도 잘리지 않은
+  // 수를 낸다(여행 5건 미만 칸은 애초에 없으니 소셀 억제는 그대로).
   async density(q: TourDensityQueryType): Promise<TourDensityResultType> {
-    // 집계보다 먼저 읽는다 — 버전이 바뀌었으면 캐시가 비워져 새로 집계한다(아래 숙소·지역 비교도 같다).
-    const version = await tourDataVersion(this.prisma);
-    const key = `${q.kind}|${q.bbox ?? ''}`;
-    const hit = this.densityCache.get(version, key);
-    if (hit) return hit;
+    const grid = await this.densityCache.get(q.kind, () => this.computeDensity(q.kind));
+    if (!q.bbox) return grid;
+    const b = parseBbox(q.bbox);
     const deg = TOUR_DENSITY_CELL_DEG;
-    const kinds = q.kind === 'restaurant' ? [...TOUR_RESTAURANT_TYPE_SHORTS] : null;
-    const bbox = q.bbox ? parseBbox(q.bbox) : null;
+    return densityResult(
+      q.kind,
+      grid.cells.filter((c) => c.x * deg < b.maxLng && (c.x + 1) * deg > b.minLng && c.y * deg < b.maxLat && (c.y + 1) * deg > b.minLat),
+    );
+  }
+
+  private async computeDensity(kind: TourDensityQueryType['kind']): Promise<TourDensityResultType> {
+    const deg = TOUR_DENSITY_CELL_DEG;
+    const kinds = kind === 'restaurant' ? [...TOUR_RESTAURANT_TYPE_SHORTS] : null;
     // SQLite 엔 FLOOR 가 없다 — 한국 좌표는 양수라 CAST(… AS INTEGER)(0 방향 절삭)가 floor 와 같다.
     const rows = await this.prisma.$queryRaw<Array<{ x: number | bigint; y: number | bigint; n: number | bigint; travelers: number | bigint }>>(Prisma.sql`
       SELECT CAST(lng / ${deg} AS INTEGER) AS x, CAST(lat / ${deg} AS INTEGER) AS y, COUNT(*) AS n, COUNT(DISTINCT travelId) AS travelers
       FROM tour_visits
       WHERE isPrivate = 0 AND lat IS NOT NULL AND lng IS NOT NULL
         ${kinds ? Prisma.sql`AND typeShort IN (${Prisma.join(kinds)})` : Prisma.empty}
-        ${bbox ? Prisma.sql`AND lng >= ${bbox.minLng} AND lng <= ${bbox.maxLng} AND lat >= ${bbox.minLat} AND lat <= ${bbox.maxLat}` : Prisma.empty}
       GROUP BY x, y
       HAVING COUNT(DISTINCT travelId) >= ${TOUR_K_MIN}
       ORDER BY n DESC
     `);
-    const cells = rows.map((r) => ({ x: Number(r.x), y: Number(r.y), n: Number(r.n), travelers: Number(r.travelers) }));
-    const out: TourDensityResultType = {
-      kind: q.kind,
-      cellDeg: deg,
-      cells,
-      breaks: tourDensityQuantileBreaks(cells.map((c) => c.n)).map((b) => Math.round(b * 10) / 10),
-      total: { cells: cells.length, visits: cells.reduce((a, c) => a + c.n, 0) },
-      sampleLabel: TOUR_SAMPLE_LABEL,
-      sourceNote: TOUR_SOURCE_NOTE,
-    };
-    this.densityCache.set(version, key, out);
-    return out;
+    return densityResult(
+      kind,
+      rows.map((r) => ({ x: Number(r.x), y: Number(r.y), n: Number(r.n), travelers: Number(r.travelers) })),
+    );
   }
 
   // ── 숙소 ───────────────────────────────────────────────────────────────────
   async lodging(q: TourInsightsQueryType): Promise<TourLodgingResultType> {
-    const version = await tourDataVersion(this.prisma);
-    const key = filterKey(q);
-    const hit = this.lodgingCache.get(version, key);
-    if (hit) return hit;
+    return this.lodgingCache.get(tourFilterKey(q), () => this.computeLodging(q));
+  }
+
+  private async computeLodging(q: TourInsightsQueryType): Promise<TourLodgingResultType> {
     const attrs = attrWhere(q);
-    const [trips, spend, lodgeVisits] = await Promise.all([
-      this.prisma.tourTrip.findMany({
-        where: { ...attrs, ...tourRegionTripWhere(q.region) } as Prisma.TourTripWhereInput,
-        select: { id: true, nights: true },
-      }),
-      this.prisma.tourSpend.findMany({
-        where: { ...attrs, category: '숙박' } as Prisma.TourSpendWhereInput,
-        select: { travelId: true, subtypeNm: true, amount: true, perPerson: true, rsvtYn: true },
-      }),
-      this.prisma.tourVisit.findMany({
-        where: { ...attrs, typeShort: '숙소', isPrivate: false, ...tourRegionVisitWhere(q.region) } as Prisma.TourVisitWhereInput,
-        select: { lodgingTypeNm: true, dgstfn: true },
-      }),
-    ]);
+    // 표를 하나씩(인사이트와 같은 이유) — 여행 → 그 여행들의 숙박 결제(소비 표는 여행 id 로 지역을 자른다) → 숙소 방문 평가.
+    const trips = await this.prisma.tourTrip.findMany({
+      where: { ...attrs, ...tourRegionTripWhere(q.region) } as Prisma.TourTripWhereInput,
+      select: { id: true, nights: true },
+    });
+    const spend = await tourRegionSpendByTrips(
+      q.region,
+      trips.map((t) => t.id),
+      (travelIds) =>
+        this.prisma.tourSpend.findMany({
+          where: { ...attrs, category: '숙박', ...(travelIds ? { travelId: { in: travelIds } } : {}) } as Prisma.TourSpendWhereInput,
+          select: { travelId: true, subtypeNm: true, amount: true, perPerson: true, rsvtYn: true },
+        }),
+    );
+    const lodgeVisits = await this.prisma.tourVisit.findMany({
+      where: { ...attrs, typeShort: '숙소', isPrivate: false, ...tourRegionVisitWhere(q.region) } as Prisma.TourVisitWhereInput,
+      select: { lodgingTypeNm: true, dgstfn: true },
+    });
     const nightsOf = new Map(trips.map((t) => [t.id, t.nights]));
     const rows = spend.filter((s) => nightsOf.has(s.travelId));
     // 여행별 숙박 결제 건수(금액 > 0) — 1박 추정의 분모 보정(한 여행이 숙소 둘을 거치면 박수를 나눠 쓴다).
@@ -207,7 +228,7 @@ export class TourRegionService {
       }))
       .filter((x) => x.trips >= TOUR_K_MIN)
       .sort((a, b) => b.trips - a.trips || a.label.localeCompare(b.label));
-    const out: TourLodgingResultType = {
+    return {
       filters: filtersOf(q),
       insufficient: trips.length < TOUR_INSIGHTS_MIN_TRIPS,
       total: { trips: trips.length, withLodging: withLodging.size, rsvtRate: rsvtY + rsvtN >= TOUR_K_MIN ? round2(rsvtY / (rsvtY + rsvtN)) : null },
@@ -215,23 +236,22 @@ export class TourRegionService {
       sampleLabel: TOUR_SAMPLE_LABEL,
       sourceNote: TOUR_SOURCE_NOTE,
     };
-    this.lodgingCache.set(version, key, out);
-    return out;
   }
 
   // ── 지역 비교 ──────────────────────────────────────────────────────────────
   // jeju: 제주시·서귀포시·부속섬(고정 3집단). 그 밖: 방문 sido 조건 안에서 시군구별 집단(방문 수 상위 MAX_SIGUNGU_GROUPS).
   async regions(q: TourInsightsQueryType): Promise<TourRegionsResultType> {
-    const version = await tourDataVersion(this.prisma);
-    const key = filterKey(q);
-    const hit = this.regionsCache.get(version, key);
-    if (hit) return hit;
+    return this.regionsCache.get(tourFilterKey(q), () => this.computeRegions(q));
+  }
+
+  private async computeRegions(q: TourInsightsQueryType): Promise<TourRegionsResultType> {
     const jeju = q.region === 'jeju';
-    const attrs = attrWhere(q);
-    const visits = await this.prisma.tourVisit.findMany({
-      where: { ...attrs, isPrivate: false, ...tourRegionVisitWhere(q.region) } as Prisma.TourVisitWhereInput,
-      select: { travelId: true, typeShort: true, dgstfn: true, stayMin: true, spendPp: true, sido: true, sigungu: true, emd: true, isIsland: true },
-    });
+    // 방문 전량(region=all 11.5만 행) — $queryRaw 로(인사이트와 같은 이유, 같은 조건이라 행 순서도 같다).
+    const visits = await this.prisma.$queryRaw<
+      Array<{ travelId: string; typeShort: string; dgstfn: number | null; stayMin: number | null; spendPp: number | null; sido: string | null; sigungu: string | null; emd: string | null; isIsland: boolean }>
+    >`
+      SELECT travelId, typeShort, dgstfn, stayMin, spendPp, sido, sigungu, emd, isIsland FROM tour_visits
+      ${whereSql([...attrSql(q), Prisma.sql`isPrivate = ${false}`, tourRegionVisitSql(q.region)])}`;
     interface GroupAgg {
       trips: Set<string>;
       sat: SatAgg;
@@ -294,7 +314,7 @@ export class TourRegionService {
     const groupVisits = [...groups.values()].reduce((a, g) => a + g.sat.n, 0);
     // 순서 — 제주는 고정, 그 밖은 방문 수 내림차순 상위 N.
     const ordered = jeju ? JEJU_GROUPS.map((g) => g.key) : [...groups.entries()].sort((a, b) => b[1].sat.n - a[1].sat.n || a[0].localeCompare(b[0])).slice(0, MAX_SIGUNGU_GROUPS).map(([k]) => k);
-    const out: TourRegionsResultType = {
+    return {
       filters: filtersOf(q),
       insufficient: allTrips.size < TOUR_INSIGHTS_MIN_TRIPS,
       groups: ordered
@@ -336,7 +356,5 @@ export class TourRegionService {
       sampleLabel: TOUR_SAMPLE_LABEL,
       sourceNote: TOUR_SOURCE_NOTE,
     };
-    this.regionsCache.set(version, key, out);
-    return out;
   }
 }

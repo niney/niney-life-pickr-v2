@@ -488,13 +488,27 @@ export type RestaurantTourStatsType = z.infer<typeof RestaurantTourStats>;
 // ── 5차: 공개 인사이트·코스 추천(식별자 없음·소셀 억제) ─────────────────────────
 export const TourAgeGrp = z.enum(['20', '30', '40', '50', '60']);
 export const TourGender = z.enum(['남', '여']);
+// 동반 형태 — 원본 데이터(4권역 공통)의 표기 그대로 8가지. 자유 문자열이면 필터 키 공간이 무한해 집계 캐시를 우회하므로
+// 허용 목록으로 받는다(PLAN-perf-2 D-2). 웹 필터 칩도 이 목록을 쓴다.
+export const TOUR_ACCOMPANY_VALUES = [
+  '나홀로 여행',
+  '2인 여행(가족 외)',
+  '2인 가족 여행',
+  '3인 이상 여행(가족 외)',
+  '3인 이상 가족 여행(친척 포함)',
+  '자녀 동반 여행',
+  '부모 동반 여행',
+  '3대 동반 여행(친척 포함)',
+] as const;
+export const TourAccompany = z.enum(TOUR_ACCOMPANY_VALUES);
+export type TourAccompanyType = z.infer<typeof TourAccompany>;
 
 // 인사이트 필터 — 전부 선택. nights 4 = 4박 이상. 필터 후 여행이 20건 미만이면 insufficient.
 export const TourInsightsQuery = z.object({
   region: TourRegion.default('jeju'),
   ageGrp: TourAgeGrp.optional(),
   gender: TourGender.optional(),
-  accompany: z.string().trim().min(1).max(40).optional(),
+  accompany: TourAccompany.optional(),
   month: z.coerce.number().int().min(4).max(9).optional(),
   nights: z.coerce.number().int().min(0).max(4).optional(),
 });
@@ -592,7 +606,7 @@ export const TourPlanBody = z.object({
   region: TourRegion.default('jeju'),
   ageGrp: TourAgeGrp.optional(),
   gender: TourGender.optional(),
-  accompany: z.string().trim().min(1).max(40).optional(),
+  accompany: TourAccompany.optional(),
   month: z.number().int().min(4).max(9).optional(),
   nights: z.number().int().min(0).max(4).optional(),
   pace: TourPlanPace.optional(),
@@ -737,7 +751,8 @@ export const TourPlanResult = z.object({
 export type TourPlanResultType = z.infer<typeof TourPlanResult>;
 
 // ── 6차 공개 — 지도 밀도 격자·숙소 통계·지역 비교 ─────────────────────────────────────
-// 밀도: 공개 방문(좌표 있음)을 0.02° 격자로 센 칸 — 여행자 5명 미만 칸은 없다. bbox 는 선택(없으면 전국 칸 전부, 수백 개).
+// 밀도: 공개 방문(좌표 있음)을 0.02° 격자로 센 칸 — 여행자 5명 미만 칸은 없다. bbox 는 선택(없으면 전국 칸 전부, 수천 개) — 서버는
+// kind 별 전국 격자만 세고 bbox 는 그중 bbox 와 겹치는 칸만 고른다(칸 값은 칸 전체 기준, PLAN-perf-2 D-8). 웹·앱은 보내지 않는다.
 export const TourDensityKind = z.enum(['all', 'restaurant']);
 export type TourDensityKindType = z.infer<typeof TourDensityKind>;
 export const TourDensityQuery = z.object({
