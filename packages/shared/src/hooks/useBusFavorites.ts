@@ -26,6 +26,11 @@ const FAVORITES_KEY = ['bus', 'favorites'] as const;
 
 const routeKey = (stId: string, busRouteId: string) => `${stId}::${busRouteId}`;
 
+// 빈 목록의 안정 참조 — 서버 목록이 아직 없을 때(로그인 첫 조회 중) 매 렌더 새 `[]` 를 돌려주면
+// 이 목록을 의존성으로 두는 소비처의 memo·effect(지도 마커·fit)가 렌더마다 다시 돈다.
+const EMPTY_STATIONS: BusFavoriteStationItemType[] = [];
+const EMPTY_ROUTES: BusFavoriteRouteItemType[] = [];
+
 export interface BusFavoritesApi {
   stations: BusFavoriteStationItemType[];
   routes: BusFavoriteRouteItemType[];
@@ -54,8 +59,8 @@ export const useBusFavorites = (): BusFavoritesApi => {
     staleTime: 60_000,
   });
 
-  const serverStations = listQuery.data?.stations ?? [];
-  const serverRoutes = listQuery.data?.routes ?? [];
+  const serverStations = listQuery.data?.stations ?? EMPTY_STATIONS;
+  const serverRoutes = listQuery.data?.routes ?? EMPTY_ROUTES;
 
   // pending 중 같은 항목 연타 무시용 — 항목 식별자 집합.
   const pendingStations = useRef(new Set<string>());

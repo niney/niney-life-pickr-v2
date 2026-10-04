@@ -6,6 +6,9 @@ import { housingApi, type HousingAxis } from '../api/housing.api.js';
 
 const STALE_MS = 6 * 60 * 60_000;
 const SEARCH_STALE_MS = 10 * 60_000;
+// 뷰포트 결과 보관 시간 — bbox 가 키에 그대로 들어가 지도를 움직일 때마다 새 쿼리가 생기고, 같은 뷰포트로
+// 정확히 되돌아오는 일은 드물다. 기본 5분이면 지나간 뷰포트의 단지(최대 4,000개)가 팬 횟수만큼 쌓인다.
+const VIEWPORT_GC_MS = 60_000;
 
 export const housingAxisKey = (axis: HousingAxis): string => `${axis.dealType}|${axis.band}`;
 
@@ -23,14 +26,17 @@ export interface HousingViewportParams {
 }
 
 // 뷰포트 조회 — params null 이면 비활성(지도 미준비). zoom 은 내림 정수로 키를 만든다.
+// signal 을 fetch 까지 넘긴다 — 응답이 오기 전에 지도를 다시 움직이면(키 교체) React Query 가 지나간
+// 뷰포트의 요청을 끊는다(일상지도와 같은 규율).
 export const useHousingPoints = (params: HousingViewportParams | null) => {
   const enabled = params !== null;
   const zoom = params ? Math.floor(params.zoom) : null;
   return useQuery({
     queryKey: ['housing', 'points', params?.bbox ?? null, zoom, params ? housingAxisKey(params.axis) : null],
-    queryFn: () => housingApi.points(params!.bbox, zoom!, params!.axis),
+    queryFn: ({ signal }) => housingApi.points(params!.bbox, zoom!, params!.axis, { signal }),
     enabled,
     staleTime: STALE_MS,
+    gcTime: VIEWPORT_GC_MS,
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
@@ -47,7 +53,7 @@ export const useHousingNearby = (
   const keyLng = lng !== null ? lng.toFixed(4) : null;
   return useQuery({
     queryKey: ['housing', 'nearby', keyLat, keyLng, opts.radius ?? null, opts.limit ?? null, housingAxisKey(axis)],
-    queryFn: () => housingApi.nearby(lat!, lng!, axis, { radius: opts.radius, limit: opts.limit }),
+    queryFn: ({ signal }) => housingApi.nearby(lat!, lng!, axis, { radius: opts.radius, limit: opts.limit }, { signal }),
     enabled,
     staleTime: STALE_MS,
     placeholderData: enabled ? (prev) => prev : undefined,

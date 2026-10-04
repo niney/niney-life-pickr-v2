@@ -6,6 +6,9 @@ import { LIFE_MAP_BOOLEAN_FILTERS, lifeMapApi, type LifeMapFilterParams } from '
 // 같은 사다리). bbox 가 바뀌는 동안 이전 결과를 placeholder 로 유지해 마커가 깜빡이지 않게 한다.
 
 const STATIC_STALE_MS = 24 * 60 * 60_000;
+// 뷰포트 결과 보관 시간 — bbox 가 키에 그대로 들어가 지도를 움직일 때마다 새 쿼리가 생기고, 같은 뷰포트로
+// 정확히 되돌아오는 일은 드물다. 기본 5분이면 지나간 뷰포트의 점(레이어당 최대 4,000개)이 팬 횟수만큼 쌓인다.
+const VIEWPORT_GC_MS = 60_000;
 
 // 필터 → 쿼리 키 조각(배열·객체 identity 에 흔들리지 않게 문자열로).
 export const lifeMapFiltersKey = (f: LifeMapFilterParams | undefined): string =>
@@ -35,14 +38,17 @@ export interface LifeMapViewportParams {
 }
 
 // 뷰포트 조회 — params null 이면 비활성(레이어 꺼짐·지도 미준비). zoom 은 내림 정수로 키를 만든다.
+// signal 을 fetch 까지 넘긴다 — 응답이 오기 전에 지도를 다시 움직이면(키 교체) React Query 가 지나간
+// 뷰포트의 요청을 끊어, 쓰이지 않을 수천 점을 끝까지 받아 파싱하지 않는다.
 export const useLifeMapPoints = (params: LifeMapViewportParams | null) => {
   const enabled = params !== null;
   const zoom = params ? Math.floor(params.zoom) : null;
   return useQuery({
     queryKey: ['life-map', 'points', params?.layer ?? null, params?.bbox ?? null, zoom, lifeMapFiltersKey(params?.filters)],
-    queryFn: () => lifeMapApi.points(params!.layer, params!.bbox, zoom!, params!.filters),
+    queryFn: ({ signal }) => lifeMapApi.points(params!.layer, params!.bbox, zoom!, params!.filters, { signal }),
     enabled,
     staleTime: STATIC_STALE_MS,
+    gcTime: VIEWPORT_GC_MS,
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
@@ -59,7 +65,8 @@ export const useLifeMapNearby = (
   const keyLng = lng !== null ? lng.toFixed(4) : null;
   return useQuery({
     queryKey: ['life-map', 'nearby', layer, keyLat, keyLng, opts.radius ?? null, opts.limit ?? null, lifeMapFiltersKey(opts.filters)],
-    queryFn: () => lifeMapApi.nearby(layer, lat!, lng!, { radius: opts.radius, limit: opts.limit, filters: opts.filters }),
+    queryFn: ({ signal }) =>
+      lifeMapApi.nearby(layer, lat!, lng!, { radius: opts.radius, limit: opts.limit, filters: opts.filters }, { signal }),
     enabled,
     staleTime: STATIC_STALE_MS,
     placeholderData: enabled ? (prev) => prev : undefined,

@@ -233,17 +233,21 @@ export const BusStationsMap = ({
   // 따라가기 중에는 화면을 비워 버스에 집중 — 검색 정류장·경유지 점을 숨기고
   // '현재(선택) 정류장' 하나만 남긴다. 폴리라인·차량은 그대로(별도 레이어).
   const following = followId !== null;
+  // 따라가기 중에만 선택 정류장이 마커 구성에 들어간다. selectedStId 를 마커 memo 의 의존성으로 직접 두면
+  // 평소에도 정류장을 고를 때마다 마커 배열이 새로 만들어져 지도가 전량을 다시 그린다(선택 강조는
+  // MapCanvas 가 feature 2개만 다시 칠한다) — 따라가기일 때의 대상 객체로 좁힌다.
+  const followStation =
+    following && selectedStId ? items.find((it) => it.stId === selectedStId) : undefined;
 
   const markers: MapMarker[] = useMemo(() => {
     if (following) {
-      const sel = selectedStId ? items.find((it) => it.stId === selectedStId) : undefined;
-      return sel
+      return followStation
         ? [
             {
-              id: sel.stId,
-              lat: sel.lat,
-              lng: sel.lng,
-              label: sel.name,
+              id: followStation.stId,
+              lat: followStation.lat,
+              lng: followStation.lng,
+              label: followStation.name,
               icon: { src: BUS_MARKER_URL, selectedSrc: BUS_MARKER_SELECTED_URL },
             },
           ]
@@ -294,7 +298,7 @@ export const BusStationsMap = ({
         icon: { src: dotUrl, selectedSrc: dotUrl },
       }));
     return [...routeStopMarkers, ...stationMarkers, ...myLocationMarkers];
-  }, [items, myLocation, routeStops, routeLine?.color, following, selectedStId]);
+  }, [items, myLocation, routeStops, routeLine?.color, following, followStation]);
 
   // ── 노선 형상 따라가기 — 차량 위치를 형상 위 호길이(s)로 환산해, 폴링 간
   //    이동을 도로 웨이포인트(via)로 MapCanvas 에 넘긴다. 형상이 상·하행 왕복

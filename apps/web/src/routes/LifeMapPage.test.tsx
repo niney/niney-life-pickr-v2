@@ -16,15 +16,19 @@ import { LifeMapPage } from './LifeMapPage';
 // 칩이 주변 요청 파라미터에 반영 ⑤ 저장한 내 위치가 진입 중심 ⑥ 배경 레이어(범죄 통계) 토글 → 지도 중심
 // 시군구 요약 카드·메트릭 전환·푸터 출처.
 // MapCanvas 목은 viewport 를 올리지 않으므로 points 요청은 나가지 않는다(뷰포트 없음 = 비활성).
+// 렌더마다 받은 overlayMarkers 참조를 기록한다(저장 위치 오버레이가 리렌더마다 새로 만들어지지 않는지 확인용).
+
+const mapProbe = vi.hoisted(() => ({ overlayMarkers: [] as unknown[][] }));
 
 vi.mock('~/components/restaurant/MapCanvas', () => ({
-  MapCanvas: forwardRef(function MockMapCanvas(_props, ref) {
+  MapCanvas: forwardRef(function MockMapCanvas(props: { overlayMarkers?: unknown[] }, ref) {
     useImperativeHandle(ref, () => ({
       flyTo: () => {},
       flyToZoomIn: () => {},
       fitToMarkers: () => {},
       fitToCoords: () => {},
     }));
+    mapProbe.overlayMarkers.push(props.overlayMarkers ?? []);
     return <div data-testid="map-canvas" />;
   }),
 }));
@@ -265,6 +269,7 @@ beforeEach(() => {
   seen.detail = [];
   seen.search = [];
   seen.density = [];
+  mapProbe.overlayMarkers = [];
   useHandlers();
 });
 
@@ -386,6 +391,24 @@ describe('LifeMapPage', () => {
     await waitFor(() => expect(seen.nearby.length).toBeGreaterThan(0));
     expect(seen.nearby[0]!.searchParams.get('lat')).toBe('35.1796');
     expect(seen.nearby[0]!.searchParams.get('lng')).toBe('129.0756');
+  });
+
+  it('저장 위치 오버레이 — 페이지가 리렌더돼도(탭 전환·응답 도착) 지도에 넘기는 오버레이 마커 배열은 같은 참조', async () => {
+    useAirLocationStore.setState({
+      location: { lat: 35.1796, lng: 129.0756, label: '부산 연제구', source: 'place', updatedAt: '2026-08-21T00:00:00.000Z' },
+    });
+    renderPage();
+    expect(await screen.findByTestId('map-canvas')).toBeInTheDocument();
+    const before = mapProbe.overlayMarkers.at(-1);
+    expect(before).toHaveLength(1); // 저장 위치(보라 점) 하나
+    const renders = mapProbe.overlayMarkers.length;
+
+    fireEvent.click(screen.getByRole('tab', { name: 'CCTV' }));
+    const list = screen.getByTestId('life-nearby-list');
+    await waitFor(() => expect(within(list).getByText('생활방범 CCTV')).toBeInTheDocument());
+    // 그 사이 지도 뷰가 다시 그려졌어도 오버레이 배열은 새로 만들지 않는다.
+    expect(mapProbe.overlayMarkers.length).toBeGreaterThan(renders);
+    expect(mapProbe.overlayMarkers.at(-1)).toBe(before);
   });
 
   it('배경 레이어(범죄 통계) 토글 → 지도 중심(서울시청=중구) 요약 카드·5등급·순위, 메트릭 칩, 푸터 출처, 끄면 사라짐', async () => {

@@ -8,6 +8,9 @@ import { EV_FILTER_KEYS, PARKING_LOT_FILTER_KEYS, parkingApi, type EvFilters, ty
 const LIVE_STALE_MS = 2 * 60_000;
 const LIVE_REFETCH_MS = 5 * 60_000;
 const STATUS_STALE_MS = 5 * 60_000;
+// 뷰포트 결과 보관 시간 — bbox 가 키에 그대로 들어가 지도를 움직일 때마다 새 쿼리가 생기고, 같은 뷰포트로
+// 정확히 되돌아오는 일은 드물다(일상지도·집값과 같은 규율). 지나간 뷰포트의 점을 기본 5분씩 쌓아 두지 않는다.
+const VIEWPORT_GC_MS = 60_000;
 
 const flagsKey = (f: object | undefined, keys: readonly string[]): string =>
   keys.map((k) => ((f as Record<string, unknown> | undefined)?.[k] ? '1' : '0')).join('');
@@ -22,14 +25,17 @@ export interface ParkingViewportParams<F> {
 }
 
 // 뷰포트 조회 — params null 이면 비활성(탭 꺼짐·지도 미준비). zoom 은 내림 정수로 키를 만든다.
+// signal 을 fetch 까지 넘긴다 — 응답이 오기 전에 지도를 다시 움직이면(키 교체) React Query 가 지나간
+// 뷰포트의 요청을 끊는다.
 export const useParkingLotPoints = (params: ParkingViewportParams<ParkingLotFilters> | null) => {
   const enabled = params !== null;
   const zoom = params ? Math.floor(params.zoom) : null;
   return useQuery({
     queryKey: ['parking', 'lots', 'points', params?.bbox ?? null, zoom, flagsKey(params?.filters, PARKING_LOT_FILTER_KEYS)],
-    queryFn: () => parkingApi.lotPoints(params!.bbox, zoom!, params!.filters),
+    queryFn: ({ signal }) => parkingApi.lotPoints(params!.bbox, zoom!, params!.filters, { signal }),
     enabled,
     staleTime: LIVE_STALE_MS,
+    gcTime: VIEWPORT_GC_MS,
     refetchInterval: enabled ? LIVE_REFETCH_MS : false,
     placeholderData: enabled ? (prev) => prev : undefined,
   });
@@ -44,7 +50,8 @@ export const useParkingLotNearby = (
   const enabled = lat !== null && lng !== null && opts.enabled !== false;
   return useQuery({
     queryKey: ['parking', 'lots', 'nearby', lat?.toFixed(4) ?? null, lng?.toFixed(4) ?? null, opts.radius ?? null, opts.limit ?? null, flagsKey(opts.filters, PARKING_LOT_FILTER_KEYS)],
-    queryFn: () => parkingApi.lotNearby(lat!, lng!, { radius: opts.radius, limit: opts.limit, filters: opts.filters }),
+    queryFn: ({ signal }) =>
+      parkingApi.lotNearby(lat!, lng!, { radius: opts.radius, limit: opts.limit, filters: opts.filters }, { signal }),
     enabled,
     staleTime: LIVE_STALE_MS,
     refetchInterval: enabled ? LIVE_REFETCH_MS : false,
@@ -66,9 +73,10 @@ export const useEvPoints = (params: ParkingViewportParams<EvFilters> | null) => 
   const zoom = params ? Math.floor(params.zoom) : null;
   return useQuery({
     queryKey: ['parking', 'ev', 'points', params?.bbox ?? null, zoom, flagsKey(params?.filters, EV_FILTER_KEYS)],
-    queryFn: () => parkingApi.evPoints(params!.bbox, zoom!, params!.filters),
+    queryFn: ({ signal }) => parkingApi.evPoints(params!.bbox, zoom!, params!.filters, { signal }),
     enabled,
     staleTime: LIVE_STALE_MS,
+    gcTime: VIEWPORT_GC_MS,
     refetchInterval: enabled ? LIVE_REFETCH_MS : false,
     placeholderData: enabled ? (prev) => prev : undefined,
   });
@@ -82,7 +90,8 @@ export const useEvNearby = (
   const enabled = lat !== null && lng !== null && opts.enabled !== false;
   return useQuery({
     queryKey: ['parking', 'ev', 'nearby', lat?.toFixed(4) ?? null, lng?.toFixed(4) ?? null, opts.radius ?? null, opts.limit ?? null, flagsKey(opts.filters, EV_FILTER_KEYS)],
-    queryFn: () => parkingApi.evNearby(lat!, lng!, { radius: opts.radius, limit: opts.limit, filters: opts.filters }),
+    queryFn: ({ signal }) =>
+      parkingApi.evNearby(lat!, lng!, { radius: opts.radius, limit: opts.limit, filters: opts.filters }, { signal }),
     enabled,
     staleTime: LIVE_STALE_MS,
     refetchInterval: enabled ? LIVE_REFETCH_MS : false,

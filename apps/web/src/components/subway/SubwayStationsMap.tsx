@@ -247,6 +247,12 @@ export const SubwayStationsMap = ({
     [lineColor],
   );
 
+  // 따라가기 중에만 선택 역이 마커 구성에 들어간다. selectedId 를 마커 memo 의 의존성으로 직접 두면
+  // 평소에도 역을 고를 때마다 마커 배열이 새로 만들어져 지도가 전량을 다시 그린다(선택 강조는
+  // MapCanvas 가 feature 2개만 다시 칠한다) — 따라가기일 때의 대상 그룹으로 좁힌다.
+  const followGroup =
+    following && selectedId ? groups.find((g) => g.id === selectedId) : undefined;
+
   const markers: MapMarker[] = useMemo(() => {
     // 경로 모드 — 출발/도착 핀 + 환승 도트만(검색 역·경유역 점·내 위치는 숨김). 좌표는
     // path.from/to 에 없고 legs 에만 있어 leg 양 끝에서 취한다. 경계=환승.
@@ -288,7 +294,7 @@ export const SubwayStationsMap = ({
     // 따라가기 중에는 화면을 비워 열차에 집중 — 검색 역·경유역 점을 숨기고 선택 역
     // 하나만 남긴다(폴리라인·열차는 별도 레이어라 그대로). 버스 8차 미러.
     if (following) {
-      const sel = selectedId ? groups.find((g) => g.id === selectedId) : undefined;
+      const sel = followGroup;
       if (!sel) return [];
       const transfer = sel.lines.length > 1;
       return [
@@ -342,7 +348,7 @@ export const SubwayStationsMap = ({
     stopDotUrl,
     stopDotTransferUrl,
     following,
-    selectedId,
+    followGroup,
     pathResult,
   ]);
 
@@ -578,7 +584,7 @@ export const SubwayStationsMap = ({
       pendingTimerRef.current = null;
       if (pendingRef.current) {
         pendingRef.current = null;
-        // 여러 지도 인스턴스(데스크톱/모바일)가 동시에 울리지 않게 고정 id 로 dedup.
+        // 고정 id 로 dedup — 같은 안내가 겹쳐 쌓이지 않게.
         toast.info(
           '열차를 지도에서 찾지 못했습니다. 아직 노선에 진입하지 않았거나 방금 운행을 마쳤을 수 있어요.',
           { id: 'subway-locate-notfound' },

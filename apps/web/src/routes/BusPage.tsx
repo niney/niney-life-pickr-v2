@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { BusStationItemType } from '@repo/api-contract';
+import type { BusNearbyItemType, BusPositionItemType, BusStationItemType } from '@repo/api-contract';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -38,8 +38,21 @@ import {
   type TransitFavTarget,
 } from '~/components/transit/TransitFavoritesSection';
 import { SubwayCrossSection } from '~/components/transit/CrossSearchSection';
+import { useIsDesktopXl } from '~/lib/useMediaQuery';
+import { cn } from '~/lib/utils';
 
 
+// 빈 결과의 안정 참조 — 매 렌더 새 `[]` 를 만들면 지도 items·vehicles 가 identity 만으로 바뀐 것처럼
+// 보여, 페이지가 리렌더될 때마다(도착 30초·위치 15초 폴링) 마커를 전부 다시 만들고 fitToMarkers 가
+// 재발화한다(지도를 옮겨도 끌려감). SubwayPage 의 EMPTY_GROUPS 와 같은 규율.
+const EMPTY_STATIONS: BusStationItemType[] = [];
+const EMPTY_NEAR_STATIONS: BusNearbyItemType[] = [];
+const EMPTY_VEHICLES: BusPositionItemType[] = [];
+
+// 데스크톱 subBar 자리표시 — 종전엔 CSS 로 숨긴 subBar(탭+검색행)를 데스크톱에도 등록해, 상단바가 그
+// 래퍼의 구분선(1px)만큼 높았다. 탭·검색행은 이제 본문에 한 벌만 두되, 상단바 모양은 종전과 같게 내용
+// 없는 자리표시를 등록한다(null 로 두면 일상지도·집값처럼 구분선이 한 줄로 얇아진다).
+const DESKTOP_SUBBAR = <span hidden />;
 
 // 겸표시(지하철역) 마커 아이콘 — 자기 정류장(파랑)과 즉시 구분되는 지하철 톤
 // (청록, 환승역 이중 링). 기존 지하철 역 마커 빌더 재사용(신규 아이콘 없음).
@@ -64,7 +77,10 @@ export const BusPage = () => {
   // 주변 모드 — near 파라미터가 유효 좌표일 때. 키워드(q)와 배타이며, URL 이
   // 유일 진실이라 새로고침/딥링크 시 Geolocation 재요청 없이 좌표로 복원된다.
   // near 형식/범위 불통과(딥링크·수동 편집 쓰레기 값)는 null → 키워드 모드.
-  const near = parseLatLngParam(searchParams.get('near'));
+  // 원문 문자열 키로 메모 — 매 렌더 새 좌표 객체가 지도 기준점(myLocation)으로 내려가면 마커 memo 와
+  // fit effect 가 렌더마다 다시 돈다.
+  const nearRaw = searchParams.get('near');
+  const near = useMemo(() => parseLatLngParam(nearRaw), [nearRaw]);
   const nearMode = near !== null;
 
   // 모바일 시트 스냅 조율 — 정류장(stId)이 잡히면 목록 시트 peek·숨김, 도착 패널을 상세 시트 half 로.
@@ -120,6 +136,9 @@ export const BusPage = () => {
   // 통합 헤더(TopBar+subBar) 실측 높이 — 데스크톱은 루트 높이를 viewport 잔여분으로 고정해
   // 지도/리스트가 내부 스크롤로만 동작하게 하고, 모바일은 시트의 topOffset·지도 fixed top 으로.
   const { setSubBar, headerHeight } = usePublicLayout();
+  // 레이아웃 분기 — CSS 이중 마운트(hidden xl:flex / xl:hidden)가 아니라 JS(useIsDesktopXl)로 가른다.
+  // 지도(OL 인스턴스·차량 tween)·패널·시트를 한 벌만 마운트하기 위함(LifeMapPage·HousingPage 와 같은 패턴).
+  const isDesktop = useIsDesktopXl();
 
   const setParam = useCallback(
     (key: string, value: string | null) => {
@@ -154,7 +173,7 @@ export const BusPage = () => {
   // 캐시에 남은 이전 응답을 마커·배너로 흘리지 않는다.
   const trimmedQ = q.trim();
   const hasQ = trimmedQ.length >= 2 && trimmedQ.length <= 50;
-  const items = hasQ ? (search.data?.items ?? []) : [];
+  const items = hasQ ? (search.data?.items ?? EMPTY_STATIONS) : EMPTY_STATIONS;
   const total = hasQ ? (search.data?.total ?? 0) : 0;
   const fetchedAt = hasQ ? (search.data?.fetchedAt ?? null) : null;
   // 서울시 API 실패로 만료 캐시를 반환한 응답 — 메타 행 경고 배지용.
@@ -171,7 +190,7 @@ export const BusPage = () => {
     effectiveNear?.lat ?? null,
     effectiveNear?.lng ?? null,
   );
-  const nearItems = nearMode ? (nearby.data?.items ?? []) : [];
+  const nearItems = nearMode ? (nearby.data?.items ?? EMPTY_NEAR_STATIONS) : EMPTY_NEAR_STATIONS;
   const nearSearching =
     nearby.isLoading || (nearby.isFetching && nearby.isPlaceholderData);
 
@@ -194,7 +213,6 @@ export const BusPage = () => {
   const accumRef = useRef(new Map<string, BusStationItemType>());
   // 명시 액션(📍/재검색 버튼)으로 URL near 가 바뀌면 누적을 비운다 — 안 비우면
   // 직후 fitToMarkers 가 이전 지점 마커까지 포함해 크게 줌아웃된다.
-  const nearRaw = searchParams.get('near');
   const prevNearRawRef = useRef(nearRaw);
   const mapItems = useMemo(() => {
     if (!nearMode) {
@@ -533,7 +551,7 @@ export const BusPage = () => {
   // (1콜)하고 도착정보를 기다릴 필요가 없어 노선 선택 즉시 전 차량이 뜬다.
   const positions = useBusPositions(routeId);
   // 노선 선택 중일 때만 지도에 차량 마커 — 해제 시 즉시 제거.
-  const vehicles = routeId ? (positions.data?.items ?? []) : [];
+  const vehicles = routeId ? (positions.data?.items ?? EMPTY_VEHICLES) : EMPTY_VEHICLES;
 
   const arrivalPanel = selectedStation ? (
     <BusArrivalPanel
@@ -583,7 +601,11 @@ export const BusPage = () => {
 
   // 초기 화면(검색어·주변·선택 정류장 없음)에 노출할 즐겨찾기 섹션. 0개면
   // undefined 를 넘겨 리스트 본체가 기존 빈 상태 안내를 그대로 보여준다.
-  const favoritesSection = hasFavorites ? (
+  // 모바일에서 목록 시트가 상세 시트 뒤에 숨어 있는 동안(listHidden)에는 만들지 않는다 — 숨은 시트도
+  // 마운트돼 있어, 섹션이 남아 있으면 펼쳐 둔 항목의 도착 미리보기가 보이지 않는 곳에서 30초 폴링을
+  // 계속한다. 펼침 상태는 스토어(transitFavExpandStore)에 있어 목록으로 돌아오면 그대로 복원된다.
+  // (데스크톱은 목록이 보일 때만 마운트되므로 해당 없음.)
+  const favoritesSection = hasFavorites && (isDesktop || !listHidden) ? (
     <TransitFavoritesSection
       bus={favorites}
       subway={subwayFavorites}
@@ -621,30 +643,31 @@ export const BusPage = () => {
     crossSearchContent: crossSearchSection,
   };
 
-  // ── 모바일 상단바 subBar — 탭 + 검색행(정류장 선택 중엔 검색행을 접어 공간 회수). xl+ 는 CSS 로
-  // 숨겨 데스크톱 레이아웃엔 영향 없음(헤더 높이도 subBar 가 display:none 이라 그대로). ──
+  // ── 모바일 상단바 subBar — 탭 + 검색행(정류장 선택 중엔 검색행을 접어 공간 회수). 데스크톱은
+  // 내용 없는 자리표시만(탭은 본문 맨 위, 검색행은 좌패널 — 위 DESKTOP_SUBBAR 주석). ──
   const subBarContent = useMemo(
-    () => (
-      <div className="xl:hidden">
-        <TransitTabs active="bus" />
-        {!(stId !== null) && (
-          <BusStationSearchBar
-            q={q}
-            nearMode={nearMode}
-            total={activeTotal}
-            fetchedAt={activeFetchedAt}
-            refreshing={refreshPending}
-            truncated={(nearMode || hasQ) && activeItems.length < activeTotal}
-            stale={nearMode ? false : stale}
-            onSubmitQ={handleSubmitQ}
-            onForceRefresh={handleForceRefresh}
-            onNearby={handleNearby}
-            onClearNear={handleClearNear}
-          />
-        )}
-      </div>
-    ),
-    [stId, q, nearMode, activeTotal, activeFetchedAt, refreshPending, activeItems.length, hasQ, stale, handleSubmitQ, handleForceRefresh, handleNearby, handleClearNear],
+    () =>
+      isDesktop ? DESKTOP_SUBBAR : (
+        <div>
+          <TransitTabs active="bus" />
+          {!(stId !== null) && (
+            <BusStationSearchBar
+              q={q}
+              nearMode={nearMode}
+              total={activeTotal}
+              fetchedAt={activeFetchedAt}
+              refreshing={refreshPending}
+              truncated={(nearMode || hasQ) && activeItems.length < activeTotal}
+              stale={nearMode ? false : stale}
+              onSubmitQ={handleSubmitQ}
+              onForceRefresh={handleForceRefresh}
+              onNearby={handleNearby}
+              onClearNear={handleClearNear}
+            />
+          )}
+        </div>
+      ),
+    [isDesktop, stId, q, nearMode, activeTotal, activeFetchedAt, refreshPending, activeItems.length, hasQ, stale, handleSubmitQ, handleForceRefresh, handleNearby, handleClearNear],
   );
   useLayoutEffect(() => {
     setSubBar(subBarContent);
@@ -660,24 +683,29 @@ export const BusPage = () => {
     >
       {/* 대중교통 서브탭 — 버스/지하철 전환. 데스크톱은 여기(아래 콘텐츠가 잔여 높이를 채운다),
           모바일은 상단바 subBar 안에 같은 탭이 있다. */}
-      <div className="hidden xl:block">
-        <TransitTabs active="bus" />
-      </div>
-      <div className="min-h-0 flex-1">
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          데스크톱 (xl+) — 좌 검색 패널(400px) + 우 지도.
-          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="hidden h-full xl:flex">
-        {/* 정류장 선택 시 좌패널이 도착정보 뷰로 전환 — '← 목록'으로 복귀. */}
-        <aside className="flex w-[400px] shrink-0 flex-col border-r">
-          {arrivalPanel ?? <BusStationList {...listProps} />}
-        </aside>
-        <section className="relative flex-1">
+      {isDesktop && <TransitTabs active="bus" />}
+      <div className={cn('min-h-0 flex-1', isDesktop && 'flex')}>
+        {/* 데스크톱 (xl+) — 좌 검색 패널(400px). 정류장 선택 시 도착정보 뷰로 전환 — '← 목록'으로 복귀. */}
+        {isDesktop && (
+          <aside className="flex w-[400px] shrink-0 flex-col border-r">
+            {arrivalPanel ?? <BusStationList {...listProps} />}
+          </aside>
+        )}
+        {/* 지도 — 한 벌. 데스크톱은 패널 오른쪽 칸, 모바일은 헤더 아래 fixed 배경(시트가 그 위에). 두 분기에서
+            같은 자리(둘째 자식)라 폭이 xl 경계를 넘어도 OL 인스턴스·따라가기 상태가 그대로 남는다.
+            --map-bottom-inset: peek 시트가 덮는 높이만큼 지도 컨트롤을 올린다. */}
+        <section
+          className={isDesktop ? 'relative flex-1' : 'fixed inset-x-0 bottom-0 z-0'}
+          style={
+            isDesktop
+              ? undefined
+              : ({ top: `${headerHeight}px`, '--map-bottom-inset': `${SHEET_PEEK_HEIGHT}px` } as React.CSSProperties)
+          }
+        >
           <BusStationsMap
-            // 데스크톱·모바일 지도 래퍼는 CSS 숨김(hidden xl:flex / xl:hidden)이라
-            // 둘 다 항상 마운트된다 — MapCanvas 가 페이지당 2개 동시 생존. 풀 키를
-            // 레이아웃별로 나눠 각자 재사용시켜야 모바일 폭에서도 플래시가 사라진다.
-            poolKey="transit-desktop"
+            // 지도 인스턴스 풀 키는 레이아웃별 — 탭 전환(버스↔지하철) 때 같은 레이아웃의 지도를 이어받는다.
+            // (MapCanvas 는 풀 키를 마운트 수명 동안 불변으로 보므로, 마운트된 채 폭이 바뀌면 처음 키로 반납된다.)
+            poolKey={isDesktop ? 'transit-desktop' : 'transit-mobile'}
             overlayMarkers={overlayMarkers}
             onOverlaySelect={handleOverlaySelect}
             crossToggleVisible={crossToggleVisible}
@@ -698,94 +726,69 @@ export const BusPage = () => {
             loading={nearMode && nearby.isFetching}
           />
         </section>
-      </div>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          모바일 (xl 미만) — 맛집 v2 와 같은 시트 패턴. 탭·검색행은 상단바 subBar(통합 sticky 헤더,
-          위 subBarContent)로 올리고, 지도는 그 아래 fixed 배경, 목록은 3-snap 바텀시트, stId 가 잡히면
-          패널을 상세 시트로 얹는다(useMapSheets). 지도 컨트롤은 --map-bottom-inset 으로 peek 시트 위로.
-          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="xl:hidden">
-        <div
-          className="fixed inset-x-0 bottom-0 z-0"
-          style={{ top: `${headerHeight}px`, '--map-bottom-inset': `${SHEET_PEEK_HEIGHT}px` } as React.CSSProperties}
-        >
-          <BusStationsMap
-            // 데스크톱과 별개 인스턴스(동시 마운트) — 풀 키 분리.
-            poolKey="transit-mobile"
-            overlayMarkers={overlayMarkers}
-            onOverlaySelect={handleOverlaySelect}
-            crossToggleVisible={crossToggleVisible}
-            items={mapItemsForMap}
-            vehicles={vehicles}
-            vehicleLabel={selectedArrival?.routeName ?? routeInfo?.routeName ?? null}
-            vehicleColor={routeColor}
-            myLocation={effectiveNear}
-            selectedStId={stId}
-            onSelectMarker={handleSelect}
-            onResearchAt={nearMode ? handleResearchAt : undefined}
-            onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
-            routeLine={routeLine}
-            routeStops={routeStops}
-            // 노선 추적 중에는 fit 억제 — 선택 정류장이 활성결과에 없어 mapItems
-            // 가 바뀌어도(경유지 점 클릭 등) 지도가 노선 전체로 줌아웃되지 않게.
-            suppressFit={autoNear !== null || routeId !== null}
-            loading={nearMode && nearby.isFetching}
-          />
-        </div>
-        <BottomSheet
-          snap={listSnap}
-          onSnapChange={setListSnap}
-          topOffset={headerHeight}
-          peekHeight={SHEET_PEEK_HEIGHT}
-          hidden={listHidden}
-          disableScrollLock={listHidden}
-          zIndex={20}
-        >
-          <div className="p-3 pb-8" data-testid="bus-list-sheet">
-            <BusStationListBody
-              q={q}
-              nearMode={nearMode}
-              geoError={geoError}
-              items={activeItems}
-              isLoading={activeLoading}
-              isError={activeError}
-              selectedStId={stId}
-              selectedMissing={selectedMissing}
-              refreshing={refreshPending}
-              onSelect={handleSelect}
-              onRetry={handleForceRefresh}
-              isStationFavorite={favorites.isStationFavorite}
-              onToggleStationFavorite={favorites.toggleStation}
-              favoritesContent={favoritesSection}
-              crossSearchContent={crossSearchSection}
-            />
-          </div>
-        </BottomSheet>
-        {stId !== null && (
-          <BottomSheet
-            key={stId}
-            snap={detailSnap}
-            onSnapChange={setDetailSnap}
-            topOffset={headerHeight}
-            peekHeight={SHEET_PEEK_HEIGHT}
-            zIndex={25}
-          >
-            <div className="pb-8" data-testid="bus-detail-sheet">
-              {arrivalPanel ?? (
-                <div className="flex flex-col items-start gap-2 px-4 py-6 text-sm text-muted-foreground">
-                  {selectedMissing
-                    ? '선택한 정류장이 현재 결과에 없습니다. 다시 검색하거나 목록으로 돌아가세요.'
-                    : '정류장 정보를 불러오는 중…'}
-                  <button type="button" onClick={handleBack} className="text-xs underline underline-offset-2">
-                    ← 목록
-                  </button>
+        {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            모바일 (xl 미만) — 맛집 v2 와 같은 시트 패턴. 탭·검색행은 상단바 subBar(통합 sticky 헤더,
+            위 subBarContent)로 올리고, 지도는 그 아래 fixed 배경, 목록은 3-snap 바텀시트, stId 가 잡히면
+            패널을 상세 시트로 얹는다(useMapSheets). 시트는 모바일에서만 마운트한다(데스크톱에 숨어 있으면
+            html overflow 락이 따라온다).
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        {!isDesktop && (
+          <>
+            <BottomSheet
+              snap={listSnap}
+              onSnapChange={setListSnap}
+              topOffset={headerHeight}
+              peekHeight={SHEET_PEEK_HEIGHT}
+              hidden={listHidden}
+              disableScrollLock={listHidden}
+              zIndex={20}
+            >
+              <div className="p-3 pb-8" data-testid="bus-list-sheet">
+                <BusStationListBody
+                  q={q}
+                  nearMode={nearMode}
+                  geoError={geoError}
+                  items={activeItems}
+                  isLoading={activeLoading}
+                  isError={activeError}
+                  selectedStId={stId}
+                  selectedMissing={selectedMissing}
+                  refreshing={refreshPending}
+                  onSelect={handleSelect}
+                  onRetry={handleForceRefresh}
+                  isStationFavorite={favorites.isStationFavorite}
+                  onToggleStationFavorite={favorites.toggleStation}
+                  favoritesContent={favoritesSection}
+                  crossSearchContent={crossSearchSection}
+                />
+              </div>
+            </BottomSheet>
+            {stId !== null && (
+              <BottomSheet
+                key={stId}
+                snap={detailSnap}
+                onSnapChange={setDetailSnap}
+                topOffset={headerHeight}
+                peekHeight={SHEET_PEEK_HEIGHT}
+                zIndex={25}
+              >
+                <div className="pb-8" data-testid="bus-detail-sheet">
+                  {arrivalPanel ?? (
+                    <div className="flex flex-col items-start gap-2 px-4 py-6 text-sm text-muted-foreground">
+                      {selectedMissing
+                        ? '선택한 정류장이 현재 결과에 없습니다. 다시 검색하거나 목록으로 돌아가세요.'
+                        : '정류장 정보를 불러오는 중…'}
+                      <button type="button" onClick={handleBack} className="text-xs underline underline-offset-2">
+                        ← 목록
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </BottomSheet>
+              </BottomSheet>
+            )}
+          </>
         )}
-      </div>
       </div>
     </div>
   );

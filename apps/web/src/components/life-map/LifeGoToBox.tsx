@@ -48,7 +48,26 @@ const regionTarget = (p: WeatherPlace): LifeGoToTarget => ({
   zoom: p.kind === 'district' ? ZOOM.district : ZOOM.city,
 });
 const REMOTE_DEBOUNCE_MS = 250;
+// 버스 정류장 검색만 더 길게 — 캐시에 없는 키워드마다 서울시 API 를 한 번씩 쓰고, 그 일일 한도를 도착·위치
+// 폴링과 나눠 쓴다(버스 탭이 제출형인 이유 — BusStationList 머리 주석). 타이핑이 잠깐 멈춘 중간 접두어를
+// 덜 보내려고 더 기다리고, 끝 글자가 조합 중인 낱자모("강ㄴ")인 동안은 아예 보내지 않는다.
+const BUS_DEBOUNCE_MS = 450;
+// 음절로 완성되기 전의 낱자모 — IME 가 조합 중에 내놓는 한글 호환 자모(자음 ㄱ~ㅎ·모음 ㅏ~ㅣ).
+const TRAILING_JAMO = /[ㄱ-ㅎㅏ-ㅣ]$/;
 const SECTION_LIMIT = 5;
+
+// 버스 검색어 — 값이 delay 동안 안정되고 끝 글자가 완성된 음절일 때만 갱신한다. 조합 중(끝이 낱자모)에는
+// 예약을 걸지 않아 직전 검색어가 그대로 남는다(타이머 = 외부 시스템 동기화 — lib/useDebounced 와 같은 근거).
+const useSettledBusQuery = (value: string, delayMs: number): string => {
+  const [settled, setSettled] = useState(value);
+  const composing = TRAILING_JAMO.test(value);
+  useEffect(() => {
+    if (composing) return;
+    const t = setTimeout(() => setSettled(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs, composing]);
+  return settled;
+};
 
 export interface LifeGoToSection {
   key: string;
@@ -109,7 +128,8 @@ export const LifeGoToBox = ({
   // 원격 검색(역·정류장·주소)은 디바운스된 값으로 — 타이핑 글자마다 세 API 가 나가지 않게. 행정구역은 즉시.
   const debouncedQ = useDebounced(typing ? trimmed : '', REMOTE_DEBOUNCE_MS);
   const subwayQ = useSubwayStationSearch(debouncedQ);
-  const busQ = useBusStationSearch(debouncedQ);
+  // 버스만 따로 — 더 긴 디바운스 + 조합 중 대기(위 BUS_DEBOUNCE_MS 주석).
+  const busQ = useBusStationSearch(useSettledBusQuery(typing ? trimmed : '', BUS_DEBOUNCE_MS));
   const remoteQ = useLifeMapSearch(debouncedQ, 8);
   // 페이지 검색 훅과의 동기화 — 디바운스된 값이 바뀔 때만 알린다(부모 setState 가 곧 외부 시스템).
   useEffect(() => {

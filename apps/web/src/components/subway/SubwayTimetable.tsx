@@ -169,6 +169,15 @@ const TimetableBody = ({
   congestionDir: SubwayCongestionDirectionType | null;
   scrollKey: string;
 }) => {
+  // 30초 tick — 시간이 흐르면 '다음 열차' 하이라이트가 다음 행으로 넘어가야 한다. 예전엔 페이지의 도착정보
+  // 30초 폴링 리렌더에 얹혀 갱신됐는데, 시간표 뷰에서는 그 폴링을 쉬므로 같은 주기로 직접 다시 그린다
+  // (외부 시계 동기화라 useEffect, cleanup 필수 — 도착 패널의 1초 tick 과 같은 근거).
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // 현재 시각 이후 첫 열차 — 하이라이트 + 자동 스크롤 기준. 렌더 중 파생(분).
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import type Feature from 'ol/Feature';
-import GeoJSON from 'ol/format/GeoJSON';
 import { fromLonLat } from 'ol/proj';
 
 // 시군구 경계(public/sigungu-geo.json — 250개, KOSIS 행정구역 코드 5자리 + 이름) — 일상지도 배경
@@ -18,7 +17,9 @@ export const useSigunguGeo = (enabled = true) =>
   useQuery<SigunguGeo>({
     queryKey: ['sigungu-geo'],
     queryFn: async () => {
-      const res = await fetch(SIGUNGU_GEO_URL);
+      // GeoJSON 파서(ol/format)는 배경을 켠 뒤에만 쓴다 — 정적 import 로 일상지도 진입 경로에 묶지 않고
+      // 경계 파일과 함께 그때 받는다.
+      const [res, { default: GeoJSON }] = await Promise.all([fetch(SIGUNGU_GEO_URL), import('ol/format/GeoJSON')]);
       if (!res.ok) throw new Error(`시군구 경계를 불러오지 못했습니다(HTTP ${res.status})`);
       const json = (await res.json()) as object;
       const features = new GeoJSON().readFeatures(json, { featureProjection: 'EPSG:3857' }) as Feature[];

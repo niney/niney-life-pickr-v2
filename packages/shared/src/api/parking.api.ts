@@ -39,30 +39,41 @@ const applyFlags = (params: URLSearchParams, f: object | undefined, keys: readon
 export const parkingApi = {
   status: () => apiFetch<ParkingStatusResultType>(Routes.Parking.status),
   // 뷰포트 조회 — bbox 는 @repo/utils formatBbox 문자열, zoom 은 정수(서버도 내림).
-  lotPoints: (bbox: string, zoom: number, filters?: ParkingLotFilters) => {
+  // init.signal: React Query 가 주는 AbortSignal — 지도를 다시 움직이면 이전 뷰포트 요청을 끊는다(생략 가능).
+  lotPoints: (bbox: string, zoom: number, filters?: ParkingLotFilters, init?: Pick<RequestInit, 'signal'>) => {
     const params = new URLSearchParams({ bbox, zoom: String(Math.floor(zoom)) });
     applyFlags(params, filters, PARKING_LOT_FILTER_KEYS);
-    return apiFetch<ParkingLotPointsResultType>(`${Routes.Parking.lotPoints}?${params.toString()}`);
+    return apiFetch<ParkingLotPointsResultType>(`${Routes.Parking.lotPoints}?${params.toString()}`, init);
   },
-  lotNearby: (lat: number, lng: number, opts: { radius?: number; limit?: number; filters?: ParkingLotFilters } = {}) => {
+  lotNearby: (
+    lat: number,
+    lng: number,
+    opts: { radius?: number; limit?: number; filters?: ParkingLotFilters } = {},
+    init?: Pick<RequestInit, 'signal'>,
+  ) => {
     const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
     if (opts.radius !== undefined) params.set('radius', String(opts.radius));
     if (opts.limit !== undefined) params.set('limit', String(opts.limit));
     applyFlags(params, opts.filters, PARKING_LOT_FILTER_KEYS);
-    return apiFetch<ParkingLotNearbyResultType>(`${Routes.Parking.lotNearby}?${params.toString()}`);
+    return apiFetch<ParkingLotNearbyResultType>(`${Routes.Parking.lotNearby}?${params.toString()}`, init);
   },
   lotDetail: (id: string) => apiFetch<ParkingLotDetailType>(Routes.Parking.lotDetail(id)),
-  evPoints: (bbox: string, zoom: number, filters?: EvFilters) => {
+  evPoints: (bbox: string, zoom: number, filters?: EvFilters, init?: Pick<RequestInit, 'signal'>) => {
     const params = new URLSearchParams({ bbox, zoom: String(Math.floor(zoom)) });
     applyFlags(params, filters, EV_FILTER_KEYS);
-    return apiFetch<EvPointsResultType>(`${Routes.Parking.evPoints}?${params.toString()}`);
+    return apiFetch<EvPointsResultType>(`${Routes.Parking.evPoints}?${params.toString()}`, init);
   },
-  evNearby: (lat: number, lng: number, opts: { radius?: number; limit?: number; filters?: EvFilters } = {}) => {
+  evNearby: (
+    lat: number,
+    lng: number,
+    opts: { radius?: number; limit?: number; filters?: EvFilters } = {},
+    init?: Pick<RequestInit, 'signal'>,
+  ) => {
     const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
     if (opts.radius !== undefined) params.set('radius', String(opts.radius));
     if (opts.limit !== undefined) params.set('limit', String(opts.limit));
     applyFlags(params, opts.filters, EV_FILTER_KEYS);
-    return apiFetch<EvNearbyResultType>(`${Routes.Parking.evNearby}?${params.toString()}`);
+    return apiFetch<EvNearbyResultType>(`${Routes.Parking.evNearby}?${params.toString()}`, init);
   },
   evDetail: (id: string) => apiFetch<EvStationDetailType>(Routes.Parking.evDetail(id)),
   airports: () => apiFetch<ParkingAirportsResultType>(Routes.Parking.airports),

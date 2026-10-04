@@ -28,17 +28,24 @@ const axisParams = (params: URLSearchParams, axis: HousingAxis): void => {
 export const housingApi = {
   status: () => apiFetch<HousingStatusResultType>(Routes.Housing.status),
   // 뷰포트 조회 — bbox 는 @repo/utils formatBbox 문자열, zoom 은 정수로 보낸다(서버도 내림).
-  points: (bbox: string, zoom: number, axis: HousingAxis) => {
+  // init.signal: React Query 가 주는 AbortSignal — 지도를 다시 움직이면 이전 뷰포트 요청을 끊는다(생략 가능).
+  points: (bbox: string, zoom: number, axis: HousingAxis, init?: Pick<RequestInit, 'signal'>) => {
     const params = new URLSearchParams({ bbox, zoom: String(Math.floor(zoom)) });
     axisParams(params, axis);
-    return apiFetch<HousingPointsResultType>(`${Routes.Housing.points}?${params.toString()}`);
+    return apiFetch<HousingPointsResultType>(`${Routes.Housing.points}?${params.toString()}`, init);
   },
-  nearby: (lat: number, lng: number, axis: HousingAxis, opts: { radius?: number; limit?: number } = {}) => {
+  nearby: (
+    lat: number,
+    lng: number,
+    axis: HousingAxis,
+    opts: { radius?: number; limit?: number } = {},
+    init?: Pick<RequestInit, 'signal'>,
+  ) => {
     const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
     if (opts.radius !== undefined) params.set('radius', String(opts.radius));
     if (opts.limit !== undefined) params.set('limit', String(opts.limit));
     axisParams(params, axis);
-    return apiFetch<HousingNearbyResultType>(`${Routes.Housing.nearby}?${params.toString()}`);
+    return apiFetch<HousingNearbyResultType>(`${Routes.Housing.nearby}?${params.toString()}`, init);
   },
   // 단지명 검색 — 1자 이상.
   search: (q: string, limit?: number) => {

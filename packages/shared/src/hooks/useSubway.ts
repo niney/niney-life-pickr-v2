@@ -1,10 +1,11 @@
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { subwayApi } from '../api/subway.api.js';
 
 // 역 라이브 검색 — 역사마스터를 로컬 DB 에 적재해 조회하므로 쿼터 부담이 0 이고,
 // 마스터가 사실상 불변이라 staleTime 24h(같은 역명 재검색 시 재호출 없음).
 // placeholderData 로 타이핑 중 이전 결과를 유지해 잔상 없이 갱신한다. 타이핑
-// 지연(디바운스)은 호출부(웹)가 useDeferredValue 로 처리 — 여기엔 타이머/effect 없음.
+// 지연(디바운스)은 호출부가 q 를 늦춰 넘기는 것으로 처리 — 여기엔 타이머/effect 없음.
 export const useSubwayStationSearch = (q: string) => {
   const trimmed = q.trim();
   // 서버 q 제약(1~50자) FE 미러 — 범위 밖이면 호출 자체를 막는다(빈 검색어 포함).
@@ -45,17 +46,34 @@ export const useSubwayNearbyStations = (
 // 비활성이면 폴링이 자동 중단돼 업스트림 쿼터를 아낀다(버스 도착 패턴). placeholderData
 // 로 30초 갱신 사이 패널이 깜빡(로딩 리셋)이지 않게 유지한다. stationId 는 검색 결과
 // 그룹의 id(`${lineId}:${name}`) — 선택(패널 열림) 시에만 조회.
-export const useSubwayStationArrivals = (stationId: string | null) => {
+// opts.polling=false: 도착 목록이 화면에 없을 때(웹의 시간표·길찾기 뷰) 30초 폴링만 끈다. 쿼리는 살아 있어
+// 받아 둔 응답(역명·호선 — 그 뷰들의 헤더)은 그대로 읽힌다. 생략하면 종전과 같이 항상 폴링.
+export const useSubwayStationArrivals = (
+  stationId: string | null,
+  opts: { polling?: boolean } = {},
+) => {
   const enabled = !!stationId;
-  return useQuery({
+  const polling = opts.polling !== false;
+  const query = useQuery({
     queryKey: ['subway', 'arrivals', stationId],
     queryFn: () => subwayApi.stationArrivals(stationId!),
     enabled,
-    refetchInterval: 30_000,
+    refetchInterval: polling ? 30_000 : false,
     staleTime: 0,
     gcTime: 60_000,
     placeholderData: enabled ? (prev) => prev : undefined,
   });
+  // 폴링을 쉬다가 다시 켜는 순간 한 번 바로 받는다 — interval 의 첫 틱은 30초 뒤라, 그대로 두면 쉬는 동안
+  // 묵은 도착정보가 그만큼 더 보인다(서버 재조회 = 외부 시스템 동기화라 effect). 첫 마운트·역 전환은
+  // useQuery 가 직접 받으므로 여기선 false→true 전이만 본다. cancelRefetch:false — 이미 받는 중이면 합류.
+  const { refetch } = query;
+  const wasPolling = useRef(polling);
+  useEffect(() => {
+    const resumed = polling && !wasPolling.current;
+    wasPolling.current = polling;
+    if (resumed && enabled) void refetch({ cancelRefetch: false });
+  }, [polling, enabled, refetch]);
+  return query;
 };
 
 // 호선 상세(역 순서 + 지선 sections) — 적재 데이터라 사실상 정적. staleTime 24h,

@@ -30,8 +30,9 @@ import { useTransitFavExpandStore } from '~/stores/transitFavExpandStore';
 //
 // 도착 미리보기는 **펼친 행에서만** 로드+폴링(30초)한다. 한 번에 하나만 펼치므로
 // (useTransitFavExpandStore, 단일 아코디언) 도착 훅은 섹션당 최대 1개만 enabled →
-// swopen 일일 쿼터를 보호한다. 펼침 상태는 데스크톱/모바일 동시 마운트 인스턴스가
-// 스토어로 공유해 같은 queryKey 를 구독(React Query dedupe)하므로 네트워크는 1회.
+// swopen 일일 쿼터를 보호한다. 펼침 상태는 스토어에 두어 목록으로 돌아오면 복원된다.
+// 페이지는 목록이 상세 시트 뒤에 가려진 동안(모바일) 이 섹션을 마운트하지 않는다 — 보이지
+// 않는 곳에서 폴링이 계속 돌지 않게(BusPage·SubwayPage 의 favoritesSection).
 
 // 행의 '이동' 액션이 페이지로 올려보내는 딥링크 의도. 페이지는 자기 도메인이면
 // 기존 in-page 핸들러(동일 URL 계약)로, 상대 도메인이면 navigate 로 처리한다.

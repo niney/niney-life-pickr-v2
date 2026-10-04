@@ -90,6 +90,9 @@ export const HousingPage = () => {
   const airLocation = useAirLocation();
   const saved = airLocation.location;
   const savedForGoTo = useMemo(() => (saved ? { lat: saved.lat, lng: saved.lng, label: saved.label } : null), [saved]);
+  // 지도 오버레이(보라 점)용 좌표 — 인라인 객체로 넘기면 매 렌더 새 참조라 지도 뷰의 오버레이 마커 memo 가
+  // 깨지고, MapCanvas 가 렌더마다(팬 한 번에 여러 번) 오버레이 소스를 비웠다 다시 채운다.
+  const savedForMap = useMemo(() => (saved ? { lat: saved.lat, lng: saved.lng } : null), [saved]);
 
   // 진입 중심 — 마운트 1회 결정(이후엔 지도가 진실). 로그인 사용자의 저장 위치는 서버 조회라 늦게
   // 올 수 있어, URL 중심이 없고 사용자가 아직 안 움직였으면 도착 시 1회 이동한다.
@@ -315,7 +318,7 @@ export const HousingPage = () => {
           selectedComplexId={sel}
           initialCenter={{ lat: initial.lat, lng: initial.lng, zoom: initial.zoom }}
           myLocation={myLocation}
-          savedLocation={saved ? { lat: saved.lat, lng: saved.lng } : null}
+          savedLocation={savedForMap}
           locationStatus={userLoc.status}
           onLocate={userLoc.refetch}
           loading={pointsQ.isFetching}
