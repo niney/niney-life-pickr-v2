@@ -1,12 +1,14 @@
 ---
 topic: saju-g
-last_compiled: 2026-09-07
-sources_count: 40
+last_compiled: 2026-10-04
+sources_count: 41
 status: active
-aliases: [사주, 사주(G), saju-g, 명식, 만세력, 오행, 일간, 십성, 절기, 음력, 윤달, 궁합, 출생 프로필, kimi-k3, saju-g-reading, SajuGPage, SajuGPairPage]
+aliases: [사주, 사주(G), saju-g, 명식, 만세력, 오행, 일간, 십성, 절기, 음력, 윤달, 궁합, 출생 프로필, kimi-k3, saju-g-reading, SajuGPage, SajuGPairPage, share-fonts, loadShareFonts, loadShareFallbackAsset, 한자 대체 글꼴]
 ---
 
 # saju-g — 사주(G), 나의 오행 지도
+
+**2026-09-25~10-04 변경 흡수 — 공유 PNG 글꼴 공용화(`2d249f4`, 2026-09-26)**: 사주(C) 공유 카드의 본문 한자 □ 버그를 고치며 friendly `lib/share-fonts` 에 `loadShareFonts()`(늘 같은 Plex 배열 — satori 는 파싱한 글꼴을 이 배열을 키로 캐시하므로 호출마다 새 배열이면 매번 다시 파싱했다)와 `loadShareFallbackAsset`(satori `loadAdditionalAsset` — 글꼴에 없는 글자 묶음에 한자가 있을 때만 Noto Sans CJK KR 한자 서브셋을 보탬)을 두고 사주(C)·사주(G)·타로 카드에 연결했다. G 카드는 원래 한자 대신 벡터 상징으로 그려(`saju-g-share-card.ts` 주석 "한자 글리프를 포함하지 않는 공유용 폰트에서도 깨지지 않는 벡터 상징") 화면 변화는 없고, 글꼴 배열 재사용과 한자가 들어올 경우의 안전망만 생겼다. 그 밖의 G 코드 변경은 없다(사주(C) 10차 앱 네이티브 전환은 [saju-c](saju-c.md)).
 
 2026-09-06 신설. 사용자가 Kimi 고려와 나머지 추천안 진행을 승인했다. 개인 사주·올해·오늘, 후속 승인한 출생 프로필·두 사람의 궁합을 웹에 제공한다. 앱·대운은 후속 범위다. 전체 위키 재컴파일과 별개로 이번 변경의 소스를 직접 읽어 반영한 토픽이다.
 
@@ -34,7 +36,7 @@ KASI 2023·2026년 월력요항의 음력 월초/일진 25건·절입 24건과 I
 
 최신 v3 합성 사례: K3 12/12 첫 호출 통과·중앙 12.574초. 이전 v2 비교: K3 10/10·10.62초, DeepSeek V4 Pro 10/10·6.73초. 이는 출력 검사 통과율이며 모든 해석의 타당성을 증명하지 않는다. 상세 수치는 [모델 평가](../../apps/friendly/research/saju-g/README.md) 참고.
 
-## 보관·공유 [coverage: high — 5 sources]
+## 보관·공유 [coverage: high — 6 sources]
 
 기본 조회는 메모리만 사용한다. 회원 보관은 소유자 영수증으로 `SajuGReading.snapshotJson`에 명식·풀이·출생 입력을 저장하며 `(userId, requestKey)`가 유일하다. 기본 풀이를 저장해도 추후 AI 생성을 막지 않는다. 게스트 기기 보관은 principal별 localStorage 최근 20개이며 자동 저장하지 않는다.
 
@@ -44,7 +46,7 @@ KASI 2023·2026년 월력요항의 음력 월초/일진 25건·절입 24건과 I
 
 새 공유 ID는 타로와 같은 7바이트 CSPRNG/base64url 10자다. `SajuGShareToken`이 새 10자·기존 32자를 API와 OG에서 동일하게 검증한다. 취소 키·영수증은 32자를 유지한다. DB 저장의 P2002 충돌에 대해 총 5회까지 저장을 시도해 조회 후 저장 사이의 경쟁도 처리한다. 소진 시 공유 생성 라우트가 명시적인 503을 반환한다(공통 오류 처리기는 5xx를 500으로 정규화하므로 제어된 응답을 직접 보낸다). 기존 링크나 DB 행을 갱신하는 migration은 없다.
 
-PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. 이미지 캐시를 읽기 전에 DB 행 존재를 확인한다. OG는 공통 web-index helper를 사용하고 취소 후 404·일반 문구를 반환한다. nginx `/saju-g/s/` 프록시가 필요하다.
+PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. 이미지 캐시를 읽기 전에 DB 행 존재를 확인한다. OG는 공통 web-index helper를 사용하고 취소 후 404·일반 문구를 반환한다. nginx `/saju-g/s/` 프록시가 필요하다. 2026-09-26(`2d249f4`)부터 PNG 글꼴은 공통 [share-fonts](../../apps/friendly/src/lib/share-fonts.ts)의 `loadShareFonts()`·`loadShareFallbackAsset`을 쓴다(이전에는 호출마다 Plex 배열을 새로 만들었다). 한자 대체 글꼴은 한자가 든 글자 묶음에서만 불러오므로 상징을 벡터로 그리는 G 카드는 평소 불러오지 않는다.
 
 ## 이야기 카드 [coverage: high — 5 sources]
 
@@ -92,7 +94,7 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 
 통합 타입 검사 6개 작업, API 202개·웹 116개·shared 81개·utils 307개가 통과했다. 전체 migration을 빈 DB에 적용해 현재 Prisma 스키마와 일치함을 확인했다. 아래 소스 목록은 G 기능 기준이며 전체 위키 재컴파일은 아니다.
 
-## Sources [coverage: high — 40 sources]
+## Sources [coverage: high — 41 sources]
 
 - [이야기 공용 콘텐츠](../../packages/utils/src/saju-g-stories.ts)
 - [이야기 카드 UI](../../apps/web/src/components/saju-g/SajuGDiscoveries.tsx)
@@ -108,6 +110,7 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 - [서비스](../../apps/friendly/src/modules/saju-g/saju-g.service.ts)
 - [라우트](../../apps/friendly/src/modules/saju-g/saju-g.route.ts)
 - [PNG](../../apps/friendly/src/modules/saju-g/saju-g-share-card.ts)
+- [공유 PNG 글꼴(공통)](../../apps/friendly/src/lib/share-fonts.ts)
 - [OG](../../apps/friendly/src/modules/saju-g/saju-g-preview.ts)
 - [공통 훅](../../packages/shared/src/hooks/useSajuG.ts)
 - [보관 스토어](../../packages/shared/src/stores/sajuGHistoryStore.ts)

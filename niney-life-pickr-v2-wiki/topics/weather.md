@@ -1,12 +1,14 @@
 ---
 topic: weather
-last_compiled: 2026-09-26
+last_compiled: 2026-10-04
 sources_count: 81
 status: active
-aliases: [날씨, weather, 기상청, KMA, kma-api, 단기예보, 중기예보, VilageFcstInfoService, MidFcstInfoService, 15084084, 15059468, getUltraSrtNcst, getUltraSrtFcst, getVilageFcst, getFcstVersion, getMidFcst, getMidLandFcst, getMidTa, getMidSeaFcst, 초단기실황, 초단기예보, 중기전망, 중기해상예보, 기상청 API허브, apihub, AWS, 방재기상관측, nph-aws2_min, stn_inf, KmaApiError, KmaApiHubError, WeatherService, AwsService, kma-api.adapter, kma-apihub.adapter, latLngToKmaGrid, LCC 격자, nx-ny, base_time, 발표 슬롯 캐시, NO_DATA 폴백, DATA_GO_KR_API_KEY, KMA_API_KEY, KMA_APIHUB_KEY, weatherRegions, WEATHER_PLACES, 구·군 지점, regId, tmFc, WeatherPage, WeatherNowHero, WeatherMeteogram, WeatherDailyStrip, WeatherSeaSection, MyLocationChip, MyLocationCard, useWeather, useWeatherNowcast, useWeatherAws, useMyLocationGlance, mergeDailyRows, weatherUpstreamMessage, weatherGlyph, 내 위치, 상단바 알약, 홈 내 위치 카드, 바다, /sea, SeaPage, 국립해양조사원, KHOA, 생활해양예보지수, 물때, 이안류, 해상 두 곳, 중기해상 vs 바다, 사이드바 14항목, kmaTodayIsoDate, dateLabel 공용, route summary, 한국어 summary]
+aliases: [날씨, weather, 기상청, KMA, kma-api, 단기예보, 중기예보, VilageFcstInfoService, MidFcstInfoService, 15084084, 15059468, getUltraSrtNcst, getUltraSrtFcst, getVilageFcst, getFcstVersion, getMidFcst, getMidLandFcst, getMidTa, getMidSeaFcst, 초단기실황, 초단기예보, 중기전망, 중기해상예보, 기상청 API허브, apihub, AWS, 방재기상관측, nph-aws2_min, stn_inf, KmaApiError, KmaApiHubError, WeatherService, AwsService, kma-api.adapter, kma-apihub.adapter, latLngToKmaGrid, LCC 격자, nx-ny, base_time, 발표 슬롯 캐시, NO_DATA 폴백, DATA_GO_KR_API_KEY, KMA_API_KEY, KMA_APIHUB_KEY, weatherRegions, WEATHER_PLACES, 구·군 지점, regId, tmFc, WeatherPage, WeatherNowHero, WeatherMeteogram, WeatherDailyStrip, WeatherSeaSection, MyLocationChip, MyLocationCard, useWeather, useWeatherNowcast, useWeatherAws, useMyLocationGlance, mergeDailyRows, weatherUpstreamMessage, weatherGlyph, 내 위치, 상단바 알약, 홈 내 위치 카드, 바다, /sea, SeaPage, 국립해양조사원, KHOA, 생활해양예보지수, 물때, 이안류, 해상 두 곳, 중기해상 vs 바다, 사이드바 14항목, kmaTodayIsoDate, dateLabel 공용, route summary, 한국어 summary, kmaYmdAddDays, 월말 넘김, 중기 기온 날짜 테스트, bdad4c2]
 ---
 
 # weather — 기상청 단기·중기예보 + API허브 AWS 관측 보강 날씨 (웹 `/weather` · 앱 `/weather` · 저장한 내 위치 글랜스)
+
+**2026-09-25~10-04 변경 흡수 — 테스트 한 줄만, 동작 변경 없음(`bdad4c2`)**: (1) [weather.test.ts](../../apps/friendly/src/modules/weather/weather.test.ts) 의 `weather routes` 중기 기온 검증이 첫날 날짜를 "발표일(`tmFc`)의 일 + 4" 를 문자열로 이어 붙여 기대하고 있어, 실행일이 27일 이후면 `2026-09-31` 같은 **없는 날짜**를 기대하고 실패했다 — 서비스는 [weather.service.ts](../../apps/friendly/src/modules/weather/weather.service.ts) 가 `@repo/utils` 의 `kmaYmdAddDays(tmFcDate, d)` 로 다음 달로 넘기므로 틀린 쪽은 테스트였다. 기대값을 `Date.UTC(년, 월-1, 일+4)` → `toISOString().slice(0,10)` 로 계산하게 고쳤다(2026-09-26). (2) 커밋 본문: 8월 24일 워크트리(`claude/nice-shtern-d1fea6`)에 커밋되지 않고 남아 있던 수정을 브랜치 정리 때 옮겼다 — 그 사이 main 에선 월말(발표일 + 4 가 그달 일수를 넘는 날)마다 friendly 전체 테스트가 이 한 건으로 실패할 수 있었다. 검증은 스키마만 만든 임시 DB 로 `weather.test` 15건. 라우트·서비스·계약·웹·앱은 이번 범위에 변경이 없다.
 
 **2026-09-24~09-26 변경 흡수 — 형제 페이지 `/sea`(바다)가 사이드바 날씨 바로 다음에, 날씨 라우트 6개엔 외부 문서용 한국어 summary(`4a2bff1`·`1b621c4`)**: 날씨 모듈의 동작 변경은 0 — [weather.route.ts](../../apps/friendly/src/modules/weather/weather.route.ts) 6개 GET 에 `summary`(+ `description` 4개: aws·nowcast·forecast·mid)만 붙어 [docs/api/endpoints.md](../../docs/api/endpoints.md) weather 절(6개, 전부 공개·60/분)로 외부에 노출된다(`1b621c4`, 2026-09-24, → [api-docs](api-docs.md)). 같은 날 `4a2bff1` 로 [SeaPage](../../apps/web/src/routes/SeaPage.tsx)(`/sea`, 메뉴 '바다')가 [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx)·[PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx) NAV 에서 '날씨' 바로 다음에 들어왔고, 이튿날 `2ff2c31` 로 '주차'가 대중교통 다음에 끼어 NAV 는 14항목 `홈·맛집·대중교통·주차·일상지도·집값·여행·날씨·바다·대기질·타로·사주(C)·사주(G)·식단` 이 됐다. 바다는 날씨의 해상 중기예보(`/weather?sea=` — 기상청 `getMidSeaFcst`, 12 해역 D+4~D+10 날씨·파고)와 **원천·단위·용도가 다른 별개 페이지**다: 국립해양조사원(KHOA) 생활해양예보지수 6종(해수욕·서핑·바다낚시·갯벌체험·바다갈라짐·바다여행)의 **지점별 7일 오전/오후 5단계 활동 지수** + 가까운 조석 예보지점의 만조·간조(물때) + 이안류(6~9월) — 레저 활동 적합도이지 해상 날씨가 아니다. 두 화면은 서로 링크하지 않는다. 공유하는 건 공용 키 `DATA_GO_KR_API_KEY`(데이터셋 8건 활용신청은 따로), 레이트리밋 등급 `RATE.transitRealtime`, utils 날짜 헬퍼(`kmaTodayIsoDate`·[dateLabel.ts](../../packages/utils/src/dateLabel.ts))뿐이고, 캐시·쿼터 카운터·"내 위치" 저장소는 공유하지 않는다(바다는 GPS 버튼만). 세부는 [sea](sea.md).
 
@@ -180,13 +182,14 @@ shared 훅(React Query, `placeholderData` 로 지점 전환 시 이전 화면 �
 - **`placeholderData` 분기** — 지점 전환 중 이전 자료가 남아 있으므로 에러 표시는 `isError && (!data || isPlaceholderData)` 로 가른다(웹·앱 동일). jsdom 엔 `ResizeObserver` 가 없어 메테오그램 테스트는 스텁을 심는다.
 - **낮/밤 아이콘은 06~19시 근사** — 일출·일몰 API 미연동([weatherIcons.tsx](../../apps/web/src/components/weather/weatherIcons.tsx)·[weatherGlyph.ts](../../apps/mobile/src/lib/weatherGlyph.ts) 주석). 프로브 주석에 남은 미사용 후보: API허브 `awsh.php`(AWS 시간자료)·`kma_sfctm2.php`(ASOS 시간자료).
 - **앱은 URL 동기화가 없다** — 딥링크 `p`/`ll` 은 초기값뿐, 이후 선택은 화면 상태. 홈 카드 탭은 파라미터 없이 `/weather` 로 가고 화면이 `auto` 로 저장 위치를 해석한다(저장 위치가 서버에서 늦게 오면 잠깐 서울로 보였다가 바뀔 수 있다).
+- **(2026-09-26 `bdad4c2`) 날짜 기대값을 문자열 덧셈으로 만들지 말 것** — 중기 D+n 날짜는 `kmaYmdAddDays` 가 월말을 넘기는데, 테스트가 `tmFc` 의 일에 4 를 더해 `YYYY-MM-(DD+4)` 로 만들면 실행일이 27일 이후일 때만 실패한다(실행 시각 의존 — 평소엔 녹색이라 놓치기 쉽다). 이제 `Date.UTC` 로 계산한다. 날짜가 실행 시각에서 파생되는 다른 테스트(발표 슬롯·`tmFc`)도 같은 함정을 조심.
 - **테스트 규모** — friendly `weather.test.ts` 15건(라우트 8 + 서비스 슬롯 폴백·TTL·stale·in-flight·쿼터 6 + `foldForecastDays` 1) + `aws.test.ts` 9건(파서 2 + 라우트 3 + 서비스 4), utils `weather.test.ts` 37건(격자 12 + 발표 시각 7 + 강수 문자열 9 + 바람·상태 4 + 지점표 5), 웹 `WeatherPage.test.tsx` 6건(MSW — 503 케이스의 픽스처 메시지가 `DATA_GO_KR_API_KEY 가 설정되지 않아` 로 바뀌었다, `3d9dfed`) + `MyLocationChip.test.tsx` 4건. 앱 화면 테스트는 없다.
 
 ## Sources [coverage: high — 81 sources]
 
 - [apps/friendly/src/modules/weather/weather.route.ts](../../apps/friendly/src/modules/weather/weather.route.ts) — 6 GET 에 한국어 summary + description 4(`1b621c4`, 동작 무변경)
 - [apps/friendly/src/modules/weather/weather.service.ts](../../apps/friendly/src/modules/weather/weather.service.ts)
-- [apps/friendly/src/modules/weather/weather.test.ts](../../apps/friendly/src/modules/weather/weather.test.ts) — 15건
+- [apps/friendly/src/modules/weather/weather.test.ts](../../apps/friendly/src/modules/weather/weather.test.ts) — 15건(`bdad4c2` 중기 기온 첫날 날짜 기대값을 `Date.UTC` 로 — 월말 넘김)
 - [apps/friendly/src/modules/weather/kma-api.adapter.ts](../../apps/friendly/src/modules/weather/kma-api.adapter.ts)
 - [apps/friendly/src/modules/weather/kma-apihub.adapter.ts](../../apps/friendly/src/modules/weather/kma-apihub.adapter.ts)
 - [apps/friendly/src/modules/weather/aws.service.ts](../../apps/friendly/src/modules/weather/aws.service.ts)

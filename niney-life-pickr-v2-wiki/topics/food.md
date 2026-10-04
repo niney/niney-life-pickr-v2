@@ -1,12 +1,14 @@
 ---
 topic: food
-last_compiled: 2026-09-07
-sources_count: 89
+last_compiled: 2026-10-04
+sources_count: 101
 status: active
-aliases: [음식, 음식카탈로그, food-catalog, FoodItem, food-import, 음식적재, food-classify, nutrition, 영양정보, allergen, 알레르기, source-observation, merge-conflict, reverse-restaurant, 파는곳, recognition-quality, foodRestaurantEvidenceScore, status:food-catalog, food_catalog_data, load-food-catalog, data/open/food, mfds-nutrition.csv, hansik-800.xlsx, DATA_GO_KR_API_KEY, 메뉴칼로리, 메뉴-칼로리-판정-엔진, menu-nutrition, MenuNutritionEngine, MenuNutritionService, kcalPer100g, per_serving, per_100g, components, portion, menu-lexicon, MenuLexicon, 어휘-DB, menu-llm-match, MenuLlmMatch, menu-llm-decompose, partsEstimated, llmPending, food-web-estimate, FoodWebEstimate, fatsecret, 웹-실측, mfds-raw, 원재료성식품, curated, 큐레이션-주류표, 골든셋, measure:menu-golden, probe:menu-coverage, fetch:mfds-nutrition, OLLAMA_MENU_MATCH_MODEL, MenuKcalChip, useRestaurantPublicMenuNutrition, getPublicMenuNames, 칼로리-칩]
+aliases: [음식, 음식카탈로그, food-catalog, FoodItem, food-import, 음식적재, food-classify, nutrition, 영양정보, allergen, 알레르기, source-observation, merge-conflict, reverse-restaurant, 파는곳, recognition-quality, foodRestaurantEvidenceScore, status:food-catalog, food_catalog_data, load-food-catalog, data/open/food, mfds-nutrition.csv, hansik-800.xlsx, DATA_GO_KR_API_KEY, 메뉴칼로리, 메뉴-칼로리-판정-엔진, menu-nutrition, MenuNutritionEngine, MenuNutritionService, kcalPer100g, per_serving, per_100g, components, portion, menu-lexicon, MenuLexicon, 어휘-DB, menu-llm-match, MenuLlmMatch, menu-llm-decompose, partsEstimated, llmPending, food-web-estimate, FoodWebEstimate, fatsecret, 웹-실측, mfds-raw, 원재료성식품, curated, 큐레이션-주류표, 골든셋, measure:menu-golden, probe:menu-coverage, fetch:mfds-nutrition, OLLAMA_MENU_MATCH_MODEL, MenuKcalChip, useRestaurantPublicMenuNutrition, getPublicMenuNames, 칼로리-칩, food-serving, mealServingNutrition, 식단-1인분, 통상-1인분, typical_portion, 식품중량, kcalPer100gOf, BASE_SERVING_G, foodPortionGrams, 음식명-portion, 1인분-기준-중량, getServingRow, servingLexicon, 시리얼-40g, foodNameVariants, FOOD_NAME_SYNONYMS, 표기-변형, 둣국-두국, 크루아상-크로와상, MFDS_REP_NAME_OVERRIDES, mfdsCatalogName, 대표식품명-보정, 삶은-달걀, 돼지-부속고기, 수조어육류, fix:food-labels, fix-food-catalog-labels, guessCuisineFromName, KOREAN_DISH_FORM_END, 분식-한식-보정, nutrientsPer100gJson, food-nutrients, 비타민·무기질, pickNutrientsPer100g, MFDS_NUTRIENT_API_FIELD, MFDS_NUTRIENT_CSV_HEADER, looseHeader, backfillBorrowedNutrients, CURATED_NUTRIENTS_LIKE, allergensInFoodName, ALLERGEN_NAME_KEYWORDS, 이름-알레르기-단서]
 ---
 
 # food — 음식 카탈로그·출처 감사·식당 역검색·메뉴 칼로리 판정 엔진
+
+**2026-09-25~10-04 변경 흡수 — 식단 1인분 규칙 `food-serving`(`9019cf5`·`2aaaa7e`)·대표식품명/회 분류 보정(`e4ce0e6`)·분식 계통·흔한 표기·시리얼 1인분(`95ec0cd`)·이름 알레르기 단서(`e3afe9c`)·100g당 비타민·무기질(`3d067a0`)**: 식단(meal)·끼니 추천·영양소 점검이 카탈로그를 직접 소비하면서 드러난 공백을 카탈로그 쪽에서 메웠다. 공통 원칙은 **식약처 원본은 고치지 않고 우리 쪽 보정층(규칙·보정표·어휘)을 두며, 이미 적재된 행은 소급 스크립트로 맞춘다**는 것이다. (1) `9019cf5`(2026-10-02): 저녁 기록의 제육볶음이 151kcal 로 남은 원인은 카탈로그 1인분이 식약처 '식품중량'(외식 행 100ml — 분석 시료·급식 1회 제공량)을 그대로 쓴 값이어서였다. 메뉴 칼로리 엔진은 이미 "100g 이하는 1인분 아님" 이라 같은 음식이 메뉴 탭 378kcal·식단 151kcal 였다. 신규 순수 함수 [food-serving.ts](../../apps/friendly/src/modules/food/food-serving.ts) `mealServingNutrition` 이 **어휘 portion 음식명 지정 > 카탈로그 1인분(`servingG > 100`) > 주식이면 종류별 통상 1인분 × 100g당(근거값 `typical_portion` 신설, `nutritionFrom` "볶음 통상 1인분 250g") > 반찬·통상 중량 모름은 카탈로그 그대로** 순으로 한 끼 1인분을 정하고, 식단 저장(`MealService`)·`backfill:meal-nutrition`·끼니 추천 건강 판정·영양소 점검이 모두 이 함수를 쓴다. 어휘 `portion` 의 말(term)로 **카탈로그 음식명**도 받게 되어(띄어쓰기 무관, 오타는 400) 메뉴 칼로리 엔진도 음식명 지정이 있으면 그 중량을 `per_serving` 으로 쓴다. `FoodService.getNutrition` → `getServingRow`(판정용 행) + `servingLexicon()`(10분 캐시). 마이그레이션 없음(근거값은 문자열 열), 운영은 `backfill:meal-nutrition --dry-run --refresh` → `--refresh`. 골든셋 정밀도 99.5%(388/390) 그대로. `2aaaa7e`(10-04)가 100g당 열량 역산을 `kcalPer100gOf` 로 export 했다(추천 건강 점수·영양소 점검이 같이 씀). (2) `e4ce0e6`: 끼니 추천에 "돼지고기"·"달걀"이 재료처럼 떴다 — 식약처 묶음의 대표식품명이 재료명이라서(찜류 '돼지고기' = 허파·간·머리고기, '달걀' = 삶은 달걀). 적재 정규화에 보정표 `MFDS_REP_NAME_OVERRIDES`(`분류키|대표식품명` → 이름)·`mfdsCatalogName` 을 두고, [foodTaxonomy.ts](../../packages/utils/src/foodTaxonomy.ts) `MFDS_CATEGORY_TO_DISH_TYPE` 에서 `수조어육류 → raw_fish` 매핑을 뺐다(삶은 달걀·소시지·대구포까지 회가 되던 것). 소급은 신규 [fix-food-catalog-labels.ts](../../apps/friendly/scripts/fix-food-catalog-labels.ts)(`fix:food-labels [--dry-run]`, 어드민 편집 경로 `adminUpdate`, 멱등, dev 4행). (3) `95ec0cd`: 직접 적은 식단 41끼 중 15개 음식이 표기 차이로 영양이 비었고, 어묵 매운탕·순대국이 '분식·패스트푸드'로 떠 골고루 계산이 틀어졌으며, 시리얼은 빵류 통상 1인분(100g)으로 환산돼 한 그릇 445kcal 였다. `guessCuisineFromName` 이 분식 단어가 걸려도 이름이 한식 요리형(`탕|찌개|전골|국|국밥|찜|조림|볶음|구이|무침|나물|전`)으로 끝나면 한식, `fix:food-labels` ③이 소급(dev 14행). `FoodService.matchFood` 가 정확·별칭 다음에 **표기 변형**(메뉴 어휘 `synonymPairs` + 새 쌍 `둣국↔두국`·`크루아상↔크로와상`)과 식단 전용 다른 이름 표 `FOOD_NAME_SYNONYMS`(동그랑땡=완자전·치킨무·요거트·콘푸레이크·후라이드치킨=닭튀김·쿠키)를 본다(15개 중 9개 매칭). 기본 어휘 `portionGrams` 에 음식명 지정 `시리얼: 40`(445 → 178kcal). (4) `e3afe9c`: [food-allergen.ts](../../apps/friendly/src/modules/food/food-allergen.ts) `allergensInFoodName` — 재료 단어 + 이름 전용 단어(만두·빵·돈가스·게장·제육·불고기…, 굴비 예외)로 음식명의 알레르겐 가능성을 보되 **추천 후보에서 보수적으로 빼는 데만** 쓰고 카탈로그 메타·화면 경고에는 쓰지 않는다(dev 1,266행 중 재료 근거 있는 행 0 이라 깐풍새우가 새우 알레르기 사용자에게 추천됐다). (5) `3d067a0`: 식약처 음식 표준데이터의 100g당 비타민·무기질 13종을 `FoodItem.nutrientsPer100gJson`(마이그레이션 `20261004060205_add_meal_nutrition`)에 싣는다 — 신규 [food-nutrients.ts](../../apps/friendly/src/modules/food/food-nutrients.ts)(키·API/CSV 열 매핑·`pickNutrientsPer100g` 이름이 같은 층부터 영양소별 0 보다 큰 첫 값), 적재 `looseHeader`(BOM·공백·㎍ 표기 흡수), 영양을 빌릴 때 같은 donor 에서 함께 복사, 기존 빌린 행·`공기밥`(=쌀밥, `CURATED_NUTRIENTS_LIKE`)은 `backfillBorrowedNutrients`(`load:food-catalog --backfill-nutrition`). dev 1,236/1,236. 소비처는 신설 토픽 [meal-nutrition](meal-nutrition.md).
 
 **2026-09-02 변경 흡수 — 메뉴 칼로리 판정 엔진(`0d2584a`…`4d159a5`, 12커밋)·data.go.kr 키 통일(`3d9dfed`)·메뉴 썸네일 프록시(`0997a69`)**: 맛집 상세 > 메뉴 탭에 칼로리 칩을 붙이기 위해 카탈로그가 "메뉴명 → 칼로리 판정" 의 마스터가 됐다. (1) `food_items.kcalPer100g` 컬럼(원본이 100g 기준이라 1인분 중량이 없는 행도 값을 갖는다) + 식약처 **원재료성식품**(15100065, `mfds-raw` 855종 — 생고기 부위·수산물·건어물, 100g당만) + 코드 내장 **큐레이션 표**(`curated`, 주류·음료·공기밥)로 카탈로그를 넓혔다. (2) [engine/](../../apps/friendly/src/modules/food/engine/)의 순수·동기 판정기가 메뉴명(`[대표] 통갈비살 900g-기본/양념`)을 전처리해 캐스케이드 exact/alias → synonym → modifier → variant → suffix → hint 로 카탈로그 메모리 인덱스에 대고 **1인분 / 100g당 / 미표시** 3등급을 보수적으로 정한다. 규칙(코드)과 어휘(데이터, `menu_lexicon` 어드민 편집)를 분리했다. (3) 규칙 밖 이름은 LLM(`OLLAMA_MENU_MATCH_MODEL`, 기본 gemma4:31b)이 후보 15개 중 제약 선택 + 자유형 표준명으로 카탈로그에 연결하고, LLM 도 못 찾은 음식은 fatsecret.kr 검색 페이지의 복수 항목 중앙값으로 100g당을 추정한다 — 셋 다 **어휘 단위 영구 캐시**(부정 결과 포함)라 비용이 식당 수가 아니라 어휘 수에 비례한다. (4) 결합 기호 세트(A+B)는 엔진이 구성요소로 나누고, 구성이 이름에 없는 세트("모듬회")는 LLM 이 구성을 추정(`partsEstimated`)하되 숫자는 만들지 않는다. (5) 골든셋 444건 정밀도 99.5%(기준선 97.6%)·분해 골든셋 37건 93.8%가 회귀 게이트다. (6) 웹·앱 MenuGrid 가 같은 훅으로 칩을 그린다(카탈로그=호박색·웹 실측=하늘색·세트=보라색, 통상 1인분 환산은 테두리 칩). 규칙 문서는 [docs/menu-calorie-engine.md](../../docs/menu-calorie-engine.md). 영양성분 API 키는 `FOOD_API_KEY || BUS_API_KEY` 폴백을 없애고 `DATA_GO_KR_API_KEY` 하나로 바뀌었다(호환 별칭 없음 — 운영 `.env` 이름 변경 필수).
 
@@ -14,34 +16,38 @@ aliases: [음식, 음식카탈로그, food-catalog, FoodItem, food-import, 음�
 
 **2026-08-22~24 신설·확장**: [meal](meal.md)의 검색·인식 교정·영양·알레르기 근거·추천 후보를 받치는 마스터 데이터 도메인이다. 여러 공공/내부 source를 하나의 정규화 카탈로그로 합치되, 필드별 관측값과 충돌을 보존해 대표값의 출처와 운영 결정을 추적한다.
 
-## Purpose [coverage: high — 16 sources]
+## Purpose [coverage: high — 20 sources]
 
-- 음식 이름·별칭을 검색하고 사진 인식 결과를 `FoodItem`에 exact/alias/fuzzy 단계로 연결한다.
-- 조리 형태 19종, 주재료 13종, 요리 계통 7종, 재료·1인분 영양·**100g당 열량**·알레르기 슬롯·출처를 한 카탈로그에 모은다.
+- 음식 이름·별칭을 검색하고 사진 인식 결과를 `FoodItem`에 exact/alias/fuzzy 단계로 연결한다. 2026-10 부터 정확·별칭 다음에 **표기 변형·다른 이름**(계란말이 → 달걀말이, 동그랑땡 → 완자전)도 본다.
+- 조리 형태 19종, 주재료 13종, 요리 계통 7종, 재료·1인분 영양·**100g당 열량**·**100g당 비타민·무기질 13종**(2026-10-04)·알레르기 슬롯·출처를 한 카탈로그에 모은다.
+- **식단 기록의 한 끼 1인분**을 정한다(2026-10-02, `food-serving`) — 식약처 '식품중량'은 한 끼 양이 아니므로 원본은 두고 어휘 지정·통상 1인분으로 환산한다. 식단 저장·스냅샷 백필·끼니 추천·영양소 점검이 같은 함수를 쓴다([meal](meal.md)·[meal-nutrition](meal-nutrition.md)).
 - 식약처 영양 표준데이터(음식 15100070·**원재료성식품 15100065**), 식품안전나라·농림 레시피, global menu canonical, 한식 800선, **코드 내장 큐레이션 표(주류·음료·공기밥)**, 수동 자료를 적재한다.
 - 같은 음식에 서로 다른 source 값이 들어오면 값을 조용히 잃지 않고 field-level observation과 검토 가능한 conflict를 남긴다.
 - 음식에서 역으로 메뉴·리뷰 근거가 있는 식당을 찾는다. 이는 현재 판매 보장이 아니라 수집된 evidence 검색이다.
 - **맛집 상세 메뉴 탭의 칼로리 칩**을 만든다 — 크롤 메뉴명을 카탈로그에 대어 1인분/100g당/구성(세트)으로 판정하고, 규칙 밖 이름은 LLM 매칭 → 웹 실측 추정 → LLM 세트 분해로 채운다. 애매하면 항목을 뺀다(틀린 칼로리는 없는 것보다 나쁘다). 소비처는 [web](web.md)·[mobile](mobile.md)의 MenuGrid 와 [friendly](friendly.md) restaurant 모듈의 공개 엔드포인트.
 - 어드민은 카탈로그·영양 coverage·source observation/conflict·적재·사진 인식 품질·**메뉴 판정 어휘**를 함께 운영한다.
 
-## Architecture [coverage: high — 31 sources]
+## Architecture [coverage: high — 38 sources]
 
 ### 카탈로그(기존)
 
 | 구성 | 책임 |
 |---|---|
 | `food.ts` 계약 + `Routes.Food` | taxonomy, 검색, allergen/evidence, observation/conflict, import·SSE DTO의 Zod SSOT. `FoodItem.kcalPer100g`·`FoodSource` 에 `mfds-raw`·`curated`(2026-09-02) |
-| `FoodService` | 활성 음식 검색, exact/alias/fuzzy match(`FoodMatch` 에 `servingG`·`kcalPer100g` 추가), 음식→식당 역검색, 어드민 CRUD·통계 |
-| `FoodImportService` | source fetch → normalize → batch fold → `nameNorm` merge/upsert → observation/conflict 기록 → 선택적 classify. 시드의 `kcalPer100g` 는 1인분 영양과 독립적으로 채운다(기존 값 있으면 `refreshNutrition` 때만 덮음) |
+| `FoodService` | 활성 음식 검색, exact/alias/fuzzy match(`FoodMatch` 에 `servingG`·`kcalPer100g`, 2026-10-02 `source`·`sourceCategory` 추가), 음식→식당 역검색, 어드민 CRUD·통계. 2026-10: `getServingRow(foodId)`(1인분 판정용 행 — 이전 `getNutrition`)·`servingLexicon()`(코드 기본 + 어드민 어휘, 10분 캐시 — 메뉴 엔진 인덱스 주기와 같음)·`matchFood` 의 표기 변형 단계(`foodNameVariants` — `synonymVariants` + `FOOD_NAME_SYNONYMS`, 변형마다 nameNorm → 별칭(인기도순) 조회, 점수 0.95·`matchedBy:'alias'`) |
+| `FoodImportService` | source fetch → normalize → batch fold → `nameNorm` merge/upsert → observation/conflict 기록 → 선택적 classify. 시드의 `kcalPer100g` 는 1인분 영양과 독립적으로 채운다(기존 값 있으면 `refreshNutrition` 때만 덮음). 2026-10-04: 시드 이름은 `mfdsCatalogName(category, repName)`(보정표 `MFDS_REP_NAME_OVERRIDES` — `찜류\|돼지고기` → "돼지 부속고기(허파·간·머리고기)", `수조어육류\|달걀` → "삶은 달걀"; `repName` 은 원본 유지), 묶음 변형마다 `nutrientVariants` 를 모아 `pickNutrientsPer100g` 로 `nutrientsPer100g` 시드(빈 행만, `refreshNutrition` 이면 덮음), CSV 머리글은 `looseHeader` 로 BOM·공백·`㎍`/`µ` 표기 무시 |
+| `food-serving.ts`(2026-10-02) | 순수 함수 `mealServingNutrition(row, {isMain}, lex)` → 양 배수 곱하기 전 한 끼 1인분 `{kcal, proteinG, sodiumMg, nutritionFrom, basis}`. 순서: `nutritionFrom`(빌린 영양)이면 카탈로그 그대로(`donor_estimate`) → 어휘 portion 음식명 지정(`foodPortionGrams`) × 100g당(`direct`) → `servingG > BASE_SERVING_G(100)` 이면 카탈로그(`kcal` 없으면 100g당 × servingG) → 주식(`isMain`)이고 `portionKeyFor` 의 통상 중량이 있으면 `typical_portion`("{종류 라벨} 통상 1인분 {g}g") → 그 밖 카탈로그. 단백질·나트륨 100g당은 카탈로그 1인분 중량이 있을 때만 역산. `kcalPer100gOf(row)`(2026-10-04 export) = `kcalPer100g ?? kcal×100/servingG` |
+| `food-nutrients.ts`(2026-10-04) | `NUTRIENT_KEYS` 13(`fiberG·calciumMg·ironMg·phosphorusMg·potassiumMg·vitaminAUg·vitaminDUg·thiaminMg·riboflavinMg·niacinMg·vitaminCMg·cholesterolMg·saturatedFatG`), 표준데이터 API 열 `MFDS_NUTRIENT_API_FIELD`·배포 CSV 머리글 `MFDS_NUTRIENT_CSV_HEADER`, `pickNutrientsPer100g`(priority 백의 자리 tier 별, tier 0 = 대표식품과 이름이 같은 변형이 그 영양소를 적었으면 그 안에서만, 0 보다 큰 첫 값·모두 0 이면 0)·`parseNutrientsPer100g`·`serializeNutrientsPer100g`(값 없으면 null) |
 | `food-raw-import.ts` | 원재료성식품 표준데이터(15100065) CSV → `mfds-raw` 시드. `_` 구분 식품명("소고기_한우(1+등급)_갈비(안창살)_생것")을 동물+부위로 짓고 등급은 중앙값, 식당 관행 별칭(`CUT_ALIASES`·`SEA_ALIASES`·`DRIED`) 부여. `servingG` null → 항상 100g당 등급 |
-| `food-curated-seeds.ts` | 공공 데이터가 비워 두는 메뉴판 단골(소주·맥주·콜라·공기밥) 32행을 제조사 표기(100ml당) 근사값 + 브랜드 별칭으로. 병·잔 용량이 있는 것만 `servingG` 를 채워 1인분 등급이 된다 |
+| `food-curated-seeds.ts` | 공공 데이터가 비워 두는 메뉴판 단골(소주·맥주·콜라·공기밥) 32행을 제조사 표기(100ml당) 근사값 + 브랜드 별칭으로. 병·잔 용량이 있는 것만 `servingG` 를 채워 1인분 등급이 된다. 2026-10-04 `CURATED_NUTRIENTS_LIKE = { 공기밥: '쌀밥' }` — 비타민·무기질을 같은 음식의 식약처 행에서 빌려 올 큐레이션 행(주류·음료는 영양소 점검이 0 으로 본다) |
 | `food-source-audit.ts` | 문자열/배열/숫자 canonical JSON, field-level source observation 수집·동일 증거 dedupe |
 | `FoodMergeConflictService` | open queue, optimistic baseline 확인, keep/accept/dismiss, accept 뒤 다른 대안 rebase |
 | `food-api.adapter.ts` | 외부 API pagination과 응답 형태 정규화; 15100070 실제 봉투가 문서와 달리 `response` 래퍼 없이 최상위 `header/body` 라 둘 다 받는다(2026-09-02 실측) |
 | `foodImportRegistry` + `scheduleRegistry` | 단일 in-flight, phase/stat, cron timer, SSE subscriber의 process singleton |
 | `FoodClassifyService` | 미분류/구버전 행을 chat LLM으로 세 축 분류하고 enum 재검증 |
-| `FoodNutritionService` | 영양이 빈 일반 음식에 좁은 donor를 골라 추정값과 `nutritionFrom` 기록(`kcalPer100g` 도 donor 에서 복사). `CATEGORY_WORDS` 를 export 해 엔진 어휘의 `suffixBlock` 기본값으로 쓴다 |
-| `food-allergen.ts` | 공개 재료 문자열만으로 19종을 결정적으로 추론하고 `unknown|inferred|verified` 상태·근거를 직렬화; 운영자 검수 보존 백필 |
+| `FoodNutritionService` | 영양이 빈 일반 음식에 좁은 donor를 골라 추정값과 `nutritionFrom` 기록(`kcalPer100g` 도 donor 에서 복사, 2026-10-04 부터 `nutrientsPer100gJson` 도 같은 donor 에서). `CATEGORY_WORDS` 를 export 해 엔진 어휘의 `suffixBlock` 기본값으로 쓴다. `backfillBorrowedNutrients`(2026-10-04): 비타민·무기질이 빈 빌린 행(`nutritionFrom`)·`CURATED_NUTRIENTS_LIKE` 행에 `nutritionFrom` 이름(" 외 N종 중앙값" 꼬리 제거)의 donor → 없으면 `pickNutritionDonor` 로 다시 골라 복사 |
+| `food-allergen.ts` | 공개 재료 문자열만으로 19종을 결정적으로 추론하고 `unknown|inferred|verified` 상태·근거를 직렬화; 운영자 검수 보존 백필. 2026-10-04 `allergensInFoodName(name)` — `ALLERGEN_NAME_KEYWORDS`(재료 단어 + 이름 전용: egg 오므라이스·에그, milk 크림·라떼·까르보나라, wheat 만두·빵·피자·돈가스·짜장면·짬뽕·수제비, crab 게장·게맛살·게찜, pork 제육·족발·보쌈·순대·탕수육·동그랑땡·감자탕, beef 불고기·육회·육개장·갈비탕·설렁탕… ) + 예외(`굴비` 는 조개류 아님). **추천 후보 제외 전용** — 카탈로그 메타로 저장하지 않는다 |
+| `fix-food-catalog-labels.ts`(2026-10-04, `fix:food-labels`) | 적재 규칙 수정을 이미 적재된 행에 소급: ① `mfds-nutrition` 행 중 이름이 아직 `repName` 그대로인 보정 대상 → 보정 이름 ② `수조어육류` 인데 `raw_fish` 이고 이름이 회가 아닌 행 → 조리형태 비움 ③ `cuisine fast_food` 인데 `guessCuisineFromName` 이 한식인 행(curated 제외) → 한식. `FoodService.adminUpdate` 경로라 이름 정규화·별칭이 맞춰지고 멱등 |
 | `FoodRecognitionQualityService` | recognition lineage와 최종 meal item을 비교한 confidence/version별 aggregate |
 | `AdminFoodPage` | 검색·필터·수정, nutrition/allergen coverage와 검수, observation/conflict 해결, import와 인식 품질 UI, **메뉴 칼로리 판정 어휘 섹션**(종류 select + term/target/note, 목록·삭제) |
 | `food-catalog-status.ts` + `deploy.sh` `food_catalog_data` | 배포 시 카탈로그 종수 점검 → 비어 있으면 배포본 첫 적재(+LLM 분류·영양 보강·식단 스냅샷 채움), 케이스 7 강제 재적재(2026-08-23) |
@@ -56,16 +62,16 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 
 | 파일 | 역할 |
 |---|---|
-| `lexicon.ts` | 어휘 구조 `LexiconSource`(앞 수식어·동의어 쌍·세트어·옵션어·접미 제외 범주어·부위 접미 `구이`·조리 접미(떼서 원재료)·수량어 한판/반판·추가 별칭·양 수식어 미니/점보·종류별 통상 1인분 중량표 `portionGrams`)와 코드 기본값 `DEFAULT_LEXICON_SOURCE`. `compileLexicon` 이 정규화·긴 것부터 정렬 |
-| `lexicon-db.ts` | `menu_lexicon` 활성 행(kind 10종: modifier·size·synonym·set·option·suffix_block·raw_suffix·quantifier·alias·portion)을 기본 어휘 위에 얹는 `mergeLexiconRows`(순수) + `loadLexicon(prisma)` |
+| `lexicon.ts` | 어휘 구조 `LexiconSource`(앞 수식어·동의어 쌍·세트어·옵션어·접미 제외 범주어·부위 접미 `구이`·조리 접미(떼서 원재료)·수량어 한판/반판·추가 별칭·양 수식어 미니/점보·종류별 통상 1인분 중량표 `portionGrams`)와 코드 기본값 `DEFAULT_LEXICON_SOURCE`. `compileLexicon` 이 정규화·긴 것부터 정렬. 2026-10-04 동의어 쌍 `둣국↔두국`·`크루아상↔크로와상`, `portionGrams` 에 첫 음식명 지정 `시리얼: 40`(빵류 100g 환산이면 한 그릇 445kcal) |
+| `lexicon-db.ts` | `menu_lexicon` 활성 행(kind 10종: modifier·size·synonym·set·option·suffix_block·raw_suffix·quantifier·alias·portion)을 기본 어휘 위에 얹는 `mergeLexiconRows`(순수) + `loadLexicon(prisma)`. 2026-10-02: `portion` 의 term 은 종류 키(dishType·raw_meat·raw_seafood) **또는 카탈로그 음식명** — 음식명은 원문과 `normalizeTerm` 정규형 둘 다 키로 둬 띄어쓰기가 달라도 찾힌다 |
 | `parse.ts` | `parseMenuName` — 태그(`[대표]`·BEST·HOT/ICE)·장식(한자·★·"72시간 숙성")·중량(kg→g, l→ml)·인분(`2인분`·`2인이상`·`2인 기준`)·수량(`2개`·`3pcs`)·크기(`(대)`·라지)·등급(`1++`·`100%`)·맛 선택 슬래시(`기본/양념`)·맛 코드 나열(`Y,G,R`)·수량어(한판)·괄호 나열/힌트를 분리. 결과 `cleaned`·`weight`·`isSet`·`setSignal`·`portionAmbiguous`·`hints`·`parts`·`quantifier`. `stripLeadingModifiers`(최대 2개)·`synonymVariants`(양방향) |
 | `catalog-index.ts` | 활성 `FoodItem` 의 메모리 인덱스 — 정규화 이름/별칭 exact 맵(이름이 별칭을 이긴다), 접미 조회(`norm` 이 카탈로그 키로 끝나는 가장 긴 행, 2자까지, `suffixBlock` 제외), 어휘 `extraAliases` 합류. `portionKeyFor`(dishType 또는 raw_meat/raw_seafood) |
-| `resolve.ts` | `matchNorm` 캐스케이드 exact/alias → synonym → modifier(+동의어) → variant(부위+구이 / 조리접미 제거 → 원재료) → suffix(생재료는 육류 부위만) → hint(괄호 안 음식명, 생재료 제외). `decideMenuKcal` 등급 규칙·`computePortion`(그 양/통상 환산). `resolveMenuName` 이 세트·수량어·주메뉴 세트를 처리하고 `trace` 를 남긴다 |
+| `resolve.ts` | `matchNorm` 캐스케이드 exact/alias → synonym → modifier(+동의어) → variant(부위+구이 / 조리접미 제거 → 원재료) → suffix(생재료는 육류 부위만) → hint(괄호 안 음식명, 생재료 제외). `decideMenuKcal` 등급 규칙·`computePortion`(그 양/통상 환산). `resolveMenuName` 이 세트·수량어·주메뉴 세트를 처리하고 `trace` 를 남긴다. 2026-10-02: `BASE_SERVING_G = 100` export(식단 1인분 규칙과 공유), `foodPortionGrams(lex, foodName)`(어휘 음식명 지정 중량, 종류 키는 영문이라 겹치지 않음) — `decideMenuKcal` 은 음식명 지정이 있고 `kcalPer100g` 가 있으면 `per_serving`(kcal = 100g당 × 지정 g), `computePortion` 도 음식명 지정을 카탈로그·통상표보다 먼저(basis `typical`) |
 | `engine.ts` | `MenuNutritionEngine(index, lexicon)` — `resolve`·`resolveMany`(같은 이름 1회)·`replaceIndex`·`replaceLexicon` |
 
-**등급 규칙**(`decideMenuKcal`): 세트 → 미표시. exact/alias/synonym/modifier 매칭이고 중량·인분·크기·수량·양 수식어 표식이 없으며 카탈로그 1인분 kcal 이 있고 `servingG > 100` 이면 `per_serving`. 그 외 `kcalPer100g` 가 있으면 `per_100g`(메뉴명 중량이 ml 이면 `per_100ml`) — variant/hint/suffix/llm/web 은 항상 이 등급. 둘 다 없으면 `no_kcal`. 표준데이터에서 `servingG` 가 100 인 행은 기준량을 그대로 둔 것(돈가스 280kcal)이라 1인분이 아니다.
+**등급 규칙**(`decideMenuKcal`): 세트 → 미표시. exact/alias/synonym/modifier 매칭이고 중량·인분·크기·수량·양 수식어 표식이 없으며 카탈로그 1인분 kcal 이 있고 `servingG > 100` 이면 `per_serving`(2026-10-02 부터 어휘 `portion` 에 그 음식명 지정이 있으면 `servingG` 와 무관하게 `per_serving`, kcal = 100g당 × 지정 g). 그 외 `kcalPer100g` 가 있으면 `per_100g`(메뉴명 중량이 ml 이면 `per_100ml`) — variant/hint/suffix/llm/web 은 항상 이 등급. 둘 다 없으면 `no_kcal`. 표준데이터에서 `servingG` 가 100 인 행은 기준량을 그대로 둔 것(돈가스 280kcal)이라 1인분이 아니다.
 
-**portion**(100g당 항목의 부가 환산, `computePortion`): 메뉴명 중량 ≥30 이면 그 양의 kcal(`stated`, 가정 없음) → 카탈로그 1인분(`servingG > 100` + kcal)이면 그것(`typical`) → 아니면 `portionGrams[portionKey]`(raw_meat 150·noodle 500·soup 500·stew 400·rice 350·beverage 250(ml)·alcohol 360(ml)…, `typical`, ±30% 근사) → 없으면 null.
+**portion**(100g당 항목의 부가 환산, `computePortion`): 메뉴명 중량 ≥30 이면 그 양의 kcal(`stated`, 가정 없음) → (2026-10-02) 어휘 음식명 지정 중량(`typical`) → 카탈로그 1인분(`servingG > 100` + kcal)이면 그것(`typical`) → 아니면 `portionGrams[portionKey]`(raw_meat 150·noodle 500·soup 500·stew 400·rice 350·beverage 250(ml)·alcohol 360(ml)…, `typical`, ±30% 근사) → 없으면 null.
 
 **세트 규칙**(`parse`·`resolve`): 결합 기호(`+ & , /`, 양쪽에 글자)가 세트어보다 먼저 → `parts` 로 구성요소 분해(구성에서 세트어·수량 제거); `N가지` → 세트; 괄호 안 나열(`정식(새우장+양념게장+…)`) 도 구성; 괄호 안 세트어(`(찍먹 세트)`)는 옵션 설명; 세트어는 토큰의 앞·뒤에 붙을 때만("쿄코코스테이크"의 코스는 아님); 주메뉴 하나짜리 세트(`GENERIC_SET_WORDS` 세트·set·정식·런치·런치정식·디너 — "와규꽃살 2인 세트"·"보쌈 정식")는 세트어를 뗀 나머지를 찾아 그 음식의 100g당(`portionAmbiguous` 강제); 수량어(한판·반판)는 뒤 부위를 찾으면 100g당, 못 찾으면 세트.
 
@@ -79,11 +85,11 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 | `menu-llm-match.service.ts` + `.prompts.ts` | `MenuLlmMatchService` — `lookupCached`(캐시만) / `matchMany`(캐시에 없는 이름만, 한 번에 ≤60, 동시 4, 타임아웃 30s, `temperature 0`·JSON schema `format`·`numCtx 4096`). 채택 `decideLlmMatch`: 후보 선택 + `high` → 그 행; 아니면 자유형 `canonical` 이 카탈로그 이름/별칭/동의어와 정확히 같으면 그 행(단 후보를 골랐는데 `low` 면 버림); 그 외 매칭 없음(저장은 한다). 결과는 `menu_llm_matches` 에 `version`(현재 1)과 함께 upsert. 모델은 `aiConfig.getResolved('ollama-cloud','chat')` 키 + `OLLAMA_MENU_MATCH_MODEL` |
 | `menu-llm-decompose.service.ts` | `MenuLlmDecomposeService` — 구성이 이름에 없는 세트("돼지모듬"·"모듬회 대")의 구성 음식명을 같은 모델이 추정(한 번에 ≤30, 동시 3, `numCtx 2048`). `decideDecomposition`: `high` 만, 구성 1~8개, 각 2~15자 문자만, 범주어(`suffixBlock`) 제거. 프롬프트 v3(관용 구성도 high, 메뉴명에 없는 찬·사이드 금지, 이름 자르기 금지). `menu_llm_decompositions` 캐시 |
 | `food-web-estimate.ts` + `.service.ts` | 순수 파서·집계(`parseFatsecretSearch`·`aggregateWebSamples`, 버전 3) + `FoodWebEstimateService`(`lookupCached`/`estimateMany`, 한 번에 ≤15, 1초 간격, 타임아웃 20s, UA `life-pickr/1.0`). fatsecret.kr 검색 결과 한 페이지의 항목("까르보나라 1인분 (260g) 당 - 칼로리: 384kcal … 100 g - 191kcal")을 100g당으로 환산해 **중앙값 ±25% 안에 2건 이상** 일치할 때만(`multi`), 아니면 이름이 질의와 같거나 브랜드 괄호를 뺀 잔여가 3자 이하인 **단독 일반 항목**(`single`)만 채택. 결과 없으면 조리 접미(구이·볶음·찜·회·사시미·숙회)를 뗀 어간으로 재질의. `food_web_estimates` 캐시(미채택도 저장) |
-| `menu-lexicon.service.ts` | 어드민 어휘 CRUD — 종류별 target 필요 여부(synonym·alias·portion)·중복·`alias` 의 target 이 활성 카탈로그에 있는지·`portion` 은 양수 검증. 효과는 검증하지 않는다(`measure:menu-golden` 으로 본다) |
+| `menu-lexicon.service.ts` | 어드민 어휘 CRUD — 종류별 target 필요 여부(synonym·alias·portion)·중복·`alias` 의 target 이 활성 카탈로그에 있는지·`portion` 은 양수 검증. 2026-10-02: `portion` 의 term 이 종류 키(`PORTION_KINDS` = `FoodDishType` 전부 + 기본 `portionGrams` 키)가 아니면 활성 카탈로그 음식명(`nameNorm` 또는 `name`)이어야 한다 — 오타는 아무 데도 안 걸리고 조용히 무효라서 400. 효과는 검증하지 않는다(`measure:menu-golden` 으로 본다) |
 
 조립은 [restaurant.route.ts](../../apps/friendly/src/modules/restaurant/restaurant.route.ts)에서 한다 — `MenuNutritionService({ prisma, loadMenuNames: service.getPublicMenuNames, llm, web, decompose })`. `getPublicMenuNames` 는 상세와 같은 소스 융합 규칙(`mergeMenus`/`mergeMenuGroups`, 네이버+다이닝코드+테이블링)으로 메뉴명만 뽑고 리뷰·요약은 싣지 않는다. 웹 실측 계층을 끄려면 `web:` 의존성 한 줄을 빼면 된다.
 
-## Talks To [coverage: high — 20 sources]
+## Talks To [coverage: high — 26 sources]
 
 - **식약처 전국통합식품영양성분정보(음식, 15100070)** — 기본은 배포본 `data/open/food/mfds-nutrition.csv`(쿼터 0, `fetch:mfds-nutrition` 이 포털 다운로드 버튼의 JSON API 두 개를 재현해 받는다 — 서비스키·활용신청 불필요, 19,495행 → 1,236종), API 는 파일이 없을 때만 `DATA_GO_KR_API_KEY`(2026-09-02 부터, 이전 `FOOD_API_KEY || BUS_API_KEY`); 100g 값을 `servingG` 기준 1인분으로 환산하고 `kcalPer100g` 도 남긴다.
 - **식약처 원재료성식품(15100065)** — `fetch:mfds-nutrition --pk=15100065` → `mfds-nutrition-15100065.csv`(3,704행 → 855종). 고기집·횟집의 생것 부위·수산물·건어물(먹태·황태는 북어 말린것 행). 가공식품(15100066)은 포털 배포본이 5만 행에서 잘려 주류 1행뿐이라 쓰지 않는다 → 큐레이션 표.
@@ -94,12 +100,13 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 - **[friendly](friendly.md) restaurant 모듈** — 공개 메뉴 칼로리 엔드포인트가 restaurant 라우트에 살고, `RestaurantService.getPublicMenuNames` 가 메뉴명을 준다. 칼로리는 상세(`getPublicDetail`, 과다로드로 한 번 최적화한 이력)에 끼워 넣지 않는다.
 - **[ai](ai.md) ollama-cloud chat** — 메뉴 LLM 매칭·세트 분해는 chat 용도 키를 상속하고 모델만 `OLLAMA_MENU_MATCH_MODEL`(기본 gemma4:31b). provider/모델이 없으면 묻지 않고 규칙·캐시만으로 응답한다. 카탈로그 분류(`FoodClassifyService`)도 chat provider 를 쓴다([versioned-llm-prompts](../concepts/versioned-llm-prompts.md)).
 - **fatsecret.kr(제3자 웹, 크롤링)** — 카탈로그에 없는 음식(까르보나라·불족발·부타동·하이볼)만 검색 페이지 1장을 받아 집계. API 가 아니며 robots.txt 는 검색 경로를 막지 않지만 약관 변경 시 이 계층만 끈다.
-- **[meal](meal.md)** — 인식명이 카탈로그에 연결되고 분류·영양 provenance·allergen evidence를 기록 시점 snapshot으로 가져간다. 추천도 같은 근거를 best-effort로 소비한다.
+- **[meal](meal.md)** — 인식명이 카탈로그에 연결되고 분류·영양 provenance·allergen evidence를 기록 시점 snapshot으로 가져간다. 추천도 같은 근거를 best-effort로 소비한다. 2026-10-02 부터 저장 경로 [meal.service.ts](../../apps/friendly/src/modules/meal/meal.service.ts)가 `FoodService.getServingRow` + `servingLexicon` → `mealServingNutrition` 으로 한 끼 1인분을 정하고 근거값 `nutritionBasis`(계약 `MealNutritionBasis` 에 `typical_portion` 추가, [schemas/meal.ts](../../packages/api-contract/src/schemas/meal.ts))를 남긴다. 통계 "추정값"에 `typical_portion` 이 포함되고 문구가 "추정값(유사 음식·통상 1인분)", 웹·앱 식단 상세는 "{근거} 기준 추정". 끼니 추천([meal-pattern.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-pattern.service.ts))은 같은 함수로 후보 kcal·단백질·나트륨을 내고(`e3afe9c` — 식품중량 탓에 거의 모든 음식이 '500kcal 이하' 가점을 받던 것), `kcalPer100gOf` 로 100g당 200kcal 이상 감점(`2aaaa7e`), `allergensInFoodName` 을 후보의 `allergenNameHints` 로 실어 사용자가 밝힌 알레르기면 좋아함·내 기록이어도 뺀다(검수 `verified` 행은 이름 단서 없음).
+- **[meal-nutrition](meal-nutrition.md)**(2026-10-04 신설) — 영양소 점검이 `nutrientsPer100gJson`·`kcalPer100gOf` 로 먹은 g 과 비타민·무기질 섭취량을 환산하고, 한 끼 후보를 `mealServingNutrition(row, {isMain:true}, lex)` 1인분으로 거른다. 카탈로그에 비타민·무기질이 없으면(원재료 `mfds-raw` 행 전부, 백필 안 한 운영 DB) 그 영양소는 판단 보류가 된다.
 - **[web](web.md)·[mobile](mobile.md) MenuGrid** — `useRestaurantPublicMenuNutrition` 훅으로 메뉴 탭이 열릴 때만 조회해 `kcalByName` 으로 칩을 그린다. 메뉴 썸네일은 같은 커밋 범위에서 프록시 리사이즈본(112px)으로 바뀌었다(`0997a69`, [friendly](friendly.md) media 참조).
-- **[utils](utils.md)** — `FOOD_SOURCES`/`FOOD_SOURCE_LABEL`(`mfds-raw` "식약처 원재료"·`curated` "내장 표"), `guessDishTypeFromName`(웹 실측 항목의 통상 1인분 키 추정), `thinkOptionForModel`.
+- **[utils](utils.md)** — `FOOD_SOURCES`/`FOOD_SOURCE_LABEL`(`mfds-raw` "식약처 원재료"·`curated` "내장 표"), `guessDishTypeFromName`(웹 실측 항목의 통상 1인분 키 추정), `thinkOptionForModel`, `FOOD_DISH_TYPE_LABEL`(`typical_portion` 근거 문구의 종류 라벨). [foodTaxonomy.ts](../../packages/utils/src/foodTaxonomy.ts) 2026-10-04: `MFDS_CATEGORY_TO_DISH_TYPE` 에서 `수조어육류` 매핑 제거(모듬회·육회는 이름 규칙이 회로 잡음), `guessCuisineFromName` 의 `KOREAN_DISH_FORM_END` 보정(분식 규칙에 걸려도 한식 요리형으로 끝나면 한식 — 떡볶이·김밥·김말이튀김은 그대로, 오징어순대·튀김류·라면은 손대지 않음).
 - **operation-log / SSE** — import 단계는 범용 로그에 남고 어드민 EventSource는 `?token=` ADMIN JWT로 snapshot/progress/done을 받는다([sse-token-auth](../concepts/sse-token-auth.md)).
 
-## API Surface [coverage: high — 16 sources]
+## API Surface [coverage: high — 19 sources]
 
 사용자 두 API는 로그인 필요, 메뉴 칼로리는 무인증 공개, 나머지는 `ADMIN` 전용이다.
 
@@ -108,7 +115,7 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 | `GET` | `/api/v1/food/search?q=&limit=` | USER+, 활성 카탈로그 자동완성(최대 20) |
 | `GET` | `/api/v1/food/:id/restaurants` | USER+, menu/review exact evidence 역검색; 좌표는 쌍으로 입력 |
 | `GET` | `/api/v1/restaurants/public/:placeId/menu-nutrition` | **공개**. `{ placeId, items[], notice, llmPending }` — 판정된 항목만(빈 배열 정상), 식당 없으면 404. `items[]`: `name`(상세 메뉴명과 문자 그대로 같음)·`basis`(per_serving/per_100g/per_100ml/components)·`kcal`(components 는 구성 전부 1인분일 때만 합계, 아니면 null)·`foodName`·`matchedBy`(exact/alias/synonym/modifier/variant/hint/suffix/llm/web/set)·`nutritionFrom`·`parts[]`/`partsTotal`/`partsEstimated`(세트)·`portion{grams,kcal,basis stated|typical,unit}`(100g당 항목) |
-| `GET` / `POST` | `/api/v1/admin/food/menu-lexicon[?kind=]` | ADMIN 어휘 목록(+코드 기본 어휘 종류별 개수 `defaults`) / 추가(201, 검증 실패 400) |
+| `GET` / `POST` | `/api/v1/admin/food/menu-lexicon[?kind=]` | ADMIN 어휘 목록(+코드 기본 어휘 종류별 개수 `defaults`) / 추가(201, 검증 실패 400 — 2026-10-02 부터 `portion` 의 term 이 종류 키도 활성 카탈로그 음식명도 아니면 400). 어드민 화면 힌트: "1인분 기준 중량(g) — 메뉴 칼로리 '1인분(150g 기준)' 문구와 식단 기록 영양에 쓴다 … 또는 카탈로그 음식명(예: 제육볶음 → 300)" |
 | `DELETE` | `/api/v1/admin/food/menu-lexicon/:id` | ADMIN 삭제(204, 없으면 404) |
 | `GET` / `POST` | `/api/v1/admin/food/items` | ADMIN 검색·source·taxonomy·nutrition·allergen status 필터 목록 / 수기 등록 |
 | `PATCH` | `/api/v1/admin/food/items/:id` | ADMIN 대표값·별칭·taxonomy·재료·알레르기 검수·영양·활성 상태 수정 |
@@ -131,7 +138,9 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 | 명령 | 역할 |
 |---|---|
 | `fetch:mfds-nutrition [--pk=15100065\|15100066] [--out=]` | 포털 배포본 CSV 받기(env 불필요) |
-| `load:food-catalog --source=nutrition\|raw\|curated\|recipe\|mafra\|menu-canonical\|hansik800\|all` | 적재(raw·curated 는 `all` 에 포함) |
+| `load:food-catalog --source=nutrition\|raw\|curated\|recipe\|mafra\|menu-canonical\|hansik800\|all` | 적재(raw·curated 는 `all` 에 포함). `--backfill-nutrition` 은 빈 1인분 영양 donor 보강 뒤 2026-10-04 부터 빌린 행의 비타민·무기질 복사(`backfillBorrowedNutrients`)까지 한다. `--refresh-nutrition` 은 `nutrientsPer100gJson` 도 덮는다 |
+| `fix:food-labels [--dry-run]` | (2026-10-04) 대표식품명 보정·수조어육류 회 분류 비우기·분식→한식 계통 소급. 멱등, 운영은 배포 뒤 한 번 |
+| `backfill:meal-nutrition [--dry-run] [--refresh]` | 식단 항목 영양 스냅샷 채우기 — 2026-10-02 부터 저장 경로와 같은 `mealServingNutrition` + 사용자 인분 수(`servings`) → 서수 양 순 배수, 근거값까지. `--refresh` 는 값이 있는 항목도 현재 카탈로그·어휘로 재계산(1인분 규칙·어휘를 바꾼 뒤에만) |
 | `measure:menu-nutrition [--limit] [--samples] [--json]` | 규칙 계층만 — 로컬 식당 메뉴명 전체의 등급별 비율·샘플 |
 | `measure:menu-golden [--golden] [--show]` | 골든셋 계층별 **정밀도**·재현율(LLM·웹은 캐시만 읽음) |
 | `measure:menu-decompose [--ask]` | 분해 골든셋 정밀도(`--ask` 면 캐시에 없는 것을 LLM 에 묻는다) |
@@ -140,16 +149,16 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 | `probe:menu-decompose --golden= --models=a,b` | **LLM 매칭** 모델 비교 프로브(이름과 달리 세트 분해가 아니다) |
 | `probe:food-web-estimate --names=a,b [--raw]` | fatsecret 파서·집계 검증(env 불필요) |
 
-## Data [coverage: high — 17 sources]
+## Data [coverage: high — 21 sources]
 
 | 모델 | 핵심 필드 |
 |---|---|
-| `FoodItem` | unique `nameNorm`, 이름/별칭, 3축 taxonomy, ingredients, allergen/evidence JSON + `allergenStatus`, serving/영양, **`kcalPer100g Float?`**(2026-09-02, 마이그레이션이 `kcal*100/servingG` 로 기존 행 역산), `nutritionFrom`, 대표 source/id/category, sourceRefs, popularity, active, classify model/version |
+| `FoodItem` | unique `nameNorm`, 이름/별칭, 3축 taxonomy, ingredients, allergen/evidence JSON + `allergenStatus`, serving/영양, **`kcalPer100g Float?`**(2026-09-02, 마이그레이션이 `kcal*100/servingG` 로 기존 행 역산), **`nutrientsPer100gJson String?`**(2026-10-04, [20261004060205_add_meal_nutrition](../../apps/friendly/prisma/migrations/20261004060205_add_meal_nutrition/migration.sql) — 100g(100ml)당 비타민·무기질 13키 중 값 있는 것만, 없으면 null = "아직 모름"), `nutritionFrom`, 대표 source/id/category, sourceRefs, popularity, active, classify model/version |
 | `FoodSourceObservation` | food, field, canonical `valueJson`, source/sourceId, observedAt. 대표값 선택과 무관하게 원천 근거 보존 |
 | `FoodMergeConflict` | existing/incoming JSON, source/sourceId, `open|kept_existing|accepted_incoming|dismissed`, resolution actor/time |
 | `FoodImportConfig` | `jobType='food-import'` 1행, enabled/cron/timezone, sources/classify, last run/status |
 | `FoodImportRun` | trigger, running/done/failed/skipped/interrupted, source별 counts/errors, classifiedCount, 시간 |
-| `MenuLexicon`(`menu_lexicon`) | `kind`·`term`·`target?`·`note?`·`active`; unique `(kind, term, target)`, index `active`. 값(칼로리)은 없다 |
+| `MenuLexicon`(`menu_lexicon`) | `kind`·`term`·`target?`·`note?`·`active`; unique `(kind, term, target)`, index `active`. 값(칼로리)은 없다. `portion` 은 term = 종류 키 또는(2026-10-02) 카탈로그 음식명, target = 그램 — 메뉴 칼로리와 식단 1인분이 같이 읽는다 |
 | `MenuLlmMatch`(`menu_llm_matches`) | unique `nameNorm`, `menuName`, `foodId?`(FK 없음)·`foodName?`, 모델 원문 `canonical`·`choice`·`confidence`·`reason`, `model`, `version`; index foodId·version. `foodId` null = "물어봤고 매칭 없음" |
 | `MenuLlmDecomposition`(`menu_llm_decompositions`) | unique `nameNorm`, `componentsJson`(`[]` = 분해 안 됨), `confidence`·`reason`·`model`·`version` |
 | `FoodWebEstimate`(`food_web_estimates`) | unique `nameNorm`, `name`, `kcalPer100g?`(null = 미채택), `agreeing`, `basis multi|single`, `samplesJson`(항목 원문, 감사용), `source`·`sourceUrl`(어간 재질의면 그 URL), `version`, `fetchedAt` |
@@ -158,13 +167,24 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 
 관측값은 whitespace를 정리하고 배열을 trim·dedupe·sort하며 유한 숫자를 6자리로 반올림한 canonical JSON이다. 동일 food/source/sourceId/field/value observation을 중복 생성하지 않는다. conflict도 representative/incoming 쌍을 dedupe해 같은 월간 입력이 open 항목을 반복 생성하지 않는다.
 
+**비타민·무기질 열**([food-nutrients.ts](../../apps/friendly/src/modules/food/food-nutrients.ts)): 표준데이터 API 열 `fibtg·ca·fe·p·k·vitaRae(μg RAE)·vitd·thia·ribf·nia·vitc·chole·fasat`(2026-10-04 김치찌개 실측 — 빈 문자열은 값 없음, `"0.00"` 은 0) ↔ 배포 CSV `식이섬유(g)`·`칼슘(mg)`·…·`비타민 A(μg RAE)`·`포화지방산(g)`. 같은 묶음 변형마다 측정 범위가 달라(김치찌개 외식 분석 행의 철·비타민 C 는 0, 급식 산출 행은 0.3·1.27) 영양소별로 고른다. 영양을 빌린 행은 1인분 영양·`kcalPer100g`·`nutrientsPer100gJson` 이 모두 같은 donor 기준이라 먹은 g 환산이 일관된다. dev 1,236/1,236(음식 DB). 원재료(`mfds-raw` — [food-raw-import.ts](../../apps/friendly/src/modules/food/food-raw-import.ts)는 열량만 시드)·큐레이션(공기밥 제외) 행과, 빌린 영양도 없는 레시피·800선 단독 행은 비어 있다.
+
+**식단 1인분 근거값**(`MealItem.nutritionBasis`, 계약 `MealNutritionBasis`): `direct`(카탈로그 1인분 또는 운영자가 정한 음식명 1인분) · `donor_estimate`(같은 계열에서 빌림) · `typical_portion`(2026-10-02 — 카탈로그 1인분이 한 끼 양이 아니라 종류별 통상 1인분으로 환산, `nutritionFrom` "볶음 통상 1인분 250g") · `missing`. 문자열 열이라 마이그레이션은 없었다.
+
 영양 coverage는 값 유무와 `nutritionFrom`을 기준으로 direct/estimated/missing을 구분한다. 알레르기는 `unknown`(판정 근거 없음), `inferred`(공개 재료 문자열 규칙), `verified`(운영자 검수)를 구분한다. 자동 import/backfill은 verified를 덮지 않으며 빈 allergen 배열만으로 안전을 뜻하지 않는다.
 
 **메모리·캐시**: `MenuNutritionResolver` 어휘+인덱스 10분 TTL, `MenuNutritionService` placeId LRU 500·10분(`llmPending` 결과는 미저장), `MenuLlmMatchService` 카탈로그 전수 5분 캐시, 백그라운드 in-flight `Map<placeId>`. 세 캐시 테이블은 `version >= 현재 상수`(`MENU_LLM_MATCH_VERSION` 1·`MENU_LLM_DECOMPOSE_VERSION` 3·`FOOD_WEB_ESTIMATE_VERSION` 3)인 행만 읽는다 — 상수를 올리면 전부 다시 묻는다.
 
 **골든셋**([golden/](../../apps/friendly/golden/)): `menu-nutrition.golden.json` 444건(로컬 470 메뉴명 중 판단 불가 26 제외; `expect` 정답 음식명 복수 허용 | null = 미표시가 정답, `basis`, `reviewed` approved 393·corrected 51) — 정밀도 99.5%(383 중 381)·재현율 99.0%, 엔진 전환 전 97.6%/93.5%. `menu-decompose.golden.json` 37건(불투명 세트 32 + 관용 세트 5; `allow` 허용 구성 | null = 분해하지 않는 게 정답, `min`) — 분해 정밀도 15/16(93.8%), 남은 1건은 "닭꼬치 모듬"을 맛이 아닌 부위로 나눈 것.
 
-## Key Decisions [coverage: high — 30 sources]
+## Key Decisions [coverage: high — 36 sources]
+
+- **2026-10-02 (`9019cf5`) — 식약처 원본은 그대로, 한 끼 1인분 중량만 우리 쪽에서 정한다** — '식품중량' 열은 분석 시료·급식 1회 제공량이고 '1인(회)분량 참고량' 열은 비어 있다. 100g당 값은 믿을 만하므로 원본·`servingG` 를 고치지 않고, 어휘 음식명 지정 > 카탈로그(100g 초과) > 주식 통상 1인분 > 카탈로그 순으로 정한다. 메뉴 칼로리 엔진과 같은 기준량(`BASE_SERVING_G`)·같은 어휘를 써서 두 화면이 2.5배 어긋나던 것을 없앴다. 반찬은 원래 양이 적은 게 맞아(감자조림 50g) 통상 환산하지 않고, 빌린 영양은 중량 근거가 없어 손대지 않는다. 특정 음식은 어드민 어휘 "1인분 기준 중량"에 음식명으로 지정(재적재가 덮지 않는다).
+- **2026-10-04 (`e4ce0e6`) — 대표식품명은 보정표로, 이미 적재된 행은 소급 스크립트로** — 적재가 이름(`nameNorm`)으로 기존 행을 찾으므로 행 이름만 바꾸면 재적재 때 원래 이름의 행이 다시 생긴다. 그래서 적재 정규화(`mfdsCatalogName`)와 소급(`fix:food-labels`)을 같은 보정표로 맞췄다. 수조어육류를 통째로 회로 옮기는 분류 매핑은 버리고 이름 규칙에 맡겼다.
+- **2026-10-04 (`95ec0cd`) — 흔한 표기는 잇되 "비슷하기만 한 음식"은 잇지 않는다** — 표기 변형(계란↔달걀·둣국↔두국)은 메뉴 어휘를 그대로 쓰고, 다른 이름(동그랑땡=완자전)은 식단 전용 표 `FOOD_NAME_SYNONYMS` 에 둔다 — 메뉴의 '후라이드치킨'은 한 마리라 메뉴 엔진 별칭에 넣으면 닭튀김 1인분으로 잘못 묶인다. 까르보나라→스파게티 같은 근사는 영양이 틀어질 수 있어 넣지 않았다.
+- **2026-10-04 (`95ec0cd`) — 분식 단어가 재료일 뿐이면 한식** — 이름이 한식 요리형으로 끝나면(어묵 매운탕·어묵볶음·순대국) 한식, 분식 이름 자체로 끝나면(떡볶이·김밥·김말이튀김) 분식. 판단이 갈리는 오징어순대·튀김류 전반·라면은 손대지 않았다. 계통이 틀리면 끼니 추천의 '골고루' 계산이 틀어진다.
+- **2026-10-04 (`e3afe9c`) — 이름의 알레르기 단서는 추천 제외에만, 메타에는 쓰지 않는다** — 재료 근거 있는 행이 사실상 없어 재료 규칙만으로는 깐풍새우·꽃게찜이 그대로 추천됐다. 잘못 빼는 쪽(우유식빵·게맛살)은 안전하지만 놓치는 쪽은 위험하므로 이름 단어로 보수적으로 뺀다. 다만 음식명은 배합을 보장하지 않아 카탈로그 메타·화면 경고로 저장하면 모든 카드에 '돼지고기·밀'이 붙으니 저장하지 않는다(기존 "알레르기 추론은 재료 전용" 원칙의 예외가 아니라 별도 용도).
+- **2026-10-04 (`3d067a0`) — 비타민·무기질은 영양소별로, 이름이 같은 층부터** — 묶음 첫 행만 쓰면 측정 안 한 0 을 부족으로 오판하고, 묶음 전체에서 고르면 다른 음식(김치찌개_참치)의 값이 샌다. 영양을 빌린 행은 같은 donor 에서 함께 빌려 1인분·100g당·비타민이 한 기준에 선다.
 
 - **2026-09-02 (`4d159a5`·`bee37c0`·`9e09950`) — 100g당 항목에도 "그 양"·"통상 1인분" 환산을 붙이되 등급은 올리지 않는다** — 메뉴명 중량이 있으면 그 양의 kcal(가정 없음), 없으면 카탈로그 1인분 → 종류별 통상 중량표(±30% 근사). 통상 환산은 테두리 칩·툴팁으로 구분하고 1인분 등급으로 승격하지 않아 1인분 칩의 정밀도를 지킨다. 중량표는 어휘 DB `portion` 으로 편집.
 - **2026-09-02 (`51de12a`) — 세트 규칙 4종 + LLM 분해는 high 만** — 결합 기호가 세트어보다 먼저, 괄호 안 나열도 구성, 괄호 안 세트어는 옵션, 주메뉴 하나짜리 세트는 그 음식의 100g당. 분해는 medium 을 받으면 지어낸 찬("통뱅이탕세트 → 뱅이탕, 도토리묵")이 섞여 high 만 채택(불투명 세트 45→34건, 분해 정밀도 93.8%). 골든셋의 주메뉴 세트 9건을 정정해 99.5% 유지.
@@ -193,7 +213,16 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 - **인식 품질은 lineage 우선** — `recognitionDishId`로 원본과 최종을 연결하고 구형 데이터만 food/name/order fallback을 쓴다. candidate confidence bucket별 교정률을 분리한다.
 - **품질 privacy k=2** — top 교정/미매칭은 서로 다른 사용자 2명 이상인 항목만 노출하고 user/memo/photo/entry id는 응답하지 않는다.
 
-## Gotchas [coverage: high — 24 sources]
+## Gotchas [coverage: high — 30 sources]
+
+- **2026-10 카탈로그 보정은 운영에 세 번의 수동 단계가 필요하다.** ① `backfill:meal-nutrition --dry-run --refresh` → `--refresh`(1인분 규칙·시리얼 40g 반영 — 안 돌리면 과거 기록은 151kcal 제육볶음 그대로) ② `fix:food-labels`(대표식품명·회 분류·분식 계통 — 안 돌리면 재적재해도 옛 이름 행이 그대로 남는다) ③ 마이그레이션 `20261004060205_add_meal_nutrition` 뒤 `load:food-catalog --source=nutrition --backfill-nutrition`(비타민·무기질 — 안 돌리면 영양소 점검이 전부 판단 보류). 배포 스크립트의 `food_catalog_data` 는 `items=0` 일 때만 첫 적재하므로 이미 카탈로그가 있는 서버에서는 저절로 돌지 않는다.
+- **`servingG ≤ 100` 은 식단에서도 1인분이 아니다(2026-10-02).** 주식이면 통상 중량으로 환산되지만 반찬(`isMain:false`)이나 통상 중량을 모르는 종류는 카탈로그 값 그대로라, 반찬으로 적은 큰 요리는 여전히 작게 잡힐 수 있다. 개별 음식은 어휘 음식명 지정으로 고친다.
+- **어휘 음식명 지정은 메뉴 칼로리 등급까지 바꾼다.** `portion` 에 음식명을 넣으면 식단 1인분뿐 아니라 그 음식으로 판정된 메뉴가 `per_serving`(1인분 칩)이 된다 — 1인분 칩 정밀도에 영향을 주니 `measure:menu-golden` 으로 확인한다. 기본 어휘의 `시리얼: 40` 도 같은 효과다.
+- **기본 어휘 `portionGrams` 에 음식명이 섞였다.** 종류 키(영문)와 음식명(한글) 이 한 맵에 있어 `PORTION_KINDS`(어드민 portion 검증의 "종류 키" 집합)에 `시리얼` 이 포함된다 — 카탈로그 확인 없이 통과한다(무해하지만 의도와 다르다).
+- **표기 변형 매칭은 점수 0.95·`matchedBy:'alias'` 로 돌아온다.** 별칭 일치와 구분되지 않아 인식 품질 통계·UI 에서 "다른 이름으로 찾음"을 따로 볼 수 없다. 변형마다 DB 를 최대 2번 조회한다.
+- **`fix:food-labels` ①은 이름이 아직 `repName` 그대로인 행만 바꾼다.** 어드민이 이미 다른 이름으로 고친 행은 그대로 둔다. ③은 `curated` 를 건드리지 않는다. 재적재로는 고쳐지지 않으므로(이름으로 행을 찾고 빈 칸만 채움) 보정 규칙을 추가할 때마다 이 스크립트도 같이 늘려야 한다.
+- **비타민·무기질 재적재는 빈 행만 채운다.** 열 매핑·선택 규칙(`pickNutrientsPer100g`)을 고친 뒤에는 `--refresh-nutrition` 이 필요하다. 빌린 값이 있는 행도 덮지 않는다.
+- **`allergensInFoodName` 은 메타에 없다.** 어드민 음식 화면·카탈로그 `allergensJson` 에는 이름 단서가 보이지 않고 추천 후보 제외에서만 작동한다. 검수(`verified`) 행은 이름 단서를 쓰지 않으므로 검수값이 틀리면 그대로 통과한다.
 
 - **`invalidate()` 를 부르는 곳이 없다.** `MenuNutritionResolver.invalidate`·`MenuNutritionService.invalidate` 는 정의만 있고 카탈로그 적재·재크롤 뒤 호출되지 않는다. 카탈로그 적재·어휘 편집·메뉴 재크롤은 인덱스 TTL 10분 + placeId LRU 10분이 지나야 반영된다(문서의 "10분 안에 반영"은 이 TTL 이다).
 - **어휘 DB 가 안 닿는 두 곳.** `webQueryFor` 의 범주어 판정과 LLM 분해의 범주어 제거, 그리고 LLM·웹 항목의 `computePortion` 은 `DEFAULT_LEXICON`(코드 기본값)을 쓴다. 어드민이 `suffix_block`·`portion` 을 추가해도 규칙 계층에만 적용되고 LLM·웹 항목의 통상 1인분 환산·범주어 필터에는 반영되지 않는다.
@@ -204,7 +233,7 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 - **한 번에 묻는 상한.** LLM 매칭 60·분해 30·웹 15(1초 간격 → 최대 ~30초). 메뉴판이 크면 첫 방문에 다 채워지지 않고 방문을 거듭하며 채워진다. 메뉴명은 200개까지만 본다.
 - **캐시 `version` 상수는 재판정 스위치다.** 프롬프트·파서를 바꾸면 상수를 올려야 옛 행이 stale 로 무시되고, 올리면 그 어휘 전부를 다시 묻는다(비용은 어휘 수). `menu_llm_matches.foodId` 는 FK 가 없어 비활성/삭제된 음식이면 `hit` 이 null 이 되고 표준명으로 웹 질의로 넘어간다.
 - **웹 실측은 제3자 크롤링이다.** fatsecret.kr 마크업이 바뀌면 파서(`ENTRY_RE`, 문장 패턴 기반)가 조용히 0건을 내고 미채택으로 **저장**된다 — 그 뒤 버전을 올려야 재조회한다. `probe:food-web-estimate` 로 먼저 확인. 끄려면 라우트의 `web:` 한 줄.
-- **`servingG == 100` 행은 1인분이 아니다.** 표준데이터에서 기준량을 그대로 둔 행(돈가스 280kcal). `mfds-raw` 는 `servingG` 가 전부 null 이라 항상 100g당이고, 큐레이션은 병·잔 용량이 있는 것만 1인분(소주 360ml 408kcal).
+- **`servingG == 100` 행은 1인분이 아니다.** 표준데이터에서 기준량을 그대로 둔 행(돈가스 280kcal). → 2026-10-02 식단 기록도 같은 기준(`BASE_SERVING_G`)으로 바뀌었다(`food-serving`). `mfds-raw` 는 `servingG` 가 전부 null 이라 항상 100g당이고, 큐레이션은 병·잔 용량이 있는 것만 1인분(소주 360ml 408kcal).
 - **큐레이션 값은 공식 데이터가 아니다.** 제조사 표기 기준 근사값을 코드에 박았다(`source: curated`, `sourceId: curated:<이름>`). 브랜드 별칭(참이슬·카스·햇반)이 exact/alias 로 걸리므로 별칭 충돌은 인덱스에서 "이름이 별칭을 이긴다" 규칙으로 풀린다.
 - **골든셋 측정은 LLM·웹 캐시만 읽는다.** `measure:menu-golden` 전에 `probe:menu-coverage --ask=N --web=N` 으로 캐시를 채워야 llm/web 계층 정밀도가 나온다. 골든셋의 `reviewed: corrected` 51건은 사람이 정정한 정답이라 규칙 변경 뒤 재검토 대상이다.
 - **커밋 날짜와 문서 날짜가 다르다.** 엔진 커밋 12개는 git 상 전부 2026-09-02 이고, [menu-calorie-engine.md](../../docs/menu-calorie-engine.md)·메모리는 정밀도 측정을 2026-09-03 으로 적는다. 이 문서는 커밋 해시 기준으로 2026-09-02 를 쓴다.
@@ -226,13 +255,13 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 - **역검색 0건은 음식 404와 다르다.** food가 있지만 exact evidence가 없으면 notice+빈 배열이 정상이고 좌표 한쪽만 보내면 400이다. 메뉴 칼로리도 판정 0건이면 빈 배열(404 는 식당 없음).
 - **인식 품질 version 필터가 있다.** model/version으로 비교할 수 있고, 손상된 schema/JSON만 제외한다. 정상 과거 prompt version을 임의로 버리지 않는다.
 - **confidence 교정은 lineage 경계를 지킨다.** 다른 bucket의 manual/lineage 항목을 단순 순서 pairing해 추가·삭제로 오판하지 않는다.
-- **meal의 `foodId`는 FK가 아니다.** 카탈로그 수정·비활성화가 과거 영양 snapshot을 자동 재계산하지 않는다.
+- **meal의 `foodId`는 FK가 아니다.** 카탈로그 수정·비활성화가 과거 영양 snapshot을 자동 재계산하지 않는다. → 2026-10 재계산은 명시적인 `backfill:meal-nutrition --refresh` 뿐이다(스냅샷은 원래 안 바꾸는 게 원칙). 영양소 점검([meal-nutrition](meal-nutrition.md))은 저장 kcal 을 **현재** 카탈로그 100g당 열량으로 나눠 g 을 구하므로, 카탈로그를 고치고 스냅샷을 재계산하지 않으면 g 환산이 어긋난다.
 
-## Sources [coverage: high — 89 sources]
+## Sources [coverage: high — 101 sources]
 
 - [packages/api-contract/src/schemas/food.ts](../../packages/api-contract/src/schemas/food.ts) — `kcalPer100g`·`mfds-raw`·`curated`(0d2584a·bcfc72b)
 - [packages/api-contract/src/schemas/menu-nutrition.ts](../../packages/api-contract/src/schemas/menu-nutrition.ts) — 공개 메뉴 칼로리 DTO·`MENU_NUTRITION_NOTICE`
-- [packages/api-contract/src/schemas/menu-lexicon.ts](../../packages/api-contract/src/schemas/menu-lexicon.ts) — 어휘 kind 10종·`MENU_LEXICON_KINDS_WITH_TARGET`
+- [packages/api-contract/src/schemas/menu-lexicon.ts](../../packages/api-contract/src/schemas/menu-lexicon.ts) — 어휘 kind 10종·`MENU_LEXICON_KINDS_WITH_TARGET`, `portion` 음식명 주석(9019cf5)
 - [packages/api-contract/src/schemas/allergen.ts](../../packages/api-contract/src/schemas/allergen.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Food`(+`adminMenuLexicon`)·`Routes.Restaurant.publicMenuNutrition`
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) — Food·source audit 모델, `kcalPer100g`, MenuLexicon·MenuLlmMatch·MenuLlmDecomposition·FoodWebEstimate
@@ -245,38 +274,38 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 - [apps/friendly/prisma/migrations/20260902170000_add_food_web_estimate/migration.sql](../../apps/friendly/prisma/migrations/20260902170000_add_food_web_estimate/migration.sql)
 - [apps/friendly/prisma/migrations/20260903090000_add_menu_lexicon/migration.sql](../../apps/friendly/prisma/migrations/20260903090000_add_menu_lexicon/migration.sql)
 - [apps/friendly/prisma/migrations/20260903100000_add_menu_llm_decomposition/migration.sql](../../apps/friendly/prisma/migrations/20260903100000_add_menu_llm_decomposition/migration.sql)
-- [apps/friendly/src/modules/food/engine/index.ts](../../apps/friendly/src/modules/food/engine/index.ts)
+- [apps/friendly/src/modules/food/engine/index.ts](../../apps/friendly/src/modules/food/engine/index.ts) — `BASE_SERVING_G`·`foodPortionGrams` export(9019cf5)
 - [apps/friendly/src/modules/food/engine/engine.ts](../../apps/friendly/src/modules/food/engine/engine.ts) — `MenuNutritionEngine`
-- [apps/friendly/src/modules/food/engine/lexicon.ts](../../apps/friendly/src/modules/food/engine/lexicon.ts) — `DEFAULT_LEXICON_SOURCE`·`portionGrams`
-- [apps/friendly/src/modules/food/engine/lexicon-db.ts](../../apps/friendly/src/modules/food/engine/lexicon-db.ts) — `mergeLexiconRows`·`loadLexicon`
+- [apps/friendly/src/modules/food/engine/lexicon.ts](../../apps/friendly/src/modules/food/engine/lexicon.ts) — `DEFAULT_LEXICON_SOURCE`·`portionGrams`(+`시리얼: 40`, 동의어 `둣국↔두국`·`크루아상↔크로와상`, 95ec0cd)
+- [apps/friendly/src/modules/food/engine/lexicon-db.ts](../../apps/friendly/src/modules/food/engine/lexicon-db.ts) — `mergeLexiconRows`·`loadLexicon`, portion 음식명 정규형 키(9019cf5)
 - [apps/friendly/src/modules/food/engine/parse.ts](../../apps/friendly/src/modules/food/engine/parse.ts) — `parseMenuName`
 - [apps/friendly/src/modules/food/engine/catalog-index.ts](../../apps/friendly/src/modules/food/engine/catalog-index.ts) — 메모리 인덱스·`portionKeyFor`
-- [apps/friendly/src/modules/food/engine/resolve.ts](../../apps/friendly/src/modules/food/engine/resolve.ts) — 캐스케이드·등급·`computePortion`
-- [apps/friendly/src/modules/food/menu-nutrition.ts](../../apps/friendly/src/modules/food/menu-nutrition.ts) (+[test](../../apps/friendly/src/modules/food/menu-nutrition.test.ts) 35건) — 파사드·`MenuNutritionResolver`
+- [apps/friendly/src/modules/food/engine/resolve.ts](../../apps/friendly/src/modules/food/engine/resolve.ts) — 캐스케이드·등급·`computePortion`, 음식명 지정 1인분(9019cf5)
+- [apps/friendly/src/modules/food/menu-nutrition.ts](../../apps/friendly/src/modules/food/menu-nutrition.ts) (+[test](../../apps/friendly/src/modules/food/menu-nutrition.test.ts) 39건 — 음식명 지정 4건 추가) — 파사드·`MenuNutritionResolver`
 - [apps/friendly/src/modules/food/menu-nutrition.service.ts](../../apps/friendly/src/modules/food/menu-nutrition.service.ts) (+[test](../../apps/friendly/src/modules/food/menu-nutrition.service.test.ts) 7건) — `forPlace`·백그라운드 체인
 - [apps/friendly/src/modules/food/menu-nutrition-candidates.ts](../../apps/friendly/src/modules/food/menu-nutrition-candidates.ts) — `pickMenuCandidates`
 - [apps/friendly/src/modules/food/menu-llm-match.service.ts](../../apps/friendly/src/modules/food/menu-llm-match.service.ts) (+[test](../../apps/friendly/src/modules/food/menu-llm-match.service.test.ts) 5건)
 - [apps/friendly/src/modules/food/menu-llm-match.prompts.ts](../../apps/friendly/src/modules/food/menu-llm-match.prompts.ts) — v1, 모델 프로브 결과 주석
 - [apps/friendly/src/modules/food/menu-llm-decompose.service.ts](../../apps/friendly/src/modules/food/menu-llm-decompose.service.ts) (+[test](../../apps/friendly/src/modules/food/menu-llm-decompose.test.ts)) — v3
-- [apps/friendly/src/modules/food/menu-lexicon.service.ts](../../apps/friendly/src/modules/food/menu-lexicon.service.ts)
+- [apps/friendly/src/modules/food/menu-lexicon.service.ts](../../apps/friendly/src/modules/food/menu-lexicon.service.ts) — `PORTION_KINDS`·portion 음식명 검증(9019cf5)
 - [apps/friendly/src/modules/food/food-web-estimate.ts](../../apps/friendly/src/modules/food/food-web-estimate.ts) (+[test](../../apps/friendly/src/modules/food/food-web-estimate.test.ts) 8건) — 파서·집계 v3
 - [apps/friendly/src/modules/food/food-web-estimate.service.ts](../../apps/friendly/src/modules/food/food-web-estimate.service.ts) (+[test](../../apps/friendly/src/modules/food/food-web-estimate.service.test.ts))
 - [apps/friendly/src/modules/food/food-raw-import.ts](../../apps/friendly/src/modules/food/food-raw-import.ts) (+[test](../../apps/friendly/src/modules/food/food-raw-import.test.ts) 8건 — 어휘 DB 병합·큐레이션 검증 포함)
-- [apps/friendly/src/modules/food/food-curated-seeds.ts](../../apps/friendly/src/modules/food/food-curated-seeds.ts) — 32행
-- [apps/friendly/src/modules/food/food.service.ts](../../apps/friendly/src/modules/food/food.service.ts) — `FoodMatch.servingG/kcalPer100g`
+- [apps/friendly/src/modules/food/food-curated-seeds.ts](../../apps/friendly/src/modules/food/food-curated-seeds.ts) — 32행, `CURATED_NUTRIENTS_LIKE`(3d067a0)
+- [apps/friendly/src/modules/food/food.service.ts](../../apps/friendly/src/modules/food/food.service.ts) — `FoodMatch.servingG/kcalPer100g`, `getServingRow`·`servingLexicon`(9019cf5), `foodNameVariants`·`FOOD_NAME_SYNONYMS`(95ec0cd)
 - [apps/friendly/src/modules/food/food.route.ts](../../apps/friendly/src/modules/food/food.route.ts) — 어휘 GET/POST/DELETE
-- [apps/friendly/src/modules/food/food.route.test.ts](../../apps/friendly/src/modules/food/food.route.test.ts) — 11건(어휘 검증 1건 추가)
+- [apps/friendly/src/modules/food/food.route.test.ts](../../apps/friendly/src/modules/food/food.route.test.ts) — 12건(portion 음식명 검증 1건 추가, 9019cf5)
 - [apps/friendly/src/modules/food/food-api.adapter.ts](../../apps/friendly/src/modules/food/food-api.adapter.ts) — 15100070 봉투 실측 대응
 - [apps/friendly/src/modules/food/food-api.adapter.test.ts](../../apps/friendly/src/modules/food/food-api.adapter.test.ts)
-- [apps/friendly/src/modules/food/food-import.service.ts](../../apps/friendly/src/modules/food/food-import.service.ts) — 시드 `kcalPer100g`·`DATA_GO_KR_API_KEY`
-- [apps/friendly/src/modules/food/food-import.service.test.ts](../../apps/friendly/src/modules/food/food-import.service.test.ts)
-- [apps/friendly/src/modules/food/food-allergen.ts](../../apps/friendly/src/modules/food/food-allergen.ts) (+[test](../../apps/friendly/src/modules/food/food-allergen.test.ts))
+- [apps/friendly/src/modules/food/food-import.service.ts](../../apps/friendly/src/modules/food/food-import.service.ts) — 시드 `kcalPer100g`·`DATA_GO_KR_API_KEY`, `MFDS_REP_NAME_OVERRIDES`·`mfdsCatalogName`(e4ce0e6), `nutrientVariants`·`looseHeader`(3d067a0)
+- [apps/friendly/src/modules/food/food-import.service.test.ts](../../apps/friendly/src/modules/food/food-import.service.test.ts) — 31건(보정표·비타민 선택·머리글 포함)
+- [apps/friendly/src/modules/food/food-allergen.ts](../../apps/friendly/src/modules/food/food-allergen.ts) (+[test](../../apps/friendly/src/modules/food/food-allergen.test.ts)) — `allergensInFoodName`(e3afe9c)
 - [apps/friendly/src/modules/food/food-source-audit.ts](../../apps/friendly/src/modules/food/food-source-audit.ts)
 - [apps/friendly/src/modules/food/food-merge-conflict.service.ts](../../apps/friendly/src/modules/food/food-merge-conflict.service.ts) (+[test](../../apps/friendly/src/modules/food/food-merge-conflict.test.ts))
 - [apps/friendly/src/modules/food/food-import-registry.ts](../../apps/friendly/src/modules/food/food-import-registry.ts)
 - [apps/friendly/src/modules/food/food-classify.service.ts](../../apps/friendly/src/modules/food/food-classify.service.ts)
 - [apps/friendly/src/modules/food/food.prompts.ts](../../apps/friendly/src/modules/food/food.prompts.ts)
-- [apps/friendly/src/modules/food/food-nutrition.service.ts](../../apps/friendly/src/modules/food/food-nutrition.service.ts) — `CATEGORY_WORDS` export·donor `kcalPer100g`
+- [apps/friendly/src/modules/food/food-nutrition.service.ts](../../apps/friendly/src/modules/food/food-nutrition.service.ts) — `CATEGORY_WORDS` export·donor `kcalPer100g`·`nutrientsPer100gJson`, `backfillBorrowedNutrients`(3d067a0)
 - [apps/friendly/src/modules/food/food-nutrition.test.ts](../../apps/friendly/src/modules/food/food-nutrition.test.ts)
 - [apps/friendly/src/modules/food/food-recognition-quality.service.ts](../../apps/friendly/src/modules/food/food-recognition-quality.service.ts)
 - [apps/friendly/src/modules/food/food-recognition-quality.route.test.ts](../../apps/friendly/src/modules/food/food-recognition-quality.route.test.ts)
@@ -286,7 +315,7 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 - [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — `OLLAMA_MENU_MATCH_MODEL`·`DATA_GO_KR_API_KEY`
 - [apps/friendly/golden/menu-nutrition.golden.json](../../apps/friendly/golden/menu-nutrition.golden.json) — 444건
 - [apps/friendly/golden/menu-decompose.golden.json](../../apps/friendly/golden/menu-decompose.golden.json) — 37건
-- [apps/friendly/scripts/load-food-catalog.ts](../../apps/friendly/scripts/load-food-catalog.ts) — `--source=raw|curated`
+- [apps/friendly/scripts/load-food-catalog.ts](../../apps/friendly/scripts/load-food-catalog.ts) — `--source=raw|curated`, `--backfill-nutrition` 이 빌린 행 비타민·무기질도(3d067a0)
 - [apps/friendly/scripts/fetch-mfds-nutrition.ts](../../apps/friendly/scripts/fetch-mfds-nutrition.ts) — 포털 배포본 CSV(`--pk`)
 - [apps/friendly/scripts/measure-menu-nutrition.ts](../../apps/friendly/scripts/measure-menu-nutrition.ts)
 - [apps/friendly/scripts/measure-menu-golden.ts](../../apps/friendly/scripts/measure-menu-golden.ts)
@@ -298,24 +327,36 @@ import는 같은 batch의 동일 `nameNorm` seed를 먼저 접되 원본 seed를
 - [apps/friendly/scripts/backfill-food-allergens.ts](../../apps/friendly/scripts/backfill-food-allergens.ts)
 - [apps/friendly/scripts/food-catalog-status.ts](../../apps/friendly/scripts/food-catalog-status.ts)
 - [apps/friendly/scripts/probe-food-api.ts](../../apps/friendly/scripts/probe-food-api.ts)
-- [apps/friendly/scripts/backfill-meal-nutrition.ts](../../apps/friendly/scripts/backfill-meal-nutrition.ts) — *배포 적재 뒤 기존 식단 항목 영양 스냅샷 채움*
-- [apps/friendly/package.json](../../apps/friendly/package.json) — *load/status/backfill/fetch/measure/probe 스크립트*
+- [apps/friendly/scripts/backfill-meal-nutrition.ts](../../apps/friendly/scripts/backfill-meal-nutrition.ts) — *배포 적재 뒤 기존 식단 항목 영양 스냅샷 채움*, `mealServingNutrition`·인분 수·`--refresh`(9019cf5)
+- [apps/friendly/package.json](../../apps/friendly/package.json) — *load/status/backfill/fetch/measure/probe 스크립트*, `fix:food-labels`(e4ce0e6)
 - [apps/friendly/.env.example](../../apps/friendly/.env.example) — *DATA_GO_KR_API_KEY 통합 주석·OLLAMA_MENU_MATCH_MODEL 프로브 결과*
 - [deploy.sh](../../deploy.sh) — *food_catalog_data(케이스 1·2·4 자동 점검) + 케이스 7*
 - [docs/deploy-friendly.md](../../docs/deploy-friendly.md) — *음식 카탈로그 적재 절차*
 - [docs/data-sources.md](../../docs/data-sources.md) — *원본 출처·15100065·큐레이션·fetch 스크립트·fatsecret 보조 절*
 - [docs/menu-calorie-engine.md](../../docs/menu-calorie-engine.md) — *엔진 구조·등급·검증·어휘 편집·분해 규칙 문서*
-- [packages/utils/src/foodTaxonomy.ts](../../packages/utils/src/foodTaxonomy.ts) — `FOOD_SOURCES`/라벨·`guessDishTypeFromName`
+- [packages/utils/src/foodTaxonomy.ts](../../packages/utils/src/foodTaxonomy.ts) — `FOOD_SOURCES`/라벨·`guessDishTypeFromName`, 수조어육류 매핑 제거(e4ce0e6)·`KOREAN_DISH_FORM_END`(95ec0cd)
 - [packages/shared/src/api/food.api.ts](../../packages/shared/src/api/food.api.ts) (+[test](../../packages/shared/src/api/food.api.test.ts)) — 어휘 API
 - [packages/shared/src/hooks/useFood.ts](../../packages/shared/src/hooks/useFood.ts) — `useMenuLexicon*`
 - [packages/shared/src/api/restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts) — `publicMenuNutrition`
 - [packages/shared/src/hooks/useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts) — `useRestaurantPublicMenuNutrition`(폴링)
-- [apps/web/src/routes/admin/AdminFoodPage.tsx](../../apps/web/src/routes/admin/AdminFoodPage.tsx) (+[test](../../apps/web/src/routes/admin/AdminFoodPage.test.tsx)) — `MenuLexiconSection`
+- [apps/web/src/routes/admin/AdminFoodPage.tsx](../../apps/web/src/routes/admin/AdminFoodPage.tsx) (+[test](../../apps/web/src/routes/admin/AdminFoodPage.test.tsx)) — `MenuLexiconSection`, portion 힌트에 음식명 지정(9019cf5)
 - [apps/web/src/components/restaurant/detail/MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx) — 훅 호출·안내 문구
 - [apps/web/src/components/restaurant/detail/shared.tsx](../../apps/web/src/components/restaurant/detail/shared.tsx) — `MenuKcalChip`·`MenuGrid kcalByName`·썸네일 112px
 - [apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx) — `placeId` 전달
 - [apps/mobile/src/components/restaurantDetail/MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx)
 - [apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx) — 앱 `MenuKcalChip`
 - [apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts)
-- [apps/friendly/src/modules/meal-recommendation/meal-pattern.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-pattern.service.ts)
+- [apps/friendly/src/modules/meal-recommendation/meal-pattern.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-pattern.service.ts) — 후보 1인분 `mealServingNutrition`·`kcalPer100gOf`·`allergenNameHints`
 - [apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts)
+- [apps/friendly/src/modules/food/food-serving.ts](../../apps/friendly/src/modules/food/food-serving.ts) (+[test](../../apps/friendly/src/modules/food/food-serving.test.ts) 9건) — `mealServingNutrition`·`kcalPer100gOf`(9019cf5·2aaaa7e)
+- [apps/friendly/src/modules/food/food-nutrients.ts](../../apps/friendly/src/modules/food/food-nutrients.ts) — 비타민·무기질 13키·열 매핑·`pickNutrientsPer100g`(3d067a0)
+- [apps/friendly/scripts/fix-food-catalog-labels.ts](../../apps/friendly/scripts/fix-food-catalog-labels.ts) — `fix:food-labels` ①②③(e4ce0e6·95ec0cd)
+- [apps/friendly/prisma/migrations/20261004060205_add_meal_nutrition/migration.sql](../../apps/friendly/prisma/migrations/20261004060205_add_meal_nutrition/migration.sql) — `food_items.nutrientsPer100gJson`
+- [apps/friendly/src/modules/meal/meal.service.ts](../../apps/friendly/src/modules/meal/meal.service.ts) — 저장 경로가 `getServingRow`·`servingLexicon`·`mealServingNutrition`
+- [apps/friendly/src/modules/meal/meal-stats.service.ts](../../apps/friendly/src/modules/meal/meal-stats.service.ts) — 추정값에 `typical_portion` 포함
+- [apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts) — 비타민·무기질 소비처([meal-nutrition](meal-nutrition.md))
+- [packages/api-contract/src/schemas/meal.ts](../../packages/api-contract/src/schemas/meal.ts) — `MealNutritionBasis` `typical_portion`
+- [packages/utils/src/foodTaxonomy.test.ts](../../packages/utils/src/foodTaxonomy.test.ts) — 7건(수조어육류·분식 계통)
+- [apps/web/src/routes/meal/MealDetailPage.tsx](../../apps/web/src/routes/meal/MealDetailPage.tsx) — "{근거} 기준 추정" 표시
+- [apps/mobile/app/meal/[id].tsx](../../apps/mobile/app/meal/[id].tsx) — 앱 상세 근거 표시
+- [docs/PLAN-meal.md](../../docs/PLAN-meal.md) — 1인분 보정·영양소 점검 진행 기록(운영 배포 절차)

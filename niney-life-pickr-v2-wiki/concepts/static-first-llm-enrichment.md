@@ -1,7 +1,7 @@
 ---
 concept: 정적 결과 먼저, LLM 은 나중에 — 규칙 결과를 즉시 주고 AI 보강은 비동기로 덧입힌다
-last_compiled: 2026-09-07
-topics_connected: [food, saju-c, tarot, ai, shared, web]
+last_compiled: 2026-10-04
+topics_connected: [food, saju-c, tarot, ai, shared, web, meal-nutrition, meal]
 status: active
 ---
 
@@ -18,6 +18,7 @@ status: active
 
 ## Instances
 
+- **2026-10-04** in [meal-nutrition](../topics/meal-nutrition.md) / [meal](../topics/meal.md) (`3d067a0`): 영양 탭은 점검(KDRI 대조, 결정적)을 즉시 보이고 영양제 조언은 사용자가 누를 때만 LLM 으로 받는다 — LLM 이 없거나 실패하면 같은 모양의 서버 문장으로 `status: fallback`. 여기서 한 걸음 더 나가 **무엇을 LLM 에 맡기는가**(후보·숫자는 서버, 걸린 칸만 서버 문장으로 교체)가 별도 패턴이 됐다 — [server-decides-llm-narrates](server-decides-llm-narrates.md).
 - **2026-09-06** in [saju-c](../topics/saju-c.md) / [shared](../topics/shared.md) (`f8e5dd0`): `POST /saju-c/readings` 가 원국 + 정적 섹션 4개 + `jobId` 를 즉시 돌려주고, `SajuJobRegistry` 가 4개 LLM 호출을 병렬로 띄운 뒤 `useSajuJob` 이 long-poll 로 도착 순 병합. 회원 저장은 4개가 모두 끝난 뒤 한 번. 패널은 pending 섹션에 "AI 가 사주를 읽는 중이에요 — 먼저 기본 풀이를 보여 드려요".
 - **2026-09-03~05** in [tarot](../topics/tarot.md): 동기 응답이지만 같은 태도 — LLM 실패·한도 초과면 정적 해석 + `source: static` 배지, 요청 실패(`failed`)에만 재시도 버튼. 메뉴 타로는 후보 3개를 시드 결정적으로 먼저 고르고 LLM 은 이유 문장만.
 - **2026-09-02** in [food](../topics/food.md) (`d12b47d`, `9d3253a`, `51de12a`): 원형. 규칙 캐스케이드로 등급을 즉시 주고 `llmPending` 메뉴는 백그라운드 체인(LLM 매칭 → 웹 실측 → 세트 분해)이 어휘 단위 캐시에 쓰면 훅 폴링이 갈아 끼운다. 웹·앱 칩이 같은 훅.

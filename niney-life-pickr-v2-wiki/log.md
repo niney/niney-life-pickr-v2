@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-10-04 (28th compile)
+
+**New topics:** meal-nutrition(246줄·53 sources) — 식단 기록의 영양소 점검(KDRI 2020 대조·성별·출생연도·기록 부족이면 보류)과 영양제 조언(purpose `meal-supplement` 기본 kimi-k3, 성분·형태만, `sanitizeAdvice` 칸 단위 검사 → 서버 문장 교체, 저장본 재사용·일일 한도). 사용자 결정(2026-10-04): 영양만 meal 에서 떼고 추천·입력은 meal 에 남김.
+**Topics updated:** web(3214줄·302 sources), api-contract(2701·108), shared(1852·203), friendly(1620·443), ai(1524·83), project-overview(1347·173), mobile(926·233), utils(618·134), settlement(465·120), api-docs(392·199 ops), saju-c(365·135), food(363·101), meal(293·116), weather(263), tarot(252·94), saju-g(141·41)
+**Untouched topics:** air-quality, analytics, auto-discover, bus, canonical, config, crawl, housing, life-map, logs, map, menu-grouping, parking, random-crawl, review-clustering, review-search, schedule, sea, subway, telegram, tour, transit, usage-quota, vote
+**New concepts:** synthetic-persona-probe, server-decides-llm-narrates, rn-runtime-gaps
+**Concepts updated:** embedded-webview-bridge(**superseded** — 사주·타로 앱 네이티브 전환, `saju-profiles` 브리지가 하루 만에 생겼다 사라진 경위와 "브리지가 상태를 실어 나르면 전환 시점" 교훈), webgl-stage-lite-fallback(앱 expo-gl 3D — 첫 프레임 실측·기기별 기억·문지기 대기), platform-ui-split(shared 세션 훅 = 화면 상태 기계 전체가 공유 단위, 정산 참여 칩), zod-ssot-buildless(표시 문자열 `settlement.labels.ts`), versioned-llm-prompts(추천 v3→v5 하루, 조언 promptVersion+inputHash 재사용), model-family-call-options(조언이 두 번째 `thinkOptionFor` 소비자 — 추천·프로브는 설정 안 읽음), unknown-vs-zero(달력 kcal null·영양 unknown/notMeasured/insufficient), static-first-llm-enrichment(영양 탭), golden-set-precision-gate(프로브로 분기)
+**Sources scanned:** ~3,654 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1,670 — 27차 1,531 → +139)
+**Sources changed:** 27차 위키 커밋 `fac1e16`(2026-09-26) 이후 **41커밋·269파일**(+25,551/−2,585) — 식단 2막 17, 음식 2, 정산 3, 사주(C)·타로 앱 네이티브 전환·3D·공유 글꼴 15, Xcode 27 3, 테스트 1.
+**Notes:** 부모가 브리핑(`COMPILE_BRIEF.md`) + 병렬 서브에이전트 11개(`model: opus`, 각 4~23분) — 한도 끊김 없이 전원 완주. 부모는 기다리는 동안 컨셉을 코드로 검증하며 먼저 썼고(에이전트 보고의 공통 지목 — RN 런타임 함정 4명, 가상 사용자 프로브 4명, 서버 판단·LLM 서술 3명 — 을 반영), 이전 라운드 보조 스크립트가 지워져 `gen-wiki-meta.mjs`·`check-wiki-topics.mjs`·`check-links.mjs` 를 다시 만들었다. 깨진 상대 링크 6건(사주·타로 웹 상수가 shared 로 이동) 해소. 사고 1건: saju-g 담당이 perl 일괄 치환으로 파일을 비웠다가 `git checkout` 으로 복구 후 재작업. 브리핑의 `commit-files.txt` 가 큰 커밋의 파일 목록을 40줄에서 잘랐다는 지적 — 다음엔 `head` 없이. 보류 컨셉 후보: 표시 극성 반전, 제거 조건이 적힌 임시 대응, 웹 정적 자산 서버 변환 중계, 서브셋 대체 글꼴, 일회성 백필 런북 부재.
+
 ## 2026-09-26 (27th compile)
 
 **New topics:** parking(606줄·72 sources) — 주차장(표준데이터+서울 공영)·충전소(환경공단)·공항(한국공항공사+인천공항) 3탭 + 5분·10분 폴러(`onListen` 에서만) + 요일×시간 혼잡 이력 + 맛집 '가는 법' 주차 / sea(350줄·51) — 국립해양조사원 지수 6종·물때·이안류 프록시(적재 없음, 좌표표 utils 커밋) / api-docs(371줄·63) — `docs/api` 외부 문서·swagger transform·CORS 어드민 외 개방(사용자 결정으로 friendly 에서 분리)

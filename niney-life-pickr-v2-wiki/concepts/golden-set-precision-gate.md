@@ -1,7 +1,7 @@
 ---
 concept: 골든셋 정밀도 게이트 — 규칙 엔진은 커밋된 정답표로, LLM 모델은 프로브 수치로 결정한다
-last_compiled: 2026-09-07
-topics_connected: [food, saju-c, saju-g, ai, utils, friendly]
+last_compiled: 2026-10-04
+topics_connected: [food, saju-c, saju-g, ai, utils, friendly, meal]
 status: active
 ---
 
@@ -17,6 +17,7 @@ status: active
 
 ## Instances
 
+- **2026-10-04** in [meal](../topics/meal.md) / [food](../topics/food.md): 정답표를 만들 수 없는 기능(식단 추천·영양 조언)에서 이 방법론이 **가상 사용자 프로브**로 갈라져 나왔다 — 정답 대신 "기대를 가진 사람"을 커밋하고 점수 층·LLM 층을 따로 판정한다([synthetic-persona-probe](synthetic-persona-probe.md)). 1인분 규칙을 바꾼 `9019cf5` 뒤에도 메뉴 칼로리 골든 정밀도 99.5% 가 그대로임을 확인 — 기존 골든셋은 인접 규칙 변경의 회귀 게이트로도 쓰인다.
 - **2026-09-06** in [saju-c](../topics/saju-c.md) / [utils](../topics/utils.md) (`db1415f`, `d31843b`): 절기·음력 표 생성 스크립트가 KASI 골든셋과 일치할 때만 커밋, 표본 사주(1990-05-15 경오 신사 경진 계미 등) 테스트 고정. 모델 프로브 → 기본 kimi-k3, 대안 deepseek-v4-pro.
 - **2026-09-06~07** in [saju-g](../topics/saju-g.md): KASI·IANA 53 대조 테스트 + 프롬프트 v3 의 K3 12/12 실측 — 다른 세션이 독립적으로 같은 형태.
 - **2026-09-02** in [food](../topics/food.md) (`0d2584a`…`51de12a`, 커밋은 전부 09-02): 원형. 메뉴명 3등급 판정 골든 444건 99.5%(기준선 97.6%), 세트 분해 골든 37건 93.8%, 불투명 세트 45→34건 — 규칙 4종·LLM 분해 v3 채택이 전부 숫자로 기록됐다. `measure:menu-golden` 은 LLM·웹 캐시만 읽으므로 `probe:menu-coverage --ask --web` 으로 먼저 채운다.

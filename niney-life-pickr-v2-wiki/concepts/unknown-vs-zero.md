@@ -1,7 +1,7 @@
 ---
 concept: 모름과 없음을 계약에서 가른다 — null(관측 안 됨·범위 밖)·0(관측된 없음)·억제(말하지 않음)
-last_compiled: 2026-09-26
-topics_connected: [housing, parking, sea, tour, air-quality, api-contract, web, life-map]
+last_compiled: 2026-10-04
+topics_connected: [housing, parking, sea, tour, air-quality, api-contract, web, life-map, meal, meal-nutrition]
 status: active
 ---
 
@@ -24,6 +24,7 @@ status: active
 
 ## Instances
 
+- **2026-10-04** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) / [api-contract](../topics/api-contract.md) (`186d2bc`·`3d067a0`): 식단 도메인으로 번졌다. 달력 `days[].kcal` 은 kcal 이 있는 항목만 더하고 하나도 없으면 `null`(0 으로 채우지 않음). 영양 점검은 영양소 상태에 `unknown` 을 두고(`MealNutrientStatus = low|borderline|ok|high|unknown`), 카탈로그에 그 영양소 값이 없으면 `notMeasured` 로 따로 보여 "부족"과 "모름"을 가른다. 기록이 적으면 판정 자체를 보류(`status: insufficient`) — 세 번째 종류인 **말하지 않음**이다. 음료·주류는 "0 으로 안다", 정보 없는 과일·채소는 "모른다"로 구분한다.
 - **2026-09-24** in [housing](../topics/housing.md) / [life-map](../topics/life-map.md) / [api-contract](../topics/api-contract.md) (`ad48f96`): 침수 흔적 — 계약 주석이 세 경우를 적는다(범위 밖·좌표 없음·미적재 → `null`). 웹은 `null` 이면 상세의 '침수 흔적' 섹션과 지도 물방울을 아예 그리지 않는다. **경계를 어디서 얻느냐가 약점으로 드러났다** — 커버리지 시도는 메타데이터가 아니라 **적재된 행의 시군구 코드 앞 두 자리**(`HousingFloodIndex.sidos`)에서 뽑는다. 로컬 적재에 잘못된 `ADM_CD` 4행(`10350` 3행·`12345` 1행)이 검증 없이 들어가 `sidos = {10, 11, 12}` 가 됐다(housing 토픽 Gotchas). 지금은 무해하지만, 오류 코드가 실제 시도 코드와 겹쳤다면 그 시도 전체가 "모름" 이 아니라 "0건(안전)" 으로 표시됐을 것이다. 적재 여부를 알려 주는 API 도 없어 범례는 적재와 무관하게 늘 보인다.
 - **2026-09-24** in [sea](../topics/sea.md) (`4a2bff1`): 지수 단계가 세 겹 — 1~5 정상 단계, **0 = 체험불가**(원천이 명시한 단계), `null` = 모름(원문 라벨은 `label` 에 그대로). D+3 이후 '일'(하루) 예보는 오전/오후 구분이 없어 `period` 가 `null` — "오후 없음" 이 아니라 "하루 단위라 구분 없음" 이다.
 - **2026-09-25** in [parking](../topics/parking.md) (`2ff2c31`): 요금 필드 `null` = 정보 없음(무료가 아니다 — 무료는 별도 Y/N), 무료 여부 `null` = 모름(현장 확인). 서울 노상 주차는 구획마다 한 행이라, 여러 행이면 행 수가 면수지만 한 행뿐이면 **면수를 모른다**(1 이 아니다). 실시간 값의 `updatedAt` 은 원천이 밝힌 갱신 시각(밝히지 않으면 `null`), `fetchedAt` 은 폴링 시각으로 둘을 따로 둔다.

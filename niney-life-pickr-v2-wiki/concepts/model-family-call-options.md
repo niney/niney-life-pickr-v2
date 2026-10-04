@@ -1,7 +1,7 @@
 ---
 concept: 모델 계열별 호출 옵션 — 모델 기벽은 utils 순수 함수로 고정하고, 어드민 설정은 효과가 있는 계열에만 건다
-last_compiled: 2026-09-19
-topics_connected: [ai, saju-c, utils, web, api-contract, friendly]
+last_compiled: 2026-10-04
+topics_connected: [ai, saju-c, utils, web, api-contract, friendly, meal-nutrition, meal]
 status: active
 ---
 
@@ -17,6 +17,7 @@ Ollama Cloud 에 올라온 모델들은 같은 `/api/chat` 이라도 **추론(th
 
 ## Instances
 
+- **2026-10-04** in [meal-nutrition](../topics/meal-nutrition.md) / [ai](../topics/ai.md) (`3d067a0`): 두 번째 소비자 — 영양제 조언(purpose `meal-supplement`, 기본 kimi-k3)이 `thinkOptionFor(model, resolved.thinking)` 로 어드민 "추론" 설정을 kimi 계열에만 반영하고 `thinkTokenMult` 로 출력 예산·타임아웃(상한 180초)을 키운다. 반면 같은 식단의 **추천**(`meal-recommendation.service.ts`)과 두 프로브(`probe:meal-models`·`probe:meal-nutrition`)는 `thinkOptionForModel(model)` 만 써서 어드민 설정을 읽지 않는다 — 한 도메인 안에 두 방식이 섞였고, 어드민 화면의 "최대 5배·120초" 안내도 사주 기준 그대로다(2026-10-04 위키 점검). `recommendModelForPurpose` 의 kimi 우선 목록은 saju·saju-g·meal-supplement 셋.
 - **2026-09-12** in [ai](../topics/ai.md) / [utils](../topics/utils.md) / [api-contract](../topics/api-contract.md) / [web](../topics/web.md) (`a823af1`): thinking 설정 도입 — DB 열 + 계약 enum + 어드민 select + 어댑터 전달 + 순수 함수 2개(`thinkOptionForModel`, `thinkOptionFor`) + 테스트. 실측 표(모델별 think 반응)가 코드 주석으로 남았다.
 - **2026-09-12** in [saju-c](../topics/saju-c.md) (`a823af1`·`baecb9b`): 첫 소비자 — 사주(C) 풀이(섹션 4개 병렬 job)와 "사주에 묻기"가 kimi 모델일 때 어드민이 고른 추론 단계로 돈다. 기본 끔이라 운영 비용은 그대로.
 - **2026-05~08 (전사)** in [ai](../topics/ai.md): 모델 축 폴백·purpose 별 모델 선택(`chat`/`image`/`tarot`…)은 [db-config-env-fallback](db-config-env-fallback.md)이 다루던 "어느 모델을 쓰나"였고, 이 컨셉은 "고른 모델을 **어떻게 부르나**"(옵션)가 갈라져 나온 것이다. `aiModel.ts` 의 다른 휴리스틱(컨텍스트 크기·vision 여부 추정)도 같은 자리에 산다.
