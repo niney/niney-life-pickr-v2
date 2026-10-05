@@ -230,7 +230,7 @@ describe('crawl singleton wiring & job list', () => {
     );
   });
 
-  it('GET /admin/crawl/jobs 는 완료 잡의 visitorReviews 만 비우고 나머지는 그대로 싣는다', async () => {
+  it('GET /admin/crawl/jobs 는 완료 잡의 visitorReviews 만 비우고 나머지는 그대로 싣는다 — 단건 조회는 리뷰까지', async () => {
     const { jobRegistry } = await import('./job-registry.js');
     const review = (i: number) => ({
       authorName: `작성자${i}`,
@@ -296,6 +296,39 @@ describe('crawl singleton wiring & job list', () => {
     // 레지스트리(SSE 'done' 재생 원본)는 그대로 — 목록 응답만 가볍게.
     const kept = jobRegistry.get(id)?.result;
     expect(kept?.ok && kept.data.visitorReviews).toHaveLength(200);
+
+    // 단건 조회는 리뷰 본문까지 싣는다 — 목록으로 종료를 알아챈 화면(SSE 'done' 을 놓쳤거나 끝난 잡을 다시 연 경우)이
+    // 완전한 결과를 여기서 받는다.
+    const one = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/crawl/jobs/${id}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(one.statusCode).toBe(200);
+    const full = one.json() as {
+      id: string;
+      status: string;
+      result: { ok: boolean; data?: { name: string; visitorReviews: Array<{ externalId: string }> } } | null;
+    };
+    expect(full).toMatchObject({ id, status: 'done', result: { ok: true, data: { name: '목록 경량화 가게' } } });
+    expect(full.result?.data?.visitorReviews).toHaveLength(200);
+    expect(full.result?.data?.visitorReviews[0]?.externalId).toBe('ext-0');
+
+    // 레지스트리에 없는(만료된) 잡은 404, 남의 잡은 403.
+    const missing = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/crawl/jobs/no-such-job',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(missing.statusCode).toBe(404);
+    const other = jobRegistry.create({ url: 'https://map.naver.com/p/entry/place/777', placeId: '777', actorId: 'someone-else' });
+    const forbidden = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/crawl/jobs/${other.id}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(forbidden.statusCode).toBe(403);
+    jobRegistry.cancel(other.id, 'someone-else');
   });
 
   it('POST 테이블링 일괄 저장은 같은 actor 의 진행 중 잡이 있으면 409', async () => {

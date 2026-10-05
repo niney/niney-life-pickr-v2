@@ -6,6 +6,7 @@ import {
   type CatchtableShopReviewOverviewResponseType,
   type CrawlJobListResultType,
   type CrawlJobLogsResultType,
+  type CrawlJobType,
   type CrawlLogLevelType,
   type CrawlModeType,
   type CrawlSearchResultType,
@@ -42,7 +43,11 @@ export const crawlApi = {
       body: JSON.stringify({ url, mode }),
     }),
 
+  // 목록은 완료 잡의 리뷰 본문(visitorReviews)을 비워서 내려온다 — 완전한 결과는 get(단건) 또는 SSE 'done'.
   list: () => apiFetch<CrawlJobListResultType>(Routes.Crawl.jobs),
+
+  // 잡 하나(완료 결과의 리뷰 본문 포함). 레지스트리에서 만료됐으면 404.
+  get: (jobId: string) => apiFetch<CrawlJobType>(Routes.Crawl.job(jobId)),
 
   cancel: (jobId: string) =>
     apiFetch<void>(Routes.Crawl.job(jobId), { method: 'DELETE' }),

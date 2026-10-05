@@ -7,6 +7,7 @@ import {
   CatchtableShopData,
   CatchtableShopMenusResponse,
   CatchtableShopReviewOverviewResponse,
+  CrawlJob,
   CrawlJobListResult,
   CrawlJobLogsQuery,
   CrawlJobLogsResult,
@@ -87,7 +88,8 @@ const safeParseJsonObject = (raw: string): Record<string, unknown> | null => {
 };
 
 // 잡 목록은 웹 폴백 폴링(8초)으로 불리므로 완료 잡의 리뷰 본문(≤200건, 잡당 ~300KB)은 빼고
-// 내린다. 리뷰 목록은 SSE 'done'(재연결 afterSeq 재생 포함)이 그대로 싣는다.
+// 내린다. 리뷰 목록은 SSE 'done'(재연결 afterSeq 재생 포함)과 잡 단건 조회(GET jobs/:id)가 그대로
+// 싣는다 — 목록으로 종료를 알아챈 클라이언트 폴백은 단건 조회로 완전한 결과를 받는다.
 const slimJobForList = (job: CrawlJobType): CrawlJobType =>
   job.result?.ok
     ? { ...job, result: { ...job.result, data: { ...job.result.data, visitorReviews: [] } } }
@@ -703,6 +705,24 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: CrawlJobListResult },
     },
     handler: async (req) => ({ jobs: jobRegistry.list(req.user.userId).map(slimJobForList) }),
+  });
+
+  // GET — 잡 하나(완료 결과의 리뷰 본문 포함). 목록은 리뷰 본문을 빼고 내리므로(slimJobForList), SSE 'done' 을
+  // 놓쳤거나 끝난 잡을 다시 여는 화면이 완전한 결과를 여기서 받는다. 레지스트리에서 만료된 잡은 404.
+  typed.get(`${Routes.Crawl.jobs}/:id`, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+      response: { 200: CrawlJob },
+    },
+    handler: async (req) => {
+      const job = jobRegistry.get(req.params.id);
+      if (!job) throw app.httpErrors.notFound('Job not found or expired');
+      if (job.actorId !== req.user.userId) throw app.httpErrors.forbidden('Not your job');
+      return jobRegistry.toPublic(job);
+    },
   });
 
   // GET — 잡 단위 영속 로그 조회. SSE 의 실시간 'log' 이벤트와 동일한 데이터를

@@ -614,36 +614,62 @@ export const useCrawlJobStream = (jobId: string | null): CrawlStreamState => {
     enabled: !!jobId && !isTerminal,
     refetchInterval: !!jobId && !isTerminal ? 8000 : false,
   });
+  // 목록은 완료 잡의 리뷰 본문을 비워서 내려온다(서버 slimJobForList). 그 축약 결과로 종료를 합성하면
+  // 리뷰가 빈 채로 확정되고 뒤에 온 SSE 'done' 은 seq 가 낮아 버려진다 — 성공으로 끝난 잡은 단건
+  // 조회로 완전한 결과를 받아 그걸로 합성한다. 실패 결과에는 리뷰가 없어 목록 것을 그대로 쓴다.
+  const listedJob =
+    !jobId || isTerminal ? undefined : jobsQuery.data?.jobs.find((j) => j.id === jobId);
+  const finishedOk =
+    !!listedJob && listedJob.status !== 'running' && listedJob.result?.ok === true;
+  const fullJobQuery = useQuery({
+    queryKey: ['crawl', 'job', jobId],
+    queryFn: () => crawlApi.get(jobId as string),
+    enabled: finishedOk,
+    retry: false,
+    // 끝난 잡의 결과는 바뀌지 않는다. 결과는 스트림 상태가 들고 있으니 캐시는 오래 두지 않는다.
+    staleTime: Infinity,
+    gcTime: 60_000,
+  });
   useEffect(() => {
     if (!jobId || isTerminal) return;
     const jobs = jobsQuery.data?.jobs;
     if (!jobs) return;
     const job = jobs.find((j) => j.id === jobId);
     if (job && job.status !== 'running' && job.result) {
+      if (job.result.ok) {
+        // 단건 조회가 끝날 때까지 기다린다. 실패하면(레지스트리 만료·네트워크) 목록의 축약 결과로라도
+        // 종료를 알린다 — 패널이 'running' 으로 남는 것보다 낫다.
+        if (fullJobQuery.isPending) return;
+        const full = fullJobQuery.data?.result;
+        dispatch({
+          type: 'event',
+          jobId,
+          event: {
+            type: 'done',
+            result: full?.ok ? full : job.result,
+            seq: Number.MAX_SAFE_INTEGER,
+            at: job.finishedAt ?? '',
+          },
+        });
+        return;
+      }
       dispatch({
         type: 'event',
         jobId,
-        event: job.result.ok
-          ? {
-              type: 'done',
-              result: job.result,
-              seq: Number.MAX_SAFE_INTEGER,
-              at: job.finishedAt ?? '',
-            }
-          : {
-              type: 'error',
-              error: job.result.error,
-              message: job.result.message,
-              seq: Number.MAX_SAFE_INTEGER,
-              at: job.finishedAt ?? '',
-            },
+        event: {
+          type: 'error',
+          error: job.result.error,
+          message: job.result.message,
+          seq: Number.MAX_SAFE_INTEGER,
+          at: job.finishedAt ?? '',
+        },
       });
     } else if (!job && state.lastSeq > 0) {
       // 진행 중이던(이벤트를 받았던) 잡이 목록에서 사라짐 = 완료 후 GC.
       // 결과 미상 종료로 정리만 트리거(자동 dismiss 는 성공일 때만 동작).
       dispatch({ type: 'closed' });
     }
-  }, [jobsQuery.data, jobId, isTerminal, state.lastSeq]);
+  }, [jobsQuery.data, fullJobQuery.isPending, fullJobQuery.data, jobId, isTerminal, state.lastSeq]);
 
   // 종료(실제 'done'/'error' 든 위 폴백 합성이든)되면 EventSource 를 닫아
   // 백그라운드 무한 재연결을 막는다.
