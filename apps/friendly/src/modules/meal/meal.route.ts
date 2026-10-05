@@ -46,6 +46,7 @@ import { RATE } from '../../plugins/rate-limit.js';
 import { MealDataError, MealDataService } from './meal-data.service.js';
 import { MealPhotoError, isValidMealPhotoToken } from './meal-photo.service.js';
 import { MealPreferenceService } from './meal-preference.service.js';
+import { createRestoreIntake } from './meal-restore-intake.js';
 import { MealService, MealServiceError } from './meal.service.js';
 import { MealStatsService } from './meal-stats.service.js';
 
@@ -261,8 +262,18 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
+  // 복원 본문은 읽기 전에 전역 자리를 잡는다 — 처리 게이트(서비스)만으로는 기다리는 요청마다 파싱된 75MB 본문이 남는다.
+  const restoreIntake = createRestoreIntake({
+    maxBodyBytes: MEAL_DATA_BACKUP_MAX_JSON_BYTES,
+    busy: () => app.httpErrors.serviceUnavailable('다른 복원 요청을 처리하고 있습니다. 잠시 뒤 다시 시도해 주세요.'),
+  });
+
   typed.post(Routes.Meal.dataRestore, {
     onRequest: [app.authenticate],
+    // 인증·요청 한도(onRequest) 뒤, 본문 파싱 전.
+    preParsing: [restoreIntake.hold],
+    preValidation: [restoreIntake.bodyReceived],
+    onResponse: [restoreIntake.done],
     config: { rateLimit: RATE.mealDataArchive },
     // base64 사진 + JSON 오버헤드 상한. 전역 body limit을 넓히지 않는다.
     bodyLimit: MEAL_DATA_BACKUP_MAX_JSON_BYTES,
@@ -273,7 +284,8 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
         '본문은 GET /api/v1/meals/data/backup 응답 그대로(JSON 최대 75MB, IP당 시간당 10회). ' +
         `사진 합계가 ${MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES / 1024 / 1024}MB(예전 백업 호환 — 새 백업은 ${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / 1024 / 1024}MB)를 넘으면 413, 복원 뒤 기록이 계정 ` +
         `${MEAL_MAX_ENTRIES_PER_USER.toLocaleString('ko-KR')}건·하루 ${MEAL_MAX_ENTRIES_PER_DAY}끼를 넘으면 409, ` +
-        '다른 백업·복원 대기가 길면 503. 선호 설정은 기존 값이 있으면 유지하고 없을 때만 아카이브 값으로 만든다.',
+        '복원 요청은 서버 전체에서 한 번에 1건만 받는다(본문을 읽기 전부터) — 다른 백업·복원 대기가 길면 503. ' +
+        '선호 설정은 기존 값이 있으면 유지하고 없을 때만 아카이브 값으로 만든다.',
       security: [{ bearerAuth: [] }],
       body: MealDataBackup,
       response: { 200: RestoreMealDataResult },

@@ -32,12 +32,13 @@ import { DEFAULT_LEXICON } from '../food/engine/index.js';
 import type { FoodService } from '../food/food.service.js';
 import { MealDataService } from './meal-data.service.js';
 import { mealMutationBarrier } from './meal-mutation-barrier.js';
+import { mealRestoreIntakeGate } from './meal-restore-intake.js';
 import { MealService } from './meal.service.js';
 
 // 사진 포함 백업·내보내기 스트림, 복원 청크·상한, 전역 1건(성능 감사 2차) — 아래 '스트림·복원 청크·상한' describe.
 const BACKUP = '/api/v1/meals/data/backup';
 const RESTORE = '/api/v1/meals/data/backup/restore';
-const STREAM_USERS = ['stream-a', 'stream-b', 'stream-c', 'stream-d', 'stream-e', 'stream-f', 'stream-g', 'stream-h', 'stream-i'];
+const STREAM_USERS = ['stream-a', 'stream-b', 'stream-c', 'stream-d', 'stream-e', 'stream-f', 'stream-g', 'stream-h', 'stream-i', 'stream-j', 'stream-k'];
 
 const emptyArchive = (archiveId: string): MealDataBackupType => ({
   format: MEAL_DATA_BACKUP_FORMAT,
@@ -1294,6 +1295,45 @@ describe('meal data export/delete routes (격리 DB)', () => {
       expect(photos.filter((p) => p.entryId === null).map((p) => p.token)).toEqual([pending.token]);
       await expect(app.mealPhotos.read(userId, pending.token, 'full')).resolves.toBeTruthy();
       for (const p of leftovers) await expect(app.mealPhotos.read(userId, p.token, 'full')).resolves.toBeTruthy();
+    });
+
+    it('복원 라우트는 본문을 읽기 전에 전역 자리를 잡는다 — 앞선 복원이 끝날 때까지 다음 요청은 입구에서 기다린다', async () => {
+      const first = emptyArchive('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+      first.photos = [await jpegPhoto('photo-1', '#246')];
+      first.entries = [archiveEntry('entry-1', '2026-02-10', ['photo-1'])];
+      const second = emptyArchive('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+      second.entries = [archiveEntry('entry-1', '2026-02-11')];
+      const storeEntered = deferred();
+      const releaseStore = deferred();
+      const originalStore = app.mealPhotos.storeWhileMutationLocked.bind(app.mealPhotos);
+      const store = vi
+        .spyOn(app.mealPhotos, 'storeWhileMutationLocked')
+        .mockImplementationOnce(async (targetUserId, buffer, opts) => {
+          storeEntered.resolve();
+          await releaseStore.promise;
+          return originalStore(targetUserId, buffer, opts);
+        });
+      try {
+        // 첫 복원이 사진 저장에서 멈춰 있는 동안(입구 자리를 쥔 채) 다른 사용자의 복원이 들어온다.
+        const a = app.inject({ method: 'POST', url: RESTORE, headers: authOf('stream-j'), payload: first });
+        await storeEntered.promise;
+        expect(mealRestoreIntakeGate.active).toBe(1);
+        const b = app.inject({ method: 'POST', url: RESTORE, headers: authOf('stream-k'), payload: second });
+        for (let i = 0; i < 400 && mealRestoreIntakeGate.queued === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+        // 두 번째 요청은 본문 파싱 전 단계(preParsing)에서 기다린다.
+        expect(mealRestoreIntakeGate.queued).toBe(1);
+        expect(await app.prisma.mealEntry.count({ where: { userId: 'stream-k' } })).toBe(0);
+
+        releaseStore.resolve();
+        expect((await a).statusCode).toBe(200);
+        expect((await b).statusCode).toBe(200);
+        expect(mealRestoreIntakeGate.active).toBe(0);
+        expect(mealRestoreIntakeGate.queued).toBe(0);
+        expect(await app.prisma.mealEntry.count({ where: { userId: 'stream-k' } })).toBe(1);
+      } finally {
+        releaseStore.resolve();
+        store.mockRestore();
+      }
     });
 
     it('백업·복원은 전역 1건 — 자리가 없으면 busy, 스트림을 버리면 전역 자리와 사용자 장벽을 바로 푼다', async () => {
