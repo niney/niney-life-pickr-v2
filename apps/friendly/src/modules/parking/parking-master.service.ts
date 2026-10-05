@@ -6,6 +6,8 @@
 //     있어 나머지는 지번 주소 지오코딩(로더). 버스전용·거주자 우선 전용은 뺀다. 시영 실시간(GetParkingInfo)에만 있는
 //     코드는 그 행으로 보충.
 //   - 표준데이터의 서울 행이 서울 원천과 100m 안 + 이름이 비슷하면(또는 25m 안) 서울 행만 남긴다(요금·실시간이 더 촘촘).
+//   - 한국교통안전공단 주차정보(15099883, kotsa-master.service): 공영만 정규화하고, 같은 기준으로 서울·표준데이터와 겹치는
+//     곳은 빼서 새 곳만 더한다(정적 정보는 기존 원천 우선).
 
 import type { PrismaClient } from '@prisma/client';
 import {
@@ -338,34 +340,75 @@ export const normalizeSeoulParkingRows = (
 };
 
 // ── 겹침 접기 ────────────────────────────────────────────────────────────────
-// primary(서울) 좌표 근처의 secondary(표준데이터) 행 중 같은 주차장으로 보이는 것을 뺀다. 좌표 없는 행은 비교 불가라 남긴다.
+// primary 좌표 근처의 secondary 행 중 같은 주차장으로 보이는 것(가장 가까운 primary 와 짝)을 가려낸다. 좌표 없는 행은 비교
+// 불가라 남긴다. 격자(칸 한 변이 판정 거리 이상)의 이웃 칸만 보므로 전국끼리 비교해도 행×행이 아니다.
+// sameNameRadiusM: 정규화 이름이 정확히 같으면(두 글자 이상) 이 거리까지 같은 곳 — KOTSA 는 입구 좌표라 같은 주차장도 기존
+// 원천과 100~300m 어긋난다(실측 2026-10-05: 종묘·세종로 196m, 이름 같은 쌍 100~300m 309곳, 방향은 일정하지 않음).
+const DUP_CELL_MIN_DEG = 0.0015;
+// 경도 1°의 최소 길이(m, 북위 39° 근처) — 칸 한 변이 판정 거리 이상이 되게.
+const LNG_DEG_MIN_M = 85_000;
+
+export const matchParkingDuplicates = (
+  primary: ParkingLotRow[],
+  secondary: ParkingLotRow[],
+  opts: { sameNameRadiusM?: number } = {},
+): { kept: ParkingLotRow[]; matched: { row: ParkingLotRow; anchor: ParkingLotRow }[] } => {
+  const sameNameRadius = Math.max(DUP_RADIUS_M, opts.sameNameRadiusM ?? 0);
+  const cellDeg = Math.max(DUP_CELL_MIN_DEG, sameNameRadius / LNG_DEG_MIN_M);
+  const dupCell = (lat: number, lng: number): [number, number] => [Math.floor(lat / cellDeg), Math.floor(lng / cellDeg)];
+  const grid = new Map<string, ParkingLotRow[]>();
+  for (const p of primary) {
+    if (p.lat === null || p.lng === null) continue;
+    const [cy, cx] = dupCell(p.lat, p.lng);
+    const k = `${cy}:${cx}`;
+    const list = grid.get(k);
+    if (list) list.push(p);
+    else grid.set(k, [p]);
+  }
+  if (grid.size === 0) return { kept: secondary, matched: [] };
+  const kept: ParkingLotRow[] = [];
+  const matched: { row: ParkingLotRow; anchor: ParkingLotRow }[] = [];
+  for (const s of secondary) {
+    if (s.lat === null || s.lng === null) {
+      kept.push(s);
+      continue;
+    }
+    const here = { lat: s.lat, lng: s.lng };
+    const [cy, cx] = dupCell(s.lat, s.lng);
+    const sName = normalizeParkingName(s.name);
+    let best: { anchor: ParkingLotRow; d: number } | null = null;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (const a of grid.get(`${cy + dy}:${cx + dx}`) ?? []) {
+          const d = haversineM(here, { lat: a.lat!, lng: a.lng! });
+          if (d > sameNameRadius || (best && best.d <= d)) continue;
+          const aName = normalizeParkingName(a.name);
+          const same =
+            d <= DUP_NEAR_M ||
+            (d <= DUP_RADIUS_M && (sName === aName || nameSimilarity(sName, aName) >= DUP_NAME_SCORE)) ||
+            (sName.length >= 2 && sName === aName);
+          if (same) best = { anchor: a, d };
+        }
+      }
+    }
+    if (best) matched.push({ row: s, anchor: best.anchor });
+    else kept.push(s);
+  }
+  return { kept, matched };
+};
+
+// primary 와 같은 곳으로 보이는 secondary 행을 뺀다 — 서울 ↔ 표준데이터 서울 행, 기존(서울·표준) ↔ KOTSA(KOTSA_SAME_NAME_RADIUS_M).
 export const dropParkingDuplicates = (
   primary: ParkingLotRow[],
   secondary: ParkingLotRow[],
+  opts: { sameNameRadiusM?: number } = {},
 ): { kept: ParkingLotRow[]; dropped: number } => {
-  const anchors = primary.filter((p) => p.lat !== null && p.lng !== null);
-  if (anchors.length === 0) return { kept: secondary, dropped: 0 };
-  const lats = anchors.map((a) => a.lat!);
-  const lngs = anchors.map((a) => a.lng!);
-  const box = { minLat: Math.min(...lats) - 0.01, maxLat: Math.max(...lats) + 0.01, minLng: Math.min(...lngs) - 0.01, maxLng: Math.max(...lngs) + 0.01 };
-  let dropped = 0;
-  const kept = secondary.filter((s) => {
-    if (s.lat === null || s.lng === null) return true;
-    if (s.lat < box.minLat || s.lat > box.maxLat || s.lng < box.minLng || s.lng > box.maxLng) return true;
-    const sName = normalizeParkingName(s.name);
-    for (const a of anchors) {
-      const d = haversineM({ lat: s.lat, lng: s.lng }, { lat: a.lat!, lng: a.lng! });
-      if (d > DUP_RADIUS_M) continue;
-      const aName = normalizeParkingName(a.name);
-      if (d <= DUP_NEAR_M || sName === aName || nameSimilarity(sName, aName) >= DUP_NAME_SCORE) {
-        dropped += 1;
-        return false;
-      }
-    }
-    return true;
-  });
-  return { kept, dropped };
+  const { kept, matched } = matchParkingDuplicates(primary, secondary, opts);
+  return { kept, dropped: matched.length };
 };
+
+// KOTSA 겹침 — 이름이 같으면 300m 까지(위 matchParkingDuplicates 주석의 실측).
+export const KOTSA_SAME_NAME_RADIUS_M = 300;
 
 export interface ParkingReplaceMeta {
   detail: Record<string, number>;

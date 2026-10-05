@@ -100,7 +100,8 @@ const EnvSchema = z.object({
   //  - 국세청 사업자등록정보 진위확인·상태조회(15081808, odcloud) — check:tour-biz·어드민 /admin/tour 만. 100건/콜.
   //  - 주차(/parking): 전국주차장정보표준데이터(15012896) — load:parking-lots 만(1,000행 × 19콜). 한국공항공사 주차 혼잡도
   //    (15158689)·인천공항 주차 정보(15095047) — 실시간 폴러(PARKING_LIVE_CRON). 환경공단 전기차 충전소(15076352) —
-  //    load:ev-chargers(전량 53콜) + 상태 폴러(EV_STATUS_CRON, 개발계정 일 1,000건). docs/PLAN-parking.md
+  //    load:ev-chargers(전량 53콜) + 상태 폴러(EV_STATUS_CRON, 개발계정 일 1,000건). 한국교통안전공단 주차정보(15099883,
+  //    심의승인) — load:parking-lots 만(시군구 251곳 ≈ 470콜, 개발계정 일 1만 건). docs/PLAN-parking.md
   DATA_GO_KR_API_KEY: z.string().default(''),
   // 여행로그(AI 허브 71780 제주·도서, 71779 서부권, 71778 동부권, 71581 수도권) 원본 열람 허용 사용자 id·이메일(쉼표) — 다운로드 승인을 받은
   // 본인만. 비우면 원본 라우트 전부 404.

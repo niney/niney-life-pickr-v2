@@ -3,8 +3,10 @@
 //   - 표준데이터 tn_pubr_prkplce_info_api / 한국공항공사 GW: { response:{ header:{resultCode}, body:{ items:{item:[…]}|[…], totalCount } } }
 //   - 인천공항: { response:{ header, body:{ items:[…], totalCount } } }
 //   - 환경공단 EvCharger: { resultCode, resultMsg, totalCount, items:{ item:[…] } }(감싸개 없음)
+//   - 한국교통안전공단 주차정보: { resultCode:'0', totalCount, <오퍼레이션 이름>:[…] }(감싸개 없음, 목록 키가 오퍼레이션마다 다름 — listKey)
 //   - 게이트웨이 오류: { OpenAPI_ServiceResponse:{ cmmMsgHeader:{ returnReasonCode } } } — JSON 또는 XML 문자열.
-// 인증·쿼터(20~33)는 503, 나머지는 502. 게이트웨이 04/05·5xx·네트워크 오류는 1회 재시도. 키는 로그·에러에 싣지 않는다.
+// 인증·쿼터(20~33)는 503, 나머지는 502. 게이트웨이 04/05·5xx·네트워크 오류는 1회 재시도. 초당 한도 초과(…PER_SECOND…)는 503 이지만
+// 잠깐 쉬면 풀리므로 더 길게 쉬고 재시도. 키는 로그·에러에 싣지 않는다.
 
 import { coerceStrOrNull, intOrNull, isObject } from '../../lib/narrow.js';
 import { toServiceKeyPart } from '../bus/bus-api.adapter.js';
@@ -13,8 +15,12 @@ const FETCH_TIMEOUT_MS = 30_000;
 // 충전기 전량 페이지(9,999행 ≈ 10MB)는 느리다.
 const SLOW_FETCH_TIMEOUT_MS = 120_000;
 const RETRY_DELAY_MS = 800;
+// 초당 한도 초과 뒤 쉬는 시간 — 1초 창이 지나도록.
+const PER_SECOND_RETRY_DELAY_MS = 2_500;
 const AUTH_REASON_CODES = new Set(['20', '21', '22', '30', '31', '32', '33']);
 const RETRYABLE_REASON_CODES = new Set(['04', '05']);
+// LIMITED_NUMBER_OF_SERVICE_REQUESTS_PER_SECOND_EXCEEDS_ERROR — 일 쿼터 초과(…REQUESTS_EXCEEDS_ERROR)와 달리 곧 풀린다.
+const isPerSecondLimit = (msg: string): boolean => msg.includes('PER_SECOND');
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -35,6 +41,8 @@ export class ParkingApiError extends Error {
 export interface ParkingCallOptions {
   fetchImpl?: FetchLike;
   timeoutMs?: number;
+  // 시도 횟수(기본 2 = 1회 재시도).
+  attempts?: number;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -45,17 +53,26 @@ export interface ParkingPage {
   totalCount: number;
 }
 
-// data.go.kr 봉투 해석 — 정상이면 page, 아니면 { error, retryable }.
+// data.go.kr 봉투 해석 — 정상이면 page, 아니면 { error, retryable(, retryAfterMs) }. listKey 는 목록이 items 가 아닌 다른
+// 키에 있는 API(한국교통안전공단 — 오퍼레이션 이름)용.
 export const interpretDataGoKr = (
   status: number,
   rawText: string,
   requestUrl: string,
-): { page: ParkingPage } | { error: ParkingApiError; retryable: boolean } => {
+  listKey?: string,
+): { page: ParkingPage } | { error: ParkingApiError; retryable: boolean; retryAfterMs?: number } => {
   const trimmed = rawText.trim();
   // 게이트웨이 오류는 XML 로 오기도 한다.
   if (trimmed.startsWith('<')) {
     const code = /<returnReasonCode>\s*(\d+)\s*<\/returnReasonCode>/.exec(trimmed)?.[1] ?? null;
     const msg = /<returnAuthMsg>([^<]*)<\/returnAuthMsg>/.exec(trimmed)?.[1] ?? /<errMsg>([^<]*)<\/errMsg>/.exec(trimmed)?.[1] ?? 'XML 응답';
+    if (isPerSecondLimit(trimmed)) {
+      return {
+        error: new ParkingApiError(`공공데이터 초당 호출 한도 초과(${code ?? '?'})`, { statusCode: 503, code, requestUrl }),
+        retryable: true,
+        retryAfterMs: PER_SECOND_RETRY_DELAY_MS,
+      };
+    }
     const auth = code !== null && AUTH_REASON_CODES.has(code);
     return {
       error: new ParkingApiError(`공공데이터 ${auth ? '인증' : '게이트웨이'} 오류(${code ?? '?'}: ${msg})`, {
@@ -78,6 +95,13 @@ export const interpretDataGoKr = (
     const header = isObject(gw['cmmMsgHeader']) ? gw['cmmMsgHeader'] : {};
     const code = coerceStrOrNull(header['returnReasonCode']);
     const msg = coerceStrOrNull(header['returnAuthMsg']) ?? coerceStrOrNull(header['errMsg']) ?? '게이트웨이 오류';
+    if (isPerSecondLimit(`${coerceStrOrNull(header['errMsg']) ?? ''} ${msg}`)) {
+      return {
+        error: new ParkingApiError(`공공데이터 초당 호출 한도 초과(${code ?? '?'})`, { statusCode: 503, code, requestUrl }),
+        retryable: true,
+        retryAfterMs: PER_SECOND_RETRY_DELAY_MS,
+      };
+    }
     const auth = code !== null && AUTH_REASON_CODES.has(code);
     return {
       error: new ParkingApiError(`공공데이터 ${auth ? '인증' : '게이트웨이'} 오류(${code ?? '?'}: ${msg})`, {
@@ -103,7 +127,7 @@ export const interpretDataGoKr = (
     };
   }
   const body = isObject(resp['body']) ? resp['body'] : resp;
-  const wrap = body['items'];
+  const wrap = body[listKey ?? 'items'];
   const raw = isObject(wrap) ? wrap['item'] : wrap;
   const items = Array.isArray(raw) ? raw.filter(isObject) : isObject(raw) ? [raw] : [];
   return { page: { items, totalCount: intOrNull(body['totalCount']) ?? items.length } };
@@ -114,7 +138,7 @@ export const callDataGoKr = async (
   base: string,
   params: Record<string, string>,
   serviceKey: string,
-  opts: ParkingCallOptions = {},
+  opts: ParkingCallOptions & { listKey?: string } = {},
 ): Promise<ParkingPage> => {
   if (!serviceKey) throw new ParkingApiError('DATA_GO_KR_API_KEY 가 설정되지 않았습니다', { statusCode: 503 });
   const qs = new URLSearchParams(params).toString();
@@ -122,8 +146,10 @@ export const callDataGoKr = async (
   const requestUrl = `${base}?serviceKey=***&${qs}`;
   const doFetch = opts.fetchImpl ?? fetch;
   let last: ParkingApiError | null = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (attempt > 0) await sleep(RETRY_DELAY_MS);
+  let delay = RETRY_DELAY_MS;
+  for (let attempt = 0; attempt < (opts.attempts ?? 2); attempt += 1) {
+    if (attempt > 0) await sleep(delay);
+    delay = RETRY_DELAY_MS;
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? FETCH_TIMEOUT_MS);
     let status: number;
@@ -142,12 +168,26 @@ export const callDataGoKr = async (
       last = new ParkingApiError(`공공데이터 HTTP ${status}`, { requestUrl });
       continue;
     }
-    const out = interpretDataGoKr(status, text, requestUrl);
+    const out = interpretDataGoKr(status, text, requestUrl, opts.listKey);
     if ('page' in out) return out.page;
     last = out.error;
     if (!out.retryable) break;
+    delay = out.retryAfterMs ?? RETRY_DELAY_MS;
   }
   throw last ?? new ParkingApiError('공공데이터 호출 실패', { requestUrl });
+};
+
+// 호출 사이 간격을 지키는 줄 세우기 — 초당 한도가 낮은 원천(KOTSA)을 한 프로세스 안에서 순차로 부를 때. 앞 호출이 끝나기를
+// 기다리진 않고 시작 시각만 gapMs 씩 벌린다(호출은 원래 순차로 부른다).
+export const createCallSpacer = (gapMs: number) => {
+  let nextAt = 0;
+  return async <T>(fn: () => Promise<T>): Promise<T> => {
+    const now = Date.now();
+    const wait = Math.max(0, nextAt - now);
+    nextAt = Math.max(now, nextAt) + gapMs;
+    if (wait > 0) await sleep(wait);
+    return fn();
+  };
 };
 
 // ── 서울 열린데이터 ──────────────────────────────────────────────────────────
@@ -230,6 +270,16 @@ export const EV_CHARGER_INFO_URL = 'https://apis.data.go.kr/B552584/EvCharger/ge
 export const EV_CHARGER_STATUS_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerStatus';
 // 가이드: 한 페이지 최대 9,999행.
 export const EV_PAGE_SIZE = 9999;
+// 한국교통안전공단 주차정보(15099883, 개발·운영 모두 심의승인 — 2026-10-05 승인 확인). 2026-09-10 에 /Parking → /Parking_v1,
+// 오퍼레이션 _v1 로 바뀌었다. 목록 키는 오퍼레이션 이름. 지역 필터는 옛 행정코드(강원 42·전북 45·부천 41190)만 받는다(kotsa-sigungu).
+// 실측(2026-10-05): 한 페이지 1만 행까지 받는다. 가이드의 30tps 보다 초당 한도가 훨씬 낮아(동시 4개면 대부분 PER_SECOND) 호출은
+// 순차 + 간격(createCallSpacer). 실시간(PrkRealtimeInfo)은 쓰지 않는다 — 시설과 이어지는 행은 값이 멈춰 있고(월요일 출근 시간
+// 1시간 관측 동안 858행 중 변화 0), 값이 바뀌는 행은 시설에 없는 ID 라 위치를 모른다(docs/PLAN-parking.md §KOTSA).
+export const KOTSA_PARKING_BASE = 'https://apis.data.go.kr/B553881/Parking_v1';
+export const KOTSA_OPS = { facility: 'PrkSttusInfo', operation: 'PrkOprInfo' } as const;
+export type KotsaOp = keyof typeof KOTSA_OPS;
+export const KOTSA_PAGE_SIZE = 10_000;
+export const KOTSA_CALL_GAP_MS = 350;
 
 export const fetchStdParkingPage = (serviceKey: string, pageNo: number, opts: ParkingCallOptions = {}): Promise<ParkingPage> =>
   callDataGoKr(STD_PARKING_URL, { pageNo: String(pageNo), numOfRows: String(STD_PARKING_PAGE_SIZE), type: 'json' }, serviceKey, opts);
@@ -246,6 +296,26 @@ export const fetchEvChargerInfoPage = (serviceKey: string, pageNo: number, opts:
     { pageNo: String(pageNo), numOfRows: String(EV_PAGE_SIZE), dataType: 'JSON', ...(opts.zcode ? { zcode: opts.zcode } : {}) },
     serviceKey,
     { ...opts, timeoutMs: opts.timeoutMs ?? SLOW_FETCH_TIMEOUT_MS },
+  );
+
+// KOTSA 한 페이지 — 시군구(옛 행정코드 5자리) 단위. 시도는 코드 앞 두 자리.
+export const fetchKotsaPage = (
+  serviceKey: string,
+  op: KotsaOp,
+  q: { sigunguCd: string; pageNo?: number; numOfRows?: number },
+  opts: ParkingCallOptions = {},
+): Promise<ParkingPage> =>
+  callDataGoKr(
+    `${KOTSA_PARKING_BASE}/${KOTSA_OPS[op]}_v1`,
+    {
+      pageNo: String(q.pageNo ?? 1),
+      numOfRows: String(q.numOfRows ?? KOTSA_PAGE_SIZE),
+      format: '2',
+      sidoCd: q.sigunguCd.slice(0, 2),
+      sigunguCd: q.sigunguCd,
+    },
+    serviceKey,
+    { ...opts, listKey: KOTSA_OPS[op], timeoutMs: opts.timeoutMs ?? SLOW_FETCH_TIMEOUT_MS, attempts: opts.attempts ?? 3 },
   );
 
 // period = 최근 N분(1~10) 안에 상태가 바뀐 충전기.

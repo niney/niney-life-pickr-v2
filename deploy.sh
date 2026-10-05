@@ -241,23 +241,25 @@ housing_data() {
 }
 
 # ── 주차 데이터 ────────────────────────────────────────────
-# status:parking 은 "ok lots=N std=S seoul=U geocoded=G ev=E chargers=C" 한 줄(테이블 없으면 "missing").
+# status:parking 은 "ok lots=N std=S seoul=U kotsa=K geocoded=G ev=E chargers=C" 한 줄(테이블 없으면 "missing").
 parking_status() { pnpm --filter friendly status:parking 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
 
-# 주차장(표준데이터 API ~19콜 + 서울 공영 2콜 + 서울 구영 주소 지오코딩 ~700콜)·충전소(환경공단 ~53콜, 1분 남짓)가 비어
-# 있으면 첫 적재, force=1(9번)이면 다시(원천 반기·수시 갱신). 실시간·충전기 상태는 서버 폴러가 돌리므로 여기선 적재만.
+# 주차장(표준데이터 API ~19콜 + 서울 공영 2콜 + 서울 구영 주소 지오코딩 ~700콜 + 한국교통안전공단 시군구 251곳 ≈ 470콜 —
+# 초당 한도 때문에 순차라 5분 남짓)·충전소(환경공단 ~53콜, 1분 남짓)가 비어 있으면 첫 적재, KOTSA 원천이 아직 없으면(kotsa=0 —
+# 2026-10 원천 추가 뒤 첫 배포) 한 번 다시, force=1(9번)이면 다시(원천 반기·수시 갱신). 실시간·충전기 상태는 서버 폴러가
+# 돌리므로 여기선 적재만.
 parking_data() {
   local force="${1:-0}"
   local st; st="$(parking_status)"
   if [[ "$st" != ok* ]]; then
     echo "  (주차 테이블 없음 — 마이그레이션(케이스 2/4) 뒤에 적재됩니다)"; return 0
   fi
-  local lots ev; lots="$(stat_val lots "$st")"; ev="$(stat_val ev "$st")"
-  echo "  주차 현재: 주차장 ${lots:-0}곳(표준 $(stat_val std "$st") · 서울 $(stat_val seoul "$st")) · 충전소 ${ev:-0}곳"
-  if [[ "$force" == 1 || "${lots:-0}" == 0 ]]; then
-    step "주차장 적재(표준데이터 API + 서울 공영주차장)"
+  local lots ev kotsa; lots="$(stat_val lots "$st")"; ev="$(stat_val ev "$st")"; kotsa="$(stat_val kotsa "$st")"
+  echo "  주차 현재: 주차장 ${lots:-0}곳(표준 $(stat_val std "$st") · 서울 $(stat_val seoul "$st") · 교통안전공단 ${kotsa:-0}) · 충전소 ${ev:-0}곳"
+  if [[ "$force" == 1 || "${lots:-0}" == 0 || "${kotsa:-0}" == 0 ]]; then
+    step "주차장 적재(표준데이터 API + 서울 공영주차장 + 한국교통안전공단 주차정보)"
     pnpm --filter friendly load:parking-lots \
-      || echo "  (주차장 적재 실패 — 표준데이터 API(15012896) 활용신청·SEOUL_OPEN_API_KEY 확인. 서울만 먼저: pnpm --filter friendly load:parking-lots --sources=seoul)"
+      || echo "  (주차장 적재 실패 — 표준데이터(15012896)·한국교통안전공단(15099883) 활용신청·SEOUL_OPEN_API_KEY 확인. 원천 하나만 문제면: pnpm --filter friendly load:parking-lots --sources=std,seoul)"
   fi
   if [[ "$force" == 1 || "${ev:-0}" == 0 ]]; then
     step "전기차 충전소 적재(환경공단 API)"
@@ -352,7 +354,7 @@ case_8() {  # 집값 데이터 적재/갱신 — 단지 CSV 를 data/open/housin
   pull; gen; housing_data 1; analyze_db
 }
 
-case_9() {  # 주차 데이터 적재/갱신 — 표준데이터·서울 공영주차장·전기차 충전소 API(코드 배포·재기동 없음)
+case_9() {  # 주차 데이터 적재/갱신 — 표준데이터·서울 공영주차장·교통안전공단·전기차 충전소 API(코드 배포·재기동 없음)
   pull; gen; parking_data 1; analyze_db
 }
 
@@ -370,7 +372,7 @@ if [[ -z "$choice" ]]; then
   6) 일상지도 데이터 적재/갱신 — data/open/ 의 CSV + 저장소 지오코딩 캐시
   7) 음식 카탈로그 적재/갱신   — data/open/food/ 의 배포본 + 레시피 API
   8) 집값 데이터 적재/갱신     — data/open/housing/ 의 단지 CSV + 실거래 API (HOUSING_MONTHS=N 으로 백필)
-  9) 주차 데이터 적재/갱신     — 전국주차장 표준데이터·서울 공영주차장·전기차 충전소 API
+  9) 주차 데이터 적재/갱신     — 전국주차장 표준데이터·서울 공영주차장·교통안전공단·전기차 충전소 API
 MENU
   read -rp "번호 [1-9]: " choice
 fi

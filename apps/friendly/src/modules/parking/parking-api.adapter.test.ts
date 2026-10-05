@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { ParkingApiError, callDataGoKr, callSeoulOpen, interpretDataGoKr } from './parking-api.adapter.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ParkingApiError, callDataGoKr, callSeoulOpen, createCallSpacer, fetchKotsaPage, interpretDataGoKr } from './parking-api.adapter.js';
 
 // 원천 봉투 — data.go.kr 의 API 별 모양(표준데이터/공항 GW response 감싸개, 인천 items 배열, 환경공단 감싸개 없음)과
 // 게이트웨이 오류(JSON·XML), 서울 열린데이터 코드(INFO-000/200/100·ERROR). 실측(2026-09-25) 응답을 줄여 쓴다.
@@ -51,6 +51,28 @@ describe('interpretDataGoKr', () => {
     const gw = interpretDataGoKr(200, '<OpenAPI_ServiceResponse><cmmMsgHeader><returnReasonCode>04</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>', URL_);
     expect('retryable' in gw && gw.retryable).toBe(true);
   });
+
+  it('한국교통안전공단 봉투 — 목록 키가 오퍼레이션 이름(listKey), 없으면 items 만 본다', () => {
+    const body = JSON.stringify({ resultCode: '0', resultMsg: 'SUCCESS', numOfRows: '2', pageNo: '1', totalCount: '5443', PrkSttusInfo: [{ prk_center_id: 'a' }] });
+    expect(interpretDataGoKr(200, body, URL_, 'PrkSttusInfo')).toEqual({ page: { items: [{ prk_center_id: 'a' }], totalCount: 5443 } });
+    expect(interpretDataGoKr(200, body, URL_)).toEqual({ page: { items: [], totalCount: 5443 } });
+  });
+
+  it('초당 호출 한도 초과는 길게 쉬고 재시도, 일 한도 초과(같은 22)는 재시도 안 함', () => {
+    const perSecond = interpretDataGoKr(
+      200,
+      '<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>LIMITED_NUMBER_OF_SERVICE_REQUESTS_PER_SECOND_EXCEEDS_ERROR</errMsg><returnAuthMsg>LIMITED_NUMBER_OF_SERVICE_REQUESTS_PER_SECOND_EXCEEDS_ERROR</returnAuthMsg><returnReasonCode>22</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>',
+      URL_,
+    );
+    expect(perSecond).toMatchObject({ retryable: true, error: { statusCode: 503 } });
+    expect('retryAfterMs' in perSecond && perSecond.retryAfterMs).toBeGreaterThanOrEqual(1000);
+    const daily = interpretDataGoKr(
+      200,
+      JSON.stringify({ OpenAPI_ServiceResponse: { cmmMsgHeader: { returnReasonCode: '22', returnAuthMsg: 'LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR' } } }),
+      URL_,
+    );
+    expect(daily).toMatchObject({ retryable: false, error: { statusCode: 503, code: '22' } });
+  });
 });
 
 const fakeFetch = (bodies: string[]) => {
@@ -85,6 +107,49 @@ describe('callDataGoKr', () => {
 
   it('키가 없으면 503', async () => {
     await expect(callDataGoKr('https://x', {}, '')).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  describe('초당 한도', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('초당 한도 초과는 쉬었다가 attempts 까지 다시 부른다', async () => {
+      vi.useFakeTimers();
+      const limited = '<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>LIMITED_NUMBER_OF_SERVICE_REQUESTS_PER_SECOND_EXCEEDS_ERROR</errMsg><returnReasonCode>22</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>';
+      const f = fakeFetch([limited, limited, JSON.stringify({ resultCode: '0', totalCount: '1', PrkOprInfo: [{ prk_center_id: 'a' }] })]);
+      const pending = callDataGoKr('https://apis.data.go.kr/x', {}, 'k', { fetchImpl: f.impl, attempts: 3, listKey: 'PrkOprInfo' });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).items).toEqual([{ prk_center_id: 'a' }]);
+      expect(f.urls).toHaveLength(3);
+    });
+  });
+});
+
+describe('fetchKotsaPage · createCallSpacer', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('시군구 코드 앞 두 자리가 시도, 오퍼레이션 _v1 경로·JSON(format=2)·1만 행', async () => {
+    const f = fakeFetch([JSON.stringify({ resultCode: '0', totalCount: '13', PrkSttusInfo: [{ prk_center_id: 'a' }, { prk_center_id: 'b' }] })]);
+    const page = await fetchKotsaPage('k', 'facility', { sigunguCd: '11110' }, { fetchImpl: f.impl });
+    expect(page).toEqual({ items: [{ prk_center_id: 'a' }, { prk_center_id: 'b' }], totalCount: 13 });
+    expect(f.urls[0]).toBe('https://apis.data.go.kr/B553881/Parking_v1/PrkSttusInfo_v1?serviceKey=k&pageNo=1&numOfRows=10000&format=2&sidoCd=11&sigunguCd=11110');
+  });
+
+  it('호출 시작 시각을 gapMs 씩 벌린다', async () => {
+    vi.useFakeTimers();
+    const space = createCallSpacer(350);
+    const starts: number[] = [];
+    const run = () =>
+      space(async () => {
+        starts.push(Date.now());
+      });
+    const all = Promise.all([run(), run(), run()]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await all;
+    expect([starts[1]! - starts[0]!, starts[2]! - starts[1]!]).toEqual([350, 350]);
   });
 });
 

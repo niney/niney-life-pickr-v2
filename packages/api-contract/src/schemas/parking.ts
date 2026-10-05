@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
-// 주차(/parking) 공개 조회 계약 — 주차장(전국주차장정보표준데이터 15012896 + 서울 공영주차장, 로컬 DB)·전기차
-// 충전소(환경공단 15076352, 로컬 DB + 상태 폴러)·공항 주차(한국공항공사·인천공항 실시간, 서버 폴러 메모리).
+// 주차(/parking) 공개 조회 계약 — 주차장(전국주차장정보표준데이터 15012896 + 서울 공영주차장 + 한국교통안전공단 주차정보
+// 15099883 공영, 로컬 DB)·전기차 충전소(환경공단 15076352, 로컬 DB + 상태 폴러)·공항 주차(한국공항공사·인천공항 실시간, 서버
+// 폴러 메모리).
 // 지도 조회는 일상지도와 같은 bbox+줌 규약 — 임계 줌 이상이면 점, 아니면 서버 집계 셀. 코드값은
 // @repo/utils parking.ts 와 같은 목록(이 패키지는 utils 를 import 하지 않는다). docs/PLAN-parking.md
 
@@ -118,7 +119,7 @@ export const ParkingFee = z.object({
 export type ParkingFeeRuleType = z.infer<typeof ParkingFee>;
 
 export const ParkingLotItem = z.object({
-  // 원천 접두 id — 'std:<관리번호>' | 'seoul:<주차장코드>'.
+  // 원천 접두 id — 'std:<관리번호>' | 'seoul:<주차장코드>' | 'kotsa:<주차장 관리 ID>'.
   id: z.string(),
   source: ParkingSource,
   name: z.string(),

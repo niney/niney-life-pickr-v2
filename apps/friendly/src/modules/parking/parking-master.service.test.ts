@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonKeys,
   dropParkingDuplicates,
+  matchParkingDuplicates,
   normalizeSeoulParkingRows,
   normalizeStdParkingRows,
   seoulExcludedOper,
@@ -205,5 +206,39 @@ describe('dropParkingDuplicates', () => {
     const { kept, dropped } = dropParkingDuplicates(seoul, std);
     expect(dropped).toBe(2);
     expect(kept.map((k) => k.id)).toEqual(['std:c', 'std:d', 'std:e']);
+  });
+
+  it('격자 칸 경계를 넘는 짝도 찾고(가장 가까운 primary), 전국끼리여도 다른 도시는 비교하지 않는다', () => {
+    // 위도 0.0015° 칸 경계(37.5015) 양쪽 — 같은 이름, 약 84m. std:far 는 115m 라 짝이 아니다.
+    const primary = [
+      lot({ id: 'std:near', name: '중앙공영주차장', lat: 37.50155, lng: 127.0 }),
+      lot({ id: 'std:far', name: '중앙공영주차장', lat: 37.50155, lng: 127.0009 }),
+      lot({ id: 'std:busan', name: '중앙공영주차장', lat: 35.1, lng: 129.04 }),
+    ];
+    const kotsa = [
+      lot({ id: 'kotsa:1', source: 'kotsa', name: '중앙 공영주차장', lat: 37.5008, lng: 127.0 }),
+      lot({ id: 'kotsa:2', source: 'kotsa', name: '중앙공영주차장', lat: 37.5, lng: 127.0025 }),
+    ];
+    const { kept, matched } = matchParkingDuplicates(primary, kotsa);
+    expect(matched.map((m) => [m.row.id, m.anchor.id])).toEqual([['kotsa:1', 'std:near']]);
+    expect(kept.map((k) => k.id)).toEqual(['kotsa:2']);
+    expect(matchParkingDuplicates([], kotsa).kept).toHaveLength(2);
+  });
+
+  it('sameNameRadiusM — 이름이 정확히 같으면 그 거리까지(KOTSA 입구 좌표 어긋남), 비슷한 이름·한 글자 이름은 100m 그대로', () => {
+    // 세종로: KOTSA 와 서울 원천이 196m 어긋난 실측 쌍.
+    const seoul = [
+      lot({ id: 'seoul:171721', source: 'seoul', name: '세종로 공영주차장(시)', lat: 37.5734, lng: 126.9759 }),
+      lot({ id: 'std:x', name: '가', lat: 37.5, lng: 127.0 }),
+    ];
+    const kotsa = [
+      lot({ id: 'kotsa:sejong', source: 'kotsa', name: '세종로', lat: 37.5733652, lng: 126.9736652 }),
+      lot({ id: 'kotsa:similar', source: 'kotsa', name: '세종로 제2', lat: 37.5734, lng: 126.9737 }),
+      lot({ id: 'kotsa:short', source: 'kotsa', name: '가', lat: 37.5015, lng: 127.0 }),
+    ];
+    expect(dropParkingDuplicates(seoul, kotsa).dropped).toBe(0);
+    const wide = matchParkingDuplicates(seoul, kotsa, { sameNameRadiusM: 300 });
+    expect(wide.matched.map((m) => [m.row.id, m.anchor.id])).toEqual([['kotsa:sejong', 'seoul:171721']]);
+    expect(wide.kept.map((k) => k.id)).toEqual(['kotsa:similar', 'kotsa:short']);
   });
 });
