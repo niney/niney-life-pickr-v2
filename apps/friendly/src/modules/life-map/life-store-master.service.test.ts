@@ -96,7 +96,7 @@ describe('life-store-master', () => {
 });
 
 // 전량 교체(X-V3) — 스테이징 표를 청크로 채운 뒤 DROP + RENAME 으로 바꿔 끼운다. 현재 스키마로 만든 빈 임시 DB 에서
-// 결과 행·인덱스 이름·스테이징 정리·실패 시 원본 보존을 고정한다.
+// 결과 행·인덱스 이름·스테이징 정리·실패 시 원본 보존·겹친 적재의 격리를 고정한다.
 describe('replaceLifeStores (스키마 임시 DB)', () => {
   let db: IsolatedDatabase;
   let prisma: PrismaClient;
@@ -147,7 +147,7 @@ describe('replaceLifeStores (스키마 임시 DB)', () => {
   it('새 행만 남고(여러 청크·한 청크 안 여러 INSERT 경계 포함) 인덱스 이름은 그대로, 스테이징은 없다', async () => {
     const before = await objects();
     expect(before).toEqual(['index:life_stores_kind_lat_lng_idx', 'index:sqlite_autoindex_life_stores_1', 'table:life_stores']);
-    // 남은 스테이징(중단 잔여물)은 시작할 때 지운다.
+    // 예전 고정 이름으로 남은 스테이징(중단 잔여물)은 시작할 때 지운다.
     await prisma.$executeRawUnsafe(`CREATE TABLE "${LIFE_STORES_NEXT_TABLE}" (junk TEXT)`);
     const rows = Array.from({ length: 2_501 }, (_, i) => row(`N${String(i).padStart(5, '0')}`, i % 2 ? 'mart' : 'cafe', 33 + (i % 600) / 100));
     const progress: number[] = [];
@@ -181,5 +181,54 @@ describe('replaceLifeStores (스키마 임시 DB)', () => {
     expect(await all()).toEqual(before);
     expect(await prisma.lifeMasterSync.count({ where: { layer: 'store' } })).toBe(syncs);
     expect(await objects()).toEqual(['index:life_stores_kind_lat_lng_idx', 'index:sqlite_autoindex_life_stores_1', 'table:life_stores']);
+  });
+
+  // load:life-stores 두 개(배포 자동 적재 + 수동)가 겹친 꼴 — 스테이징 이름이 고정이던 때는 늦게 시작한 B 가 A 의 스테이징을
+  // 지우고 다시 만들어, A 의 남은 청크가 B 의 표에 들어간 채 A 가 "성공"으로 게시했다(A·B 행이 섞이고 일부 유실).
+  it('겹쳐 돌아도 서로의 스테이징에 쓰지 않는다 — 먼저 끝난 적재는 제 행만 게시하고, 늦게 교체한 쪽이 남는다', async () => {
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+    const aFilling = deferred();
+    const bFilling = deferred();
+    const aSwapped = deferred();
+    const aRows = Array.from({ length: 30 }, (_, i) => row(`A${String(i).padStart(2, '0')}`, 'mart', 37));
+    const bRows = Array.from({ length: 30 }, (_, i) => row(`B${String(i).padStart(2, '0')}`, 'cafe', 37.1));
+    // 첫 청크를 넣은 뒤 신호를 주고, 상대가 올 때까지 기다렸다가 나머지를 넣는다.
+    async function* staged(rows: LifeStoreRow[], filled: { resolve: () => void }, wait: Promise<void>): AsyncGenerator<LifeStoreRow[]> {
+      yield rows.slice(0, 10);
+      yield [];
+      filled.resolve();
+      await wait;
+      yield rows.slice(10, 20);
+      yield rows.slice(20);
+    }
+    const syncs = await prisma.lifeMasterSync.count({ where: { layer: 'store' } });
+
+    const a = replaceLifeStores(prisma, staged(aRows, aFilling, bFilling.promise), { sourceFile: 'a.zip', baseDate: '2026-09-30' });
+    await aFilling.promise;
+    // A 가 스테이징을 채우는 도중에 B 가 시작한다.
+    const b = replaceLifeStores(prisma, staged(bRows, bFilling, aSwapped.promise), { sourceFile: 'b.zip', baseDate: '2026-12-31' });
+    try {
+      expect(await a).toBe(30);
+      expect(await all()).toEqual(aRows);
+      aSwapped.resolve();
+      expect(await b).toBe(30);
+      expect(await all()).toEqual(bRows);
+      expect(await objects()).toEqual(['index:life_stores_kind_lat_lng_idx', 'index:sqlite_autoindex_life_stores_1', 'table:life_stores']);
+      const history = await prisma.lifeMasterSync.findMany({ where: { layer: 'store' }, orderBy: { id: 'asc' }, skip: syncs });
+      expect(history.map((h) => [h.count, h.sourceFile])).toEqual([
+        [30, 'a.zip'],
+        [30, 'b.zip'],
+      ]);
+    } finally {
+      aSwapped.resolve();
+      bFilling.resolve();
+      await Promise.allSettled([a, b]);
+    }
   });
 });

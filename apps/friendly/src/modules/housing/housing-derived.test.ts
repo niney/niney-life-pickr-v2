@@ -8,6 +8,7 @@ import {
   housingUmdKey,
   rebuildHousingDerived,
   rebuildHousingStats,
+  replaceHousingStats,
   type HousingStatRow,
 } from './housing-derived.service.js';
 
@@ -157,8 +158,8 @@ describe('housing derived (격리 DB)', () => {
     expect((await prisma.housingTrade.findUnique({ where: { id: 't3b' } }))?.complexId).toBe('rt:11110:창신동:578-5:동대문맨션');
   });
 
-  // 통계 섀도 표 교체(D-4·X-5) — 예전 쓰기(한 트랜잭션 deleteMany + createMany)와 같은 행을 남기고, _next 표·인덱스
-  // 이름·실패 시 원본 보존을 고정한다.
+  // 통계 섀도 표 교체(D-4·X-5) — 예전 쓰기(한 트랜잭션 deleteMany + createMany)와 같은 행을 남기고, 스테이징 표·인덱스
+  // 이름·실패 시 원본 보존·겹친 실행의 격리를 고정한다.
   const snapshot = async () =>
     (await prisma.housingComplexStat.findMany({ orderBy: [{ complexId: 'asc' }, { dealType: 'asc' }, { band: 'asc' }] })).map((s) => ({ ...s }));
   const statsObjects = async () =>
@@ -181,7 +182,7 @@ describe('housing derived (격리 DB)', () => {
     const legacy = await snapshot();
     expect(legacy.length).toBeGreaterThan(5);
     const objectsBefore = await statsObjects();
-    // 남은 _next(중단 잔여물)는 시작할 때 지운다.
+    // 예전 고정 이름으로 남은 스테이징(중단 잔여물)은 시작할 때 지운다.
     await prisma.$executeRawUnsafe(`CREATE TABLE "${HOUSING_STATS_NEXT_TABLE}" (junk TEXT)`);
 
     const n = await rebuildHousingStats(prisma, '2026-08-30', { insertRows: 2, txRows: 3 });
@@ -198,7 +199,7 @@ describe('housing derived (격리 DB)', () => {
     expect(await snapshot()).toEqual(legacy);
   });
 
-  it('통계 교체 — 채우는 도중 실패하면 원본·적재 이력은 그대로, _next 는 지운다', async () => {
+  it('통계 교체 — 채우는 도중 실패하면 원본·적재 이력은 그대로, 제 스테이징은 지운다', async () => {
     const before = await snapshot();
     const syncs = await prisma.housingSync.count({ where: { kind: 'stats' } });
     let calls = 0;
@@ -220,5 +221,82 @@ describe('housing derived (격리 DB)', () => {
     expect(await snapshot()).toEqual(before);
     expect(await prisma.housingSync.count({ where: { kind: 'stats' } })).toBe(syncs);
     expect(await statsObjects()).toEqual(['index:sqlite_autoindex_housing_complex_stats_1', 'table:housing_complex_stats']);
+  });
+
+  // 갱신 cron 과 load:housing-* 처럼 서로 다른 프로세스가 겹쳐 돈 꼴 — 스테이징 이름이 고정이던 때는 늦게 시작한 B 가
+  // A 의 스테이징을 지우고 다시 만들어, A 의 남은 행이 B 의 표에 들어간 채 A 가 "성공"으로 게시했다(A·B 행이 섞이고 일부 유실).
+  it('통계 교체 — 겹쳐 돌아도 서로의 스테이징에 쓰지 않는다: 먼저 끝난 실행은 제 행만 게시하고, 늦게 교체한 쪽이 남는다', async () => {
+    const stat = (complexId: string, band: string): HousingStatRow => ({
+      complexId,
+      dealType: 'trade',
+      band,
+      latestPrice: 1,
+      latestRent: 0,
+      latestArea: 84.97,
+      latestFloor: null,
+      latestDate: '2026-08-01',
+      count12: 1,
+      count: 1,
+      unitPrice12: null,
+      latestDealType: null,
+    });
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+    const keys = async () => (await snapshot()).map((s) => `${s.complexId}|${s.band}`);
+    const aRows = ['all', 'b1', 'b2'].map((band) => stat('A', band));
+    const bRows = ['all', 'b1', 'b2'].map((band) => stat('B', band));
+    const aFilling = deferred();
+    const bFilling = deferred();
+    const aSwapped = deferred();
+    const syncs = await prisma.housingSync.count({ where: { kind: 'stats' } });
+
+    const a = replaceHousingStats(
+      prisma,
+      '2026-08-30',
+      async (emit) => {
+        await emit(aRows.slice(0, 1));
+        aFilling.resolve();
+        await bFilling.promise;
+        await emit(aRows.slice(1));
+      },
+      { insertRows: 1, txRows: 1 },
+    );
+    await aFilling.promise;
+    // A 가 스테이징을 채우는 도중에 B 가 시작한다.
+    const b = replaceHousingStats(
+      prisma,
+      '2026-08-31',
+      async (emit) => {
+        await emit(bRows.slice(0, 1));
+        bFilling.resolve();
+        await aSwapped.promise;
+        await emit(bRows.slice(1));
+      },
+      { insertRows: 1, txRows: 1 },
+    );
+    try {
+      expect(await a).toBe(3);
+      expect(await keys()).toEqual(['A|all', 'A|b1', 'A|b2']);
+      aSwapped.resolve();
+      expect(await b).toBe(3);
+      expect(await keys()).toEqual(['B|all', 'B|b1', 'B|b2']);
+      expect(await statsObjects()).toEqual(['index:sqlite_autoindex_housing_complex_stats_1', 'table:housing_complex_stats']);
+      const history = await prisma.housingSync.findMany({ where: { kind: 'stats' }, orderBy: { id: 'asc' }, skip: syncs });
+      expect(history.map((h) => [h.count, h.baseDate])).toEqual([
+        [3, '2026-08-30'],
+        [3, '2026-08-31'],
+      ]);
+    } finally {
+      aSwapped.resolve();
+      bFilling.resolve();
+      await Promise.allSettled([a, b]);
+      // 다른 테스트가 보는 통계로 되돌린다.
+      await rebuildHousingStats(prisma, '2026-08-30');
+    }
   });
 });

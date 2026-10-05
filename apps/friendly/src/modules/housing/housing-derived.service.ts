@@ -11,6 +11,7 @@
 
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { HOUSING_AREA_BANDS, housingDateMonthsAgo, normalizeHousingName, type HousingAreaBand } from '@repo/utils';
+import { createShadowTable, dropShadowTable, shadowTablePrefix, swapShadowTable } from '../../lib/shadow-table.js';
 import {
   geocodeLifeRows,
   type GeocodeAddressType,
@@ -307,12 +308,12 @@ const toFiniteOrNull = (v: unknown): number | null => {
 // ── 섀도 표 교체 ──
 // 예전엔 한 쓰기 트랜잭션에서 31만 행을 지우고 다시 넣어 쓰기 락을 13.5~18초 잡았다(D-4·X-5 — 그동안 서버의 모든
 // 쓰기가 멈추고, 데이터가 늘면 busy_timeout 30초를 넘겨 실패한다). 지금은 같은 정의의 _next 표를 짧은 트랜잭션
-// (5,000행)으로 채운 뒤 DROP + RENAME + 적재 이력을 한 트랜잭션으로 바꿔 끼운다. 표 정의(+ 보조 인덱스)는
-// sqlite_master 에서 복사하므로 마이그레이션이 열을 더해도 따라가고 Prisma 스키마는 그대로다. _next 는 시작할 때
-// DROP IF EXISTS 하고 실패하면 지운다 — 중단 잔여물이 migrate drift 로 남지 않게. 동시에 두 번 돌면 늦게 시작한
-// 쪽이 _next 를 지워 먼저 쪽이 실패할 뿐 원본은 교체 트랜잭션에서만 바뀐다.
+// (5,000행)으로 채운 뒤 DROP + RENAME + 적재 이력을 한 트랜잭션으로 바꿔 끼운다. 스테이징 이름은 실행마다 달라
+// (lib/shadow-table.ts) 갱신 cron 과 load:housing-* 가 겹쳐 돌아도 서로의 표에 쓰지 않는다 — 각자 온전한 통계를
+// 만들고 늦게 교체한 쪽이 남는다. 실패하면 제 스테이징을 지우고, 중단 잔여물은 다음 실행이 치운다.
 const STATS_TABLE = 'housing_complex_stats';
-export const HOUSING_STATS_NEXT_TABLE = `${STATS_TABLE}_next`;
+// 예전 고정 스테이징 이름이자 실행별 이름의 접두(`…_next_<시각>_<난수>`).
+export const HOUSING_STATS_NEXT_TABLE = shadowTablePrefix(STATS_TABLE);
 const STATS_COLUMNS = [
   'complexId',
   'dealType',
@@ -334,23 +335,14 @@ export interface HousingStatsWriteOptions {
   txRows?: number;
 }
 
-const statsShadowDdl = async (prisma: PrismaClient): Promise<{ createNext: string; indexes: string[] }> => {
-  const objs = await prisma.$queryRaw<{ type: string; sql: string | null }[]>(
-    Prisma.sql`SELECT type, sql FROM sqlite_master WHERE tbl_name = ${STATS_TABLE} AND sql IS NOT NULL`,
-  );
-  const table = objs.find((o) => o.type === 'table')?.sql ?? '';
-  const createNext = table.replace(/^CREATE TABLE\s+"?housing_complex_stats"?(?=\s*\()/i, `CREATE TABLE "${HOUSING_STATS_NEXT_TABLE}"`);
-  if (!table || createNext === table) throw new Error(`${STATS_TABLE} 표 정의를 복사하지 못했습니다`);
-  // 보조 인덱스(지금은 없음 — PK autoindex 는 sql 이 없고 RENAME 이 이름을 따라 바꾼다)는 교체 뒤 원래 이름으로 다시 만든다.
-  return { createNext, indexes: objs.filter((o) => o.type === 'index').map((o) => o.sql!) };
-};
-
 class StatsShadowWriter {
   private buf: HousingStatRow[] = [];
   count = 0;
 
   constructor(
     private readonly prisma: PrismaClient,
+    // 이번 실행의 스테이징 표.
+    private readonly table: string,
     private readonly insertRows: number,
     private readonly txRows: number,
   ) {}
@@ -375,7 +367,7 @@ class StatsShadowWriter {
             Prisma.sql`(${r.complexId}, ${r.dealType}, ${r.band}, ${r.latestPrice}, ${r.latestRent}, ${r.latestArea}, ${r.latestFloor}, ${r.latestDate}, ${r.count12}, ${r.count}, ${r.unitPrice12}, ${r.latestDealType})`,
         );
       stmts.push(
-        this.prisma.$executeRaw`INSERT INTO ${Prisma.raw(`"${HOUSING_STATS_NEXT_TABLE}"`)} (${Prisma.raw(STATS_COLUMNS.map((c) => `"${c}"`).join(', '))}) VALUES ${Prisma.join(values)}`,
+        this.prisma.$executeRaw`INSERT INTO ${Prisma.raw(`"${this.table}"`)} (${Prisma.raw(STATS_COLUMNS.map((c) => `"${c}"`).join(', '))}) VALUES ${Prisma.join(values)}`,
       );
     }
     await this.prisma.$transaction(stmts);
@@ -388,35 +380,30 @@ class StatsShadowWriter {
 // 유형×구간 행에 더해 단지마다 **폴백 행(dealType='any', band='all')** 하나 — 세 유형을 통틀어 가장 최근
 // 거래(그 유형은 latestDealType)와 전체 유형 합계. 선택한 축에 거래가 없는 단지에 "다른 조건의 마지막
 // 거래" 를 보여 주는 용도라 요청 경로의 조인이 하나 더 늘 뿐 거래 표는 여전히 안 읽는다.
-// 쓰기는 위 섀도 표 교체 — 구간별 행을 계산하는 대로 _next 에 넣어 JS 에 전 행을 쥐지 않는다.
+// 쓰기는 위 섀도 표 교체 — 구간별 행을 계산하는 대로 스테이징에 넣어 JS 에 전 행을 쥐지 않는다.
 export const rebuildHousingStats = (
   prisma: PrismaClient,
   today: string = localToday(),
   opts: HousingStatsWriteOptions = {},
 ): Promise<number> => replaceHousingStats(prisma, today, (emit) => computeHousingStatRows(prisma, today, emit), opts);
 
-// 섀도 표 교체 본체 — produce 가 넘기는 행으로 _next 를 채우고 바꿔 끼운다(쓰기 락 측정은 이걸 직접 부른다).
+// 섀도 표 교체 본체 — produce 가 넘기는 행으로 이번 실행의 스테이징을 채우고 바꿔 끼운다(쓰기 락 측정은 이걸 직접 부른다).
 export const replaceHousingStats = async (
   prisma: PrismaClient,
   today: string,
   produce: (emit: (rows: HousingStatRow[]) => Promise<void>) => Promise<void>,
   opts: HousingStatsWriteOptions = {},
 ): Promise<number> => {
-  const { createNext, indexes } = await statsShadowDdl(prisma);
-  await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "${HOUSING_STATS_NEXT_TABLE}"`);
-  await prisma.$executeRawUnsafe(createNext);
-  const writer = new StatsShadowWriter(prisma, opts.insertRows ?? 400, opts.txRows ?? 5000);
+  const shadow = await createShadowTable(prisma, STATS_TABLE);
+  const writer = new StatsShadowWriter(prisma, shadow.name, opts.insertRows ?? 400, opts.txRows ?? 5000);
   try {
     await produce((rows) => writer.push(rows));
     await writer.flush();
-    await prisma.$transaction([
-      prisma.$executeRawUnsafe(`DROP TABLE "${STATS_TABLE}"`),
-      prisma.$executeRawUnsafe(`ALTER TABLE "${HOUSING_STATS_NEXT_TABLE}" RENAME TO "${STATS_TABLE}"`),
-      ...indexes.map((sql) => prisma.$executeRawUnsafe(sql)),
+    await swapShadowTable(prisma, STATS_TABLE, shadow, [
       prisma.housingSync.create({ data: { kind: 'stats', count: writer.count, baseDate: today } }),
     ]);
   } catch (e) {
-    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "${HOUSING_STATS_NEXT_TABLE}"`).catch(() => undefined);
+    await dropShadowTable(prisma, shadow);
     throw e;
   }
   return writer.count;
