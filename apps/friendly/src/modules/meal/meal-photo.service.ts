@@ -119,12 +119,19 @@ export class MealPhotoService {
   private async persistNewPhoto(
     userId: string,
     input: { full: Buffer; thumb: Buffer; width: number | null; height: number | null },
+    fixedToken?: string,
   ): Promise<UploadMealPhotoResultType> {
     await this.assertPhotoQuota(userId);
+    if (fixedToken !== undefined) {
+      // 지정 토큰(복원)은 파일을 쓰기 전에 확인한다 — 이미 있는 토큰이면 아래 실패 정리가 남의 파일을 지운다.
+      if (!isValidMealPhotoToken(fixedToken)) throw new MealPhotoError('invalid_token', '잘못된 사진 토큰입니다.');
+      const taken = await this.prisma.mealPhoto.findUnique({ where: { token: fixedToken }, select: { id: true } });
+      if (taken) throw new MealPhotoError('invalid_token', '이미 저장된 사진 토큰입니다.');
+    }
 
     const dir = this.userDir(userId);
     await mkdir(dir, { recursive: true });
-    const token = randomUUID();
+    const token = fixedToken ?? randomUUID();
     try {
       await writeFile(join(dir, `${token}.jpg`), input.full);
       await writeFile(join(dir, `${token}_t.jpg`), input.thumb);
@@ -162,15 +169,18 @@ export class MealPhotoService {
    * 여러 사진+메타데이터를 하나의 사용자 mutation 경계에서 복원할 때만 사용한다.
    * 호출자는 반드시 mealMutationBarrier의 해당 userId lock을 이미 보유해야 한다. 일반 업로드는
    * 위 store()를 써야 하며, 이 메서드 안에서 다시 lock을 잡으면 비재진입 lock이 교착된다.
+   * token 을 주면 그 토큰으로 저장한다 — 복원이 아카이브에서 정해지는 토큰을 써서, 도중에 끊긴 복원이 남긴
+   * 사진을 재시도가 찾아 지울 수 있게 한다(없으면 서버 발급 난수).
    */
   async storeWhileMutationLocked(
     userId: string,
     buffer: Buffer,
+    opts: { token?: string } = {},
   ): Promise<UploadMealPhotoResultType> {
-    return this.storeUnlocked(userId, buffer);
+    return this.storeUnlocked(userId, buffer, opts.token);
   }
 
-  private async storeUnlocked(userId: string, buffer: Buffer): Promise<UploadMealPhotoResultType> {
+  private async storeUnlocked(userId: string, buffer: Buffer, fixedToken?: string): Promise<UploadMealPhotoResultType> {
     let source = buffer;
     let processed: Buffer;
     try {
@@ -205,12 +215,16 @@ export class MealPhotoService {
 
     const meta = await (await loadSharp())(processed).metadata();
     const thumb = await this.normalize(source, THUMB_DIMENSION, THUMB_QUALITY);
-    return this.persistNewPhoto(userId, {
-      full: processed,
-      thumb,
-      width: meta.width ?? null,
-      height: meta.height ?? null,
-    });
+    return this.persistNewPhoto(
+      userId,
+      {
+        full: processed,
+        thumb,
+        width: meta.width ?? null,
+        height: meta.height ?? null,
+      },
+      fixedToken,
+    );
   }
 
   // 소유자 검증 후 원본/썸네일 바이트. 파일이 없으면 not_found(행만 남은 경우 포함).

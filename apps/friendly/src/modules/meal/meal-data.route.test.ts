@@ -37,7 +37,7 @@ import { MealService } from './meal.service.js';
 // 사진 포함 백업·내보내기 스트림, 복원 청크·상한, 전역 1건(성능 감사 2차) — 아래 '스트림·복원 청크·상한' describe.
 const BACKUP = '/api/v1/meals/data/backup';
 const RESTORE = '/api/v1/meals/data/backup/restore';
-const STREAM_USERS = ['stream-a', 'stream-b', 'stream-c', 'stream-d', 'stream-e', 'stream-f', 'stream-g'];
+const STREAM_USERS = ['stream-a', 'stream-b', 'stream-c', 'stream-d', 'stream-e', 'stream-f', 'stream-g', 'stream-h', 'stream-i'];
 
 const emptyArchive = (archiveId: string): MealDataBackupType => ({
   format: MEAL_DATA_BACKUP_FORMAT,
@@ -716,10 +716,10 @@ describe('meal data export/delete routes (격리 DB)', () => {
     const originalStore = app.mealPhotos.storeWhileMutationLocked.bind(app.mealPhotos);
     const store = vi
       .spyOn(app.mealPhotos, 'storeWhileMutationLocked')
-      .mockImplementationOnce(async (targetUserId, buffer) => {
+      .mockImplementationOnce(async (targetUserId, buffer, opts) => {
         storeEntered.resolve();
         await releaseStore.promise;
-        return originalStore(targetUserId, buffer);
+        return originalStore(targetUserId, buffer, opts);
       });
 
     try {
@@ -1167,6 +1167,133 @@ describe('meal data export/delete routes (격리 DB)', () => {
       expect(JSON.parse(rec!.feedbackJson!)).toMatchObject({ rating: 1 });
       expect(linked.map((row) => row.id)).toContain(JSON.parse(rec!.feedbackJson!).eatenEntryId);
       expect(await app.prisma.mealPhoto.count({ where: { userId: 'stream-g', entryId: { not: null } } })).toBe(1);
+    });
+
+    // 복원 도중 프로세스가 끝난 꼴(배포 reload·메모리 재시작) — n 번째 쓰기 트랜잭션에서 끊기고 실패 정리도 돌지 못한다.
+    // 커밋된 청크는 원장 없이 남는다.
+    const dyingAt = (n: number): PrismaClient => {
+      let transactions = 0;
+      let dead = false;
+      const died = (): Promise<never> => Promise.reject(new Error('process died'));
+      return new Proxy(app.prisma, {
+        get(target, prop, receiver) {
+          if (prop === '$transaction') {
+            return (fn: Parameters<PrismaClient['$transaction']>[0]) => {
+              transactions += 1;
+              if (dead || transactions === n) {
+                dead = true;
+                return died();
+              }
+              return (target.$transaction as (f: typeof fn) => Promise<unknown>)(fn);
+            };
+          }
+          const value = Reflect.get(target, prop, receiver) as unknown;
+          if (dead && (prop === 'mealEntry' || prop === 'mealRecommendation' || prop === 'mealPhoto')) {
+            return new Proxy(value as object, {
+              get: (delegate, method, self) => (method === 'deleteMany' ? died : (Reflect.get(delegate, method, self) as unknown)),
+            });
+          }
+          return value;
+        },
+      }) as PrismaClient;
+    };
+    const jpegPhoto = async (ref: string, background: string): Promise<MealDataBackupType['photos'][number]> => {
+      const jpeg = await sharp({ create: { width: 30, height: 20, channels: 3, background } }).jpeg().toBuffer();
+      return {
+        ref,
+        contentType: 'image/jpeg',
+        dataBase64: jpeg.toString('base64'),
+        sha256: createHash('sha256').update(jpeg).digest('hex'),
+        byteSize: jpeg.byteLength,
+        width: 30,
+        height: 20,
+      };
+    };
+
+    it('복원 도중 프로세스가 끝나 일부 청크만 남아도, 같은 아카이브를 다시 보내면 잔여 행을 지우고 한 벌만 복원한다', async () => {
+      const userId = 'stream-h';
+      const archive = emptyArchive('99999999-9999-4999-8999-999999999999');
+      archive.photos = [await jpegPhoto('photo-1', '#468')];
+      archive.entries = Array.from({ length: 1_200 }, (_, i) =>
+        archiveEntry(`entry-${i}`, new Date(Date.UTC(2024, 0, 1) + Math.floor(i / 3) * 86_400_000).toISOString().slice(0, 10), i === 0 ? ['photo-1'] : []),
+      );
+      archive.recommendations = [
+        {
+          ref: 'rec-1',
+          targetDate: '2024-01-02',
+          targetSlot: 'lunch',
+          items: [],
+          summary: '요약',
+          status: 'fallback',
+          model: null,
+          promptVersion: 1,
+          notice: null,
+          context: {},
+          profile: {},
+          profileHash: 'h',
+          createdAt: '2024-01-02T00:00:00.000Z',
+          feedback: { pickedName: null, rating: 1, eatenEntryRef: 'entry-5' },
+          events: [{ kind: 'shown', candidateName: null, candidateFoodId: null, candidateRank: null, rating: null, platform: 'mobile', rankingVersion: 1, createdAt: '2024-01-02T00:00:00.000Z' }],
+        },
+      ];
+      const counts = async () => ({
+        entries: await app.prisma.mealEntry.count({ where: { userId } }),
+        items: await app.prisma.mealItem.count({ where: { entry: { userId } } }),
+        recommendations: await app.prisma.mealRecommendation.count({ where: { userId } }),
+        events: await app.prisma.mealRecommendationEvent.count({ where: { userId } }),
+        photos: await app.prisma.mealPhoto.count({ where: { userId } }),
+        ledgers: await app.prisma.mealDataImport.count({ where: { userId } }),
+      });
+
+      // 추천 청크 + 첫 기록 청크(500건, 사진 연결)까지 커밋되고 두 번째 기록 청크에서 끊긴다.
+      await expect(new MealDataService(dyingAt(3), { photos: app.mealPhotos }).restore(userId, archive)).rejects.toThrow('process died');
+      expect(await counts()).toEqual({ entries: 500, items: 500, recommendations: 1, events: 1, photos: 1, ledgers: 0 });
+      const leftoverPhoto = await app.prisma.mealPhoto.findFirstOrThrow({ where: { userId } });
+
+      // 다시 켜진 서버에 같은 아카이브를 보낸다 — 예전엔 남은 500건 옆에 1,200건이 더 생겼다(1,700건·추천 2건).
+      const data = new MealDataService(app.prisma, { photos: app.mealPhotos });
+      const retried = await data.restore(userId, archive);
+      expect(retried).toMatchObject({ duplicate: false, restored: { entries: 1_200, items: 1_200, photos: 1, recommendations: 1, recommendationEvents: 1 } });
+      expect(await counts()).toEqual({ entries: 1_200, items: 1_200, recommendations: 1, events: 1, photos: 1, ledgers: 1 });
+      const photo = await app.prisma.mealPhoto.findFirstOrThrow({ where: { userId }, include: { entry: true } });
+      // 사진은 아카이브에서 정해지는 같은 토큰으로 다시 저장돼 첫 기록에 붙고, 파일도 읽힌다.
+      expect(photo.token).toBe(leftoverPhoto.token);
+      expect(photo.entry?.eatenDate).toBe('2024-01-01');
+      await expect(app.mealPhotos.read(userId, photo.token, 'full')).resolves.toBeTruthy();
+      const rec = await app.prisma.mealRecommendation.findFirstOrThrow({ where: { userId } });
+      const linkedId = (JSON.parse(rec.feedbackJson!) as { eatenEntryId: string }).eatenEntryId;
+      expect(await app.prisma.mealEntry.count({ where: { userId, id: linkedId } })).toBe(1);
+      // 같은 날짜·시각 기록의 id 동률 정렬은 아카이브 순서 그대로다.
+      const firstDay = await app.prisma.mealEntry.findMany({ where: { userId, eatenDate: '2024-01-01' }, orderBy: [{ eatenAt: 'asc' }, { id: 'asc' }], include: { photos: true } });
+      expect(firstDay.map((row) => row.photos.length)).toEqual([1, 0, 0]);
+
+      // 끝난 복원은 원장이 막는다(멱등).
+      expect(await data.restore(userId, archive)).toMatchObject({ duplicate: true, restored: { entries: 1_200 } });
+      expect(await counts()).toEqual({ entries: 1_200, items: 1_200, recommendations: 1, events: 1, photos: 1, ledgers: 1 });
+    });
+
+    it('사진만 저장하고 끝난 복원의 잔여 사진도 재시도가 지운다 — 사용자가 올려 둔 다른 미연결 사진은 그대로', async () => {
+      const userId = 'stream-i';
+      const pendingJpeg = await sharp({ create: { width: 12, height: 12, channels: 3, background: '#a31' } }).jpeg().toBuffer();
+      const pending = await app.mealPhotos.store(userId, pendingJpeg);
+      const archive = emptyArchive('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+      archive.photos = [await jpegPhoto('photo-1', '#135'), await jpegPhoto('photo-2', '#579')];
+      archive.entries = [archiveEntry('entry-1', '2026-02-01', ['photo-1']), archiveEntry('entry-2', '2026-02-02', ['photo-2'])];
+
+      // 사진 두 장을 저장한 뒤 첫 쓰기 트랜잭션에서 끊긴다 — 기록 없이 미연결 사진만 남는다.
+      await expect(new MealDataService(dyingAt(1), { photos: app.mealPhotos }).restore(userId, archive)).rejects.toThrow('process died');
+      expect(await app.prisma.mealEntry.count({ where: { userId } })).toBe(0);
+      const leftovers = await app.prisma.mealPhoto.findMany({ where: { userId, entryId: null, token: { not: pending.token } } });
+      expect(leftovers).toHaveLength(2);
+
+      const retried = await new MealDataService(app.prisma, { photos: app.mealPhotos }).restore(userId, archive);
+      expect(retried).toMatchObject({ duplicate: false, restored: { entries: 2, photos: 2 } });
+      const photos = await app.prisma.mealPhoto.findMany({ where: { userId } });
+      expect(photos).toHaveLength(3);
+      expect(photos.filter((p) => p.entryId !== null).map((p) => p.token).sort()).toEqual(leftovers.map((p) => p.token).sort());
+      expect(photos.filter((p) => p.entryId === null).map((p) => p.token)).toEqual([pending.token]);
+      await expect(app.mealPhotos.read(userId, pending.token, 'full')).resolves.toBeTruthy();
+      for (const p of leftovers) await expect(app.mealPhotos.read(userId, p.token, 'full')).resolves.toBeTruthy();
     });
 
     it('백업·복원은 전역 1건 — 자리가 없으면 busy, 스트림을 버리면 전역 자리와 사용자 장벽을 바로 푼다', async () => {

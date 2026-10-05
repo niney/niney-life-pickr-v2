@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
@@ -198,12 +198,47 @@ const chunkByBudget = <T>(
   return out;
 };
 
-let rowIdSeq = 0;
-/** cuid 와 같은 꼴(c + 시각 + 순번 + 난수, 25자). 복원이 createMany 전에 기록·추천 관계를 잇는 데 쓴다. */
-const newRowId = (): string => {
-  rowIdSeq = (rowIdSeq + 1) % 1_679_616;
-  const rand = randomBytes(8).readBigUInt64BE().toString(36).padStart(12, '0').slice(-12);
-  return `c${Date.now().toString(36).padStart(8, '0')}${rowIdSeq.toString(36).padStart(4, '0')}${rand}`;
+/**
+ * 복원이 만드는 기록·추천 id 와 사진 토큰 — (사용자, 아카이브, ref)로 정해진다. 복원은 청크마다 커밋하고 원장은 마지막
+ * 트랜잭션에서만 쓰므로, 도중에 프로세스가 끝나면(배포 reload·메모리 재시작) 커밋된 청크가 원장 없이 남는다. 난수 id 였을
+ * 땐 같은 아카이브를 다시 보내면 남은 행 옆에 한 벌이 더 생겼다. id 가 아카이브에서 정해지면 재시도가 그 잔여 행·사진을
+ * 찾아 지우고 처음부터 다시 쓴다(discardInterruptedRestore).
+ *   - 기록·추천: cuid 와 같은 꼴(c + 24자) — 아카이브 해시 8 + 순번 4 + 행 해시 12. 같은 복원 안에서는 아카이브
+ *     순서대로 정렬돼 eatenAt·createdAt 이 같은 행의 순서(id 동률 정렬)가 그대로다.
+ *   - 사진: 서버 발급 토큰과 같은 꼴(uuid 모양 16진수). 사진 읽기는 소유자 검증을 거치므로 토큰이 예측 가능해도 된다.
+ */
+interface RestoreIds {
+  entries: Map<string, string>;
+  recommendations: Map<string, string>;
+  photos: Map<string, string>;
+}
+
+const base36 = (bytes: Buffer, length: number): string =>
+  BigInt(`0x${bytes.toString('hex')}`).toString(36).padStart(length, '0').slice(-length);
+
+const restoreRowIds = (scopeKey: string, refs: readonly string[]): Map<string, string> => {
+  const scope = createHash('sha256').update(scopeKey).digest();
+  const prefix = `c${base36(scope.subarray(0, 6), 8)}`;
+  return new Map(
+    refs.map((ref, index) => [
+      ref,
+      `${prefix}${index.toString(36).padStart(4, '0')}${base36(createHash('sha256').update(scope).update(ref).digest().subarray(0, 8), 12)}`,
+    ]),
+  );
+};
+
+const restorePhotoToken = (scopeKey: string, ref: string): string => {
+  const hex = createHash('sha256').update(`${scopeKey}\u0000${ref}`).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+};
+
+const restoreIdsOf = (userId: string, archive: MealDataBackupType): RestoreIds => {
+  const scopeKey = (kind: string): string => `${userId}\u0000${archive.archiveId}\u0000${kind}`;
+  return {
+    entries: restoreRowIds(scopeKey('entry'), archive.entries.map((entry) => entry.ref)),
+    recommendations: restoreRowIds(scopeKey('recommendation'), archive.recommendations.map((r) => r.ref)),
+    photos: new Map(archive.photos.map((photo) => [photo.ref, restorePhotoToken(scopeKey('photo'), photo.ref)])),
+  };
 };
 
 /** 응답 스트림 — 끝나거나(정상·오류·클라이언트 이탈) 기한을 넘기면 release 를 한 번 부른다. */
@@ -844,8 +879,12 @@ export class MealDataService {
           where: { userId_archiveId: { userId, archiveId: archive.archiveId } },
         });
         if (lockedPrevious) return duplicateResult(lockedPrevious);
+        const ids = restoreIdsOf(userId, archive);
+        // 원장이 없는데 이 아카이브의 id 로 된 행이 있으면 앞선 복원이 도중에 끊긴 것 — 지우고 처음부터 다시 쓴다.
+        // 상한 검사는 그 뒤에(잔여 행을 기존 기록으로 세면 재시도가 상한에 걸린다).
+        await this.discardInterruptedRestore(userId, ids);
         await this.assertRestoreFits(userId, archive);
-        return this.restoreLocked(userId, archive);
+        return this.restoreLocked(userId, archive, ids);
       });
     } finally {
       releaseGate();
@@ -897,44 +936,85 @@ export class MealDataService {
     }
   }
 
+  /** 복원이 만든 기록·추천·사진을 지운다(실패 정리·끊긴 복원의 잔여 정리 공용). 사진 파일은 행을 지운 뒤에. */
+  private async removeRestoredRows(
+    userId: string,
+    entryIds: string[],
+    recommendationIds: string[],
+    photos: Array<{ userId: string; token: string }>,
+  ): Promise<void> {
+    for (const ids of chunk(entryIds, CLEANUP_CHUNK)) {
+      // 기록을 지우면 항목·붙은 사진 행이 cascade 로 함께 지워진다.
+      await this.prisma.mealEntry.deleteMany({ where: { userId, id: { in: ids } } });
+    }
+    for (const ids of chunk(recommendationIds, CLEANUP_CHUNK)) {
+      await this.prisma.mealRecommendation.deleteMany({ where: { userId, id: { in: ids } } });
+    }
+    if (photos.length === 0) return;
+    for (const tokens of chunk(photos.map((photo) => photo.token), CLEANUP_CHUNK)) {
+      await this.prisma.mealPhoto.deleteMany({ where: { userId, entryId: null, token: { in: tokens } } });
+    }
+    await this.deps.photos.removeFiles(photos);
+  }
+
   /**
-   * 장벽 안의 실제 복원. 사진 파일·행을 먼저 만들고, 기록·추천은 id 를 미리 만들어 createMany 로 청크마다
+   * 같은 아카이브의 앞선 복원이 도중에 끊겨(프로세스 종료) 남긴 행·사진을 지운다. 원장이 없다는 것은 호출자가 같은
+   * 사용자 장벽 안에서 확인했다 — 복원은 장벽 안에서만 돌므로, 원장 없이 이 아카이브의 id 로 남은 행은 끝난 복원이
+   * 아니다. 사진은 이 아카이브의 토큰 중 기록에 안 붙었거나 지울 기록에 붙은 것만 지운다.
+   */
+  private async discardInterruptedRestore(userId: string, ids: RestoreIds): Promise<void> {
+    const entryIds: string[] = [];
+    for (const part of chunk([...ids.entries.values()], CLEANUP_CHUNK)) {
+      const rows = await this.prisma.mealEntry.findMany({ where: { userId, id: { in: part } }, select: { id: true } });
+      entryIds.push(...rows.map((row) => row.id));
+    }
+    const recommendationIds: string[] = [];
+    for (const part of chunk([...ids.recommendations.values()], CLEANUP_CHUNK)) {
+      const rows = await this.prisma.mealRecommendation.findMany({ where: { userId, id: { in: part } }, select: { id: true } });
+      recommendationIds.push(...rows.map((row) => row.id));
+    }
+    const leftover = new Set(entryIds);
+    const photos: Array<{ userId: string; token: string }> = [];
+    for (const part of chunk([...ids.photos.values()], CLEANUP_CHUNK)) {
+      const rows = await this.prisma.mealPhoto.findMany({
+        where: { userId, token: { in: part } },
+        select: { token: true, entryId: true },
+      });
+      for (const row of rows) {
+        if (row.entryId === null || leftover.has(row.entryId)) photos.push({ userId, token: row.token });
+      }
+    }
+    if (entryIds.length === 0 && recommendationIds.length === 0 && photos.length === 0) return;
+    await this.removeRestoredRows(userId, entryIds, recommendationIds, photos);
+  }
+
+  /**
+   * 장벽 안의 실제 복원. 사진 파일·행을 먼저 만들고, 기록·추천은 id 를 미리 정해(restoreIdsOf) createMany 로 청크마다
    * 짧은 트랜잭션에 쓴다(한 트랜잭션에 수천 건을 행 단위로 넣으면 쓰기 락이 수 초, 5,000건은 5초 타임아웃).
-   * 중간에 실패하면 만든 id 로 지우고 사진도 정리한다 — 원장(mealDataImport)은 마지막 트랜잭션에서만 쓴다.
+   * 중간에 실패하면 만든 id 로 지우고 사진도 정리한다 — 원장(mealDataImport)은 마지막 트랜잭션에서만 쓴다. 정리도 못
+   * 하고 프로세스가 끝나면 남은 행은 같은 아카이브의 재시도가 지운다(discardInterruptedRestore).
    */
   private async restoreLocked(
     userId: string,
     archive: MealDataBackupType,
+    ids: RestoreIds,
   ): Promise<RestoreMealDataResultType> {
     const stored: Array<{ ref: string; userId: string; token: string }> = [];
     const createdEntryIds: string[] = [];
     const createdRecommendationIds: string[] = [];
-    const cleanup = async (): Promise<void> => {
-      for (const ids of chunk(createdEntryIds, CLEANUP_CHUNK)) {
-        // 기록을 지우면 항목·붙은 사진 행이 cascade 로 함께 지워진다.
-        await this.prisma.mealEntry.deleteMany({ where: { userId, id: { in: ids } } });
-      }
-      for (const ids of chunk(createdRecommendationIds, CLEANUP_CHUNK)) {
-        await this.prisma.mealRecommendation.deleteMany({ where: { userId, id: { in: ids } } });
-      }
-      if (stored.length === 0) return;
-      await this.prisma.mealPhoto.deleteMany({
-        where: { userId, entryId: null, token: { in: stored.map((photo) => photo.token) } },
-      });
-      await this.deps.photos.removeFiles(stored);
-    };
+    const cleanup = (): Promise<void> => this.removeRestoredRows(userId, createdEntryIds, createdRecommendationIds, stored);
 
     try {
       let running = 0;
       for (const photo of archive.photos) {
         const bytes = this.decodePhoto(photo, running);
         running += bytes.byteLength;
-        const created = await this.deps.photos.storeWhileMutationLocked(userId, bytes);
+        const created = await this.deps.photos.storeWhileMutationLocked(userId, bytes, { token: ids.photos.get(photo.ref) });
         stored.push({ ref: photo.ref, userId, token: created.token });
       }
       const storedByRef = new Map(stored.map((photo) => [photo.ref, photo.token]));
-      const recommendationIds = new Map(archive.recommendations.map((r) => [r.ref, newRowId()]));
-      const entryIds = new Map(archive.entries.map((entry) => [entry.ref, newRowId()]));
+      const recommendationIds = ids.recommendations;
+      const entryIds = ids.entries;
 
       // 추천은 행동 이력 수까지(추천 1건당 이벤트 최대 200개), 기록은 항목 수까지 고려해 청크로 나눈다.
       const recommendationChunks = chunkByBudget(
