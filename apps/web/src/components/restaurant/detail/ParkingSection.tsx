@@ -42,12 +42,17 @@ const parkingPageUrl = (lat: number, lng: number, sel?: string): string =>
   `/parking?ll=${roundCoord(lat)},${roundCoord(lng)}&z=17${sel ? `&sel=${encodeURIComponent(sel)}` : ''}`;
 
 // ── 가는 법 탭 섹션 ─────────────────────────────────────────────────────────
-export const ParkingNearbySection = ({ detail, lat, lng }: { detail: RestaurantPublicDetailType; lat: number; lng: number }) => {
+// 좌표가 없는 식당(lat/lng null)은 리뷰 평가·팁·다이닝코드 시설만 — 주변 주차장 목록·주차 페이지 링크는 좌표가 있어야 한다.
+// 그때 보여 줄 리뷰 정보도 없으면 섹션을 그리지 않는다(탭의 '좌표 없음' 안내만 남는다).
+export const ParkingNearbySection = ({ detail, lat, lng }: { detail: RestaurantPublicDetailType; lat: number | null; lng: number | null }) => {
   const navigate = useNavigate();
   const { reviews, nearby, dcParking } = useParkingData(detail);
   const aspect = reviews.data?.aspect;
   const mentions = aspect ? aspect.pos + aspect.neg + aspect.neu : 0;
   const items = nearby.data?.items ?? [];
+  const hasReviewInfo = mentions > 0 || (reviews.data?.tips.length ?? 0) > 0 || dcParking;
+  const located = lat !== null && lng !== null;
+  if (!located && !hasReviewInfo) return null;
   return (
     <section data-testid="restaurant-parking">
       <header className="mb-2 flex items-center justify-between gap-2">
@@ -55,13 +60,15 @@ export const ParkingNearbySection = ({ detail, lat, lng }: { detail: RestaurantP
           <SquareParking className="size-4" />
           주차
         </h3>
-        <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground" onClick={() => navigate(parkingPageUrl(lat, lng))}>
-          주차 페이지에서 보기
-          <ExternalLink className="size-3" />
-        </Button>
+        {located && (
+          <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground" onClick={() => navigate(parkingPageUrl(lat, lng))}>
+            주차 페이지에서 보기
+            <ExternalLink className="size-3" />
+          </Button>
+        )}
       </header>
 
-      {(mentions > 0 || (reviews.data?.tips.length ?? 0) > 0 || dcParking) && (
+      {hasReviewInfo && (
         <div className="mb-2 space-y-1.5 rounded-md border bg-muted/20 px-3 py-2 text-sm">
           {mentions > 0 && aspect && (
             <p>
@@ -86,7 +93,7 @@ export const ParkingNearbySection = ({ detail, lat, lng }: { detail: RestaurantP
         </div>
       )}
 
-      {nearby.isLoading && items.length === 0 ? (
+      {!located ? null : nearby.isLoading && items.length === 0 ? (
         <div className="flex h-16 items-center justify-center text-sm text-muted-foreground">
           <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
         </div>

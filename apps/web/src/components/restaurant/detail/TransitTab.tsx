@@ -31,13 +31,17 @@ export const TransitTab = ({ detail }: { detail: RestaurantPublicDetailType }) =
   const lng = detail.longitude;
 
   if (lat === null || lng === null) {
+    // 리뷰 속 주차 평가·다이닝코드 시설은 좌표 없이도 보여 준다 — 홈 탭 한 줄 요약이 리뷰 평가만으로도 떠서 이 탭으로 데려온다.
     return (
-      <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
-        <MapPinOff className="size-8 text-muted-foreground" />
-        <p className="text-sm font-medium">좌표 정보가 없어 주변 대중교통을 찾을 수 없어요</p>
-        {(detail.roadAddress ?? detail.address) && (
-          <p className="text-xs text-muted-foreground">{detail.roadAddress ?? detail.address}</p>
-        )}
+      <div className="flex flex-col gap-6 p-4">
+        <div className="flex flex-col items-center gap-2 px-2 py-8 text-center">
+          <MapPinOff className="size-8 text-muted-foreground" />
+          <p className="text-sm font-medium">좌표 정보가 없어 주변 대중교통·주차장을 찾을 수 없어요</p>
+          {(detail.roadAddress ?? detail.address) && (
+            <p className="text-xs text-muted-foreground">{detail.roadAddress ?? detail.address}</p>
+          )}
+        </div>
+        <ParkingNearbySection detail={detail} lat={null} lng={null} />
       </div>
     );
   }

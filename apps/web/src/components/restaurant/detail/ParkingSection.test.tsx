@@ -99,6 +99,33 @@ describe('식당 상세 주차', () => {
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/parking?ll=37.527,126.864&z=17&sel=seoul%3A1'));
   });
 
+  it('좌표 없는 식당 — 리뷰 평가·팁·다이닝코드 시설만, 주변 주차장 조회·주차 페이지 링크는 없다', async () => {
+    const noCoord = { ...detail, latitude: null, longitude: null } as RestaurantPublicDetailType;
+    renderWith(<ParkingNearbySection detail={noCoord} lat={null} lng={null} />);
+    const sec = await screen.findByTestId('restaurant-parking');
+    await waitFor(() => expect(within(sec).getByText('리뷰: 주차 불편한 편')).toBeInTheDocument());
+    expect(within(sec).getByText('다이닝코드 시설 정보: 주차 가능')).toBeInTheDocument();
+    expect(within(sec).queryByText('주차 페이지에서 보기')).toBeNull();
+    expect(within(sec).queryByText(/반경 .* 안에 등록된 주차장이 없어요/)).toBeNull();
+    expect(nearbyUrl).toBeNull();
+  });
+
+  it('좌표도 리뷰 정보도 없으면 섹션을 그리지 않는다', async () => {
+    let emptyCalls = 0;
+    server.use(
+      http.get('/api/v1/restaurants/public/P1/parking-reviews', () => {
+        emptyCalls += 1;
+        return HttpResponse.json({ analyzed: 0, aspect: { pos: 0, neg: 0, neu: 0 }, tips: [] });
+      }),
+    );
+    const bare = { ...detail, latitude: null, longitude: null, diningcode: null } as RestaurantPublicDetailType;
+    renderWith(<ParkingNearbySection detail={bare} lat={null} lng={null} />);
+    await waitFor(() => expect(emptyCalls).toBe(1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId('restaurant-parking')).toBeNull();
+    expect(nearbyUrl).toBeNull();
+  });
+
   it('홈 한 줄 요약 — 평가 + 가장 가까운 주차장(무료), 누르면 가는 법으로', async () => {
     let opened = false;
     renderWith(<ParkingSummaryLine detail={detail} onOpen={() => (opened = true)} />);
