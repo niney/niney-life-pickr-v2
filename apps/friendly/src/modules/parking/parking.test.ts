@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type {
@@ -24,7 +25,8 @@ const qs = (p: Record<string, string>): string => new URLSearchParams(p).toStrin
 const SEOUL_BBOX = '126.970,37.560,126.990,37.580';
 const KOREA_BBOX = '124,33,132,39';
 
-const lotRow = (p: Record<string, unknown>) => ({
+// 픽스처 — id 는 행마다 넘긴다(나머지는 기본값). 반환을 Prisma 입력 타입으로 두어 열 이름·타입을 타입체크가 잡게 한다.
+const lotRow = (p: Partial<Prisma.ParkingLotCreateManyInput> & { id: string }): Prisma.ParkingLotCreateManyInput => ({
   source: 'std',
   name: '주차장',
   ownership: 'public',
@@ -129,7 +131,7 @@ describe('parking routes (격리 DB)', () => {
   });
 
   it('충전소 — 점·필터·주변·상세, 상태 반영은 충전기와 충전소 칸을 함께 고친다', async () => {
-    const st = (p: Record<string, unknown>) => ({
+    const st = (p: Partial<Prisma.EvStationCreateManyInput> & { id: string }): Prisma.EvStationCreateManyInput => ({
       name: '충전소',
       lat: 37.5665,
       lng: 126.978,

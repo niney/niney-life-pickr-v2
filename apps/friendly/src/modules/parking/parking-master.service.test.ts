@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { EvLevel, ParkingFeeType, ParkingLevel, ParkingLotType, ParkingOwnership, ParkingSource } from '@repo/api-contract';
+import { EV_LEVELS, PARKING_FEE_TYPES, PARKING_LEVELS, PARKING_LOT_TYPES, PARKING_OWNERSHIPS, PARKING_SOURCES } from '@repo/utils';
 import {
   canonKeys,
   dropParkingDuplicates,
@@ -43,6 +45,18 @@ const stdSnake = (p: Record<string, unknown>): Record<string, unknown> => ({
   PWDBS_PPK_ZONE_YN: 'Y',
   REFERENCE_DATE: '2026-08-04',
   ...p,
+});
+
+// 계약은 utils 를 import 하지 않는 규약이라 같은 값 목록을 두 곳에 적는다 — 한쪽만 바뀌면 여기서 걸린다(여행로그·음식과 같은 방식).
+describe('주차 코드표 — api-contract enum 과 @repo/utils 목록 동기화', () => {
+  it('관리 주체·주차장 유형·요금 구분·원천·혼잡 단계·충전소 단계의 값과 순서가 같다', () => {
+    expect(ParkingOwnership.options).toEqual([...PARKING_OWNERSHIPS]);
+    expect(ParkingLotType.options).toEqual([...PARKING_LOT_TYPES]);
+    expect(ParkingFeeType.options).toEqual([...PARKING_FEE_TYPES]);
+    expect(ParkingSource.options).toEqual([...PARKING_SOURCES]);
+    expect(ParkingLevel.options).toEqual([...PARKING_LEVELS]);
+    expect(EvLevel.options).toEqual([...EV_LEVELS]);
+  });
 });
 
 describe('canonKeys', () => {
