@@ -1,15 +1,17 @@
 ---
 topic: subway
 type: codebase
-last_compiled: 2026-08-30
-sources_count: 74
+last_compiled: 2026-10-10
+sources_count: 83
 status: active
-aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArrival, realtimePosition, subwayStationMaster, SearchSTNTimeTableByIDService, SearchSTNBySubwayLineInfo, subway-station-search, subway-arrivals, subway-positions, subway-line-detail, subway-timetable, subway-congestion, subway-path, subway-favorites, station-name-grouping, groupStations, subway-line-order, fr-code, branch-section, loop-section, subway-verify, verify-subway-lines, subwayId, statnId-mismatch, realtimeName-override, dongmyeong-station, train-interpolation, locateTrain, subwayPosition, vehiclePill, transit-tabs, transit-cross, transit-map-pool, subway-dijkstra, SUBWAY_API_KEY, SEOUL_OPEN_API_KEY, INFO-200, ERROR-337, plan-b-station-id, subway-list-sheet, subway-detail-sheet, BottomSheet, useMapSheets, sheet-pattern, 시트-골격, subBar, map-bottom-inset, 일부만-표시, subway-line-shape, load-subway-shapes]
+aliases: [SUBWAY_CLIENT_DAILY_MISS_BUDGET, PerClientDailyBudget, IP-하루-미스-예산, realtimeBudget, timetableBudget, clientBudgetError, clientKey, 429-지하철, asTooMany, UpstreamCooldown, swopen-cooldown, openapi-cooldown, DAILY_LIMIT_CODE, ERROR-337-서비스-차단, upstream-guard, useSubwayStationArrivals-polling, polling-false, 도착-폴링-휴지, useDebounced, SEARCH_DEBOUNCE_MS, followGroup, EMPTY_GROUPS, SubwayPage.test, 한-벌-마운트, DATA_GO_KR_API_KEY, seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArrival, realtimePosition, subwayStationMaster, SearchSTNTimeTableByIDService, SearchSTNBySubwayLineInfo, subway-station-search, subway-arrivals, subway-positions, subway-line-detail, subway-timetable, subway-congestion, subway-path, subway-favorites, station-name-grouping, groupStations, subway-line-order, fr-code, branch-section, loop-section, subway-verify, verify-subway-lines, subwayId, statnId-mismatch, realtimeName-override, dongmyeong-station, train-interpolation, locateTrain, subwayPosition, vehiclePill, transit-tabs, transit-cross, transit-map-pool, subway-dijkstra, SUBWAY_API_KEY, SEOUL_OPEN_API_KEY, INFO-200, ERROR-337, plan-b-station-id, subway-list-sheet, subway-detail-sheet, BottomSheet, useMapSheets, sheet-pattern, 시트-골격, subBar, map-bottom-inset, 일부만-표시, subway-line-shape, load-subway-shapes]
 ---
 
 # subway — 수도권 전철 두 포털 프록시 + 로컬 역사마스터 기반 웹 역·도착·노선·시간표·경로 화면
 
 서울시 수도권 전철 공공 API 두 포털(실시간 `swopenAPI.seoul.go.kr` + 정적 `openapi.seoul.go.kr:8088`)을 friendly 가 프록시하고, **웹**(`apps/web`)이 역 검색·실시간 도착·주변 역·호선 보기·실시간 열차 추적·시간표·혼잡도·경로 탐색을 그리는 도메인. 자매 토픽 [bus](bus.md)의 검증된 설계(어댑터 규율·쿼터 게이트·즐겨찾기 하이브리드·지도 어댑터·URL-as-truth)를 이식하되, 지하철 고유의 구조적 차이(로컬 DB 검색·GPS 없는 열차 위치·노선 형상 API 부재)에 맞게 재설계했다. **버스와 하나의 '대중교통' 통합 페이지**(`/bus` + `/subway` 탭)로 묶여 있다. ~~앱에는 지하철 화면이 없다~~ → 2026-07 이후 **앱(`apps/mobile`)에도 대중교통 화면**(버스·지하철 통합, 탑승 모드·하차 알림 포함)이 있다 — [transit](transit.md)/[mobile](mobile.md) 참조.
+
+**2026-10-05 변경 흡수 — 실시간·시간표에 IP 하루 미스 예산(429)과 실패 쿨다운(`fd957320`) + 웹 한 벌 마운트·시간표/길찾기 뷰 도착 폴링 휴지·검색 200ms 디바운스(`086e4510`)**: 공통 부품 구조는 [transit](transit.md) 의 "실시간 외부 API 공통 가드" 절, 라이브러리 소유는 [friendly](friendly.md). 지하철 몫: (1) **IP 하루 미스 예산(E-7)** — 발견: 역 701곳(조회역명 565개)을 순회하면 IP 하나가 1,075요청 만에 'realtime' 900 을 소진(분당 60 이면 15분, 시간표는 7.5분)하고, 실시간은 stale 폴백이 없어 자정까지 503. [subway.service.ts](../../apps/friendly/src/modules/subway/subway.service.ts) `SUBWAY_CLIENT_DAILY_MISS_BUDGET = { realtime: 150, timetable: 40 }`(`PerClientDailyBudget` 두 개, 테스트 주입 `clientBudget`) — 실시간 150 = 한 역을 30초 폴링으로 75분 지켜볼 몫, 시간표는 미스 1회가 업스트림 2콜이라 40(80콜). **캐시 히트(15초 마이크로캐시·DB 30일 시간표)는 세지 않는다.** 라우트([subway.route.ts](../../apps/friendly/src/modules/subway/subway.route.ts))가 `clientKey(req)`(CF-Connecting-IP, [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts))를 `{ client }` 로 넘기고, 서비스의 `SubwayServiceError(429)` 를 `asTooMany` 가 `app.httpErrors.tooManyRequests` 로 바꾼다(`replyUpstreamError` 는 4xx 라벨이 없어서) — 문구 "오늘 이 네트워크에서 지하철 실시간 정보를 너무 많이 조회했습니다. 내일 다시 이용해 주세요.". 서비스 주석 스스로 CGNAT 뒤 여러 명이면 먼저 닿을 수 있는 **보조 수단**이라고 적는다. 일일 쿼터 그룹 `realtime 900`·`openapi 900` 은 그대로(원래 분리돼 있었다). (2) **실패 쿨다운(E-V2)** — 서비스 단위 `'swopen' | 'openapi'`(실시간·시간표는 키·포털이 다름), 키는 `arrivals:<조회역명>`·`positions:<호선명>`·시간표 `cacheKey`. `SubwayApiAuthError`(`INFO-100`)와 일일 트래픽 초과 `ERROR-337`(`DAILY_LIMIT_CODE`)은 그 포털 전체를 막는다. 실시간은 쿨다운 중 업스트림·쿼터 없이 503("서울시 지하철 API 가 응답하지 않아 잠시 조회를 멈췄습니다. N초 뒤…"), 시간표는 쿨다운·예산 소진도 만료 blob 이 있으면 stale. 순서는 쿨다운 → IP 예산 → 전역 쿼터. (3) **어댑터** 1콜 10초 → `UPSTREAM_REQUEST_BUDGET_MS` 8초. 라우트 description 3곳에 "캐시 미스는 IP 당 하루 150회(도착·위치 합산)/40회까지, 초과 429" 문구 → [docs/api/README.md](../../docs/api/README.md) 오류 표 429 행. (4) **웹(`086e4510`)** — [SubwayPage](../../apps/web/src/routes/SubwayPage.tsx)가 `useIsDesktopXl` 한 벌 마운트(지도 OL·열차 tween·도착 패널 1초 tick 이 한 벌로 — 근거는 [transit](transit.md)), 도착 30초 폴링은 시간표·길찾기 뷰에서 쉼(`useSubwayStationArrivals(stn, { polling: !timetableView && !inPathView })` — 받아 둔 응답은 그 뷰 헤더가 계속 읽고, 도착 뷰로 돌아오면 즉시 1회 `refetch({ cancelRefetch: false })`), 그래서 [SubwayTimetable](../../apps/web/src/components/subway/SubwayTimetable.tsx) '다음 열차' 강조가 자체 30초 tick 을 갖는다. 라이브 검색은 `useDeferredValue` → `useDebounced(qInput, SEARCH_DEBOUNCE_MS = 200)` — 한글 조합 단계("ㄱ"→"가"→"강")마다 요청·지도 fit 애니메이션(중간 결과로 수도권 전역 줌아웃 → 타일 재요청)이 나가던 것을 입력이 멈춘 뒤 한 번으로, 입력값은 즉시 반영(IME 안전), 지울 땐 디바운스를 기다리지 않고 바로 초기 화면, 디바운스 대기 중도 '검색 중'. `near` 원문 문자열 memo(역을 골라 확대한 직후 도착 응답 리렌더의 fit 이 전체 보기로 되돌리던 것), [SubwayStationsMap](../../apps/web/src/components/subway/SubwayStationsMap.tsx) 마커 memo 의존 `selectedId` → `followGroup`. 테스트 [subway.test.ts](../../apps/friendly/src/modules/subway/subway.test.ts) 53건(⑩ IP 예산·⑪ 쿨다운·⑫ 라우트 429 신설), [SubwayPage.test](../../apps/web/src/routes/SubwayPage.test.tsx) 7건. (5) 덤 — 혼잡도 적재 키 서술이 2026-09-02 키 통일(`3d9dfed`) 뒤에도 `BUS_API_KEY` 로 남아 있던 것을 `DATA_GO_KR_API_KEY` 로 바로잡았다(코드는 이미 그 이름).
 
 **2026-08-22 변경 흡수 — 웹 모바일(=웹 작은 화면) 레이아웃을 공통 시트 골격으로 이전(`e84e4b9`)**: [SubwayPage](../../apps/web/src/routes/SubwayPage.tsx)의 모바일 블록이 "검색바 / 지도 / 리스트 38dvh 세로 적층"에서 맛집 v2·버스·일상지도와 같은 **상단바 subBar + fixed 지도 + 바텀시트 2장** 골격으로 바뀌었다 — `TransitTabs`+`SubwayStationSearchBar` 는 상단바 subBar 로(역 선택 중엔 검색행을 접어 헤더 215→98px), 지도는 `fixed` 배경(`poolKey="transit-mobile"`·이중 마운트 유지, 호선·경로·열차 prop 그대로), `SubwayStationListBody` 는 목록 [BottomSheet](../../apps/web/src/components/sheet/BottomSheet.tsx)(`data-testid="subway-list-sheet"`, `zIndex 20`), `stn` 이 잡히면 배타 패널(`panelContent` = 시간표 > 길찾기 > 도착)이 상세 시트(`key=stn`, `data-testid="subway-detail-sheet"`, `zIndex 25`)로 얹힌다. 스냅 조율은 [useMapSheets](../../apps/web/src/components/sheet/useMapSheets.ts) — 검색어 ≥1자(라이브 검색이라 버스의 2자와 다름)·주변 모드로 진입하면 목록 `half` 시작, 검색어 입력(비어 있지 않을 때)·내 주변·재검색 뒤 `peek` 이면 `half` 로 승격. [SubwayStationList](../../apps/web/src/components/subway/SubwayStationList.tsx)의 "결과가 많아 일부만 표시합니다" 별도 줄은 메타 행 인라인 `· 일부만 표시`(title "서버가 100건으로 절단했습니다")로, [SubwayStationsMap](../../apps/web/src/components/subway/SubwayStationsMap.tsx)의 따라가기/다시 따라가기 pill 은 `bottom-[calc(0.75rem+var(--map-bottom-inset,0px))]` 로 peek 시트(120px) 위에 뜬다. 데스크톱 블록·URL 계약(`q`/`near`/`stn`/`line`/`to`)·BE 는 무변경. 골격 규약(subBar·스냅 규칙·React Compiler 훅 순서·이중 마운트 함정)은 [transit](transit.md), 시트 컴포넌트 자체는 [web](web.md).
 
@@ -23,15 +25,15 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 
 커밋 히스토리상 1차(탭+역 검색+지도)부터 15차(검색 크로스 섹션)까지 진행됐고, 이 문서는 그 최신 코드 기준이다. 차수별 로드맵·사용자 결정·프로브 체크리스트의 원문은 [docs/PLAN-subway.md](../../docs/PLAN-subway.md)에 있다(계획 시점 기록 — 실제 진행은 커밋이 진실). 계획상 **9차(환승·출구)는 아직 구현되지 않았다** — TAGO 지하철정보(15098554) 게이트웨이 반영 대기.
 
-## Purpose [coverage: high — 8 sources]
+## Purpose [coverage: high — 9 sources]
 
 지하철 도메인은 웹에서 다음을 제공한다: (1) **역 찾기** — 라이브 키워드 검색(타이핑 즉시, [SubwayStationList](../../apps/web/src/components/subway/SubwayStationList.tsx)) 또는 좌표 기반 주변 역(Geolocation·지도 재검색), (2) **실시간 도착정보** — 선택 역의 호선별 도착 열차 30초 폴링 + `recptnDt` 기준 1초 카운트다운([SubwayArrivalPanel](../../apps/web/src/components/subway/SubwayArrivalPanel.tsx)), (3) **호선 보기 + 실시간 열차 추적** — 선택 호선의 근사 폴리라인·경유역 위에 실시간 열차를 얹고(GPS 없이 역간 보간으로 좌표 재구성), 알약을 탭하면 카메라가 따라간다, (4) **부가 정보** — 역 시간표·첫차/막차(8차)·시간대별 혼잡도(10차)·역→역 경로 탐색(11차)·주변 버스 정류장 연계(12차).
 
-버스 도메인을 관통하는 제약이 "서울시 개발계정 일 한도"였다면, 지하철에는 **결정적 완화**가 있다: 역사마스터(수도권 ~784행)를 friendly DB 에 전량 적재해 두어 **검색·주변·노선·경로·혼잡도가 전부 로컬 조회(업스트림 0콜)**로 완결된다. 그래서 검색이 라이브(타이핑 즉시)일 수 있다. **쿼터를 쓰는 것은 실시간(도착·열차 위치)과 시간표 수집뿐**이고, 이들도 15초 마이크로 캐시 + in-flight 합류 + 일일 쿼터(기본 900)로 방어한다.
+버스 도메인을 관통하는 제약이 "서울시 개발계정 일 한도"였다면, 지하철에는 **결정적 완화**가 있다: 역사마스터(수도권 ~784행)를 friendly DB 에 전량 적재해 두어 **검색·주변·노선·경로·혼잡도가 전부 로컬 조회(업스트림 0콜)**로 완결된다. 그래서 검색이 라이브(타이핑 즉시)일 수 있다. **쿼터를 쓰는 것은 실시간(도착·열차 위치)과 시간표 수집뿐**이고, 이들도 15초 마이크로 캐시 + in-flight 합류 + 일일 쿼터(기본 900)로 방어하며, 2026-10-05 부터는 IP 하루 미스 예산(실시간 150·시간표 40, 초과 429)과 실패 쿨다운(30초→5분, 인증·일일 트래픽 초과는 포털 전체)이 더해졌다.
 
 접근 정책은 버스·맛집 공개 지도와 동일하다: 검색·도착·주변·노선·위치·시간표·혼잡도·경로는 **비로그인 공개**, **즐겨찾기만 로그인 필요**(소유자 스코프). 실시간 라우트는 `SUBWAY_API_KEY`, 시간표는 `SEOUL_OPEN_API_KEY` 가 비어 있으면 그 라우트만 503 을 내고(검색 등 로컬 조회는 정상), 마스터 미적재면 검색이 503("load:subway-stations 실행 필요").
 
-## Architecture [coverage: high — 11 sources]
+## Architecture [coverage: high — 12 sources]
 
 한 방향 레이어드 파이프라인이다. 어댑터가 두 포털의 JSON 을 정규화하고, 서비스가 로컬 조회·캐시·쿼터를 얹고, 라우트가 HTTP 상태로 변환하고, 계약(zod)이 FE/BE 를 컴파일 타임에 묶고, shared 가 API·훅·store 를, 웹 컴포넌트가 UI 를 담당한다. 순수 로직(그룹핑·경로·순서·혼잡·보정·보간)은 서비스/스크립트에서 떼어내 단위 테스트 대상 순수 함수로 둔다.
 
@@ -65,10 +67,10 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 | **openapi.seoul.go.kr:8088** (정적) | `subwayStationMaster/1/1000` | `SEOUL_OPEN_API_KEY` | 역사마스터(784행, 적재용) |
 | | `SearchSTNTimeTableByIDService/1/500/{역코드}/{요일}/{상하}` | `SEOUL_OPEN_API_KEY` | 역 시간표(1~9호선) |
 | | `SearchSTNBySubwayLineInfo` | `SEOUL_OPEN_API_KEY` | 노선별 역 순서(FR_CODE, 적재용) |
-| **odcloud** (data.go.kr 파일데이터) | 서울교통공사 혼잡도 15071311 | `BUS_API_KEY` | 시간대별 혼잡도(1~8호선, 적재용) |
+| **odcloud** (data.go.kr 파일데이터) | 서울교통공사 혼잡도 15071311 | `DATA_GO_KR_API_KEY`(2026-09-02 전 `BUS_API_KEY`) | 시간대별 혼잡도(1~8호선, 적재용) |
 
 - swopenAPI 실시간 키(`SUBWAY_API_KEY`)와 openapi 일반 인증키(`SEOUL_OPEN_API_KEY`)는 **서로 호환되지 않는다** — 발급처(data.seoul.go.kr 열린데이터광장)는 같아도 별개 키다([env.ts](../../apps/friendly/src/config/env.ts) 주석).
-- 혼잡도는 별도 계정이 아니라 **버스의 `BUS_API_KEY`(data.go.kr)를 재사용**한다 — 같은 포털이라 버스 어댑터의 `toServiceKeyPart`(Encoding 키 raw 직결)까지 이식했다([load-subway-congestion.ts](../../apps/friendly/scripts/load-subway-congestion.ts)). 8차 시간표도 TAGO 후보를 두고 `BUS_API_KEY` 폴백을 계획했으나, 프로브 결과 서울시 openapi 소스로 확정돼 `SEOUL_OPEN_API_KEY` 만 쓴다.
+- 혼잡도는 별도 계정이 아니라 **data.go.kr 계정 공용 키를 재사용**한다(도입 땐 버스의 `BUS_API_KEY`, 2026-09-02 `3d9dfed` 부터 `DATA_GO_KR_API_KEY` — 스크립트가 `process.env.DATA_GO_KR_API_KEY` 를 직접 읽는다) — 같은 포털이라 버스 어댑터의 `toServiceKeyPart`(Encoding 키 raw 직결)까지 이식했다([load-subway-congestion.ts](../../apps/friendly/scripts/load-subway-congestion.ts)). 8차 시간표도 TAGO 후보를 두고 버스 키 폴백을 계획했으나, 프로브 결과 서울시 openapi 소스로 확정돼 `SEOUL_OPEN_API_KEY` 만 쓴다.
 - 어댑터는 키가 path 에 실리므로 `fetchUrl`(키 평문)과 `requestUrl`(`***` 마스킹본)을 **같은 템플릿에서 병렬 생성**한다 — URL 에서 키를 사후 치환하지 않는다(누락 위험). 예외 메시지도 `scrubKey` 로 한 번 더 지운다(이중 안전망).
 
 ### 내부 ID 체계 — 플랜 B (`${lineId}:${name}`)
@@ -86,8 +88,8 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 | 층 | 라우트 | 소스 | 쿼터/캐시 |
 |---|---|---|---|
 | **로컬 DB** | 검색·주변·호선 상세·경로·혼잡도 | `subway_stations`/`subway_line_stations`/`subway_congestions` 조회 | **쿼터 0** (`source: 'db'`) |
-| **실시간** | 도착·열차 위치 | swopenAPI 프록시 | 15초 마이크로 캐시 + in-flight 합류 + 일일 쿼터('realtime' 그룹, 기본 900). **stale 폴백 없음** |
-| **시간표** | 역 시간표 | openapi 프록시 | (역×dayType) DB blob 30일 TTL(빈 blob 은 6h — 81ccb6d) + **stale 폴백** + in-flight('openapi' 쿼터, 방향 2콜 선소비) |
+| **실시간** | 도착·열차 위치 | swopenAPI 프록시 | 15초 마이크로 캐시 + in-flight 합류 + 일일 쿼터('realtime' 그룹, 기본 900) + IP 하루 미스 150(도착·위치 합산, 429) + 실패 쿨다운 `swopen`(2026-10-05). **stale 폴백 없음** — 쿨다운 중엔 503 |
+| **시간표** | 역 시간표 | openapi 프록시 | (역×dayType) DB blob 30일 TTL(빈 blob 은 6h — 81ccb6d) + **stale 폴백** + in-flight('openapi' 쿼터, 방향 2콜 선소비) + IP 하루 미스 40(429) + 실패 쿨다운 `openapi`(2026-10-05) |
 
 로컬 조회는 라이브 검색을 가능하게 한 핵심이다. 실시간은 조회역명/호선명 단위 15초 캐시로 동시 사용자 전원이 업스트림 1콜을 공유한다.
 
@@ -113,12 +115,13 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 
 **9차(환승·출구)는 미구현** — TAGO 출구별 정보 게이트웨이 반영 대기(계획만 존재).
 
-## Talks To [coverage: high — 11 sources]
+## Talks To [coverage: high — 15 sources]
 
 - **서울시 실시간 swopenAPI (`http://swopenAPI.seoul.go.kr/api/subway/...`)** — 평문 HTTP, GET, 키가 path 세그먼트. JSON 응답. friendly 만 호출(브라우저 직접 접근 없음). 도착(`realtimeStationArrival`)·위치(`realtimePosition`)만 여기.
 - **서울시 정적 openapi (`http://openapi.seoul.go.kr:8088/...`)** — 역사마스터·시간표·노선순서. 같은 키 path 규율·에러 모델(`RESULT.CODE`)이 swopen 과 미묘하게 달라 어댑터가 두 파서(`readSwopenStatus`/`readSeoulResult`)로 분리.
-- **odcloud (`data.go.kr` 파일데이터)** — 서울교통공사 혼잡도(UDDI 지정). `BUS_API_KEY`(버스와 공용 계정)로 [load-subway-congestion.ts](../../apps/friendly/scripts/load-subway-congestion.ts)가 전량 적재.
-- **friendly DB (Prisma/SQLite)** — `subway_stations`·`subway_master_syncs`·`subway_line_stations`·`subway_timetable_caches`·`subway_congestions`·`subway_favorite_stations`·`subway_favorite_lines`. 상세는 [Data](#data-coverage-high--7-sources).
+- **odcloud (`data.go.kr` 파일데이터)** — 서울교통공사 혼잡도(UDDI 지정). data.go.kr 공용 키 `DATA_GO_KR_API_KEY`(2026-09-02 전엔 버스와 공용인 `BUS_API_KEY`)로 [load-subway-congestion.ts](../../apps/friendly/scripts/load-subway-congestion.ts)가 전량 적재.
+- **friendly DB (Prisma/SQLite)** — `subway_stations`·`subway_master_syncs`·`subway_line_stations`·`subway_timetable_caches`·`subway_congestions`·`subway_favorite_stations`·`subway_favorite_lines`. 상세는 Data 절.
+- **[friendly](friendly.md) 공통 가드(2026-10-05)** — [lib/upstream-guard.ts](../../apps/friendly/src/lib/upstream-guard.ts)의 `PerClientDailyBudget`(이 도메인만 사용)·`UpstreamCooldown`·`retryAfterSec`, 어댑터 시간 상한 `UPSTREAM_REQUEST_BUDGET_MS`. 일일 쿼터는 지하철 서비스 자체의 `consumeQuota`('realtime'·'openapi' 그룹)를 그대로 쓴다(`DailyQuota` 로 옮기지 않음). IP 키는 [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) `clientKey`. 구조·다른 도메인과의 비교는 [transit](transit.md).
 - **map 도메인 (vworld)** — [SubwayStationsMap](../../apps/web/src/components/subway/SubwayStationsMap.tsx)이 `useMapPublicConfig` 로 vworld 키를 받아 [MapCanvas](../../apps/web/src/components/restaurant/MapCanvas.tsx)에 넘긴다. MapCanvas 는 버스가 도입한 확장(차량 애니 레이어·`followVehicleId`·`routeLine`)에 더해 지하철이 `overlayMarkers`(fit 제외 겸표시 레이어)와 `poolKey`(탭 전환 인스턴스 풀링)를 추가로 도입했다. 지도 인프라 전반은 [map](map.md).
 - **bus 도메인** — 12차 [SubwayNearbyBusSection](../../apps/web/src/components/subway/SubwayNearbyBusSection.tsx)이 기존 `GET /bus/stations/nearby` 를 신규 API 없이 재사용하고, 14/15차가 버스 검색·주변 훅을 겸표시·크로스 섹션에 쓴다. 통합 페이지는 두 도메인을 [transit](../../apps/web/src/components/transit/TransitTabs.tsx) 셸(탭·크로스·통합 즐겨찾기·겸표시 토글)로 잇는다. 자매 토픽 [bus](bus.md).
 - **`@repo/api-contract`** — `schemas/subway.ts`·`schemas/subway-favorite.ts`·`Routes.Subway`. zod SSOT([zod-ssot-buildless](../concepts/zod-ssot-buildless.md)).
@@ -127,7 +130,7 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 - **프로브·적재 스크립트(6종)** — [probe-subway-api.ts](../../apps/friendly/scripts/probe-subway-api.ts)(1차 0단계 미지수 확정 ①~⑩), [load-subway-stations.ts](../../apps/friendly/scripts/load-subway-stations.ts)(마스터 적재), [verify-subway-lines.ts](../../apps/friendly/scripts/verify-subway-lines.ts)(호선 매핑 보정), [load-subway-line-orders.ts](../../apps/friendly/scripts/load-subway-line-orders.ts)(5차 순서), [probe-subway-positions.ts](../../apps/friendly/scripts/probe-subway-positions.ts)(6차 semantics 게이트), [probe-subway-timetable.ts](../../apps/friendly/scripts/probe-subway-timetable.ts)(8차 소스 판정). 코드에 박힌 추정을 실응답으로 확정하는 프로브 우선 개발 플로우([external-api-proxy-fixture](../concepts/external-api-proxy-fixture.md)).
 - **일상지도 옴니박스 소비처(2026-08-21)** — [LifeGoToBox](../../apps/web/src/components/life-map/LifeGoToBox.tsx)(웹)·[LifeGoToModal](../../apps/mobile/src/components/lifeMap/LifeGoToModal.tsx)(앱)이 `useSubwayStationSearch` 를 타이핑 250ms 디바운스(`REMOTE_DEBOUNCE_MS`)로 `useBusStationSearch`·`useLifeMapSearch` 와 나란히 부른다. 지하철 검색은 로컬 DB(쿼터 0)라 디바운스 발화가 비용 문제가 아니다 — 같은 옴니박스에서 버스 쪽만 쿼터를 쓴다([bus](bus.md)·[life-map](life-map.md)).
 
-## API Surface [coverage: high — 9 sources]
+## API Surface [coverage: high — 12 sources]
 
 **HTTP — 공개 라우트 ([subway.route.ts](../../apps/friendly/src/modules/subway/subway.route.ts), 인증 없음):**
 
@@ -135,10 +138,10 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 |---|---|---|---|
 | `GET Routes.Subway.stationSearch` | `q`(1~50자, NFC) | `SubwayStationSearchResult` | DB(쿼터 0) |
 | `GET Routes.Subway.stationsNearby` | `lat`·`lng`(WGS84), `radius`(100~3000, 기본 1500) | `SubwayNearbyResult` | DB 바운딩박스 |
-| `GET Routes.Subway.stationArrivals(:stationId)` | `stationId`(`${lineId}:${name}`) | `SubwayArrivalsResult` | 실시간(15s 캐시) |
-| `GET Routes.Subway.linePositions(:lineId)` | `lineId`(4자리) | `SubwayPositionsResult` | 실시간(15s 캐시) |
+| `GET Routes.Subway.stationArrivals(:stationId)` | `stationId`(`${lineId}:${name}`) | `SubwayArrivalsResult` | 실시간(15s 캐시) · 미스 IP 150/일(위치와 합산) |
+| `GET Routes.Subway.linePositions(:lineId)` | `lineId`(4자리) | `SubwayPositionsResult` | 실시간(15s 캐시) · 미스 IP 150/일(도착과 합산) |
 | `GET Routes.Subway.lineDetail(:lineId)` | `lineId`(4자리) | `SubwayLineDetailResult` | DB(순서 적재) |
-| `GET Routes.Subway.stationTimetable(:stationId)` | `+ dayType`('1'/'2'/'3') | `SubwayTimetableResult` | blob 30일+stale |
+| `GET Routes.Subway.stationTimetable(:stationId)` | `+ dayType`('1'/'2'/'3') | `SubwayTimetableResult` | blob 30일+stale · 미스 IP 40/일 |
 | `GET Routes.Subway.stationCongestion(:stationId)` | `+ dayType` | `SubwayCongestionResult` | DB(정적 통계) |
 | `GET Routes.Subway.path` | `from`·`to`(stationId, from≠to) | `SubwayPathResult` | DB 그래프 |
 
@@ -151,7 +154,7 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 | `Routes.Subway.favoriteLine(:stationId, :lineId)` | PUT / DELETE | `SubwayFavoritesResult` |
 | `Routes.Subway.favoritesSync` | POST | `SubwayFavoritesResult`(union 병합 후) |
 
-버스와 동일하게 변경 계열은 **변경 후 전체 목록**을 반환(diff 없이 캐시 통째 교체), DELETE 는 `deleteMany` 로 멱등, PUT 은 신규 시에만 상한(`SUBWAY_FAVORITES_MAX = 100`) 검사(초과 400). 라우트는 error-handler 가 `statusCode >= 500` 을 일괄 500 으로 뭉개므로, 의미 있는 **502(업스트림)·503(키 미설정·마스터 미적재·쿼터 소진)** 과 404(없는 역)를 핸들러가 직접 `reply.code().send()` 로 응답(공용 `ErrorResponseSchema` 등록). 미제공 노선의 시간표/혼잡도는 404 가 아니라 `coverage:false` + 200(역이 없는 게 아니므로).
+버스와 동일하게 변경 계열은 **변경 후 전체 목록**을 반환(diff 없이 캐시 통째 교체), DELETE 는 `deleteMany` 로 멱등, PUT 은 신규 시에만 상한(`SUBWAY_FAVORITES_MAX = 100`) 검사(초과 400). 라우트는 error-handler 가 `statusCode >= 500` 을 일괄 500 으로 뭉개므로, 의미 있는 **502(업스트림)·503(키 미설정·마스터 미적재·쿼터 소진)** 과 404(없는 역)를 핸들러가 직접 `reply.code().send()` 로 응답(공용 `ErrorResponseSchema` 등록). 미제공 노선의 시간표/혼잡도는 404 가 아니라 `coverage:false` + 200(역이 없는 게 아니므로). **(2026-10-05)** 도착·위치·시간표는 IP 하루 미스 예산을 넘으면 **429**(서비스 `SubwayServiceError(429)` → 라우트 `asTooMany` → `app.httpErrors.tooManyRequests`, 응답 스키마에 429 항목은 없다), 실패 쿨다운 중이면 업스트림을 부르지 않은 **503**("…잠시 조회를 멈췄습니다. N초 뒤…" — 도착 description 의 "실패한 역명은 잠시 503"). 외부 문서는 [docs/api/README.md](../../docs/api/README.md) 오류 표(429 행에 "지하철 실시간·시간표의 IP별 하루 업스트림 조회 한도 초과")와 공용 쿼터 문단("지하철 실시간은 IP당 하루 150회, 시간표는 40회").
 
 **Zod 계약 ([subway.ts](../../packages/api-contract/src/schemas/subway.ts) · [subway-favorite.ts](../../packages/api-contract/src/schemas/subway-favorite.ts)):**
 
@@ -171,12 +174,12 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 
 **FE hooks ([useSubway.ts](../../packages/shared/src/hooks/useSubway.ts) · [useSubwayFavorites.ts](../../packages/shared/src/hooks/useSubwayFavorites.ts)):**
 
-- `useSubwayStationSearch(q)` — `enabled = 1~50자`, `staleTime 24h`, **라이브**(타이핑 즉시). `placeholderData` 로 잔상 없이 갱신. 디바운스는 호출부의 `useDeferredValue`(타이머/effect 없음).
+- `useSubwayStationSearch(q)` — `enabled = 1~50자`, `staleTime 24h`, **라이브**(제출 없이 타이핑으로 조회). `placeholderData` 로 잔상 없이 갱신. 훅 안엔 타이머/effect 가 없고 지연은 호출부 몫 — 웹 SubwayPage 는 2026-10-05 부터 [useDebounced](../../apps/web/src/lib/useDebounced.ts) 200ms(그전 `useDeferredValue`), 일상지도 옴니박스는 250ms.
 - `useSubwayNearbyStations(lat, lng, radius=1500)` — 좌표 키 소수 4자리 스냅(≈11m), `staleTime 60s`.
-- `useSubwayStationArrivals(stationId)` — `refetchInterval 30s`, `staleTime 0`, `refetchIntervalInBackground` false(탭 비활성 자동 중단).
+- `useSubwayStationArrivals(stationId, { polling? })` — `refetchInterval 30s`(`polling: false` 면 끔 — 2026-10-05, 쿼리는 살아 있어 받아 둔 응답은 읽힘), `staleTime 0`, `refetchIntervalInBackground` false(탭 비활성 자동 중단). false→true 전이 때 effect 가 `refetch({ cancelRefetch: false })` 를 한 번 부른다(interval 첫 틱이 30초 뒤라 묵은 정보가 그만큼 더 보이지 않게). `polling` 생략 시 종전과 같이 항상 폴링(앱·통합 즐겨찾기 미리보기).
 - `useSubwayLinePositions(lineId)` — `refetchInterval 30s`(역 단위 상태라 버스 15s보다 밀도 낮음 + 쿼터).
 - `useSubwayLineDetail` / `useSubwayTimetable` / `useSubwayCongestion` / `useSubwayPath` — 전부 로컬/정적 데이터라 `staleTime 24h`, 폴링 없음.
-- `useSubwayFavorites()` — 게스트/로그인 하이브리드 단일 인터페이스([Key Decisions](#key-decisions-coverage-high--10-sources)).
+- `useSubwayFavorites()` — 게스트/로그인 하이브리드 단일 인터페이스(Key Decisions 절). 서버 목록이 아직 없을 때 빈 배열을 모듈 상수(`EMPTY_STATIONS`·`EMPTY_LINES`)로 돌려준다(2026-10-05). 상한 `SUBWAY_FAVORITES_MAX` 는 같은 날 `da755684` 로 스키마에서 [constants.ts](../../packages/api-contract/src/constants.ts)로 옮겨졌다.
 
 **마커/보간 유틸 ([subwayMarker.ts](../../packages/utils/src/subwayMarker.ts) · [subwayPosition.ts](../../packages/utils/src/subwayPosition.ts) · [subwayLine.ts](../../packages/utils/src/subwayLine.ts)):**
 
@@ -190,7 +193,7 @@ locateTrain(sections, item, opts) → { s, bearing }        // 역간 보간 코
 sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도로 슬라이스(순환 짧은 호)
 ```
 
-## Data [coverage: high — 7 sources]
+## Data [coverage: high — 8 sources]
 
 전부 [schema.prisma](../../apps/friendly/prisma/schema.prisma)에 정의되고 마이그레이션 5개로 쌓였다. **어느 즐겨찾기·순서·혼잡도 테이블도 `SubwayStation` 을 FK 로 참조하지 않는다** — 마스터 재적재·보정이 다른 테이블을 깨지 않도록(스냅샷 내성).
 
@@ -214,25 +217,28 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 
 **게스트 로컬 저장** ([subwayFavoriteStore.ts](../../packages/shared/src/stores/subwayFavoriteStore.ts)) — 비로그인 즐겨찾기는 zustand persist. 웹은 `localStorage` 자동, 앱은 storage 주입(reviewAskStore 와 같은 lazy resolver 패턴). 등록순 배열, 상한 100.
 
-## Key Decisions [coverage: high — 10 sources]
+## Key Decisions [coverage: high — 12 sources]
+
+- **2026-10-05 지하철은 버킷을 더 쪼개지 않고 IP 하루 미스 예산 + 실패 쿨다운으로(`fd957320`).** 지하철 일일 쿼터는 이미 실시간('realtime')·시간표('openapi')로 나뉘어 있고 도착·위치는 둘 다 실시간 화면이라 버스처럼 기능별로 나눌 남용 경로가 없다 — 문제는 IP 하나가 존재하는 역명 565개를 순회해 공유 900 을 15분에 태우는 것(E-7, 직전 감사 #18 의 분당 60 프리셋 뒤 잔여)이었다. 발견 원문이 권한 per-IP 미스 예산(예 100/일)을 화면 사용 모형으로 150(한 역 75분 감시)·40(시간표 미스 2콜)으로 잡고, 근본책으로 꼽힌 실패 쿨다운을 같이 넣었다. 다른 근본책인 시간표 사전 워밍(1,365키를 한가한 시간에 채움)은 쿼터 3일치라 [PLAN-perf-2](../../docs/PLAN-perf-2.md) "남은 것 → 보류 유지" 로 남았다. 실시간 stale 폴백 없음 원칙은 그대로라 쿨다운 중 실시간은 503 이다(도착 오정보보다 에러가 낫다 — 버스의 10분 stale 과 다른 선택 유지).
+- **2026-10-05 라이브 검색 지연을 `useDeferredValue` 에서 200ms 디바운스로(`086e4510`).** deferred 값은 렌더 우선순위만 늦출 뿐 조합 단계마다 쿼리 키가 바뀌어 요청과 지도 fit 애니메이션이 나갔다(중간 결과로 수도권 전역 줌아웃 → 타일 재요청). 로컬 DB 라 쿼터 문제는 아니고 화면·타일 비용 문제다. 입력 state 는 즉시 반영(IME 조합 보존 — 아래 URL 결정과 같은 이유)하고 쿼리 값만 늦춘다. 타이머는 `lib/useDebounced` 가 소유해 페이지엔 effect 가 없다.
 
 - **내부 ID = `${lineId}:${name}` (플랜 B).** 프로브 실측: 마스터 `BLDN_ID` ≠ 실시간 `statnId` 라 조인 불가. 합성 ID + 역명 기반 실시간 조회로 완결하고, `statnId` 는 6차 위치 조인용으로 도착 API 관측 backfill(플랜 A 였다면 statnId PK). 계약(`SubwayArrivalsParams` 등)이 이 합성 ID 를 path 로 받고 라우트는 `decodeURIComponent` 트릭으로 등록.
 - **역명 그룹핑 — 동일 name + 좌표 근접(≤1km)만 환승역.** ["같은 name = 환승역"은 틀린다] — **진짜 동명이역**('양평' 5호선 vs 경의중앙선, '신촌' 2호선 vs 경의중앙선)이 존재. [groupStations](../../apps/friendly/src/modules/subway/subway-master.service.ts)가 같은 name 을 좌표 단일연결 클러스터링(`STATION_CLUSTER_RADIUS_M = 1000`)해 멀면 별개 그룹으로 분리한다. 도착 API 가 역명 키라 동명이역 응답이 섞여 오므로, 서버가 그룹의 `lineId` 집합으로 필터해 오염을 차단한다. 이 함수는 검색·도착 필터·경로 환승 간선·호선 상세 `isTransfer` 가 공용.
 - **호선 매핑 보정 — 마스터 ROUTE 는 철도노선, 도착 API 가 운행계통의 정답.** 마스터 `ROUTE` 는 철도노선(경원선 등) 기준이라 경원선 구간의 경의중앙 전용역(왕십리·옥수·서빙고·응봉 등)이 1호선으로 오라벨된다. [verify-subway-lines.ts](../../apps/friendly/scripts/verify-subway-lines.ts) + [subway-verify.service.ts](../../apps/friendly/src/modules/subway/subway-verify.service.ts)가 역명 그룹당 도착 1콜로 `subwayList`/`statnList`(실제 운행계통)를 관측해, 그룹과 교집합 있는 클러스터를 **병합**(GTX-A 가 자기만 표기·안산선 분할 대응)한 뒤 extra 삭제/missing 생성/`statnId` backfill/`realtimeName` 검증한다. 관측 캐시 기반 `--apply` 라 재호출 0.
 - **좌표계는 값 범위 강제 — WGS84 한국(lat 33~39, lng 124~132).** 마스터 `LAT/LOT` 는 WGS84 문자열이지만 정규화 시 범위를 강제해(밖이면 drop) 계약 zod 제약과 코드 상수를 일치시킨다(버스의 값 범위 판정과 동일 정신 — 지하철은 필드 후보 순회 없이 단일 필드 검증).
 - **검색·주변·노선·경로·혼잡도 = 로컬 DB, 쿼터 0.** 역사마스터를 전량 적재해 두어 라이브 검색이 가능(`source: 'db'` 를 계약으로 명시 — 버스의 cache/api/stale 구분이 없음). 마스터 0행이면 검색이 503, 단순 무매칭은 빈 결과 200(구분).
-- **실시간 인프라 — 15초 마이크로 캐시 + in-flight + 일일 쿼터(도착·위치 공유).** [subway.service.ts](../../apps/friendly/src/modules/subway/subway.service.ts)의 `fetchRealtime`/`loadRealtime` 골격을 도착(2차)·위치(6차)가 재사용. 캐시는 필터 전 raw 배열을 담아 동명이역 두 그룹이 같은 조회명 캐시를 공유. 쿼터('realtime' 그룹, Asia/Seoul 경계, 기본 900)는 캐시 미스 확정 직전에만 소비, 소진 시 소비 없이 503(실시간이라 stale 폴백 없음). 단일 인스턴스 전제 모듈 싱글턴([in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)). 운영 확장 시 도착을 일괄(ALL) 서버 폴링으로 전환하는 escape hatch 는 마이크로 캐시 뒤에 숨어 라우트/계약 무변경(계획).
+- **실시간 인프라 — 15초 마이크로 캐시 + in-flight + 일일 쿼터(도착·위치 공유).** [subway.service.ts](../../apps/friendly/src/modules/subway/subway.service.ts)의 `fetchRealtime`/`loadRealtime` 골격을 도착(2차)·위치(6차)가 재사용. 캐시는 필터 전 raw 배열을 담아 동명이역 두 그룹이 같은 조회명 캐시를 공유. 쿼터('realtime' 그룹, Asia/Seoul 경계, 기본 900)는 캐시 미스 확정 직전에만 소비, 소진 시 소비 없이 503(실시간이라 stale 폴백 없음). 2026-10-05 부터 미스 경로 순서는 실패 쿨다운(`swopen`) 확인 → IP 하루 예산(`realtimeBudget.take`) → 쿼터 소비 → 업스트림이고, 업스트림이 `SubwayApiError` 를 던지면 그 키(인증·`ERROR-337` 이면 포털 전체)를 쿨다운에 기록한다. 단일 인스턴스 전제 모듈 싱글턴([in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)). 운영 확장 시 도착을 일괄(ALL) 서버 폴링으로 전환하는 escape hatch 는 마이크로 캐시 뒤에 숨어 라우트/계약 무변경(계획).
 - **카운트다운 기준은 `recptnDt`, fetchedAt 아님.** 공식 가이드가 "현재시각과 recptnDt 차이만큼 열차가 더 진행"을 명시하므로, `recptnToIso` 가 KST 를 `+09:00` 명시로 ISO 정규화해 계약에 싣는다 — 마이크로 캐시로 fetchedAt 이 과거여도 카운트다운이 정확.
 - **열차 위치 — GPS 없는 역간 보간(6차 코어).** 실시간 위치는 현재역(`statnId`)+상태(`trainStatus`)뿐이라, 서버가 마스터 조인으로 역 좌표를 enrich(실패 null, 부가 정보)하고 FE 가 5차 순서(sections)와 조합해 [locateTrain](../../packages/utils/src/subwayPosition.ts)으로 위치를 추정한다: 상태→세그먼트 분수(`'3'전역출발 0.2 / '0'진입 0.9 / '1'도착 1.0 / '2'출발 다음세그 0.1`), 방향은 행선(`statnTid`) seq 비교 1차·`updnLine`('0'/'1') 폴백. 프로브 실증: 급행도 통과역을 statnId 로 보고(급행 Δ1=일반 Δ1), 2호선 순환은 updn 혼재라 행선 필수, 올림픽공원은 위치/도착 statnId 가 서로 달라 역명 폴백. `sliceForMove` 가 폴링 간 도로 슬라이스(순환 짧은 호), MapCanvas rAF tween(28초) 무수정 재사용.
 - **노선 형상 = 역 좌표 근사 폴리라인(공공 API 부재).** 별도 path 배열 없이 `sections[].stations` 좌표를 이어 그린다. 지선(2호선 성수/신정, 5호선 마천 등)은 `FR_CODE` 로 `branchKey` 를 나눠 section 분리(단일 배열이면 지도에서 지그재그). 2호선 본선 순환은 서버가 첫 역을 끝에 복제하지 않고 FE 가 `isLoop` 로 닫는다.
 - **경로 탐색 — 로컬 그래프 다익스트라(유료 API 불필요).** [subway-path.service.ts](../../apps/friendly/src/modules/subway/subway-path.service.ts): 노드=역×호선, 운행 간선=순서 인접 seq(`RIDE_SEC_PER_STATION = 120`), 환승 간선=역명 근접 그룹 내 쌍(`TRANSFER_SEC = 240`), 2호선 순환은 loop 간선(짧은 호 자동), 지선은 공용 정차역의 동일 stationId 노드 공유로 자연 반영. 비용 `(초, 환승수)` 사전순(동률이면 환승 적은 쪽). 그래프는 lazy 1회 구축(TTL 30일 + in-flight 합류), 의존성 없는 이진 힙. **선두/후미 환승 간선(출발·도착역 플랫폼 이동)은 leg·환승수·소요에서 제외** — 강남→서울역이 환승 2가 아닌 1(사당)로 상식 정합.
 - **즐겨찾기 하이브리드 — 게스트 로컬 + 로그인 서버 + union 병합.** 게스트는 store, 로그인은 서버 목록을 React Query 로. 로그인 직후 게스트 저장분을 서버로 union 병합(sync 1회, 서버에 없는 것만 insert·상한 초과분 조용히 skip). sync 는 외부 시스템 동기화라 [useSubwayFavorites](../../packages/shared/src/hooks/useSubwayFavorites.ts)가 `useEffect` 로 발사(`syncedRef` StrictMode 가드), 파생 판정(`isFavorite`)은 렌더 중 계산. 버스 즐겨찾기와 미러 구조.
 - **URL 이 유일 진실 — `q`/`near`/`stn`/`line`/`to`.** [SubwayPage](../../apps/web/src/routes/SubwayPage.tsx)가 이 5개를 URL 에 동기화(버스의 `q`/`stId`/`routeId`/`near` 와 1:1 대응 계보) — 새로고침/공유/딥링크 시 Geolocation 재요청 없이 복원. 자동 재조회(패닝) 좌표만 로컬 상태(`autoNear`, history 오염 방지). 단 **검색 입력값은 로컬 state 가 진실이고 URL `q` 는 쓰기 전용 미러** — URL 을 input value 에 직결하면 라우터 리렌더가 한글 IME 조합을 리셋해 첫 글자가 유실된다(실측 "강남"→"남").
-- **패널 우선순위 — 시간표 > 길찾기 > 도착(배타).** 좌패널/모바일 하단이 선택 역에서 세 뷰로 전환되며, 열기 핸들러가 서로를 닫아 동시에 참이 아니다. line 추적과 길찾기(`to`)는 폴리라인 충돌로 배타.
-- **탭 통합 — `/bus` + `/subway`, 라우트 전환 = 탭.** [TransitTabs](../../apps/web/src/components/transit/TransitTabs.tsx)가 슬림 행으로 배치, 지도 인스턴스는 공유하지 않되(각 페이지가 소유) **OL Map 을 모듈 풀에 보관(D안 `poolKey`)**해 탭 전환 타일 플래시를 제거한다(데스크톱/모바일 동시 마운트라 `transit-desktop`/`transit-mobile` 키 분리). A안(뷰포트 이어보기)은 풀이 빈 새로고침 복원용 보완재로 유지.
+- **패널 우선순위 — 시간표 > 길찾기 > 도착(배타).** 좌패널/모바일 상세 시트가 선택 역에서 세 뷰로 전환되며, 열기 핸들러가 서로를 닫아 동시에 참이 아니다. line 추적과 길찾기(`to`)는 폴리라인 충돌로 배타. 2026-10-05 부터 도착 폴링은 도착 뷰일 때만 돈다(`polling: !timetableView && !inPathView`) — 배타 패널이라 다른 뷰에선 도착 목록이 화면에 없다.
+- **탭 통합 — `/bus` + `/subway`, 라우트 전환 = 탭.** [TransitTabs](../../apps/web/src/components/transit/TransitTabs.tsx)가 슬림 행으로 배치, 지도 인스턴스는 공유하지 않되(각 페이지가 소유) **OL Map 을 모듈 풀에 보관(D안 `poolKey`)**해 탭 전환 타일 플래시를 제거한다(도입 땐 데스크톱/모바일 동시 마운트라 `transit-desktop`/`transit-mobile` 키 분리 — 2026-10-05 `useIsDesktopXl` 한 벌 마운트 뒤에도 레이아웃별 키 유지, [transit](transit.md)). A안(뷰포트 이어보기)은 풀이 빈 새로고침 복원용 보완재로 유지.
 - **Zod SSOT — buildless.** 계약 1개 변경이 FE/BE 컨슈머를 컴파일 타임에 동기화, `fastify-type-provider-zod` 가 검증 + OpenAPI 자동 생성([zod-ssot-buildless](../concepts/zod-ssot-buildless.md)).
 
-## Gotchas [coverage: high — 8 sources]
+## Gotchas [coverage: high — 10 sources]
 
 - **HTTP 200 + 본문 에러 — status 신뢰 금지.** 두 포털 모두 정상/에러/데이터없음을 본문 코드로만 구분한다. swopen 정상은 `{ errorMessage:{code:'INFO-000'}, <list>:[...] }`, 데이터 없음은 톱레벨 단독 `{ code:'INFO-200' }`, openapi 는 `RESULT.CODE`. 어댑터의 `throwIfError` 가 `INFO-000`/`INFO-200` 통과, `INFO-100` 인증실패(503), 그 외 502.
 - **`INFO-200`(데이터 없음)은 에러가 아니라 정상 빈 배열.** 서울 밖 역·심야 운행종료가 여기로 떨어진다. 에러로 다루면 오탐 — FE 는 "운행 종료 또는 실시간 미제공 역" 안내로 흡수.
@@ -242,19 +248,25 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - **동명이역 응답 오염.** '양평'/'신촌' 조회 1콜에 두 물리 역(다른 호선)이 섞여 온다 — 서버가 그룹 `lineId` 집합으로 필터. verify 는 `subwayList` 로 클러스터를 나눠 자동 분리(동명이역은 교집합 0).
 - **한글 IME 조합 유실.** URL `q` 를 input value 에 직결하면 라우터 리렌더가 조합 세션을 리셋해 첫 글자가 유실("강남"→"남") — 입력 진실은 로컬 state, URL 은 쓰기 전용 미러, 초기값만 lazy initializer 로 복원(뒤로가기 등 외부 URL 변경은 input 에 역반영 안 함).
 - **시간표/혼잡도 커버리지 한정.** 시간표는 **1~9호선(중전철)만**(`TIMETABLE_LINES`), 혼잡도는 **1~8호선만** 제공 — 나머지(광역·경전철·9호선 혼잡)는 `coverage:false` + 200(404 아님, "미제공" 라벨 + "정적 통계" 라벨). 시간표 `ARRIVETIME` 은 자정 넘김을 24/25시로 표기('24:46:00', '00:00:00' 미관측)라 문자열 정렬이 곧 시각 순서(0시 wraparound 없음).
+- **IP 하루 예산은 보조 수단 — 공용 IP 뒤 사용자들이 나눠 쓴다(2026-10-05~).** CGNAT·사무실 NAT 뒤 여러 명이면 실시간 150회를 먼저 닿을 수 있고, 닿으면 그 IP 전체가 자정까지 429 다(웹 QueryClient 는 4xx 를 재시도하지 않아 바로 오류 상태 — `3d294304`). 또 미스 경로가 IP 예산을 전역 쿼터보다 **먼저** 소비하므로 전역 `realtime` 900 소진으로 503 이 나는 요청도 그 IP 예산 1을 쓴다(작은 누수, 미수정). 테스트는 `clientBudget` 주입으로 한도를 낮춰 확인한다(⑩·⑫).
+- **쿨다운은 조회역명 단위 — 동명이역·환승역 그룹은 한 키가 막히면 같이 503.** 도착 캐시·쿨다운 키가 `arrivals:<조회역명>` 이라 같은 역명을 쓰는 그룹(동명이역 포함)이 함께 쉬고, `ERROR-337`(일일 트래픽 초과)·`INFO-100`(인증)은 swopen 포털 전체를 5분→1시간 막는다 — 그동안 실시간 라우트는 업스트림을 부르지 않는 503 이라 라이브 스모크의 `ERROR-337` skip 판정과 달리 서비스 경로에선 코드가 아니라 쿨다운 문구로 보인다. 쿨다운 기록 시각이 조회 시작 기준이라 30초가 ≈22초로 줄 수 있는 문제는 6개 서비스 공통([transit](transit.md) 의 Gotchas 절).
 - **라이브 스모크는 쿼터 초과(`ERROR-337`)를 skip.** [subway-api.live.test.ts](../../apps/friendly/src/modules/subway/subway-api.live.test.ts)가 폴링·적재로 쿼터를 소진한 날 스위트가 종일 빨개지는 것을 막되, `ERROR-337` 코드만 정밀 skip(SubwayApiError 전체를 삼키면 응답 형식 회귀까지 가려짐). 인증 실패(키 미승인/동기화 지연)도 skip. 테스트 시드는 `subwaytest-`/placeholder 키로 실호출 차단.
 - **키 URL path 노출.** 키가 path 세그먼트라 쿼리파람보다 새기 쉽다 — 로그·에러·프로브 덤프 전부 `***` 마스킹(어댑터 `requestUrl` + `scrubKey` 이중, 프로브/스크립트도 동일 규율).
 - **개발 함정(버스 계승).** 브랜치 전환/rebase 후 `prisma generate` 필수(client 불일치면 `prisma.subwayStation` undefined), dev DB 에 vworld 키 미등록이면 지도는 placeholder(설계된 폴백, 리스트는 동작), 포트 3000 이중 바인딩. 1차 마이그레이션은 기존 무관 drift 때문에 `migrate diff` 수기 작성 + `migrate deploy` 로 비파괴 우회했다.
 - **미구현·미확정.** 9차(환승·출구)는 TAGO 게이트웨이 대기로 미구현. `SUBWAY_LINES` 의 신림선(1094)은 문헌 추정(프로브 미검증), 일부 `positionParam` 은 관례 표기 추정(주석의 `verified` 만 실검증). 실시간 미제공 역의 도착 실패는 `INFO-200` 이라 '표기 불일치로 조용히 실패'와 구분 불가 — 필요 시 전 역 1회 검증 스크립트(쿼터 ~800콜, 별도 날).
 - ~~앱 미구현~~ → **앱 대중교통 화면 존재(2026-07~)** — 검색·도착·따라가기에 더해 탑승 모드·하차 지점/알림·실형상 렌더까지 앱이 앞서 있다([transit](transit.md)). 게스트 즐겨찾기 storage 주입(setSubwayFavoriteStorage)도 앱 entry 에 배선됨.
-- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수, 데스크톱 폭에서도 모바일 시트가 마운트돼 있어 `transit-desktop`/`transit-mobile` 풀 키 분리는 그대로 필요, 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 역 지점을 가릴 수 있다. 상세는 [transit](transit.md) 의 Gotchas 절.
+- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수(2026-10-05 부터 데스크톱은 `DESKTOP_SUBBAR` 자리표시를 등록 — `null` 로 바꾸면 상단바 구분선이 1px 얇아짐), 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 역 지점을 가릴 수 있다. ~2026-10-05 엔 데스크톱 폭에서도 모바일 시트가 마운트돼 있었지만 한 벌 마운트로 해소됐다. 상세는 [transit](transit.md) 의 Gotchas 절.
+- **시간표·길찾기 뷰의 도착 데이터는 묵음이다(2026-10-05~).** `polling: false` 동안 쿼리는 살아 있어 헤더의 역명·호선을 받아 둔 응답에서 읽는다 — 그 뷰에 도착 숫자를 새로 보여 주면 최대 뷰를 연 시간만큼 낡은 값이다. 도착 뷰로 돌아오는 순간에만 즉시 1회 재조회한다.
+- **검색 디바운스와 "검색 결과 없음" 깜빡임(2026-10-05~).** 입력(`qInput`)과 쿼리(`searchQ`, 200ms 뒤)가 갈라져, 대기 중엔 `liveQ !== trimmedQ` 를 '검색 중' 으로 쳐서 목록이 "검색 결과가 없습니다" 로 잠깐 바뀌지 않게 한다. 지울 땐 `hasQ` 가 입력값도 함께 봐서 디바운스를 기다리지 않고 초기 화면으로 간다 — 이 두 조건을 단순화하면 깜빡임·잔상이 돌아온다([SubwayPage.test](../../apps/web/src/routes/SubwayPage.test.tsx) 가 고정).
 
-## Sources [coverage: high — 74 sources]
+## Sources [coverage: high — 83 sources]
 
 **백엔드 (friendly)**
-- [apps/friendly/src/modules/subway/subway-api.adapter.ts](../../apps/friendly/src/modules/subway/subway-api.adapter.ts)
-- [apps/friendly/src/modules/subway/subway.service.ts](../../apps/friendly/src/modules/subway/subway.service.ts)
-- [apps/friendly/src/modules/subway/subway.route.ts](../../apps/friendly/src/modules/subway/subway.route.ts)
+- [apps/friendly/src/modules/subway/subway-api.adapter.ts](../../apps/friendly/src/modules/subway/subway-api.adapter.ts) — *1콜 8초(2026-10-05)*
+- [apps/friendly/src/modules/subway/subway.service.ts](../../apps/friendly/src/modules/subway/subway.service.ts) — *IP 하루 미스 예산 `SUBWAY_CLIENT_DAILY_MISS_BUDGET`·쿨다운 swopen/openapi(2026-10-05)*
+- [apps/friendly/src/modules/subway/subway.route.ts](../../apps/friendly/src/modules/subway/subway.route.ts) — *`clientKey` 전달·`asTooMany` 429·description 3곳(2026-10-05)*
+- [apps/friendly/src/lib/upstream-guard.ts](../../apps/friendly/src/lib/upstream-guard.ts) — *공용 PerClientDailyBudget·UpstreamCooldown(구조는 transit)*
+- [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) — *`clientKey`·`RATE.transitRealtime`*
 - [apps/friendly/src/modules/subway/subway-master.service.ts](../../apps/friendly/src/modules/subway/subway-master.service.ts)
 - [apps/friendly/src/modules/subway/subway-path.service.ts](../../apps/friendly/src/modules/subway/subway-path.service.ts)
 - [apps/friendly/src/modules/subway/subway-line-order.service.ts](../../apps/friendly/src/modules/subway/subway-line-order.service.ts)
@@ -263,7 +275,7 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - [apps/friendly/src/modules/subway/subway-shape.service.ts](../../apps/friendly/src/modules/subway/subway-shape.service.ts) — *실형상 조립 순수 로직(c9c5235)*
 - [apps/friendly/src/modules/subway/subway-favorite.service.ts](../../apps/friendly/src/modules/subway/subway-favorite.service.ts)
 - [apps/friendly/src/modules/subway/subway-favorite.route.ts](../../apps/friendly/src/modules/subway/subway-favorite.route.ts)
-- [apps/friendly/src/modules/subway/subway.test.ts](../../apps/friendly/src/modules/subway/subway.test.ts)
+- [apps/friendly/src/modules/subway/subway.test.ts](../../apps/friendly/src/modules/subway/subway.test.ts) — *53건(⑩ IP 예산·⑪ 쿨다운·⑫ 라우트 429 신설)*
 - [apps/friendly/src/modules/subway/subway-api.adapter.test.ts](../../apps/friendly/src/modules/subway/subway-api.adapter.test.ts)
 - [apps/friendly/src/modules/subway/subway-api.live.test.ts](../../apps/friendly/src/modules/subway/subway-api.live.test.ts)
 - [apps/friendly/src/modules/subway/subway-path.test.ts](../../apps/friendly/src/modules/subway/subway-path.test.ts)
@@ -297,13 +309,14 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 **계약 (api-contract)**
 - [packages/api-contract/src/schemas/subway.ts](../../packages/api-contract/src/schemas/subway.ts)
 - [packages/api-contract/src/schemas/subway-favorite.ts](../../packages/api-contract/src/schemas/subway-favorite.ts)
+- [packages/api-contract/src/constants.ts](../../packages/api-contract/src/constants.ts) — *`SUBWAY_FAVORITES_MAX`(2026-10-05 `da755684` 로 이동)*
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)
 
 **공유 (shared)**
 - [packages/shared/src/api/subway.api.ts](../../packages/shared/src/api/subway.api.ts)
 - [packages/shared/src/api/subway-favorite.api.ts](../../packages/shared/src/api/subway-favorite.api.ts)
-- [packages/shared/src/hooks/useSubway.ts](../../packages/shared/src/hooks/useSubway.ts)
-- [packages/shared/src/hooks/useSubwayFavorites.ts](../../packages/shared/src/hooks/useSubwayFavorites.ts)
+- [packages/shared/src/hooks/useSubway.ts](../../packages/shared/src/hooks/useSubway.ts) — *`useSubwayStationArrivals(stationId, { polling })`(2026-10-05)*
+- [packages/shared/src/hooks/useSubwayFavorites.ts](../../packages/shared/src/hooks/useSubwayFavorites.ts) — *빈 서버 목록 `EMPTY_*` 안정 참조*
 - [packages/shared/src/stores/subwayFavoriteStore.ts](../../packages/shared/src/stores/subwayFavoriteStore.ts)
 
 **유틸 (utils)**
@@ -315,15 +328,18 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - [packages/utils/src/subwayCongestion.ts](../../packages/utils/src/subwayCongestion.ts) — *혼잡도 임계·슬롯 단일 정의(9206346), 웹·앱 congestionUtils 는 facade*
 
 **웹 (web)**
-- [apps/web/src/routes/SubwayPage.tsx](../../apps/web/src/routes/SubwayPage.tsx)
+- [apps/web/src/routes/SubwayPage.tsx](../../apps/web/src/routes/SubwayPage.tsx) — *useIsDesktopXl 한 벌 마운트·도착 polling 휴지·검색 200ms 디바운스·`near` memo(2026-10-05)*
+- [apps/web/src/routes/SubwayPage.test.tsx](../../apps/web/src/routes/SubwayPage.test.tsx) — *7건(도착 쿼리 구독자 1·시간표/길찾기 폴링 휴지·재개 즉시 1회·디바운스·지울 땐 즉시·fit 재발화 없음)*
+- [apps/web/src/lib/useDebounced.ts](../../apps/web/src/lib/useDebounced.ts) — *검색 쿼리 디바운스(useDeferredValue 대체)*
+- [apps/web/src/lib/useMediaQuery.ts](../../apps/web/src/lib/useMediaQuery.ts) — *useIsDesktopXl*
 - [apps/web/src/components/subway/SubwayArrivalPanel.tsx](../../apps/web/src/components/subway/SubwayArrivalPanel.tsx)
 - [apps/web/src/components/subway/SubwayLineBadge.tsx](../../apps/web/src/components/subway/SubwayLineBadge.tsx)
 - [apps/web/src/components/subway/SubwayStationList.tsx](../../apps/web/src/components/subway/SubwayStationList.tsx) — *"일부만 표시" 메타 행 인라인(2026-08-22)*
 - [apps/web/src/components/sheet/BottomSheet.tsx](../../apps/web/src/components/sheet/BottomSheet.tsx) — *모바일 목록/상세 시트(2026-08-22, 맛집 v2 와 공용)*
 - [apps/web/src/components/sheet/useMapSheets.ts](../../apps/web/src/components/sheet/useMapSheets.ts) — *목록↔상세 스냅 조율, SHEET_PEEK_HEIGHT*
 - [apps/web/src/components/PublicLayout.tsx](../../apps/web/src/components/PublicLayout.tsx) — *setSubBar/headerHeight — 모바일 탭·검색행을 상단바로*
-- [apps/web/src/components/subway/SubwayStationsMap.tsx](../../apps/web/src/components/subway/SubwayStationsMap.tsx)
-- [apps/web/src/components/subway/SubwayTimetable.tsx](../../apps/web/src/components/subway/SubwayTimetable.tsx)
+- [apps/web/src/components/subway/SubwayStationsMap.tsx](../../apps/web/src/components/subway/SubwayStationsMap.tsx) — *마커 memo 의존 `followGroup`(2026-10-05)*
+- [apps/web/src/components/subway/SubwayTimetable.tsx](../../apps/web/src/components/subway/SubwayTimetable.tsx) — *'다음 열차' 자체 30초 tick(2026-10-05)*
 - [apps/web/src/components/subway/SubwayPathPanel.tsx](../../apps/web/src/components/subway/SubwayPathPanel.tsx)
 - [apps/web/src/components/subway/SubwayNearbyBusSection.tsx](../../apps/web/src/components/subway/SubwayNearbyBusSection.tsx)
 - [packages/utils/src/subwayTimetable.ts](../../packages/utils/src/subwayTimetable.ts) — *시간표 파생 로직(웹 timetableUtils.ts 는 2507cdc 로 @repo/utils 승격·삭제)*
@@ -342,3 +358,6 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 
 **배경 문서**
 - [docs/PLAN-subway.md](../../docs/PLAN-subway.md)
+- [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md) — *6차·모듈 묶음 realtime·"남은 것 → 보류 유지"(시간표 사전 워밍)*
+- [docs/PLAN-perf-2-findings.md](../../docs/PLAN-perf-2-findings.md) — *E-7 원문(역명 순회 15분 소진)·E-V2*
+- [docs/api/README.md](../../docs/api/README.md) — *429 행·"지하철 실시간 IP당 하루 150회, 시간표 40회"*

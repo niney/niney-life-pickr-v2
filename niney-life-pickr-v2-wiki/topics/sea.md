@@ -1,12 +1,14 @@
 ---
 topic: sea
-last_compiled: 2026-09-26
-sources_count: 51
+last_compiled: 2026-10-10
+sources_count: 55
 status: active
-aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사원, KHOA, khoa, 1192136, 생활해양예보지수, 해양예보지수, 해수욕, 해수욕 지수, 서핑, 서핑 지수, 바다낚시, 낚시 지수, 갯벌체험, 갯벌, 바다갈라짐, 바닷길, 모세의 기적, 바다여행, 조석예보, 고·저조, 물때, 만조, 간조, 이안류, 이안류 지수, 15142484, 15142490, 15142486, 15142489, 15142485, 15142491, 15156018, 15156028, fcstBeachv2, fcstSurfingv2, fcstFishingv2, fcstMudflatv2, fcstSeaSplitv2, fcstSeaTripv2, tideFcstHghLw, GetTideFcstHghLwApiService, ripCurrent, GetRipCurrentApiService, gubun, 갯바위, predcNoonSeCd, predcYmd, totalIndex, extrSe, predcDt, predcTdlvVl, obsCode, reqDate, beachCode, obsrvnDt, lastScrCn, khoa.adapter, KhoaApiError, interpretKhoaResponse, callKhoaPage, callKhoaAll, KHOA_PATHS, KHOA_PAGE_SIZE, KHOA_BASE_URL, SeaService, SeaServiceError, toSeaSlot, groupSeaSpots, mergeSlots, latestRip, attachRips, SEA_FORECAST_TTL_MS, SEA_TIDE_TTL_MS, SEA_STALE_MAX_MS, sea.route, Routes.Sea, SeaActivity, SeaForecastQuery, SeaForecastResult, SeaSlot, SeaSpot, SeaVariant, SeaRip, SeaTideQuery, SeaTideExtreme, SeaTideResult, seaApi, useSeaForecast, useSeaTide, SEA_ACTIVITIES, SEA_ACTIVITY_LABEL, SEA_ACTIVITY_HINT, isSeaActivity, seaActivityHasPeriod, SEA_INDEX_LABEL, SEA_INDEX_COLOR, seaIndexLevelOf, seaIndexColor, SEA_RIP_LABEL, SEA_RIP_COLOR, seaRipLevelOf, isSeaRipSeason, nearestSeaTideStation, matchSeaRipBeach, seaTideKindOf, buildSeaSpotMarkerDataUrl, seaStations, SEA_TIDE_STATIONS, SEA_RIP_BEACHES, 조석 예보지점 166, 이안류 해수욕장 10, SeaPage, SeaMap, SeaSpotDetail, seaFormat, seaSlotFor, rankSeaSpots, seaSlotSummary, formatSeaDistance, variants, 어종별 지수, 등급별 지수, 7일 지수 띠, poolKey sea, DATA_GO_KR_API_KEY, 중기해상예보와 구분]
+aliases: [SEA_QUOTA_LIMITS, SeaQuotaBucket, 바다-일일-카운터, SEA_TIDE_CACHE_MAX, 물때-LRU, SEA_TIDE_DATE_PAST_DAYS, SEA_TIDE_DATE_FUTURE_DAYS, 물때-날짜-범위, isCalendarDate, kstYmd, countedPage, quotaUsed, tideCacheSize, EntryStore, forecasts-Map, ATTEMPT_TIMEOUT_MS, budgetMs, onRetry, upstream-guard, UpstreamCooldown, 실패-쿨다운, 바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사원, KHOA, khoa, 1192136, 생활해양예보지수, 해양예보지수, 해수욕, 해수욕 지수, 서핑, 서핑 지수, 바다낚시, 낚시 지수, 갯벌체험, 갯벌, 바다갈라짐, 바닷길, 모세의 기적, 바다여행, 조석예보, 고·저조, 물때, 만조, 간조, 이안류, 이안류 지수, 15142484, 15142490, 15142486, 15142489, 15142485, 15142491, 15156018, 15156028, fcstBeachv2, fcstSurfingv2, fcstFishingv2, fcstMudflatv2, fcstSeaSplitv2, fcstSeaTripv2, tideFcstHghLw, GetTideFcstHghLwApiService, ripCurrent, GetRipCurrentApiService, gubun, 갯바위, predcNoonSeCd, predcYmd, totalIndex, extrSe, predcDt, predcTdlvVl, obsCode, reqDate, beachCode, obsrvnDt, lastScrCn, khoa.adapter, KhoaApiError, interpretKhoaResponse, callKhoaPage, callKhoaAll, KHOA_PATHS, KHOA_PAGE_SIZE, KHOA_BASE_URL, SeaService, SeaServiceError, toSeaSlot, groupSeaSpots, mergeSlots, latestRip, attachRips, SEA_FORECAST_TTL_MS, SEA_TIDE_TTL_MS, SEA_STALE_MAX_MS, sea.route, Routes.Sea, SeaActivity, SeaForecastQuery, SeaForecastResult, SeaSlot, SeaSpot, SeaVariant, SeaRip, SeaTideQuery, SeaTideExtreme, SeaTideResult, seaApi, useSeaForecast, useSeaTide, SEA_ACTIVITIES, SEA_ACTIVITY_LABEL, SEA_ACTIVITY_HINT, isSeaActivity, seaActivityHasPeriod, SEA_INDEX_LABEL, SEA_INDEX_COLOR, seaIndexLevelOf, seaIndexColor, SEA_RIP_LABEL, SEA_RIP_COLOR, seaRipLevelOf, isSeaRipSeason, nearestSeaTideStation, matchSeaRipBeach, seaTideKindOf, buildSeaSpotMarkerDataUrl, seaStations, SEA_TIDE_STATIONS, SEA_RIP_BEACHES, 조석 예보지점 166, 이안류 해수욕장 10, SeaPage, SeaMap, SeaSpotDetail, seaFormat, seaSlotFor, rankSeaSpots, seaSlotSummary, formatSeaDistance, variants, 어종별 지수, 등급별 지수, 7일 지수 띠, poolKey sea, DATA_GO_KR_API_KEY, 중기해상예보와 구분]
 ---
 
 # sea — 바다(국립해양조사원 생활해양예보지수 6종 · 물때 · 이안류 프록시, 웹 `/sea`)
+
+**2026-10-05 변경 흡수 — 물때 날짜 범위·물때 LRU·일일 카운터·실패 쿨다운·페이지 8초 예산(`fd957320`)**: 공통 부품 구조는 [transit](transit.md) 의 "실시간 외부 API 공통 가드" 절, 라이브러리 소유는 [friendly](friendly.md). 아래 Gotchas 첫 항목("일일 쿼터 카운터가 없다")이 지적하던 것을 그대로 고친 라운드다(발견 원문 [PLAN-perf-2-findings](../../docs/PLAN-perf-2-findings.md) E-6 — 날짜 키 3,000개면 업스트림 3,001콜, `'9999-99-99'` 도 업스트림까지 가고, IP 하나로 ≈2.8시간이면 조석 API 하루 한도가 바닥남). (1) **물때 날짜 범위(계약)** — [schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts) `SeaTideQuery.date` 에 refine: 달력에 있는 날짜(`isCalendarDate` — `2026-02-31` 거름) && KST 오늘-`SEA_TIDE_DATE_PAST_DAYS`(2) ~ 오늘+`SEA_TIDE_DATE_FUTURE_DAYS`(10), 밖이면 zod **400**(업스트림 전). 웹이 고르는 날짜(활동 예보 `dates` 7일, 캐시가 묵으면 어제 포함)를 넉넉히 덮는 범위라 화면 변화 없음. 키 공간이 조석지점 166 × 13일 = 최대 2,158 로 묶인다. 라우트 description 에 "date 는 KST 오늘-2일~오늘+10일 범위의 날짜만(그 밖은 400)" — [docs/api/README.md](../../docs/api/README.md) 바다 개요도 같은 문구. (2) **캐시 분리·상한** — 단일 `Map` → 활동 예보 `forecasts`(`Map`, 키 6개 고정)와 물때 `tides`(`LRUCache` max `SEA_TIDE_CACHE_MAX` 3,000, 엔트리 ≈1KB) — 예전 Map 은 청소·상한이 없어 키가 영구 상주했다. 둘이 같은 `cached` 를 쓰도록 최소 인터페이스 `EntryStore{get,set}`. (3) **일일 카운터 신설** — `SEA_QUOTA_LIMITS = { forecast: 2_000, tide: 2_000 }`(`DailyQuota`, 업스트림 한도 개발계정 API 별 10,000 보다 한참 낮게, 정상 사용량의 수 배 — 지수 6종 활동당 하루 24회 × 1~6쪽 ≈300 + 이안류(6~9월) 10곳 × 24회 ≈240, 물때는 보통 수십 콜). `countedPage(bucket, now)` 가 `callKhoaPage` 를 감싸 **페이지마다** 1 을 확보하고 `onRetry` 로 어댑터 재시도도 가산한다 — 이안류 10콜도 `forecast` 버킷. 초과는 503 "해양조사원 API 일일 호출 한도를 소진해…"(캐시 있으면 stale). 진단용 `quotaUsed(bucket)`·`tideCacheSize()`. (4) **실패 쿨다운** — 서비스 단위가 데이터셋 경로(`KHOA_PATHS[activity]`·`KHOA_PATHS.tide` — 활용신청 단위), 키는 캐시 키. `KhoaApiError` 의 `statusCode === 503`(게이트웨이 20~33 인증·한도)이면 그 데이터셋 전체를 5분→1시간 막는다. 쿨다운 중엔 업스트림·카운터 없이 12시간 내 last-known 또는 503 "해양조사원 API 가 응답하지 않아 잠시 조회를 멈췄습니다. N초 뒤…" — 아래 Gotchas 의 "실패는 캐시하지 않아 장애 중 요청마다 20초×2 를 기다림" 이 풀렸다. (5) **어댑터 시간 예산** — [khoa.adapter.ts](../../apps/friendly/src/modules/sea/khoa.adapter.ts) 시도당 20초 → 시도당 5초(`ATTEMPT_TIMEOUT_MS`) × 페이지 1건(재시도 포함) 8초 예산(`budgetMs` 주입), 재시도는 남은 시간이 700ms + 2초 이상일 때만. (6) `cached` 재구성 — TTL 히트 → in-flight 합류 → 쿨다운 → 로드(이전엔 히트·합류 뒤 로드만), `fetchedAt` 은 요청 시작 시각. 테스트 [sea.test.ts](../../apps/friendly/src/modules/sea/sea.test.ts) 12 → 17건(물때 카운터·물때 LRU·쿨다운·어댑터 시간 예산·날짜 범위 400). 웹·utils·shared 변경 없음.
 
 **2026-09-24~09-26 변경 흡수 — 신규 토픽, 바다 페이지(`4a2bff1`) + 외부 API 문서 summary(`1b621c4`)**: 2026-09-24 19:37 `4a2bff1` 로 "이번 주 바다 어디 갈까" 를 고르는 공개 페이지 `/sea`("바다", 사이드바 날씨 바로 다음)가 들어왔다. 국립해양조사원(KHOA)이 data.go.kr 로 내는 생활해양예보지수 6종 — 해수욕 15142484 · 서핑 15142490 · 바다낚시 15142486 · 갯벌체험 15142489 · 바다갈라짐(바닷길) 15142485 · 바다여행 15142491 — 의 7일 오전/오후 5단계 지수를 friendly `modules/sea/` 가 **활동 하나 = 전국 전량(300행 페이지 1~6장)** 으로 받아 1시간 메모리 캐시하고, 조석예보(고·저조) 15156018 은 좌표에서 가장 가까운 예보지점(utils 좌표표 166곳) × 날짜 단위로 12시간, 이안류 15156028 은 6~9월에만 해수욕 응답에 해수욕장 10곳의 최신 관측을 붙인다. 업스트림이 실패하면 12시간 안의 마지막 값을 `stale:true` 로 준다. **DB 테이블·적재 스크립트·배포 단계 없음**(API 만 — `docs/data-sources.md`). 웹은 활동 탭 × 날짜 × 오전/오후를 URL(`?a&d&p&sel`)에 두고 지도 마커색·순위 목록·지점 상세(7일 지수 띠·어종/등급 `variants` 칩·이안류·물때)를 그린다. 계약 `schemas/sea.ts`·`Routes.Sea`(forecast·tide), shared `seaApi`·`useSeaForecast`·`useSeaTide`, utils `sea.ts`·`seaStations.ts`. **앱(`apps/mobile`)은 미구현**. 같은 날 20:34 `1b621c4` 가 두 라우트에 한국어 `summary`·`description` 을 달아 `docs/api/endpoints.md` 의 `## sea` 절(공개·60/분 2행)로 외부 문서화했다([api-docs](api-docs.md)) — 동작 변경 없음. 기상청 해상 중기예보(`/weather?sea=`)와는 원천·단위·용도가 다른 별개 도메인이다([weather](weather.md)).
 
@@ -18,9 +20,9 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 
 **[weather](weather.md) 의 해상 예보와 다른 점** — `/weather` 의 "중기해상"([WeatherSeaSection](../../apps/web/src/components/weather/WeatherSeaSection.tsx), `?sea=<regId>`)은 **기상청** 중기예보(15059468) `getMidSeaFcst` 로, 12 해역([weatherRegions.ts](../../packages/utils/src/weatherRegions.ts) `WEATHER_MID_SEA_REGIONS` — 서해북부~동해북부 8 + 대화퇴·동중국해·규슈·연해주)의 **D+4~D+10** 날씨 문구 + 파고 최저~최고(m)를 색 없이 숫자로 보여 주는 **해역 단위 기상 예보**다. `/sea` 는 **국립해양조사원**이 해수욕장·서핑 해변·낚시 포인트·갯벌 마을·바닷길 명소·해안 권역 **지점 단위**로 산출한 **활동 적합도 5단계 지수**(D+0부터 7일 — 오전/오후 구분은 앞 사흘까지, 갯벌·바닷길은 늘 하루 한 번)에 천문조 물때와 이안류 실측을 더한 **레저 판단용** 화면이다. 키 이름·`toServiceKeyPart`·`RATE.transitRealtime`·`replyUpstreamError`·메모리 캐시 골격은 같지만 모듈·캐시·계약은 완전히 따로이고, 두 화면은 서로 링크하지 않는다(메뉴에서 이웃할 뿐 — [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx) `날씨 · 바다 · 대기질`).
 
-## Architecture [coverage: high — 20 sources]
+## Architecture [coverage: high — 21 sources]
 
-날씨·대기와 같은 한 방향 레이어드 프록시다 — 어댑터가 봉투를 해석하고, 서비스가 캐시·정규화를 얹고, 라우트가 HTTP 상태로 바꾸고, 계약(zod)이 FE/BE 를 묶고, shared 가 API·훅을, utils 가 활동·지수·색·좌표표·마커를, 웹이 UI 를 맡는다. 날씨와 달리 **일일 쿼터 카운터와 발표 슬롯 계산이 없고**, 캐시 TTL 은 고정값(1h/12h)이다.
+날씨·대기와 같은 한 방향 레이어드 프록시다 — 어댑터가 봉투를 해석하고, 서비스가 캐시·정규화를 얹고, 라우트가 HTTP 상태로 바꾸고, 계약(zod)이 FE/BE 를 묶고, shared 가 API·훅을, utils 가 활동·지수·색·좌표표·마커를, 웹이 UI 를 맡는다. 날씨와 달리 **발표 슬롯 계산이 없고** 캐시 TTL 은 고정값(1h/12h)이다. 일일 카운터는 2026-10-05 부터 있다(그전엔 없었다 — forecast·tide 각 2,000, 공용 [lib/upstream-guard.ts](../../apps/friendly/src/lib/upstream-guard.ts)).
 
 ```
 웹 /sea (SeaPage — URL ?a=활동 &d=YYYY-MM-DD &p=am|pm &sel=지점 id, 전부 replace 갱신)
@@ -34,15 +36,16 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
      │  ↕ @repo/api-contract: schemas/sea.ts · routes.ts(Routes.Sea 2)
      ▼
   friendly modules/sea: sea.route.ts (GET 2, 공개, RATE.transitRealtime 60/분, replyUpstreamError 502/503)
-        └ sea.service.ts  (SeaService — 캐시 Map + in-flight 합류 + stale 12h · 정규화 · 지점 묶음 · variants 병합 · 이안류 부착 · 물때)
-             └ khoa.adapter.ts (봉투 해석 · 20초 타임아웃 · 1회 재시도 · 300행 페이지 순회 · 키 마스킹)
+        └ sea.service.ts  (SeaService — forecasts Map(6) + tides LRU 3,000 + in-flight 합류 + stale 12h + 일일 카운터 forecast/tide 2,000
+                            + 실패 쿨다운 · 정규화 · 지점 묶음 · variants 병합 · 이안류 부착 · 물때)   ← lib/upstream-guard.ts (2026-10-05)
+             └ khoa.adapter.ts (봉투 해석 · 시도 5초 × 페이지 8초 예산 · 1회 재시도 · 300행 페이지 순회 · 키 마스킹)
      ▼
   https://apis.data.go.kr/1192136/{fcstBeachv2|fcstSurfingv2|fcstFishingv2|fcstMudflatv2|fcstSeaSplitv2|fcstSeaTripv2|tideFcstHghLw|ripCurrent}/<Op>
 ```
 
 ### 어댑터 — `khoa.adapter.ts`
 
-[khoa.adapter.ts](../../apps/friendly/src/modules/sea/khoa.adapter.ts)(170줄): `KHOA_BASE_URL = 'https://apis.data.go.kr/1192136'` 에 HTTPS GET, 쿼리 `serviceKey` + `type=json`. 8 오퍼레이션이 같은 봉투를 쓴다. `interpretKhoaResponse(status, rawText, requestUrl)` 가 `{page}` 또는 `{error, retryable}` 을 돌려준다(프로브 실측 2026-09-24 기준 주석):
+[khoa.adapter.ts](../../apps/friendly/src/modules/sea/khoa.adapter.ts)(186줄): `KHOA_BASE_URL = 'https://apis.data.go.kr/1192136'` 에 HTTPS GET, 쿼리 `serviceKey` + `type=json`. 8 오퍼레이션이 같은 봉투를 쓴다. `interpretKhoaResponse(status, rawText, requestUrl)` 가 `{page}` 또는 `{error, retryable}` 을 돌려준다(프로브 실측 2026-09-24 기준 주석):
 
 | 응답 | 판정 | 결과 |
 |---|---|---|
@@ -52,9 +55,9 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 | `OpenAPI_ServiceResponse.cmmMsgHeader.returnReasonCode` 20·21·22·30·31·32·33 | 게이트웨이 인증·쿼터(미신청 키 30 은 HTTP 403 으로 옴) | `KhoaApiError` **503**, 재시도 없음 |
 | 게이트웨이 04·05 | 게이트웨이 타임아웃류 | 502, **1회 재시도** |
 | JSON 파싱 실패 | HTTP ≥500 이면 재시도 대상 | 502 |
-| fetch 예외(네트워크·20초 abort) | — | 502, 1회 재시도 |
+| fetch 예외(네트워크·시도 타임아웃 abort) | — | 502, 1회 재시도 |
 
-`callKhoaPage(path, params, opts)`: 타임아웃 20초(`AbortController` — 호출측 `signal` 을 주면 그것만), 재시도 간격 700ms, 최대 2회 시도. 평문 키가 든 URL(`toServiceKeyPart` — [bus 어댑터](../../apps/friendly/src/modules/bus/bus-api.adapter.ts)의 data.go.kr Encoding 키 이중 인코딩 회피)은 fetch 에만 쓰고, 보관·로그용 `requestUrl` 은 `serviceKey=***`, fetch 예외 메시지도 `scrubKey` 로 가린다. `KhoaApiError{statusCode(기본 502), code, requestUrl, responseText}` 는 `replyUpstreamError` 가 warn 로그에 싣는 진단 필드 이름과 맞춰져 있다. `callKhoaAll(path, params, opts, callPage?)`: `numOfRows = KHOA_PAGE_SIZE 300`(가이드 최대)·`pageNo 1..` 을 **순차로** 넘기며 누적이 `totalCount` 에 닿거나 빈 페이지가 오면 멈춘다(상한 `MAX_PAGES 20` = 6,000행). 가장 큰 바다낚시 1,750행 = 6페이지.
+`callKhoaPage(path, params, opts)`: 2026-10-05 부터 페이지 1건(재시도 포함) **8초 예산**(`UPSTREAM_REQUEST_BUDGET_MS`, 테스트 주입 `budgetMs`) 안에서 시도당 `ATTEMPT_TIMEOUT_MS` 5초(`AbortController` — 호출측 `signal` 을 주면 그것만, 예산도 안 씀), 재시도 간격 700ms, 최대 2회 시도 — 재시도는 남은 시간이 `700ms + UPSTREAM_MIN_RETRY_WINDOW_MS(2초)` 이상일 때만, 직전에 `opts.onRetry()`(서비스 카운터 가산). 그전엔 시도당 20초 × 재시도라 업스트림이 매달리면 40초 넘게 기다렸다. 평문 키가 든 URL(`toServiceKeyPart` — [bus 어댑터](../../apps/friendly/src/modules/bus/bus-api.adapter.ts)의 data.go.kr Encoding 키 이중 인코딩 회피)은 fetch 에만 쓰고, 보관·로그용 `requestUrl` 은 `serviceKey=***`, fetch 예외 메시지도 `scrubKey` 로 가린다. `KhoaApiError{statusCode(기본 502), code, requestUrl, responseText}` 는 `replyUpstreamError` 가 warn 로그에 싣는 진단 필드 이름과 맞춰져 있다. `callKhoaAll(path, params, opts, callPage?)`: `numOfRows = KHOA_PAGE_SIZE 300`(가이드 최대)·`pageNo 1..` 을 **순차로** 넘기며 누적이 `totalCount` 에 닿거나 빈 페이지가 오면 멈춘다(상한 `MAX_PAGES 20` = 6,000행). 가장 큰 바다낚시 1,750행 = 6페이지.
 
 `KHOA_PATHS`(경로는 코드, 데이터셋 번호는 env 주석의 활동명 대응):
 
@@ -71,11 +74,11 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 
 ### 서비스 — `sea.service.ts`
 
-[sea.service.ts](../../apps/friendly/src/modules/sea/sea.service.ts)(329줄) `SeaService({serviceKey, callPage?, now?})` — 라우트 플러그인이 한 번 만드는 **단일 인스턴스**(날씨는 식단 추천이 `WeatherService` 를 하나 더 만들어 캐시가 둘로 갈리지만, 바다는 라우트 인스턴스 하나뿐). `callPage`·`now` 는 테스트 주입용.
+[sea.service.ts](../../apps/friendly/src/modules/sea/sea.service.ts)(406줄) `SeaService({serviceKey, callPage?, now?, dailyLimit?, dailyLimits?})` — 라우트 플러그인이 한 번 만드는 **단일 인스턴스**(날씨도 2026-10-05 부터 `app.weather` 하나로 모였다 — 그전엔 식단 추천이 하나 더 만들었다). `callPage`·`now`·`dailyLimit(s)` 는 테스트 주입용.
 
-**캐시** `cached(key, ttlMs, load)`: TTL 안 엔트리면 그대로 → 아니면 같은 키 in-flight Promise 에 합류(없으면 시작하고 `finally` 로 제거) → 성공 시 `{data, fetchedAt, expiresAt}` 저장 → 실패 시 이전 엔트리가 `SEA_STALE_MAX_MS`(12시간) 안이면 `stale:true` 로 서빙, 아니면 throw. 상수 `SEA_FORECAST_TTL_MS = 1h`, `SEA_TIDE_TTL_MS = 12h`, `SEA_STALE_MAX_MS = 12h`. 키가 비면 `opts()` 가 캐시보다 먼저 `SeaServiceError('DATA_GO_KR_API_KEY 가 설정되지 않았습니다', 503)`.
+**캐시** `cached(store, key, upstream, ttlMs, load)`(2026-10-05 형태): TTL 안 엔트리면 그대로 → 같은 키 in-flight Promise 에 합류 → **실패 쿨다운 확인**(막혀 있으면 업스트림·카운터 없이 12시간 내 last-known `stale:true`, 없으면 503) → 로드 시작(`finally` 로 in-flight 제거) → 성공 시 `cooldown.success` 후 `{data, fetchedAt: 요청 시작 시각, expiresAt}` 저장 → 실패 시 `KhoaApiError` 면 쿨다운 기록(`statusCode 503` = 게이트웨이 인증·한도면 그 데이터셋 전체), 이전 엔트리가 `SEA_STALE_MAX_MS`(12시간) 안이면 `stale:true` 로 서빙, 아니면 throw. 저장소는 둘 — `forecasts`(`Map`, `forecast:<activity>` 6개 고정)와 `tides`(`LRUCache` max `SEA_TIDE_CACHE_MAX` 3,000). 카운터는 `countedPage(bucket, now)` 가 페이지 호출마다 `quota.consume(bucket)`(초과면 throw → stale 폴백)하고 `onRetry` 로 `record` — 우리 카운터 소진은 업스트림 실패가 아니라 쿨다운하지 않는다. 상수 `SEA_FORECAST_TTL_MS = 1h`, `SEA_TIDE_TTL_MS = 12h`, `SEA_STALE_MAX_MS = 12h`, `SEA_TIDE_CACHE_MAX = 3_000`, `SEA_QUOTA_LIMITS = { forecast: 2_000, tide: 2_000 }`. 키가 비면 `opts()` 가 캐시보다 먼저 `SeaServiceError('DATA_GO_KR_API_KEY 가 설정되지 않았습니다', 503)`.
 
-**`getForecast(activity)`** — 키 `forecast:${activity}`: `callKhoaAll(KHOA_PATHS[activity], fishing 이면 {gubun:'갯바위'} 아니면 {})` → `groupSeaSpots` → (beach 면) `attachRips` → `{activity, dates, spots, fetchedAt, stale}`. 활동당 한 키라 정상 상태에선 업스트림 호출이 **사용자·좌표와 무관하게 활동 6개 × 시간당 1회**로 묶인다(서비스 머리 주석: 갱신당 1~6콜, 활동 6 × 하루 24회 ≈ 300콜 — 개발계정 일 10,000건에 한참 못 미침). 단, 실패는 캐시하지 않으므로 업스트림 장애 중엔 요청마다 다시 시도한다(Gotchas).
+**`getForecast(activity)`** — 키 `forecast:${activity}`: `callKhoaAll(KHOA_PATHS[activity], fishing 이면 {gubun:'갯바위'} 아니면 {})` → `groupSeaSpots` → (beach 면) `attachRips` → `{activity, dates, spots, fetchedAt, stale}`. 활동당 한 키라 정상 상태에선 업스트림 호출이 **사용자·좌표와 무관하게 활동 6개 × 시간당 1회**로 묶인다(서비스 머리 주석: 갱신당 1~6콜, 활동 6 × 하루 24회 ≈ 300콜 — 개발계정 일 10,000건에 한참 못 미침, 카운터 `forecast` 2,000). 실패는 여전히 캐시 엔트리를 늘리지 않지만, 2026-10-05 부터는 실패한 키가 쿨다운(30초→5분)에 들어가 장애 중 매 요청이 다시 시도하지 않는다 — 그 사이엔 12시간 내 마지막 값(stale)이나 503. 쪽 순회는 페이지마다 8초 예산이라 바다낚시 6쪽은 최악 ≈48초를 순차로 기다릴 수 있다(Gotchas).
 
 **정규화** `toSeaSlot(activity, row)` — 활동마다 다른 원문 필드를 한 `SeaSlot` 모양으로(없는 값 null). 공통: `predcYmd`(YYYY-MM-DD 가 아니면 행을 버림) → `date`, `totalIndex` 원문 라벨 → `label` + `seaIndexLevelOf` → `level`, `predcNoonSeCd` '오전'→`am` / '오후'→`pm` / 그 밖(원문 '일' = 하루 예보) → `null`. 숫자는 `numOrNull`, 문자열은 `coerceStrOrNull` + trim([narrow.ts](../../apps/friendly/src/lib/narrow.ts)).
 
@@ -92,13 +95,13 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 
 **지점 묶음** `groupSeaSpots(activity, rows)`: 지점명·`lat`·`lot` 이 없거나 슬롯이 null 인 행은 버리고, `이름|lat 4자리|lng 4자리` 키로 묶는다. 같은 이름이 좌표를 달리해 두 번 이상 나오면 id 를 `이름@lat3,lng3`(소수 3자리), 아니면 이름 그대로. 슬롯은 날짜 → 오전·오후(null 은 오전과 같은 순위) → 원문 순으로 **안정 정렬**한 뒤 `mergeSlots` — 같은 날짜·시간대 슬롯을 하나로 합치며 `variants` 를 원문 순으로 이어 붙이고, 슬롯 `level/label` 은 **가장 좋은 세부 값**(0 체험불가 < 1 매우나쁨 … < 5 매우좋음). 지점은 이름 가나다(`localeCompare(…, 'ko')`), `dates` 는 등장한 날짜 오름차순. 효과: 바다낚시 원문 1,750행 → 슬롯 ~700개, 응답 440→196KB(계약 주석·커밋 본문).
 
-**이안류** `attachRips(spots)`: `kmaTodayIsoDate(now)` 의 KST 월이 `isSeaRipSeason`(6~9)일 때만, `SEA_RIP_BEACHES` 10곳을 **병렬**로 `{beachCode, numOfRows:'300', pageNo:'1'}` 한 장씩 → `latestRip(code, rows)`(관측 시각 `obsrvnDt` 문자열 최댓값 1행 → `{code, level: seaRipLevelOf(lastScrCn), label, observedAt, waveM: wvhgt}`) → 해수욕 지점마다 `matchSeaRipBeach(spot.name, spot)`(이름 공백 무시 일치 우선, 아니면 2km 안 최근접)로 `spot.rip` 에 붙인다. 한 곳 실패는 `catch {}` 로 그 곳만 비고 예보는 그대로. 이안류는 해수욕 캐시 엔트리 **안에** 같이 저장된다.
+**이안류** `attachRips(spots)`: `kmaTodayIsoDate(now)` 의 KST 월이 `isSeaRipSeason`(6~9)일 때만, `SEA_RIP_BEACHES` 10곳을 **병렬**로 `{beachCode, numOfRows:'300', pageNo:'1'}` 한 장씩 → `latestRip(code, rows)`(관측 시각 `obsrvnDt` 문자열 최댓값 1행 → `{code, level: seaRipLevelOf(lastScrCn), label, observedAt, waveM: wvhgt}`) → 해수욕 지점마다 `matchSeaRipBeach(spot.name, spot)`(이름 공백 무시 일치 우선, 아니면 2km 안 최근접)로 `spot.rip` 에 붙인다. 한 곳 실패(2026-10-05 부터 카운터 소진 포함 — 이안류 10콜도 `countedPage('forecast')` 로 해수욕과 같은 `forecast` 버킷을 쓴다)는 `catch {}` 로 그 곳만 비고 예보는 그대로. 이안류는 해수욕 캐시 엔트리 **안에** 같이 저장된다.
 
-**물때** `getTide(lat, lng, date)`: `nearestSeaTideStation({lat, lng})`(utils, haversine) → 키 `tide:${station.code}:${date}` 12시간 → `{obsCode, reqDate: YYYYMMDD, numOfRows:'10', pageNo:'1'}` 1콜 → 행마다 `predcDt`('YYYY-MM-DD HH:MM')가 요청 날짜로 시작하고 `seaTideKindOf(extrSe)` 가 high/low 인 것만 `{time:'HH:MM', kind, levelCm: predcTdlvVl}` → 시각순. 업스트림이 다음 날 행까지 섞어 줘서(테스트 표본의 09-25 03:50 행) 날짜 필터가 필요하다. 응답 `station{code, name, lat, lng, distM}` 에 최근접 거리를 싣는다.
+**물때** `getTide(lat, lng, date)`: (`date` 는 계약이 이미 KST 오늘-2~+10 의 실제 날짜로 거른 값 — 2026-10-05) `nearestSeaTideStation({lat, lng})`(utils, haversine) → 키 `tide:${station.code}:${date}` 12시간(`tides` LRU, 카운터 `tide`) → `{obsCode, reqDate: YYYYMMDD, numOfRows:'10', pageNo:'1'}` 1콜 → 행마다 `predcDt`('YYYY-MM-DD HH:MM')가 요청 날짜로 시작하고 `seaTideKindOf(extrSe)` 가 high/low 인 것만 `{time:'HH:MM', kind, levelCm: predcTdlvVl}` → 시각순. 업스트림이 다음 날 행까지 섞어 줘서(테스트 표본의 09-25 03:50 행) 날짜 필터가 필요하다. 응답 `station{code, name, lat, lng, distM}` 에 최근접 거리를 싣는다.
 
 ### 라우트 — `sea.route.ts`
 
-[sea.route.ts](../../apps/friendly/src/modules/sea/sea.route.ts)(62줄 — `*.route.ts` autoload, [app.ts](../../apps/friendly/src/app.ts) `matchFilter`·`dirNameRoutePrefix:false`): 두 GET 모두 `config.rateLimit: RATE.transitRealtime` + `tags:['sea']` + querystring zod + `response {200, 502: ErrorResponseSchema, 503: ErrorResponseSchema}`. 핸들러는 서비스 호출을 try/catch 해 `replyUpstreamError(req, reply, e, [502, 503], '바다 예보 조회 실패' / '물때 조회 실패')` — 5xx 는 warn 로그(마스킹 URL·업스트림 코드·응답 300자) 후 직접 응답(전역 error-handler 가 5xx 를 500 으로 뭉개므로 — 날씨와 동일), 그 밖은 rethrow. 400 은 zod. `1b621c4` 에서 `summary`·`description` 만 추가됐다(API Surface).
+[sea.route.ts](../../apps/friendly/src/modules/sea/sea.route.ts)(63줄 — `*.route.ts` autoload, [app.ts](../../apps/friendly/src/app.ts) `matchFilter`·`dirNameRoutePrefix:false`): 두 GET 모두 `config.rateLimit: RATE.transitRealtime` + `tags:['sea']` + querystring zod + `response {200, 502: ErrorResponseSchema, 503: ErrorResponseSchema}`. 핸들러는 서비스 호출을 try/catch 해 `replyUpstreamError(req, reply, e, [502, 503], '바다 예보 조회 실패' / '물때 조회 실패')` — 5xx 는 warn 로그(마스킹 URL·업스트림 코드·응답 300자) 후 직접 응답(전역 error-handler 가 5xx 를 500 으로 뭉개므로 — 날씨와 동일), 그 밖은 rethrow. 400 은 zod. `1b621c4` 에서 `summary`·`description` 만 추가됐다(API Surface).
 
 ### utils — `sea.ts` · `seaStations.ts`
 
@@ -115,7 +118,7 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 
 ### 계약·shared
 
-- [schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts)(107줄) — 스키마 목록은 API Surface. `Routes.Sea` 는 [routes.ts](../../packages/api-contract/src/routes.ts) 날씨 블록 바로 다음.
+- [schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts)(134줄 — 2026-10-05 물때 날짜 refine 추가) — 스키마 목록은 API Surface. `Routes.Sea` 는 [routes.ts](../../packages/api-contract/src/routes.ts) 날씨 블록 바로 다음.
 - [sea.api.ts](../../packages/shared/src/api/sea.api.ts): `seaApi.forecast(activity)` · `seaApi.tide(lat, lng, date)`(좌표는 소수 5자리로 직렬화), `apiFetch`(토큰 불필요).
 - [useSea.ts](../../packages/shared/src/hooks/useSea.ts): `useSeaForecast(activity)`(stale 30분·재조회 60분, **placeholderData 없음** — 활동 전환 시 이전 활동 지점을 들고 있지 않음) · `useSeaTide(point, date)`(point·date 둘 다 있을 때만, 키 좌표 소수 3자리 ≈100m, stale 6시간 — 천문조 계산값).
 
@@ -133,7 +136,7 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 
 - **국립해양조사원(data.go.kr)** — `https://apis.data.go.kr/1192136/<서비스>/<오퍼레이션>`, HTTPS GET, `serviceKey` + `type=json` + `numOfRows`/`pageNo`(+ 오퍼레이션별 `gubun`·`obsCode`·`reqDate`·`beachCode`). 서버 전용(키 노출 금지) — 브라우저는 friendly 만 본다. 8 데이터셋 각각 활용신청이 필요하고 미신청은 게이트웨이 30(HTTP 403) → 503.
 - **[bus](bus.md) 어댑터** — `toServiceKeyPart` import. 2026-09-26 현재 이 헬퍼를 src 모듈 9개 파일(날씨·대기·음식·집값 2·일상지도·여행·주차·바다)이 가져다 쓰는 data.go.kr 공통 다리다.
-- **[friendly](friendly.md) 공통** — `replyUpstreamError`([reply-upstream-error.ts](../../apps/friendly/src/lib/reply-upstream-error.ts) — 5xx warn + 502/503 직접 응답), `RATE.transitRealtime`(`{max: 60, timeWindow: '1 minute'}` — [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts)), `lib/narrow`(`coerceStrOrNull`·`intOrNull`·`numOrNull`·`isObject`), 모듈 autoload, env `DATA_GO_KR_API_KEY`([env.ts](../../apps/friendly/src/config/env.ts)).
+- **[friendly](friendly.md) 공통** — `replyUpstreamError`([reply-upstream-error.ts](../../apps/friendly/src/lib/reply-upstream-error.ts) — 5xx warn + 502/503 직접 응답), `RATE.transitRealtime`(`{max: 60, timeWindow: '1 minute'}` — [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts)), `lib/narrow`(`coerceStrOrNull`·`intOrNull`·`numOrNull`·`isObject`), 모듈 autoload, env `DATA_GO_KR_API_KEY`([env.ts](../../apps/friendly/src/config/env.ts)). 2026-10-05 부터 [lib/upstream-guard.ts](../../apps/friendly/src/lib/upstream-guard.ts)의 `DailyQuota`(forecast·tide)·`UpstreamCooldown`(데이터셋 경로 단위)·`retryAfterSec`·`UPSTREAM_REQUEST_BUDGET_MS`/`UPSTREAM_MIN_RETRY_WINDOW_MS` — 버스·지하철·대기·날씨와 같은 부품이고 구조는 [transit](transit.md) 의 "실시간 외부 API 공통 가드" 절.
 - **[utils](utils.md)** — 도메인 표 `sea.ts`/`seaStations.ts` 외에 [geo.ts](../../packages/utils/src/geo.ts) `haversineM`(서버 최근접 지점·이안류 매칭)·`approxDistanceM`(웹 목록 거리), [weather.ts](../../packages/utils/src/weather.ts) `kmaTodayIsoDate`(= [dateLabel.ts](../../packages/utils/src/dateLabel.ts) 의 `todayKst` 재수출 — 서버는 이안류 기간 월 판정, 웹은 "오늘"), `relativeDayLabel`·`formatYmdWithWeekday`(날씨·대기와 같은 날짜 문구), [busMarker.ts](../../packages/utils/src/busMarker.ts) `buildMyLocationMarkerDataUrl`, `markerFrame`.
 - **[shared](shared.md)** — `apiFetch`, [useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts)(`auto:false` 라 마운트 때 측위하지 않고 버튼이 `refetch` — 명시 요청은 10초 + TIMEOUT 1회 재시도, 비보안 컨텍스트는 `unavailable`), `useMapPublicConfig`([useSettingsMap.ts](../../packages/shared/src/hooks/useSettingsMap.ts), staleTime ∞·retry 없음).
 - **[map](map.md)** — [MapCanvas](../../apps/web/src/components/restaurant/MapCanvas.tsx)(OL + VWorld 타일, `overlayMarkers`·`poolKey`·`flyToZoomIn`). 지도+바텀시트 골격([map-sheet-shell](../concepts/map-sheet-shell.md))은 **쓰지 않는다** — 문서형 페이지 안의 고정 높이 지도 상자.
@@ -146,10 +149,10 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 
 | 메서드 | 경로 | 쿼리 | 응답 | 업스트림 콜(캐시 미스) | 서버 캐시 |
 |---|---|---|---|---|---|
-| GET | `/api/v1/sea/forecast` | `activity`* = `beach`·`surf`·`fishing`·`mudflat`·`seaSplit`·`seaTrip` | `SeaForecastResult{activity, dates[], spots[], fetchedAt, stale}` | 활동 전량 1~6페이지 순차(+ 6~9월 beach 는 이안류 10콜 병렬) | 활동별 1h, 실패 시 12h 안 stale |
-| GET | `/api/v1/sea/tide` | `lat`* 32~39 · `lng`* 124~132(`z.coerce.number`) · `date`* `YYYY-MM-DD` | `SeaTideResult{station{code,name,lat,lng,distM}, date, extremes[], fetchedAt, stale}` | 1 | 예보지점×날짜 12h, 실패 시 12h 안 stale |
+| GET | `/api/v1/sea/forecast` | `activity`* = `beach`·`surf`·`fishing`·`mudflat`·`seaSplit`·`seaTrip` | `SeaForecastResult{activity, dates[], spots[], fetchedAt, stale}` | 활동 전량 1~6페이지 순차(+ 6~9월 beach 는 이안류 10콜 병렬) — 페이지당 카운터 `forecast` 1 | 활동별 1h, 실패 시 12h 안 stale |
+| GET | `/api/v1/sea/tide` | `lat`* 32~39 · `lng`* 124~132(`z.coerce.number`) · `date`* `YYYY-MM-DD` — **KST 오늘-2 ~ 오늘+10 의 실제 날짜만**(2026-10-05) | `SeaTideResult{station{code,name,lat,lng,distM}, date, extremes[], fetchedAt, stale}` | 1 — 카운터 `tide` | 예보지점×날짜 12h(LRU 3,000), 실패 시 12h 안 stale |
 
-둘 다 공개·비로그인, `RATE.transitRealtime` 60/분. 400 = zod(없는 활동·좌표 범위 밖·날짜 형식 — `sea.test.ts` 가 `activity=ski`·`lat=10`·`date=20260924` 로 확인), 502 = 업스트림 오류 코드·네트워크·JSON 실패, 503 = 키 미설정·게이트웨이 인증/쿼터(20~33). 생성 문서([openapi.json](../../docs/api/openapi.json))는 `tags ['sea']`·`x-auth: public`·`x-rate-limit`·응답 200/502/503 을 싣고(400 은 목록에 없음), [endpoints.md](../../docs/api/endpoints.md) `## sea` 두 행의 설명은 라우트 `summary` 그대로 — "활동별 생활해양예보지수(지점 × 7일) — 국립해양조사원 API 프록시, 1시간 캐시" / "좌표에서 가장 가까운 조석 예보지점의 하루 만조·간조(물때) — 국립해양조사원, 12시간 캐시". `description` 은 activity 값 목록·"beach 는 6~9월에 해수욕장 이안류 최신 관측을 덧붙인다" / "lat·lng(WGS84)·date(YYYY-MM-DD) 모두 필수. 전국 조석 예보지점 166곳 중 최근접 지점을 서버가 고른다".
+둘 다 공개·비로그인, `RATE.transitRealtime` 60/분. 400 = zod(없는 활동·좌표 범위 밖·날짜 형식·**날짜 범위 밖·달력에 없는 날짜** — `sea.test.ts` 가 `activity=ski`·`lat=10`·`date=20260924` 와 2026-10-05 추가분 먼 과거·먼 미래·없는 날짜로 확인), 502 = 업스트림 오류 코드·네트워크·JSON 실패, 503 = 키 미설정·게이트웨이 인증/쿼터(20~33)·일일 카운터 소진·실패 쿨다운 중 last-known 없음. 생성 문서([openapi.json](../../docs/api/openapi.json))는 `tags ['sea']`·`x-auth: public`·`x-rate-limit`·응답 200/502/503 을 싣고(400 은 목록에 없음), [endpoints.md](../../docs/api/endpoints.md) `## sea` 두 행의 설명은 라우트 `summary` 그대로 — "활동별 생활해양예보지수(지점 × 7일) — 국립해양조사원 API 프록시, 1시간 캐시" / "좌표에서 가장 가까운 조석 예보지점의 하루 만조·간조(물때) — 국립해양조사원, 12시간 캐시". `description` 은 activity 값 목록·"beach 는 6~9월에 해수욕장 이안류 최신 관측을 덧붙인다" / "lat·lng(WGS84)·date(YYYY-MM-DD) 모두 필수. date 는 KST 오늘-2일~오늘+10일 범위의 날짜만(그 밖은 400). 전국 조석 예보지점 166곳 중 최근접 지점을 서버가 고른다"(범위 문구는 2026-10-05 추가).
 
 계약([schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts), [index.ts](../../packages/api-contract/src/index.ts) `export * from './schemas/sea.js'`):
 
@@ -158,7 +161,7 @@ aliases: [바다, sea, /sea, 바다 페이지, 해양 예보, 국립해양조사
 - `SeaSlot{date(YYYY-MM-DD 정규식), period: 'am'·'pm' | null, variants[], level: int 0~5 | null, label | null, waveM, wavePeriodS, waterTempC, airTempC, windMs, currentMs (number | null), tidePhase, weather, openStatus, timeFrom, timeTo (string | null)}` — 세부가 있으면 `level/label` 은 세부 중 가장 좋은 값(지도 색·목록 정렬용).
 - `SeaRip{code, level: int 1~4 | null, label | null, observedAt, waveM | null}`.
 - `SeaSpot{id(활동 안에서 유일), name, lat, lng, slots[], rip: SeaRip | null}` · `SeaForecastResult{activity, dates: string[], spots[], fetchedAt, stale}`.
-- `SeaTideQuery{lat coerce 32~39, lng coerce 124~132, date 정규식}` · `SeaTideExtreme{time 'HH:MM'(KST), kind 'high'·'low', levelCm | null}` · `SeaTideResult{station{code, name, lat, lng, distM int}, date, extremes[], fetchedAt, stale}`.
+- `SeaTideQuery{lat coerce 32~39, lng coerce 124~132, date 정규식 + refine(달력 날짜 && KST 오늘-2 ~ 오늘+10)}` — 상수 `SEA_TIDE_DATE_PAST_DAYS = 2`·`SEA_TIDE_DATE_FUTURE_DAYS = 10` 과 `kstYmd`(UTC+9 산술)·`isCalendarDate` 가 스키마 파일 안에 있다(2026-10-05). refine 이 `Date.now()` 를 검증 시점에 읽으므로 같은 날짜도 날이 바뀌면 통과 여부가 바뀐다 · `SeaTideExtreme{time 'HH:MM'(KST), kind 'high'·'low', levelCm | null}` · `SeaTideResult{station{code, name, lat, lng, distM int}, date, extremes[], fetchedAt, stale}`.
 - `Routes.Sea = { forecast: '/api/v1/sea/forecast', tide: '/api/v1/sea/tide' }`([routes.ts](../../packages/api-contract/src/routes.ts)).
 
 응답 모양 예시(값은 `sea.test.ts`·`SeaPage.test.tsx` 표본 — 2026-09-24 실측 행을 줄인 것, 생략은 `…`):
@@ -209,14 +212,17 @@ shared([sea.api.ts](../../packages/shared/src/api/sea.api.ts)·[useSea.ts](../..
 
 utils export([sea.ts](../../packages/utils/src/sea.ts)): `SEA_ACTIVITIES`·`SeaActivity`·`SEA_ACTIVITY_LABEL`·`SEA_ACTIVITY_HINT`·`isSeaActivity`·`seaActivityHasPeriod` / `SeaIndexLevel`·`SEA_INDEX_LABEL`·`seaIndexLevelOf`·`SEA_INDEX_COLOR`·`seaIndexColor` / `SeaRipLevel`·`SEA_RIP_LABEL`·`SEA_RIP_COLOR`·`seaRipLevelOf`·`isSeaRipSeason` / `nearestSeaTideStation`·`matchSeaRipBeach`·`seaTideKindOf`·`buildSeaSpotMarkerDataUrl` / 재수출 `SeaTideStation`·`SEA_TIDE_STATIONS`·`SeaRipBeach`·`SEA_RIP_BEACHES`. 웹 테스트 id: `sea-list`·`sea-detail`·`sea-detail-slot`·`sea-detail-rip`·`sea-detail-tide`·`sea-footer`([SeaPage.tsx](../../apps/web/src/routes/SeaPage.tsx)·SeaSpotDetail). 스크립트·어드민 라우트는 없다.
 
-## Data [coverage: high — 9 sources]
+## Data [coverage: high — 10 sources]
 
 **DB 없음** — `schema.prisma` 에 Sea/Khoa 모델이 없고 마이그레이션·적재 스크립트·`deploy.sh` 단계도 없다([data-sources.md](../../docs/data-sources.md) "원본 파일·적재 없이 서버가 … 메모리 캐시"). 상태는 전부 프로세스 메모리·코드 상수·클라이언트다.
 
 | 저장소 | 키 | TTL / 보존 |
 |---|---|---|
-| `SeaService.cache` (Map) | `forecast:<activity>`(6개) · `tide:<obsCode>:<YYYY-MM-DD>` | 예보 1h · 물때 12h. 실패 시 마지막 값을 12h 안 stale. **만료 엔트리 스윕·크기 상한 없음**(프로세스 수명 동안 남음) |
+| `SeaService.forecasts` (Map) | `forecast:<activity>`(6개 고정) | 예보 1h, 실패 시 마지막 값을 12h 안 stale. 키가 6개라 상한 불필요 |
+| `SeaService.tides` (`LRUCache` max 3,000, 2026-10-05) | `tide:<obsCode>:<YYYY-MM-DD>` — 날짜가 계약에서 13일로 묶여 최대 2,158 | 물때 12h, 실패 시 12h 안 stale. ~2026-10-05 엔 예보와 같은 `Map` 하나에 **만료 스윕·크기 상한 없이** 프로세스 수명 동안 남았다(E-6) |
 | `SeaService.inflight` (Map) | 같은 키 | 로드 중에만 |
+| `SeaService.quota` (`DailyQuota`, 2026-10-05) | `forecast`(지수 6종 + 이안류) · `tide` | 각 2,000/일(페이지·재시도 단위), KST 자정 리셋 |
+| `SeaService.cooldown` (`UpstreamCooldown`, 2026-10-05) | 서비스 = 데이터셋 경로 × 캐시 키 | 키 30초→5분, 게이트웨이 인증·한도(503)면 데이터셋 전체 5분→1시간 |
 | 이안류 | 해수욕 예보 엔트리 안의 `spot.rip` | 해수욕 예보와 같이 1h(stale 이면 최대 12h) |
 | 클라 RQ 캐시 | `['sea','forecast',a]` · `['sea','tide',lat3,lng3,date]` | 30분 stale / 60분 재조회 · 6h stale |
 | 웹 URL | `?a=<activity>&d=<YYYY-MM-DD>&p=<am·pm>&sel=<spot id>` | replace 갱신, 새로고침·공유 복원 |
@@ -255,12 +261,14 @@ utils export([sea.ts](../../packages/utils/src/sea.ts)): `SEA_ACTIVITIES`·`SeaA
 
 **규모(2026-09-24 실측 — 커밋 본문·코드 주석·작업 기록)**: 바다낚시 원문 1,750행(300행 × 6페이지) → 지점 묶음 후 슬롯 ~700 → 응답 440→196KB(friendly 는 `@fastify/compress` 를 쓰지 않으므로 앱 레벨 압축 전 크기). 이안류는 5분 간격 관측 ~230행/일 → 한 페이지(300행)에 담기고 최신 1행만 쓴다. 물때는 `numOfRows 10` 한 페이지(다음 날 행이 섞여 와 날짜로 거름). 시각 표기: 응답 `fetchedAt` 은 ISO, 물때 `time` 은 KST `HH:MM`, 이안류 `observedAt` 은 원문 `YYYY-MM-DD HH:MM` 그대로. 테스트 표본은 [sea.test.ts](../../apps/friendly/src/modules/sea/sea.test.ts) 의 인라인 행(실응답을 줄인 것 — 대천해수욕장 `lat 36.30555 / lot 126.51601`, 가거도 낚시 어종 3종, 인천 `DT_0001` 극치 4행 등)뿐이고 `__fixtures__` 폴더는 없다.
 
-## Key Decisions [coverage: high — 17 sources]
+## Key Decisions [coverage: high — 18 sources]
+
+- **2026-10-05 물때 날짜는 막고(400), 카운터·쿨다운은 다른 실시간 프록시와 같은 부품으로(`fd957320`)** — 발견 원문 E-6 이 권한 대로 날짜를 계약 refine 으로 묶었다. 대기 예보처럼 clamp(조정)하지 않고 400 인 이유는, 물때는 사용자가 고른 날짜의 만조·간조 시각 자체가 답이라 다른 날짜를 몰래 돌려주면 오답이기 때문이다(대기 예보는 "오늘 기준 최신 발표" 가 답이라 조정이 무해). 범위 -2~+10 은 웹이 실제로 고르는 활동 예보 날짜(7일, 캐시가 묵으면 어제 포함)보다 넉넉하게. 카운터 2,000 은 업스트림 한도(10,000)보다 한참 낮지만 정상 사용량(지수 ≈300 + 이안류 ≈240/일)의 수 배라 정상 화면엔 닿지 않는다 — 처음 둔 "키 공간 계산으로 충분" 판단은 날짜 키가 무한일 때 깨졌다. 쿨다운 단위를 데이터셋 경로로 둔 건 활용신청이 데이터셋별이라서(낚시 미신청이 해수욕을 막지 않게). 구조는 [transit](transit.md), 컨셉 [quota-proportional-loading](../concepts/quota-proportional-loading.md).
 
 - **2026-09-24 외부 API 문서에 싣기(`1b621c4`)** — 두 라우트에 한국어 `summary`(캐시 시간까지 명시)·`description`(activity 값 목록·이안류 6~9월 / lat·lng·date 필수·166곳 최근접)을 달아 [endpoints.md](../../docs/api/endpoints.md) `## sea` 절과 [README](../../docs/api/README.md) 도메인 개요로 공개. 동작 변경 없음. 어드민 라우트가 아니므로 CORS 개방(`origin:'*'`, credentials false) 대상이다 — 세부 정책은 [api-docs](api-docs.md).
 - **2026-09-24 별도 메뉴 `/sea` "바다", 날씨 바로 다음, 웹 먼저(`4a2bff1`)** — 같은 날의 물 관련 데이터 조사(1번 서울 침수흔적도 → [housing](housing.md)·[life-map](life-map.md) `ad48f96`, 2번 국립해양조사원 바다지수) 2번을 사용자가 "종합적으로 추천하는 안으로 진행" 하라고 해 구현자가 정한 설계(작업 기록): 날씨 페이지의 섹션이나 일상지도 레이어가 아니라 독립 메뉴. 앱은 다음 단계로 미룸(미구현).
 - **적재 대신 프록시 + 메모리 캐시** — 7일 예보가 매일 통째로 바뀌고 요청마다 전량을 주므로 DB·적재 스크립트를 두지 않는다. [data-sources.md](../../docs/data-sources.md) 에 "바다(/sea)도 API 만" 으로, 키·데이터셋·쿼터는 [env.ts](../../apps/friendly/src/config/env.ts)·[.env.example](../../apps/friendly/.env.example) 공용 키 목록에 한 항목으로 기록.
-- **활동 단위 전량 캐시 — 쿼터가 사용자 수와 무관** — 업스트림이 지점 필터 없이 전국 전량을 주므로 활동 하나를 캐시 엔트리 하나(1h)로. 갱신당 1~6콜 × 활동 6 × 24회 ≈ 300콜/일(서비스 주석; 6~9월엔 해수욕 갱신마다 이안류 10콜이 별도 데이터셋에 더해짐)이라 개발계정 일 10,000건으로 충분 → 운영계정 전환(심의)은 불필요하다고 판단(작업 기록). [quota-proportional-loading](../concepts/quota-proportional-loading.md) 의 "팬아웃 붕괴"(대기 '전국' 1콜 캐시) 계열이다. 대신 bus·대기·날씨가 둔 **일일 쿼터 카운터는 두지 않았다**(→ Gotchas).
+- **활동 단위 전량 캐시 — 쿼터가 사용자 수와 무관** — 업스트림이 지점 필터 없이 전국 전량을 주므로 활동 하나를 캐시 엔트리 하나(1h)로. 갱신당 1~6콜 × 활동 6 × 24회 ≈ 300콜/일(서비스 주석; 6~9월엔 해수욕 갱신마다 이안류 10콜이 별도 데이터셋에 더해짐)이라 개발계정 일 10,000건으로 충분 → 운영계정 전환(심의)은 불필요하다고 판단(작업 기록). [quota-proportional-loading](../concepts/quota-proportional-loading.md) 의 "팬아웃 붕괴"(대기 '전국' 1콜 캐시) 계열이다. 처음엔 bus·대기·날씨가 둔 **일일 쿼터 카운터를 두지 않았다** — 2026-10-05 `fd957320` 로 `forecast`·`tide` 각 2,000 이 생겼다(위 결정).
 - **물때는 서버가 최근접 예보지점을 고르고 "지점 × 날짜" 로 캐시** — 캐시 키가 좌표가 아니라 지점 코드라 같은 해안의 사용자·지점들이 캐시를 공유하고, 천문조 계산값이라 하루 안 바뀌어 12시간. 클라이언트 키도 좌표 3자리(≈100m)로 묶는다([useSea.ts](../../packages/shared/src/hooks/useSea.ts) 주석).
 - **지점 좌표표를 코드로 커밋** — 조석예보 가이드 코드표와 이안류 해수욕장 코드에 좌표가 없어 2026-09-24 지점별 1회 호출로 166 + 10곳 좌표를 모아 utils([seaStations.ts](../../packages/utils/src/seaStations.ts))에 두었다. 서버(최근접·이안류 매칭)와 웹이 같은 표를 본다. 지점이 늘면 다시 모은다는 방침([data-sources.md](../../docs/data-sources.md)).
 - **세부(어종·등급) 행은 슬롯 하나의 `variants` 로** — 같은 지점·날짜·시간대의 파고·수온 등은 세부마다 같아 슬롯에 한 번만 싣고 지수만 세부별로([schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts) 주석) → 바다낚시 응답 440→196KB. 슬롯 대표 지수(지도 색·순위)는 **가장 좋은 세부** — "그 지점에서 뭐라도 좋은가" 기준이고, 푸터 범례에 "바다낚시·서핑은 어종·등급 중 가장 좋은 지수로 색칠" 로 밝힌다.
@@ -275,11 +283,11 @@ utils export([sea.ts](../../packages/utils/src/sea.ts)): `SEA_ACTIVITIES`·`SeaA
 - **레이트리밋은 실시간 대중교통 프리셋 60/분, 502/503 은 라우트가 직접** — 캐시 미스 키(좌표·날짜)를 바꿔 가며 쿼터를 태우는 남용 방어([sea.route.ts](../../apps/friendly/src/modules/sea/sea.route.ts) 주석, [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts)). 상태 코드는 날씨와 같은 `replyUpstreamError`([reply-upstream-error.ts](../../apps/friendly/src/lib/reply-upstream-error.ts)).
 - **색 램프** — 매우좋음 파랑(#0284c7) → 좋음 초록 → 보통 노랑 → 나쁨 주황 → 매우나쁨 빨강(#dc2626), 체험불가 회색·결측 연회색. 이안류 4단계도 같은 hex 계열(관심 파랑 → 위험 빨강). 다음 날 들어온 [주차](parking.md)(`2ff2c31`) 혼잡 단계 `PARKING_LEVEL_COLOR`(여유·보통·혼잡·만차)가 같은 초록·노랑·주황·빨강 hex 를 쓴다([parking.ts](../../packages/utils/src/parking.ts)) — 단계형 지수 색이 utils 에서 사실상 공용 팔레트가 됐다.
 
-## Gotchas [coverage: high — 18 sources]
+## Gotchas [coverage: high — 19 sources]
 
-- **일일 쿼터 카운터가 없다** — [bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts)(900)·[air-quality.service.ts](../../apps/friendly/src/modules/air-quality/air-quality.service.ts)(450)·[weather.service.ts](../../apps/friendly/src/modules/weather/weather.service.ts)(9,000)는 서비스 메모리에 `DEFAULT_DAILY_UPSTREAM_LIMIT` 카운터를 두고 넘으면 stale 이나 503 으로 막는데 `SeaService` 엔 없다. 방어선은 IP당 60/분뿐이다. 특히 `/sea/tide` 는 `date` 를 형식(정규식)만 검사해 임의 날짜 × 최근접 지점(166곳)을 바꿔 가며 부르면 요청마다 새 캐시 키 = 업스트림 1콜이다(IP 하나로 분당 60, 하루 최대 86,400 > 데이터셋 한도 10,000). `1b621c4` CORS 개방 뒤 [PLAN-perf-security.md](../../docs/PLAN-perf-security.md) #42 번복 기록이 "남는 위험은 비용(LLM·업스트림 쿼터 소진 — IP 분산으로 IP당 한도가 약해짐)" 이라 적은 바로 그 경우다. 한도가 소진되면 게이트웨이 20~33 계열(어댑터 주석 "인증·쿼터") → 503 이 되고, 이미 캐시된 활동은 12시간까지 stale 로 버틴다. 물때 캐시에는 만료 스윕·크기 상한도 없어 이런 키가 프로세스 수명 동안 쌓인다(날씨는 다음 `cached` 호출 때 만료 엔트리를 스윕).
-- **이안류는 최대 1시간(stale 이면 12시간) 늦다** — 5분 간격 관측이지만 해수욕 예보 캐시 엔트리에 묶여 1시간마다 갱신되고, 화면([SeaSpotDetail.tsx](../../apps/web/src/components/sea/SeaSpotDetail.tsx))은 `observedAt.slice(11)` 로 **시:분만** 보여 날짜가 없다(stale 이면 어제 관측도 "HH:MM 관측"). 이안류 호출 실패는 로그 없이 `catch {}` 로 삼키므로 15156028 활용신청 누락·만료도 조용히 "이안류 없음" 으로 보인다. 10월~5월엔 호출 자체를 하지 않는다(`sea.test.ts` 가 10월 시각으로 호출 0 을 확인).
-- **캐시 만료 직후 첫 요청은 업스트림을 기다린다** — stale-while-revalidate 가 아니다: 만료되면 로드해 성공하면 새 값, **실패해야** 이전 값을 stale 로 준다. 바다낚시는 300행 6페이지를 **순차**로(각 20초 타임아웃·1회 재시도) 받으므로 업스트림이 느린 날엔 첫 요청이 수 초~수십 초 걸린다. 같은 키 동시 요청은 in-flight 로 합류해 콜이 늘지는 않는다. 그리고 **실패는 캐시하지 않는다** — stale 로 응답해도 엔트리의 `expiresAt` 을 늘리지 않으므로, 업스트림 장애 동안엔 in-flight 가 끝날 때마다 다음 요청이 다시 로드를 시도하고 매번 타임아웃(20초 × 2 + 700ms)을 기다린 뒤에야 stale 을 받는다(12시간이 지나면 그마저 502/503).
+- **(2026-10-05 해소, `fd957320`) 일일 쿼터 카운터가 없었다** — 아래는 2026-09-24~10-05 의 상태 기록이다. 지금은 `SEA_QUOTA_LIMITS`(forecast·tide 각 2,000), 물때 날짜 계약 refine(KST 오늘-2~+10, 밖이면 400), 물때 LRU 3,000, 실패 쿨다운이 있어 아래 공격은 날짜 범위(13일 × 166곳 = 2,158 키)와 카운터 2,000 에서 멈춘다. 남는 위험: 2,158 키를 다 도는 순회는 여전히 `tide` 카운터를 하루치 소진시켜 그날 물때를 503 으로 만들 수 있다(지수 예보는 자기 버킷이라 산다) — IP 분산 앞에서 카운터는 "업스트림 한도 보호" 이지 "기능 보호" 가 아니다. 당시 서술: [bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts)(900)·[air-quality.service.ts](../../apps/friendly/src/modules/air-quality/air-quality.service.ts)(450)·[weather.service.ts](../../apps/friendly/src/modules/weather/weather.service.ts)(9,000)는 서비스 메모리에 `DEFAULT_DAILY_UPSTREAM_LIMIT` 카운터를 두고 넘으면 stale 이나 503 으로 막는데(2026-10-05 부터 셋 다 버킷 분리) `SeaService` 엔 없었다. 방어선은 IP당 60/분뿐이었다. 특히 `/sea/tide` 는 `date` 를 형식(정규식)만 검사해 임의 날짜 × 최근접 지점(166곳)을 바꿔 가며 부르면 요청마다 새 캐시 키 = 업스트림 1콜이다(IP 하나로 분당 60, 하루 최대 86,400 > 데이터셋 한도 10,000). `1b621c4` CORS 개방 뒤 [PLAN-perf-security.md](../../docs/PLAN-perf-security.md) #42 번복 기록이 "남는 위험은 비용(LLM·업스트림 쿼터 소진 — IP 분산으로 IP당 한도가 약해짐)" 이라 적은 바로 그 경우다. 한도가 소진되면 게이트웨이 20~33 계열(어댑터 주석 "인증·쿼터") → 503 이 되고, 이미 캐시된 활동은 12시간까지 stale 로 버틴다. 물때 캐시에는 만료 스윕·크기 상한도 없어 이런 키가 프로세스 수명 동안 쌓인다(날씨는 다음 `cached` 호출 때 만료 엔트리를 스윕).
+- **이안류는 최대 1시간(stale 이면 12시간) 늦다** — 5분 간격 관측이지만 해수욕 예보 캐시 엔트리에 묶여 1시간마다 갱신되고, 화면([SeaSpotDetail.tsx](../../apps/web/src/components/sea/SeaSpotDetail.tsx))은 `observedAt.slice(11)` 로 **시:분만** 보여 날짜가 없다(stale 이면 어제 관측도 "HH:MM 관측"). 이안류 호출 실패는 로그 없이 `catch {}` 로 삼키므로 15156028 활용신청 누락·만료도, 2026-10-05 부터는 `forecast` 카운터 소진도 조용히 "이안류 없음" 으로 보인다(이안류 호출은 쿨다운을 거치지 않는 `countedPage` 직접 호출이라 장애 중엔 해수욕 갱신마다 10콜이 다시 나간다 — 해수욕 예보 자체가 쿨다운이면 이 경로도 안 탄다). 10월~5월엔 호출 자체를 하지 않는다(`sea.test.ts` 가 10월 시각으로 호출 0 을 확인).
+- **캐시 만료 직후 첫 요청은 업스트림을 기다린다** — stale-while-revalidate 가 아니다: 만료되면 로드해 성공하면 새 값, **실패해야** 이전 값을 stale 로 준다. 바다낚시는 300행 6페이지를 **순차**로 받고 시간 예산이 **페이지마다** 8초(시도당 5초 + 1회 재시도, 2026-10-05 — 그전 시도당 20초)라, 업스트림이 매달리는 날엔 첫 요청이 최악 ≈48초(6쪽 × 8초)까지 걸릴 수 있다 — [docs/api/README.md](../../docs/api/README.md)의 "업스트림 요청은 1건당 최대 약 8초에서 끊는다" 는 페이지 1건 기준이다. 같은 키 동시 요청은 in-flight 로 합류해 콜이 늘지는 않는다. ~2026-10-05 엔 **실패를 기억하지 않아** 장애 동안 in-flight 가 끝날 때마다 다음 요청이 다시 로드를 시도하고 매번 타임아웃(20초 × 2 + 700ms)을 기다린 뒤에야 stale 을 받았다 — 이제는 실패한 키가 쿨다운(30초→5분)에 들어가 그동안 즉시 stale(12시간 안) 또는 503 이다. 쿨다운 기록이 조회 시작 시각 기준이라 페이지 순회가 길었던 실패일수록 실제 쉬는 시간이 짧아진다(6개 서비스 공통 후속 — [transit](transit.md) 의 Gotchas 절; 바다낚시는 48초짜리 실패면 첫 30초 쿨다운이 이미 지나 있다).
 - **D+3 이후 하루 예보는 활동을 가리지 않는다** — 코드 주석·계약은 "해수욕·바다여행은 D+3 이후 원문 '일'" 만 적었지만 작업 기록(2026-09-24 실측)은 서핑·낚시도 D+3 이후 하루 예보라고 한다. 정규화는 활동과 무관하게 '오전'/'오후' 외 값을 null 로 두므로 안전하다. 웹은 그런 날 오전/오후 토글이 효과가 없다(`seaSlotFor` 가 그날 첫 슬롯으로 폴백 — [seaFormat.ts](../../apps/web/src/components/sea/seaFormat.ts)).
 - **'03' 데이터 없음은 에러가 아니다** — 빈 결과로 받아 목록이 "예보 지점이 없습니다." 가 된다. 반대로 미신청 키(30)는 HTTP 403 과 함께 게이트웨이 봉투로 오므로 status 가 아니라 본문으로 판정해야 503 이 된다([khoa.adapter.ts](../../apps/friendly/src/modules/sea/khoa.adapter.ts)).
 - **`gubun` 은 값이 무시돼도 보내야 한다** — 빠지면 `'11'`(필수 파라미터 누락) → 502. 서비스가 낚시일 때만 `'갯바위'` 를 붙이고 테스트가 이를 확인한다.
@@ -293,14 +301,17 @@ utils export([sea.ts](../../packages/utils/src/sea.ts)): `SEA_ACTIVITIES`·`SeaA
 - **id 정밀도 차이** — 지점 묶음 키는 좌표 소수 4자리(≈11m), 동명 지점 id 접미는 3자리(≈110m)라 같은 이름이 100m 남짓 안에서 두 좌표로 오면 이론상 id 가 겹친다(목록 key 중복·선택 모호). 실측 데이터에서 확인된 사례는 없다.
 - **물때는 직선거리 최근접** — `nearestSeaTideStation` 은 해안선·반도를 모른다. 지점 반대편 해안의 예보지점이 뽑힐 수 있고, 후보엔 `IE_` 해양과학기지 3곳도 있다. 화면이 "○○ 기준(거리)" 와 "수십 분 차이" 안내를 함께 보여 주는 이유.
 - **웹 에러 문구가 하나뿐** — 502(업스트림 실패)와 503(키·활용신청·쿼터)을 가르지 않고 "바다 예보를 불러오지 못했습니다" 만 띄운다(날씨의 `weatherUpstreamMessage` 같은 분기 없음). 지도 키가 없으면 지도 자리만 안내문이 되고 목록·상세는 동작한다.
-- **테스트 규모** — friendly `sea.test.ts` 12건(봉투 해석 2 · 페이지 순회 1 · 정규화·지점 묶음·variants 병합·`latestRip` 4 · 서비스 503·캐시/stale/gubun·이안류 부착·물때 4 · 라우트 400 1 — 라우트 테스트만 `buildApp`), utils [sea.test.ts](../../packages/utils/src/sea.test.ts) 6건(지수·이안류·극치구분·`seaActivityHasPeriod`·166곳/인천 `DT_0001` 최근접 100m 이내·이안류 이름/2km 매칭), 웹 [SeaPage.test.tsx](../../apps/web/src/routes/SeaPage.test.tsx) 6건(MSW, `MapCanvas` 목 — 기본 탭 순위·요약·범례 / 행 클릭 → `sel`·상세·이안류·물때·띠 클릭·하루 칸 / 바다낚시 탭 어종 칩 / URL `d`·`p` / `seaFormat` 2). 앱 테스트 없음(앱 미구현).
+- **물때 날짜 범위는 검증 시각 기준이다(2026-10-05~)** — refine 이 `Date.now()` 를 계약 검증 때 읽으므로 자정 직전에 연 화면이 자정 뒤 "오늘-3일" 이 된 날짜를 보내면 400 이 된다(웹은 활동 예보 `dates` 를 고르니 실제론 어제까지만 — 범위 안). 같은 스키마를 import 하는 클라이언트가 값 검증에 쓰면 클라이언트 시계 기준이 된다. 상수 `SEA_TIDE_DATE_*` 가 zod 없는 `constants.ts` 가 아니라 스키마 파일 안에 있어, FE 가 값으로 쓰려 하면 CLAUDE.md 규칙 1(값 상수는 constants.ts)에 걸린다(현재 FE 사용처는 없음).
+- **테스트 규모** — friendly `sea.test.ts` 17건(봉투 해석 2 · 페이지 순회 1 · 정규화·지점 묶음·variants 병합·`latestRip` 4 · 서비스 503·캐시/stale/gubun·이안류 부착·물때 4 · 라우트 400 1 + 2026-10-05 물때 카운터·물때 LRU·쿨다운·어댑터 시간 예산·날짜 범위 400 5 — 라우트 테스트만 `buildApp`), utils [sea.test.ts](../../packages/utils/src/sea.test.ts) 6건(지수·이안류·극치구분·`seaActivityHasPeriod`·166곳/인천 `DT_0001` 최근접 100m 이내·이안류 이름/2km 매칭), 웹 [SeaPage.test.tsx](../../apps/web/src/routes/SeaPage.test.tsx) 6건(MSW, `MapCanvas` 목 — 기본 탭 순위·요약·범례 / 행 클릭 → `sel`·상세·이안류·물때·띠 클릭·하루 칸 / 바다낚시 탭 어종 칩 / URL `d`·`p` / `seaFormat` 2). 앱 테스트 없음(앱 미구현).
 
-## Sources [coverage: high — 51 sources]
+## Sources [coverage: high — 55 sources]
 
-- [apps/friendly/src/modules/sea/khoa.adapter.ts](../../apps/friendly/src/modules/sea/khoa.adapter.ts) — 봉투 해석·페이지 순회·재시도·`KHOA_PATHS` 8(170줄)
-- [apps/friendly/src/modules/sea/sea.service.ts](../../apps/friendly/src/modules/sea/sea.service.ts) — `SeaService` 캐시·stale·정규화·지점 묶음·이안류·물때(329줄)
-- [apps/friendly/src/modules/sea/sea.route.ts](../../apps/friendly/src/modules/sea/sea.route.ts) — GET 2, `1b621c4` summary·description(62줄)
-- [apps/friendly/src/modules/sea/sea.test.ts](../../apps/friendly/src/modules/sea/sea.test.ts) — 12건(인라인 실응답 축약 행)
+- [apps/friendly/src/modules/sea/khoa.adapter.ts](../../apps/friendly/src/modules/sea/khoa.adapter.ts) — 봉투 해석·페이지 순회·재시도·`KHOA_PATHS` 8, 시도 5초 × 페이지 8초 예산·`onRetry`(2026-10-05, 186줄)
+- [apps/friendly/src/modules/sea/sea.service.ts](../../apps/friendly/src/modules/sea/sea.service.ts) — `SeaService` 캐시(forecasts Map·tides LRU)·stale·카운터·쿨다운·정규화·지점 묶음·이안류·물때(406줄)
+- [apps/friendly/src/modules/sea/sea.route.ts](../../apps/friendly/src/modules/sea/sea.route.ts) — GET 2, `1b621c4` summary·description + 물때 날짜 범위 문구(2026-10-05, 63줄)
+- [apps/friendly/src/modules/sea/sea.test.ts](../../apps/friendly/src/modules/sea/sea.test.ts) — 17건(인라인 실응답 축약 행, 2026-10-05 +5)
+- [apps/friendly/src/lib/upstream-guard.ts](../../apps/friendly/src/lib/upstream-guard.ts) — 공용 DailyQuota·UpstreamCooldown·예산 상수(2026-10-05, 구조는 transit)
+- [apps/friendly/src/lib/upstream-guard.test.ts](../../apps/friendly/src/lib/upstream-guard.test.ts) — 5건
 - [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — `DATA_GO_KR_API_KEY` 공용 키 목록의 국립해양조사원 항목
 - [apps/friendly/.env.example](../../apps/friendly/.env.example) — 데이터셋 8개·개발계정 자동승인·일 10,000건
 - [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) — `RATE.transitRealtime` 60/분
@@ -309,10 +320,10 @@ utils export([sea.ts](../../packages/utils/src/sea.ts)): `SEA_ACTIVITIES`·`SeaA
 - [apps/friendly/src/modules/bus/bus-api.adapter.ts](../../apps/friendly/src/modules/bus/bus-api.adapter.ts) — `toServiceKeyPart`
 - [apps/friendly/src/app.ts](../../apps/friendly/src/app.ts) — modules autoload(`*.route.ts`)
 - [apps/friendly/package.json](../../apps/friendly/package.json) — sea 전용 probe·적재 스크립트 없음(확인)
-- [apps/friendly/src/modules/weather/weather.service.ts](../../apps/friendly/src/modules/weather/weather.service.ts) — 일일 쿼터 카운터 비교(9,000)
-- [apps/friendly/src/modules/air-quality/air-quality.service.ts](../../apps/friendly/src/modules/air-quality/air-quality.service.ts) — 일일 쿼터 카운터 비교(450)
-- [apps/friendly/src/modules/bus/bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts) — 일일 쿼터 카운터 비교(900)
-- [packages/api-contract/src/schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts) — 활동 enum·슬롯·variants·이안류·물때(107줄)
+- [apps/friendly/src/modules/weather/weather.service.ts](../../apps/friendly/src/modules/weather/weather.service.ts) — 일일 쿼터 카운터 비교(2026-10-05 부터 vilage 7,500·mid 1,500)
+- [apps/friendly/src/modules/air-quality/air-quality.service.ts](../../apps/friendly/src/modules/air-quality/air-quality.service.ts) — 일일 쿼터 카운터 비교(2026-10-05 부터 버킷 5개 합 450)
+- [apps/friendly/src/modules/bus/bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts) — 일일 쿼터 카운터 비교(2026-10-05 부터 버킷 4개 합 900)
+- [packages/api-contract/src/schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts) — 활동 enum·슬롯·variants·이안류·물때, 물때 날짜 refine·`SEA_TIDE_DATE_*`(2026-10-05, 134줄)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Sea`
 - [packages/api-contract/src/index.ts](../../packages/api-contract/src/index.ts)
 - [packages/shared/src/api/sea.api.ts](../../packages/shared/src/api/sea.api.ts) — `seaApi`
@@ -347,4 +358,6 @@ utils export([sea.ts](../../packages/utils/src/sea.ts)): `SEA_ACTIVITIES`·`SeaA
 - [docs/api/README.md](../../docs/api/README.md) — stale 규약·한도 표·도메인 개요·출처 표기
 - [docs/api/openapi.json](../../docs/api/openapi.json) — sea 2 paths(`x-auth public`·`x-rate-limit`)
 - [docs/PLAN-perf-security.md](../../docs/PLAN-perf-security.md) — #42 번복 "남는 위험은 비용(업스트림 쿼터 소진)"
+- [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md) — 2차·6차(E-6)·모듈 묶음 realtime·리뷰 "남긴 것"(쿨다운 기준 시각)
+- [docs/PLAN-perf-2-findings.md](../../docs/PLAN-perf-2-findings.md) — E-6 원문(날짜 키 3,000 → 업스트림 3,001콜, 조석 한도 2.8시간 소진)
 - [docs/PLAN-parking.md](../../docs/PLAN-parking.md) — "바다·집값과 같은 골격" 서술(어긋남)

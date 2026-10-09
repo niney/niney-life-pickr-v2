@@ -27,7 +27,7 @@
 
 2026-09-06 사주 범위 갱신: [saju-g](topics/saju-g.md) 추가, 현재 토픽 32개. 아래 수치는 마지막 전체 컴파일 당시 기록이다.
 
-Compiled: 2026-10-04 (28th) | Topics: 41 | Concepts: 35 | Sources: ~3,654 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1670) | Auto-updates on session start
+Compiled: 2026-10-10 (29th) | Topics: 41 | Concepts: 40 | Sources: ~4,261 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1750) | Auto-updates on session start
 
 ## Topic map at a glance
 

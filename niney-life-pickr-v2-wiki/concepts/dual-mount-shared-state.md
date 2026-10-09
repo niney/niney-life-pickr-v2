@@ -1,11 +1,13 @@
 ---
 concept: dual-mount-shared-state
-last_compiled: 2026-08-30
-topics_connected: [web, transit, map, bus, subway, life-map]
-status: active
+last_compiled: 2026-10-10
+topics_connected: [web, transit, map, bus, subway, life-map, canonical]
+status: superseded
 ---
 
 # 데스크톱/모바일 동시 마운트와 상태·자원 공유
+
+> **2026-10-05 이후 상태: 대체됨(superseded).** 웹 성능 라운드가 남은 이중 마운트 페이지를 전부 `useIsDesktopXl` JS 분기(한 벌 마운트)로 바꿨다 — 버스·지하철(`086e4510`)과 맛집 v2(`14f48e16`). 2026-10-10 기준 공개 지도 페이지에 CSS 숨김 이중 마운트(`hidden xl:flex` / `xl:hidden` 으로 페이지 트리 두 벌)는 **없다**(남은 `xl:hidden` 은 페이저·어드민 상단바의 작은 조각뿐). 지도 풀 키 `transit-desktop`/`transit-mobile` 은 남았지만 이제 "두 인스턴스 동시 생존" 이 아니라 "브레이크포인트를 넘을 때 레이아웃별 인스턴스 재사용" 의 의미다. 아래 본문은 2026-07~08 의 설계 기록이고, 끝난 이유는 "끝난 방식" 절.
 
 ## Pattern
 
@@ -36,6 +38,11 @@ status: active
 
 4. **이중 마운트는 기본값이지 교리가 아니다** (2026-08). 일상지도가 JS 분기를 고른 뒤로 "반응형 = 두 트리 동시 생존" 은 대중교통·맛집 v2 의 선택이지 리포 규칙이 아니게 됐다. 새 지도 페이지는 먼저 "숨은 트리가 부수효과(스크롤 락·타이머·무거운 캔버스)를 내는가" 를 묻고, 낸다면 JS 분기 + 리마운트 비용을, 안 낸다면 이중 마운트 + 상태 승격을 고른다.
 
+## 끝난 방식 (2026-10-05)
+
+- **2026-10-05** in [bus](../topics/bus.md) / [subway](../topics/subway.md) / [transit](../topics/transit.md) / [web](../topics/web.md) / [map](../topics/map.md) (`086e4510`·`14f48e16`): 위 4번 "이중 마운트는 기본값이지 교리가 아니다" 의 질문 — "숨은 트리가 부수효과를 내는가" — 에 성능 측정이 답했다. 숨은 트리는 OL 지도 인스턴스·차량 tween·폴링 리렌더·시트를 한 벌 더 돌렸고, 네트워크는 queryKey dedupe 로 1회였어도 **렌더·마커 재생성·메모리는 2배**였다. 커밋 본문: "지도(OL 인스턴스·차량 tween)·패널·시트를 한 벌만 마운트하기 위함". 맛집 v2 는 "전에는 CSS 로 숨긴 한 벌이 더 떠 있었다" 며 같은 날 바꿨고, 지도를 두 분기의 같은 자리에 두어 xl 경계를 넘어도 인스턴스가 유지된다. 이 컨셉이 세운 상태 공유 결정 트리(스토어 승격 vs 페이지 state vs 로컬)는 **창 크기를 넘나들 때 상태를 잃지 않기 위한 규칙**으로 여전히 유효하다 — `transitFavExpandStore`·`transitCrossShowStore` 는 남았다. 사라진 건 "두 트리가 동시에 산다" 는 전제와 그 비용이다.
+- **교훈**: 이중 마운트의 장점(분기 없는 반응형, 경계를 넘을 때 즉시 전환)은 화면이 가벼울 때만 공짜다. 무거운 캔버스·폴링이 붙는 순간 "보이지 않는 쪽의 비용" 이 측정에서 드러나고, 그때는 JS 분기 + 레이아웃별 인스턴스 재사용(풀 키)이 같은 사용자 경험을 반값에 준다. 같은 라운드의 [target-scoped-queries](target-scoped-queries.md)(보이지 않으면 조회하지 않는다)와 같은 결.
+
 ## Sources
 
 - [[../topics/web]]
@@ -45,3 +52,5 @@ status: active
 - [[../topics/subway]]
 - [[../topics/life-map]]
 - [[map-sheet-shell]]
+- [canonical](../topics/canonical.md)
+- [target-scoped-queries](target-scoped-queries.md)

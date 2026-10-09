@@ -1,6 +1,6 @@
 ---
 concept: 공공데이터 마스터 적재 수명주기 — 원본은 리포 밖, 로더 전량 교체, 가공 캐시만 커밋
-last_compiled: 2026-09-26
+last_compiled: 2026-10-10
 topics_connected: [life-map, bus, subway, food, friendly, project-overview, housing, tarot, saju-c, tour, canonical, parking, sea]
 status: active
 ---
@@ -21,6 +21,7 @@ status: active
 
 ## Instances
 
+- **2026-10-05~10 (세 번째 원천 병합 + 원천 공통 정리 규칙 + 교체를 쪼개기)** in [parking](../topics/parking.md) / [housing](../topics/housing.md) / [life-map](../topics/life-map.md) / [project-overview](../topics/project-overview.md) (`007ac899`·`36f07eb3`·`5655abbc`·`fe0d59ab`): (1) **원천이 늘면 병합 규칙이 원천별로 갈린다** — `load:parking-lots` 기본 원천이 `std,seoul,kotsa`. 한국교통안전공단 주차정보(15099883)는 원천 1,767,934행 중 공영 13,645행을 옛 행정코드 251개 시군구 순차 호출(초당 한도로 350ms 간격 ≈470콜·4분 20초)로 받는다. 원천 결함으로 37개 시군구는 건수만 오고 목록이 비어 그 지역엔 보강이 없다. KOTSA 좌표는 입구라 필지 중심인 다른 원천과 어긋나, 중복 판정(`matchParkingDuplicates`, 격자 이웃 9칸)이 "25m 안, 또는 100m 안 + 이름 유사" 에 더해 **이름이 같으면 300m** 까지 같은 곳으로 본다. 이름 다른 3곳 이상이 한 점에 몰린 대표 좌표는 주소로 다시 찾고 못 찾으면 버린다. 기존과 겹치는 곳은 KOTSA 행을 버리고 새 곳만 더해 10-05 결과 8,656곳 중 새로 2,051곳(10-10 로컬 2,068, 전체 20,261). 실시간은 시설과 이어지는 858행이 1시간 동안 값 변화 0 이라 뺐다. (2) **정규화 단계에 원천 공통 정리 규칙 + 리포트 카운터** — `sanitizeParkingFeeRule`(비정상 시간 요금 → 정보 없음, 표준 133·KOTSA 89행)과 등록 차량 전용 제외(KOTSA 이름+월정액만 90행, 표준 `isStdPermitOnly` 27곳, 요금 구분 빈 공영 2,981행)가 원천과 무관하게 같은 함수로 돌고, 적재 리포트가 `feeRuleCleared`·`droppedPermitOnly` 로 몇 행이 걸렸는지 남긴다([unknown-vs-zero](unknown-vs-zero.md)). (3) **전량 교체를 락 관점으로 다시** — 집값 통계·상가 130만 행 교체가 한 트랜잭션(쓰기 락 19초·349초)에서 섀도 표 청크 채움 + 순간 교체(0.5초·12초)로 바뀌었고(`lib/shadow-table.ts`), 겹친 재적재가 서로의 표에 쓰던 고정 스테이징 이름 회귀를 실행별 이름으로 막았다([sqlite-write-lock-budget](sqlite-write-lock-budget.md)). 적재 흐름 끝마다 `analyze_db`(테이블별 ANALYZE)가 붙어 **적재가 곧 플래너 통계 갱신 시점**이 됐다 — 통계가 없으면 집값 지도가 10~30배 느렸다. ⚠️ `deploy.sh parking_data` 는 `kotsa=0` 을 재적재 조건으로 써서, KOTSA 가 계속 실패하거나 `--sources=std,seoul` 로 돌리면 배포마다 ~5분 전량 적재를 다시 시도하고, KOTSA 실패는 서울·표준 교체까지 무산시킨다.
 - **2026-09-25 (API 전량형 두 원천 병합 + 마스터 위 상태 오버레이)** in [parking](../topics/parking.md) / [project-overview](../topics/project-overview.md) (`2ff2c31`): 주차장은 원본 파일 없이 **API 두 계열을 한 표로** — 전국주차장정보표준데이터(data.go.kr 15012896, 1,000행 × ~19콜)와 서울 공영주차장 안내(서울 열린데이터 `GetParkInfo`)를 정규화(표준 API 의 camelCase 와 포털 파일의 UPPER_SNAKE 키 통일, 서울 노상 구획 행 접기, 버스·거주자 전용 제외)한 뒤 **표준↔서울 겹침을 접어**(로컬 413건) `ParkingLot` 에 전량 교체한다(트랜잭션 + `createMany` 청크 500, id 는 원천 접두 `std:<관리번호>`·`seoul:<코드>`). 전기차 충전소(환경공단 15076352, 전량 ~53콜 43초)는 `EvStation`·`EvCharger` 두 표를 한 트랜잭션에서 교체(21초, 로컬 99,850곳/515,263기). 두 로더 모두 `ParkingSync(kind)` 에 이력을 남기고 `status:parking` 한 줄(`ok lots=N std=S seoul=U geocoded=G ev=E chargers=C`)을 `deploy.sh` `parking_data` 가 읽어 비었으면 첫 적재, 새 메뉴 **9** 로 코드 배포·재기동 없이 재적재한다. 새로운 층은 **마스터 위의 상태 오버레이** — 실시간 여석은 폴러 메모리, 충전기 상태는 10분 폴러가 마스터 행을 `UPDATE … FROM` 으로 제자리 갱신, 요일×시간 혼잡 이력은 `ParkingOccupancyStat(key, dow, hour)` 에 **FK 없는 누적 집계**(samples·occSum·fullCount)로 쌓는다. 마스터가 통째로 교체돼도 이력은 원천 키로 살아남는다(아래 What This Means 5).
 - **2026-09-24 (원본을 로더가 직접 받는다 + 좌표계 변환)** in [life-map](../topics/life-map.md) / [housing](../topics/housing.md) (`ad48f96`): 서울시 침수흔적도(서울 열린데이터 OA-15636) — `load:life-flood` 가 `data/open/flood/` 가 비어 있으면 데이터셋 페이지를 읽고 파일별로 폼 POST 해 연도별 SHP zip 14개(~6MB, 로그인 불필요)를 **스스로 내려받는다**(`--download` 는 새 연도 재확인, deploy.sh force 때). SHP/DBF 를 자체 파서로 읽고(CP949·UTF-8 혼재, 연도마다 다른 스키마) UTM-K(EPSG:5179) 필지 폴리곤을 WGS84 무게중심 점으로 바꿔(주소·필지는 버림) `LifeFloodTrace` 4.3만 행을 전량 교체, `LifeMasterSync layer='flood'` → `status:life-map` `flood=N` → deploy.sh 가 0건이면 자동 적재. 재취득이 쉬워 원본 보관 부담이 없는 쪽 극단이고, `build:life-crime` 의 인구 CSV 자동 다운로드와 같은 "로더가 원본을 획득" 계열. 소비 쪽에선 **이력 행이 캐시 버전**이 됐다 — 집값의 `HousingFloodIndex` 는 0.002° 메모리 격자를 만들어 두고 최신 `LifeMasterSync(flood).id` 가 바뀔 때만 다시 짓는다.
 - **2026-09-24 (대조 — 적재 없음, 좌표표만 코드로 커밋)** in [sea](../topics/sea.md) (`4a2bff1`): 바다는 마스터를 두지 않는다 — 국립해양조사원 지수 6종·조석·이안류를 요청 시 받아 메모리 캐시(활동별 1시간·물때 12시간 + 실패 시 12시간 stale)만 한다. 대신 공식 코드표에 **좌표가 없어서** 조석 예보지점 166곳·이안류 해수욕장 10곳의 좌표를 지점별 1회 호출로 모아 `packages/utils/src/seaStations.ts` 로 커밋했다 — "쿼터를 써서 얻은 가공물만 커밋" 규약이 DB 적재 없이 코드 상수로 나타난 형태(지오코딩 gz·범죄 JSON 과 같은 다리).
@@ -41,15 +42,21 @@ status: active
 
 1. **"정적=로컬" 의 대가는 운영이다.** 런타임 API 소비를 0 으로 만드는 대신 재취득·재적재·상태 점검이라는 운영 작업이 생긴다. 이 리포는 그 작업을 deploy.sh 케이스(6·7)와 status 한 줄 계약으로 **사람이 기억하지 않아도 되게** 만들었다 — 적재 명령을 외우는 대신 `./deploy.sh 6` 을 친다.
 2. **원본을 리포에 안 넣는 결정이 두 규약을 낳았다.** (a) 보관 기준은 "재취득 난이도" — 79MB CSV 는 지우고 16GB zip 은 0.5% 추출본만 남긴다. (b) **가공 캐시만 커밋** — 쿼터를 써서 얻은 산출물(지오코딩 gz)은 원본이 아니라 코드에 준하는 자산이라 리포에 들어간다. 이 둘이 없으면 "원본 밖" 결정은 재현 불가능한 배포가 된다.
-3. **이력 행은 기능 게이트다.** `*MasterSync`/`FoodImportRun` 은 로그가 아니라 "이 기능이 지금 켜져 있는가" 의 진실이다. 그래서 미적재를 503 + 안내로 드러내는 것이 맞고, 조용한 빈 목록은 버그로 취급한다.
+3. **이력 행은 기능 게이트다.** `*MasterSync`/`FoodImportRun` 은 로그가 아니라 "이 기능이 지금 켜져 있는가" 의 진실이다. 그래서 미적재를 503 + 안내로 드러내는 것이 맞고, 조용한 빈 목록은 버그로 취급한다. **2026-10 부터 이력 행은 캐시 버전이기도 하다** — 집값 셀 캐시 키와 `/housing/status` 메모가 최신 sync id 를 키에 넣고(통계가 재계산되면 키가 갈려 TTL 없이도 무효화), 여행로그 공개 집계는 적재·제거 이력의 최신 id 가 바뀌면 `TourVersionedCache` 를 통째로 비운다. 데이터가 적재로만 바뀌는 마스터라면 "언제 무효화할까" 의 답이 이력 테이블에 이미 있다. 단 이력에 안 남는 변화(수동 SQL, 적재 밖 쓰기)는 이 버전을 지나친다.
 4. **깨지는 지점** — 로컬 `dev.db` 와 운영 `prod.db` 의 적재 상태가 다르다(로컬 병의원 0건 관측). 로더가 비스트리밍이라 메모리에 원본 전량이 올라간다(CCTV 79MB 까지는 통과). 화장실 지오코딩은 1일차 78.9% 에서 멈춰 2일차 재실행·gz 재커밋이 남았다. 테스트가 `.env` 의 `DATABASE_URL` 을 그대로 쓰므로 적재·머지 테스트는 `useIsolatedDatabase()` 없이는 실 DB 를 갈아엎는다(2026-08-22 `517e465` 실사고).
 
 5. **전량 교체되는 마스터에 매달리는 데이터는 FK 대신 안정 원천 키로** (2026-09-25 정리). 교체 트랜잭션의 `deleteMany({})` 는 FK 가 걸린 자식까지 끌고 간다 — 그래서 마스터 위에 쌓이는 것들은 하나같이 FK 없이 원천 키로 매단다: 주차 혼잡 이력 `ParkingOccupancyStat.key`(`seoul:<코드>`·공항 구역 키), 맛집 매칭 `RestaurantTourMatch`(FK 없음)·`RestaurantStoreMatch`(상가 마스터 `LifeStore` 쪽 FK 를 떼어 낸 마이그레이션 `20260912102150` — canonical 쪽 FK 는 유지), 여행로그 `Tour*` 표 전체(FK 없음, `west:`·`east:`·`capital:` 접두), 지오코딩 영구 캐시 `LifeGeocodeCache`(유형+주소 키), 집값 단지 재적재의 "같은 id 에서 보강 컬럼 이어받기". 원천 id 에 출처 접두(`std:`·`seoul:`·`west:`)를 붙이는 것도 같은 목적 — 여러 원천이 한 표에 들어와도 키가 충돌하지 않고, 재적재 뒤에도 같은 행을 같은 키로 다시 찾는다. 대가는 고아 행이다(마스터에서 사라진 주차장의 이력·폐업 가게의 매칭이 남는다) — 매칭 표는 `missing` 상태로 드러내고, 혼잡 이력은 주차장 상세에서 그 키로만 읽으므로 고아 행은 조회되지 않은 채 남는다.
+
+6. **적재는 원천 하나가 아니라 원천 사이의 규칙이다** (2026-10, 주차 세 번째 원천). 원천이 둘일 땐 "겹치면 접는다" 하나로 충분했지만, 셋이 되자 원천마다 좌표의 뜻(입구 vs 필지 중심)·이름 품질·결함 지역이 달라 **판정 반경을 원천별로** 두고, 정리 규칙(요금 이상치·전용 구획)은 반대로 **원천과 무관한 공통 함수**로 올렸다. 그리고 그 규칙이 몇 행을 건드렸는지를 리포트 카운터로 남긴다 — 다음 원천 갱신 때 숫자가 튀면 원천이 바뀐 것이다. 또 마스터가 커질수록 교체 자체가 서버 쓰기 예산을 먹으므로, 수명주기의 "전량 교체" 단계는 이제 "옆에서 다 만들고 순간 교체" 를 뜻한다.
 
 관련: [quota-proportional-loading](quota-proportional-loading.md) — 이 컨셉이 그 4층 중 "정적=로컬" 다리의 운영 규약. [external-api-proxy-fixture](external-api-proxy-fixture.md) — HIRA·VWorld 지오코더처럼 **라우트 없는 적재 전용 어댑터**가 이 수명주기의 입력단. [in-memory-singleton-gates](in-memory-singleton-gates.md) — food import 의 단일-잡 게이트가 운영 중 갱신형의 동시성 방어.
 
 ## Sources
 
+- [docs/PLAN-parking.md](../../docs/PLAN-parking.md)
+- [apps/friendly/src/lib/shadow-table.ts](../../apps/friendly/src/lib/shadow-table.ts)
+- [sqlite-write-lock-budget](sqlite-write-lock-budget.md)
+- [unknown-vs-zero](unknown-vs-zero.md)
 - [life-map](../topics/life-map.md)
 - [bus](../topics/bus.md)
 - [subway](../topics/subway.md)

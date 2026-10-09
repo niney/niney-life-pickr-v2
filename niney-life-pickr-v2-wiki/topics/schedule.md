@@ -1,22 +1,24 @@
 ---
 topic: schedule
-last_compiled: 2026-08-30
-sources_count: 16
+last_compiled: 2026-10-10
+sources_count: 28
 status: active
-aliases: [스케줄러, 주기 실행, schedule, cron, croner, normalize-merge, ScheduleService, scheduleRegistry, ActiveRun, runScheduled, beginRun, ScheduleRun, ScheduleConfig, schedule_configs, schedule_runs, run-events, DEFAULT_CRON, MAX_TARGETS_PER_RUN, RUN_HISTORY_LIMIT, useScheduleRunEvents, ScheduleSection, parentRunId, buildLlmProviderEnv]
+aliases: [스케줄러, 주기 실행, schedule, cron, croner, normalize-merge, ScheduleService, scheduleRegistry, ActiveRun, runScheduled, beginRun, ScheduleRun, ScheduleConfig, schedule_configs, schedule_runs, run-events, DEFAULT_CRON, MAX_TARGETS_PER_RUN, RUN_HISTORY_LIMIT, useScheduleRunEvents, ScheduleSection, parentRunId, buildLlmProviderEnv, app.analytics, skipped busy, 머지 건너뜀, receipts-retention, media-thumbs-sweep, usage-quota-gc, meal-photo-gc, food-import, random-crawl, sqlite-optimize, logs-retention, 새벽 크론, 03:00 재시작, groupingInFlight, CRAWL_WAIT_TIMEOUT_MS, waitForTerminal]
 ---
 
 # schedule — 인프로세스 cron(정규화 → 글로벌 머지) 스케줄러
 
 > 인프로세스 cron 스케줄러. 관리자가 예약한 주기로 "메뉴 정규화 → 글로벌 머지" 파이프라인을 자동 실행한다. croner 기반, 단일 Fastify 인스턴스, 분산 락 없음.
 
+**2026-10-05 변경 흡수 — 03:00 경로의 무게 줄이기: `AnalyticsService` 공유(`app.analytics`)·머지 busy 건너뜀·머지 저장 변경분만(`622bfca2`), 정규화 대상 수집 GROUP BY(`12bc6ac5`), `scheduleRegistry` 새 jobType 2종(`622bfca2`), 어드민 cron 미리보기 디바운스(`c5052742`)**: (1) **운영 증거** — [PLAN-perf-2](../../docs/PLAN-perf-2.md) 의 메모리 초과 재시작 3주 90회 중 **03:00 정각 재시작이 3회**(9/26·9/28·10/1)였고, 그중 9/28·10/1 은 직전 15분 요청이 0건이었다. 그래서 이 모듈의 기본 cron `0 3 * * *`(정규화 → 글로벌 머지)이 유력 원인으로 꼽혔다. 작업 로그 FK 위반 229건도 10/4 03:03 에 몰렸다([logs](logs.md)). 이번 라운드는 이 경로의 세 단계를 각각 가볍게 했다. (2) **collecting** — `menuGrouping.getRestaurantsStatus` 의 분석 done 수 집계가 done 요약 전 행을 관계 select 하던 것에서 `visitorReview.groupBy({ by: ['restaurantId'] })` 카운트로 바뀌었다(`12bc6ac5`, findings A-V2 — 요약 수에 비례해 느려지고 메모리를 잡던 경로). (3) **grouping** — `groupForRestaurant` 의 같은 placeId 진행 중 합류가 모듈 스코프 `groupingInFlight` Map 이 됐다(`ab7dad28`). 스케줄과 어드민 벌크 잡이 같은 가게에서 겹치면 두 번째는 LLM 을 다시 돌리지 않는다. 다만 합류한 호출은 새 run 을 만들지 않으므로 그 가게의 menu-grouping 자식 run 은 스케줄 부모 아래에 안 생긴다(Gotchas). (4) **merging** — [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) 가 만든 `AnalyticsService` 를 `app.decorate('analytics', …)` 로 내놓아, 어드민 라우트도 같은 인스턴스를 쓴다(findings G-V2 — 예전엔 인스턴스가 둘이라 `mergeInflight` 가 수동·스케줄 머지를 서로 막지 못했다). 어드민 머지가 도는 중이면 `runGlobalMerge` 가 `busy: true` 를 돌려준다. 그러면 [schedule.service.ts](../../apps/friendly/src/modules/schedule/schedule.service.ts) 는 info 로그와 `merge` 단계 스텝 `'글로벌 머지 건너뜀 — 다른 머지 진행 중'`(meta `skipped: 'busy'`)만 남기고 run 을 done 으로 끝낸다(`'글로벌 머지 완료'` 스텝은 찍지 않는다). 머지 저장은 값이 같은 키의 UPDATE 를 생략해 증분 머지가 미링크 1건으로 3,000키를 다시 쓰던 쓰기 락이 1,393 → 315ms 로 줄었다([analytics](analytics.md)). 신규 테스트 "records a skipped merge step when another merge holds the shared analytics service". (5) **`scheduleRegistry` 를 쓰는 jobType 이 7개로** — 이번에 `media-thumbs-sweep`(썸네일 디스크 2GB 정리, `17 */6 * * *` + 부팅 60초 뒤 1회, [media.route.ts](../../apps/friendly/src/modules/media/media.route.ts))과 `receipts-retention`(미참조 영수증 30일 정리, `20 4 * * *`, [settlement-extraction.route.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts))이 더해졌다. 지난 위키가 빠뜨린 `usage-quota-gc`(`40 4 * * *`, 2026-09-02 `cd5a29b8`, [plugins/usage-quota.ts](../../apps/friendly/src/plugins/usage-quota.ts))도 있다. 레지스트리를 안 쓰는 자체 croner 도 하나 늘었다 — `sqlite-optimize`(`30 4 * * *` `PRAGMA optimize = 0x10002`, [plugins/prisma.ts](../../apps/friendly/src/plugins/prisma.ts), `2b072b53`). 새벽 04시대가 촘촘해졌다(Gotchas). (6) **random-crawl 회차** — 선택 크롤 종료 대기에 60분 상한(`CRAWL_WAIT_TIMEOUT_MS`, `jobRegistry.waitForTerminal`)이 생겼다. 크롤이 끝나지 않아도 회차가 영원히 `crawling` 으로 남아 cron·텔레그램 회차를 막지 않는다(넘기면 크롤 취소 + 회차 failed, `ab7dad28`, [random-crawl](random-crawl.md)). (7) **어드민 UI** — [AdminAnalyticsPage](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) 의 `ScheduleSection` 이 `memo` 가 됐다. 커스텀 cron 입력 중엔 `useDebounced(draftCron, 300)` 이 멈춘 값만 `preview` 로 보낸다(프리셋 칩은 0ms). 입력과 미리보기가 어긋난 동안엔 옛 결과를 보이지 않는다(`previewSettled`). 테스트 "스케줄 cron 을 손으로 고치면 미리보기는 입력이 멈춘 뒤 한 번만 요청한다".
+
 **2026-08-22 변경 흡수 — 플러그인 env 조립 `buildLlmProviderEnv()`(`cc8399a`)**: [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) 가 자체 `LlmProviderEnv` 리터럴(`env.OLLAMA_*` + `defaultModels` 3키) 대신 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 `AiConfigService` 를 만든다 — 아래 Gotchas 의 "자체 AiConfig 생성"(autoload 순서상 `app.aiConfig` 재사용 불가)은 그대로이고 **인스턴스는 자체, env 블록만 공용**이 된 것. `MenuGroupingService`/`AnalyticsService` 가 받는 인스턴스·파이프라인 동작은 변경 없음. 배경(purpose 5종)은 [ai](ai.md).
 
-## Purpose [coverage: high — 6 sources]
+## Purpose [coverage: high — 11 sources]
 
 관리자가 cron 식으로 **"정규화 → 글로벌 머지"** 파이프라인을 주기 예약·자동 실행하게 하는 도메인이다. 지금까지 [menu-grouping](menu-grouping.md)(식당별 메뉴 정규화)과 [analytics](analytics.md)(글로벌 머지)를 수동으로 돌려야 했는데, 이를 야간 배치처럼 자동화한다.
 
-작업 타입은 `normalize-merge` 로 시작했지만 같은 `scheduleRegistry` 가 지금은 **4개 jobType 을 호스팅**한다 — `random-crawl`(2026-06, [random-crawl](random-crawl.md)), `food-import`(2026-08-22, 월간 카탈로그 적재 — `food-import.service.ts` 가 `setCron(JOB_TYPE, cronExpr, timezone)` 등록, [food](food.md)), `meal-photo-gc`(2026-08-23, 매일 04:30 KST 고아 사진 GC — [`plugins/meal.ts`](../../apps/friendly/src/plugins/meal.ts) 의 `GC_CRON = '30 4 * * *'`, [meal](meal.md)). cron 타이머 자원은 한 레지스트리가 jobType 별로 들고, 아래 run 3단계 서술은 `normalize-merge` 기준이다. 한 번의 실행(run)은 세 단계로 진행한다:
+작업 타입은 `normalize-merge` 로 시작했지만 같은 `scheduleRegistry` 가 지금은 **7개 jobType 의 cron 타이머를 호스팅**한다 — `random-crawl`(2026-06, [random-crawl](random-crawl.md)), `food-import`(2026-08-22, 월간 카탈로그 적재 — `food-import.service.ts` 가 `setCron(JOB_TYPE, cronExpr, timezone)` 등록, [food](food.md)), `meal-photo-gc`(2026-08-23, 매일 04:30 KST 고아 사진 GC — [`plugins/meal.ts`](../../apps/friendly/src/plugins/meal.ts) 의 `GC_CRON = '30 4 * * *'`, [meal](meal.md)), `usage-quota-gc`(2026-09-02, 매일 04:40 오래된 사용량 카운터 정리 — [`plugins/usage-quota.ts`](../../apps/friendly/src/plugins/usage-quota.ts), [usage-quota](usage-quota.md)), **2026-10-05 신규** `media-thumbs-sweep`(6시간마다 17분 `17 */6 * * *` + 부팅 60초 뒤 1회, 썸네일 디스크 캐시 2GB 초과분 정리 — [`media.route.ts`](../../apps/friendly/src/modules/media/media.route.ts))·`receipts-retention`(매일 04:20, 30일 미참조 영수증 파일 정리 — [`settlement-extraction.route.ts`](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts), [settlement](settlement.md)). 뒤의 넷은 run 기록·overlap 가드 없는 단순 타이머다. 새 둘(media·receipts)은 테스트 환경에선 등록하지 않지만, `meal-photo-gc`·`usage-quota-gc` 는 테스트에서도 등록된다(`unref` 라 프로세스를 붙잡지는 않는다). cron 타이머 자원은 한 레지스트리가 jobType 별로 들고, 아래 run 3단계 서술은 `normalize-merge` 기준이다. 레지스트리 밖 자체 `Cron` 도 있다 — `logs-retention`(04:00, [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts))·`sqlite-optimize`(04:30, [plugins/prisma.ts](../../apps/friendly/src/plugins/prisma.ts), 2026-10-05)·집값 거래 갱신·충전소/주차 폴러. 이들은 각자 `onClose` 로 멈추고 `scheduleRegistry.stopAllCrons()` 의 대상이 아니다. 한 번의 실행(run)은 세 단계로 진행한다:
 
 1. **collecting** — "처리 필요"(미분류 메뉴 있거나 구버전) 식당 목록을 수집. 크롤 진행 중인 식당은 제외.
 2. **grouping** — 식당별로 `menuGrouping.groupForRestaurant(placeId)` 를 순차 호출(증분 정규화).
@@ -24,13 +26,13 @@ aliases: [스케줄러, 주기 실행, schedule, cron, croner, normalize-merge, 
 
 기본 권장 주기는 매일 03:00 (`DEFAULT_CRON = '0 3 * * *'`, `Asia/Seoul`)이며, 어드민이 cron 식·타임존·on/off 를 바꿀 수 있다. 진행 상황은 SSE 로 live 표시되고 실행 이력은 SQLite 에 영속된다.
 
-## Architecture [coverage: high — 6 sources]
+## Architecture [coverage: high — 7 sources]
 
 세 개의 협력 객체로 구성된다.
 
 - **ScheduleService** ([`schedule.service.ts`](../../apps/friendly/src/modules/schedule/schedule.service.ts)) — 파이프라인 로직. `getConfig` / `updateConfig` / `applySchedule` / `bootstrap` / `runScheduled` / `collectTargets` / `listRuns` / `preview`. cron tick 과 어드민 "지금 실행"은 둘 다 `runScheduled(trigger)` 한 경로로 들어간다(차이는 `trigger` 값 `'cron'` vs `'manual'` 뿐).
 - **scheduleRegistry** ([`schedule-registry.ts`](../../apps/friendly/src/modules/schedule/schedule-registry.ts)) — 모듈 singleton. 두 가지 메모리 상태만 관리: ① `Map<jobType, Cron>` cron 타이머, ② 시스템 전체 동시 1개인 `ActiveRun`(overlap 가드 + live 진행 + SSE 구독자 + graceful abort). 파이프라인 로직은 없고 상태/타이머만 담당.
-- **schedule plugin** ([`plugins/schedule.ts`](../../apps/friendly/src/plugins/schedule.ts)) — `fastify-plugin`, `dependencies: ['prisma']`. `app.decorate('schedule', ...)` 로 ScheduleService 를 전역 singleton 으로 노출. 라우트와 부팅 cron tick 이 같은 인스턴스를 공유한다.
+- **schedule plugin** ([`plugins/schedule.ts`](../../apps/friendly/src/plugins/schedule.ts)) — `fastify-plugin`, `dependencies: ['prisma', 'logs']`. `app.decorate('schedule', ...)` 로 ScheduleService 를 전역 singleton 으로 노출. 라우트와 부팅 cron tick 이 같은 인스턴스를 공유한다. 2026-10-05 부터 파이프라인용으로 만든 `AnalyticsService` 도 `app.decorate('analytics', ...)` 로 내놓는다 — 어드민 분석 라우트가 이것을 써서 머지 상호배제(`mergeInflight`)와 통계 캐시가 하나가 된다(G-V2).
 
 **2026-06-25 변경 흡수 — 범용 작업 로그(operation-log) 이중 기록**: `ScheduleServiceDeps` 에 옵셔널 `operationLog?: OperationLogService | null` 추가 ([logs](logs.md) 토픽). `runScheduled` 가 `ScheduleRun`(스케줄 화면용)과 별개로 operation-log run 도 시작(`oplog.startRun({ feature: 'schedule', jobId: runId, trigger })`)하고, `jobId` 에 `ScheduleRun.id` 를 넣어 두 기록을 상호 추적한다. 단계별 step 로그(`collect`/`grouping`/`merge`)를 흘리고, 자식 `menuGrouping.groupForRestaurant(placeId, { parentRunId })` · `analytics.runGlobalMerge({ full: false, parentRunId })` 호출에 `parentRunId` 를 넘겨 부모-자식 run 을 연계한다. **미주입(null)이면 완전 no-op** — 기존 단위 테스트가 계측 없이도 깨지지 않게 설계됐다. 개별 식당 실패는 `failedCount` 로 세어 run 은 `done` 으로 유지하되 meta 에 단서를 남긴다.
 
@@ -38,25 +40,27 @@ aliases: [스케줄러, 주기 실행, schedule, cron, croner, normalize-merge, 
 
 ### 실행 흐름 (runScheduled)
 
-`beginRun` 으로 슬롯을 잡는다 → 이미 running 이면 `null` 반환 → 호출자가 `skipped` 행만 남기고 종료(overlap 방지). 슬롯을 잡으면 `running` 행 생성 후 collecting→grouping→merging 진행. 식당 경계마다 `signal.aborted` 와 `jobRegistry.isPlaceCrawling(placeId)` 를 재확인한다. 끝나면 registry 에서 카운트 스냅샷을 떠서 run 행을 마감(`done`/`failed`/`interrupted`)하고, `scheduleConfig.lastRunAt`/`lastStatus` 를 비정규화 갱신한다.
+`beginRun` 으로 슬롯을 잡는다 → 이미 running 이면 `null` 반환 → 호출자가 `skipped` 행만 남기고 종료(overlap 방지). 슬롯을 잡으면 `running` 행 생성 후 collecting→grouping→merging 진행. merging 에서 `runGlobalMerge` 결과가 `busy`(같은 `app.analytics` 에서 어드민 머지 진행 중)면 건너뜀 스텝만 남기고 정상 종료한다(2026-10-05). 식당 경계마다 `signal.aborted` 와 `jobRegistry.isPlaceCrawling(placeId)` 를 재확인한다. 끝나면 registry 에서 카운트 스냅샷을 떠서 run 행을 마감(`done`/`failed`/`interrupted`)하고, `scheduleConfig.lastRunAt`/`lastStatus` 를 비정규화 갱신한다.
 
 ### 부팅·종료
 
 - **부팅**: `server.ts` 가 `app.schedule.bootstrap()` 호출 → 직전 인스턴스에서 `running` 으로 남은 run 을 `interrupted`(`error: 'server restart'`)로 정리 → DB 설정을 읽어 cron 등록.
 - **종료**: `server.ts` 의 SIGTERM/SIGINT 핸들러가 `scheduleRegistry.stopAllCrons()` + `abortInflight()` 후 `app.close()`. plugin 의 `onClose` 훅도 동일 정리(멱등 — 테스트 `app.close()` 에서도 작동). `app.ts` 에 `forceCloseConnections: 'idle'` 추가로 idle SSE keep-alive 가 close 를 매달지 않게 함. 15초 안전망 `setTimeout(() => process.exit(1))`(unref).
 
-## Talks To [coverage: high — 5 sources]
+## Talks To [coverage: high — 9 sources]
 
-- **[menu-grouping](menu-grouping.md)** — `groupForRestaurant(placeId)` 로 식당별 정규화(grouping 단계), `getRestaurantsStatus({ attention: true, ... })` 로 처리 대상 수집(collecting 단계). attention 정의를 그대로 재사용한다.
-- **[analytics](analytics.md)** — `runGlobalMerge({ full: false })` 로 증분 글로벌 머지(merging 단계). `AnalyticsError` 코드 `no_inputs` 는 정상(머지할 신규 입력 없음)으로 간주하고 통과시킨다.
+- **[menu-grouping](menu-grouping.md)** — `groupForRestaurant(placeId)` 로 식당별 정규화(grouping 단계), `getRestaurantsStatus({ attention: true, ... })` 로 처리 대상 수집(collecting 단계). attention 정의를 그대로 재사용한다. 2026-10-05: 수집의 분석 done 수는 GROUP BY 카운트([menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts), `12bc6ac5`), 같은 placeId 진행 중 호출은 모듈 `groupingInFlight` 로 합류(`ab7dad28` — 스케줄과 어드민·식당 상세 경로의 서비스 인스턴스가 달라도 공유).
+- **[analytics](analytics.md)** — `runGlobalMerge({ full: false })` 로 증분 글로벌 머지(merging 단계). `AnalyticsError` 코드 `no_inputs` 는 정상(머지할 신규 입력 없음)으로 간주하고 통과시킨다. 2026-10-05 부터 인스턴스가 어드민 라우트와 공유(`app.analytics`)되고, 결과 `busy` 는 건너뜀으로 기록한다([analytics.service.ts](../../apps/friendly/src/modules/analytics/analytics.service.ts)).
 - **[crawl](crawl.md) job-registry** — `jobRegistry.isPlaceCrawling(placeId)` 로 크롤 진행 중인 식당을 제외. collecting 시점과 grouping 직전에 두 번 확인(수집 후 크롤이 시작됐을 수 있어서).
 - **[logs](logs.md) operation-log** — `OperationLogService` 옵셔널 주입. run/step 을 범용 작업 로그에 이중 기록하고 `parentRunId` 로 자식 menu-grouping/analytics run 을 연계. 어드민 `/admin/logs` 에서 스케줄 실행이 다른 기능 run 과 같은 화면으로 보인다.
 - **[friendly](friendly.md)** — `app.prisma`, `app.authenticate`/`app.requireAdmin`, `app.jwt`, `app.httpErrors`.
 - **[shared](shared.md) / [web](web.md)** — `schedule.api.ts` + `useSchedule.ts` 훅을 통해 어드민 UI([AdminAnalyticsPage](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx))가 소비.
 
-plugin 이 `AiConfigService` / `MenuGroupingService` / `AnalyticsService` 를 **자체 인스턴스화**한다(아래 Gotchas 참조 — `app.aiConfig` 재사용 불가).
+plugin 이 `AiConfigService` / `MenuGroupingService` / `AnalyticsService` 를 **자체 인스턴스화**한다(아래 Gotchas 참조 — `app.aiConfig` 재사용 불가). 그중 `AnalyticsService` 는 2026-10-05 부터 앱 유일 인스턴스(`app.analytics`)다.
 
-## API Surface [coverage: high — 5 sources]
+같은 `scheduleRegistry` 를 쓰는 다른 모듈(7 jobType 중 6): [random-crawl](random-crawl.md)·[food](food.md)·[meal](meal.md)·[usage-quota](usage-quota.md)·[settlement](settlement.md)(영수증 정리)·media(썸네일 정리, [friendly](friendly.md)).
+
+## API Surface [coverage: high — 6 sources]
 
 라우트([`schedule.route.ts`](../../apps/friendly/src/modules/schedule/schedule.route.ts)), `Routes.Schedule.*`([routes.ts](../../packages/api-contract/src/routes.ts)). 전부 `/api/v1/admin/schedule` prefix, `app.authenticate` + `app.requireAdmin` 보호(SSE 만 예외).
 
@@ -79,9 +83,9 @@ EventSource 가 헤더를 못 보내므로 `?token=` 쿼리로 JWT 인증한다(
 
 - [`schedule.api.ts`](../../packages/shared/src/api/schedule.api.ts) — `getConfig`/`updateConfig`/`runNow`/`listRuns`/`preview` + `buildScheduleRunEventsUrl()`(token 을 query 로).
 - [`useSchedule.ts`](../../packages/shared/src/hooks/useSchedule.ts) — React Query 훅 + `useScheduleRunEvents(enabled)` SSE 구독(지수 백오프 재연결, `done` 에서 `schedule`/`analytics` 캐시 무효화).
-- [AdminAnalyticsPage](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) `ScheduleSection` — 어드민 분석 페이지에 통합. cron 프리셋 칩(매일 새벽3시/정오/6시간마다/매시간) + 커스텀 입력 + preview 다음 실행 시각 + on/off 토글 + "지금 실행" + 이력 테이블 + live SSE 진행 바.
+- [AdminAnalyticsPage](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) `ScheduleSection` — 어드민 분석 페이지에 통합. cron 프리셋 칩(매일 새벽3시/정오/6시간마다/매시간) + 커스텀 입력 + preview 다음 실행 시각 + on/off 토글 + "지금 실행" + 이력 테이블 + live SSE 진행 바. 2026-10-05 부터 `memo`(페이지 루트의 잡 SSE·표 조회 재렌더에 끌려가지 않음)이고, 커스텀 입력은 300ms 디바운스(`useDebounced`, 프리셋은 0ms) 뒤에만 `useSchedulePreview` 를 부른다. 입력과 미리보기 대상이 다른 동안엔 결과를 숨긴다(`previewSettled`). 테스트 [AdminAnalyticsPage.test](../../apps/web/src/routes/admin/AdminAnalyticsPage.test.tsx).
 
-## Data [coverage: high — 2 sources]
+## Data [coverage: medium — 2 sources]
 
 [Prisma](../../apps/friendly/prisma/schema.prisma), 마이그레이션 [`20260605135918_add_schedule_tables`](../../apps/friendly/prisma/migrations/20260605135918_add_schedule_tables/migration.sql).
 
@@ -91,8 +95,10 @@ EventSource 가 헤더를 못 보내므로 `?token=` 쿼리로 JWT 인증한다(
 
 상수: `RUN_HISTORY_LIMIT = 50`(이력 조회 take), `MAX_TARGETS_PER_RUN = 200`(주기당 처리 상한).
 
-## Key Decisions [coverage: high — 5 sources]
+## Key Decisions [coverage: high — 7 sources]
 
+- **2026-10-05 머지가 겹치면 스케줄은 실패가 아니라 건너뜀(`622bfca2`).** 같은 `app.analytics` 에서 어드민 수동 머지가 돌고 있으면, 그 머지가 결과를 저장하므로 스케줄 회차를 failed 로 칠 이유가 없다. run 은 done 으로 두고 `skipped: 'busy'` 스텝으로 흔적만 남긴다(어드민 잡 쪽은 반대로 busy 를 실패로 닫는다 — 사람이 "머지가 됐다" 고 오해하지 않게, [analytics](analytics.md)). 인스턴스를 모으는 방식은 모듈 변수 대신 플러그인 decorate 를 골랐다 — 통계 캐시까지 하나가 되기 때문이다([in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)).
+- **2026-10-05 기본 cron(03:00)은 그대로 두고 경로를 가볍게.** 03:00 재시작이 이 cron 과 겹친다는 운영 증거가 있었지만, 시각을 옮기는 대신 collecting(GROUP BY)·merging(저장 변경분만, 상호배제)의 메모리·쓰기 락을 줄였다. 다른 새벽 작업은 이 시각과 04:00(로그 보존)을 피해 04:20·04:30·04:40 등에 배치됐다(영수증 정리 주석 "logs-retention 04:00·usage-quota GC 04:40 과 겹치지 않게").
 - **17차(2026-06) 신규 도메인.** 16차(`13c10a5`)→HEAD 사이 추가. menu-grouping/analytics 수동 실행을 cron 자동화로 묶은 첫 주기 작업 인프라.
 - **croner 라이브러리, 인프로세스.** 별도 워커/큐 없이 단일 Fastify 인스턴스 안에서 cron 타이머가 돈다. CLAUDE.md 의 **no-Redis / 단일 인스턴스** 전제와 일관 — **분산 락 없음**. 동시성은 메모리 단일 슬롯(`ActiveRun`)으로 가드한다.
 - **cron tick 과 manual 을 한 경로로.** 둘 다 `runScheduled(trigger)`. overlap 가드·진행 추적·abort 가 한 곳에 모인다.
@@ -100,9 +106,14 @@ EventSource 가 헤더를 못 보내므로 `?token=` 쿼리로 JWT 인증한다(
 - **설정 영속 / 진행상태 메모리 분리.** 설정·이력은 SQLite(재시작 복원), cron 타이머·진행은 registry singleton. `bootstrap` 이 부팅 시 둘을 잇는다.
 - **개별 식당 실패 ≠ 주기 실패.** grouping 중 한 식당이 throw 해도 로그만 남기고 계속(멱등이라 다음 주기 재시도). `no_inputs` 머지 에러도 정상 처리.
 
-## Gotchas [coverage: high — 7 sources]
+## Gotchas [coverage: high — 12 sources]
 
-- **`app.aiConfig` 재사용 불가 → 자체 AiConfig 생성.** autoload 알파벳순상 `'schedule'` < `'summaries'` 라 schedule 플러그인이 먼저 로드된다. 이때 `app.aiConfig`(summaries 가 decorate)가 아직 없으므로, plugin 이 `AiConfigService`/`MenuGroupingService`/`AnalyticsService` 를 **새로 인스턴스화**한다(2026-08-22 부터 env 블록은 `buildLlmProviderEnv()` 공용 — 인스턴스만 별개). 같은 서비스를 여러 인스턴스가 가질 수 있음에 유의.
+- **`app.aiConfig` 재사용 불가 → 자체 AiConfig 생성.** autoload 알파벳순상 `'schedule'` < `'summaries'` 라 schedule 플러그인이 먼저 로드된다. 이때 `app.aiConfig`(summaries 가 decorate)가 아직 없으므로, plugin 이 `AiConfigService`/`MenuGroupingService`/`AnalyticsService` 를 **새로 인스턴스화**한다(2026-08-22 부터 env 블록은 `buildLlmProviderEnv()` 공용 — 인스턴스만 별개). 같은 서비스를 여러 인스턴스가 가질 수 있음에 유의 — 2026-10-05 부터 `AnalyticsService` 는 여기서 만든 것이 앱 유일(`app.analytics`)이지만, `MenuGroupingService` 는 여전히 세 벌이다(이 플러그인·menu-grouping 라우트·restaurant 라우트). 정규화 중복을 막는 진행 중 합류는 모듈 Map 이라 인스턴스와 무관하다.
+- **03:00 은 메모리 재시작이 겹쳤던 시각이다.** [PLAN-perf-2](../../docs/PLAN-perf-2.md) 운영 증거: 3주 90회 재시작 중 03:00 정각 3회, 그중 둘은 요청 0건 창. 이번 라운드가 경로를 가볍게 했지만 운영 확인은 배포 뒤 `"msg":"mem"` 로그(10분 간격)와 pm2 재시작 수로 해야 한다. 재시작이 회차를 끊으면 다음 부팅 `bootstrap()` 이 `interrupted` 로 마감한다.
+- **진행 중 합류한 가게는 자식 run 이 없다.** 스케줄 grouping 이 어드민 벌크 잡과 같은 가게를 만나 `groupingInFlight` 에 합류하면 그 가게의 menu-grouping run 은 어드민 쪽(부모 없음)에만 생긴다. 스케줄 run 상세에서 처리 수보다 자식 run 이 적어 보일 수 있다.
+- **어드민 머지가 길면 스케줄 머지는 그날 건너뛴다.** busy 건너뜀은 재시도하지 않는다 — 다음 cron tick(기본 다음 날 03:00)까지 증분 머지가 없다. 어드민 머지가 결과를 저장하므로 보통 문제는 없지만, 어드민 머지가 실패하면 그날 머지는 둘 다 없다.
+- **새벽 04시대가 촘촘하다.** 04:00 `logs-retention`(배치 DELETE) → 04:20 `receipts-retention` → 04:30 `meal-photo-gc` 와 `sqlite-optimize`(`PRAGMA optimize`, 통계가 맞으면 ~100ms no-op)가 같은 분 → 04:40 `usage-quota-gc`, 그리고 03:00 의 이 파이프라인. 레지스트리 `setCron` 은 jobType 키만 다르면 서로 모르므로, 새 새벽 작업을 넣을 때는 이 목록을 보고 시각을 고른다(특히 쓰기 락이 큰 작업 — [sqlite-write-lock-budget](../concepts/sqlite-write-lock-budget.md)).
+- **배포 직후 정리 작업이 한꺼번에 지울 수 있다.** 썸네일 정리는 부팅 60초 뒤 1회 돌아 2GB 초과분을 한 번에 지우고, 영수증 30일 정리는 첫 04:20 에 그동안 쌓인 미참조 파일을 지운다(PLAN-perf-2 배포 체크리스트 6). 둘 다 이 레지스트리 타이머다.
 - **croner 는 패턴 in-place 변경 불가.** `setCron` 은 기존 Cron 을 `stop()` 한 뒤 새로 만든다. 등록 시 `unref: true`(타이머 혼자 프로세스 못 붙잡게) + `catch: true`.
 - **overlap 시 `skipped` 행이 남는다.** 이전 실행이 안 끝난 채 tick/manual 이 오면 아무 작업 없이 `skipped` run 한 행만 기록. 이력에 `skipped` 가 자주 보이면 한 주기가 다음 tick 까지 안 끝난다는 신호.
 - **서버 재시작 시 `running` → `interrupted` 정리.** abort 된 작업이 DB 에 `running` 으로 남으면 다음 부팅 `bootstrap()` 이 `interrupted`(`error: 'server restart'`)로 마감. 다음 tick 에 재개(멱등).
@@ -111,16 +122,27 @@ EventSource 가 헤더를 못 보내므로 `?token=` 쿼리로 JWT 인증한다(
 - **v3 택소노미는 자동 반영 안 됨.** 스케줄러의 글로벌 머지는 `{ full: false }` 증분 — 기존 path 를 바꾸지 않는다. 새 택소노미 버전 적용은 여전히 **수동 full 재머지**가 필요.
 - **SSE 연결 시 진행 중 run 이 없으면 즉시 종료.** snapshot 한 번만 흘리고 닫는다. FE 훅은 백오프 재연결하지만 idle 상태에선 계속 짧게 끊긴다.
 
-- **`scheduleRegistry` 는 더 이상 이 모듈만의 것이 아니다.** `random-crawl`·`food-import`·`meal-photo-gc` 가 같은 싱글턴에 `setCron` 하므로, 부팅 순서·타이머 unref·"동시 1개 inflight" 가드가 jobType 별로 어떻게 격리되는지는 각 소비 모듈이 책임진다(food-import 는 DB `hasActiveRun()` 이 진짜 overlap 가드, meal GC 는 단순 타이머). 레지스트리 API 를 바꾸면 4 소비처를 함께 본다.
+- **`scheduleRegistry` 는 더 이상 이 모듈만의 것이 아니다.** `random-crawl`·`food-import`·`meal-photo-gc`·`usage-quota-gc`·`media-thumbs-sweep`·`receipts-retention` 이 같은 싱글턴에 `setCron` 하므로, 부팅 순서·타이머 unref·"동시 1개 inflight" 가드가 jobType 별로 어떻게 격리되는지는 각 소비 모듈이 책임진다(food-import 는 DB `hasActiveRun()` 이 진짜 overlap 가드, random-crawl 은 크롤 대기 60분 상한, GC·정리 4종은 단순 타이머). `ActiveRun`(동시 1 슬롯)은 `beginRun` 을 부르는 `normalize-merge` 만의 것이라, 정리 작업이 파이프라인 도중에 도는 것을 막지 않는다. 레지스트리 API 를 바꾸면 7 소비처를 함께 본다.
 
-## Sources [coverage: high — 16 sources]
+## Sources [coverage: high — 28 sources]
 
 - [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) — `buildLlmProviderEnv()` 플러그인 env 조립(2026-08-22)
-- [`apps/friendly/src/modules/schedule/schedule.service.ts`](../../apps/friendly/src/modules/schedule/schedule.service.ts) — 파이프라인 로직
+- [`apps/friendly/src/modules/schedule/schedule.service.ts`](../../apps/friendly/src/modules/schedule/schedule.service.ts) — 파이프라인 로직 (2026-10-05 — 머지 `busy` 면 건너뜀 스텝)
 - [`apps/friendly/src/modules/schedule/schedule-registry.ts`](../../apps/friendly/src/modules/schedule/schedule-registry.ts) — cron 타이머 + ActiveRun singleton
 - [`apps/friendly/src/modules/schedule/schedule.route.ts`](../../apps/friendly/src/modules/schedule/schedule.route.ts) — HTTP/SSE 레이어
-- [`apps/friendly/src/modules/schedule/schedule.service.test.ts`](../../apps/friendly/src/modules/schedule/schedule.service.test.ts) — 단위 테스트
-- [`apps/friendly/src/plugins/schedule.ts`](../../apps/friendly/src/plugins/schedule.ts) — fastify-plugin decorate (2026-08-22 — `buildLlmProviderEnv()`)
+- [`apps/friendly/src/modules/schedule/schedule.service.test.ts`](../../apps/friendly/src/modules/schedule/schedule.service.test.ts) — 단위 테스트 (2026-10-05 — 공유 analytics busy 시 `skipped: 'busy'` 스텝·run done)
+- [`apps/friendly/src/plugins/schedule.ts`](../../apps/friendly/src/plugins/schedule.ts) — fastify-plugin decorate (2026-08-22 — `buildLlmProviderEnv()`; 2026-10-05 — `app.analytics` decorate, `dependencies: ['prisma','logs']`)
+- [`apps/friendly/src/modules/analytics/analytics.service.ts`](../../apps/friendly/src/modules/analytics/analytics.service.ts) — `runGlobalMerge` 의 `busy` 결과·변경분만 저장(소유 [analytics](analytics.md))
+- [`apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts`](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts) — `getRestaurantsStatus` GROUP BY(2026-10-05 `12bc6ac5`)·`groupingInFlight`(`ab7dad28`)
+- [`apps/friendly/src/modules/random-crawl/random-crawl.service.ts`](../../apps/friendly/src/modules/random-crawl/random-crawl.service.ts) — `random-crawl` jobType, 크롤 대기 60분 상한(`CRAWL_WAIT_TIMEOUT_MS`, 2026-10-05)
+- [`apps/friendly/src/modules/crawl/job-registry.ts`](../../apps/friendly/src/modules/crawl/job-registry.ts) — `waitForTerminal(jobId, timeoutMs)`(2026-10-05)
+- [`apps/friendly/src/modules/media/media.route.ts`](../../apps/friendly/src/modules/media/media.route.ts) — `media-thumbs-sweep` jobType(2026-10-05)
+- [`apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts`](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts) — `receipts-retention` jobType(04:20, 2026-10-05)
+- [`apps/friendly/src/plugins/usage-quota.ts`](../../apps/friendly/src/plugins/usage-quota.ts) — `usage-quota-gc` jobType(04:40, 2026-09-02)
+- [`apps/friendly/src/plugins/logs.ts`](../../apps/friendly/src/plugins/logs.ts) — 레지스트리 밖 `logs-retention`(04:00)
+- [`apps/friendly/src/plugins/prisma.ts`](../../apps/friendly/src/plugins/prisma.ts) — 레지스트리 밖 `sqlite-optimize`(04:30, 2026-10-05)
+- [`apps/web/src/routes/admin/AdminAnalyticsPage.test.tsx`](../../apps/web/src/routes/admin/AdminAnalyticsPage.test.tsx) — cron 미리보기 디바운스 테스트(신규 2026-10-05)
+- [`docs/PLAN-perf-2.md`](../../docs/PLAN-perf-2.md) — 03:00 재시작 증거, A-V2·G-4·G-V2, 배포 직후 정리 작업 주의
 - [`apps/friendly/src/server.ts`](../../apps/friendly/src/server.ts) — bootstrap + graceful shutdown
 - [`apps/friendly/src/app.ts`](../../apps/friendly/src/app.ts) — `forceCloseConnections: 'idle'`
 - [`packages/api-contract/src/schemas/schedule.ts`](../../packages/api-contract/src/schemas/schedule.ts) — zod 스키마
@@ -128,7 +150,7 @@ EventSource 가 헤더를 못 보내므로 `?token=` 쿼리로 JWT 인증한다(
 - [`packages/shared/src/api/schedule.api.ts`](../../packages/shared/src/api/schedule.api.ts) — API 클라이언트
 - [`packages/shared/src/hooks/useSchedule.ts`](../../packages/shared/src/hooks/useSchedule.ts) — React Query + SSE 훅
 - [`apps/friendly/prisma/migrations/20260605135918_add_schedule_tables/migration.sql`](../../apps/friendly/prisma/migrations/20260605135918_add_schedule_tables/migration.sql) + [`schema.prisma`](../../apps/friendly/prisma/schema.prisma) — DB 모델
-- [`apps/web/src/routes/admin/AdminAnalyticsPage.tsx`](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) — 어드민 스케줄러 UI
+- [`apps/web/src/routes/admin/AdminAnalyticsPage.tsx`](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) — 어드민 스케줄러 UI (2026-10-05 — `ScheduleSection` memo·cron 미리보기 디바운스)
 - [`apps/friendly/src/plugins/meal.ts`](../../apps/friendly/src/plugins/meal.ts) — `meal-photo-gc` cron 등록(2026-08-23)
 - [`apps/friendly/src/modules/food/food-import.service.ts`](../../apps/friendly/src/modules/food/food-import.service.ts) — `food-import` cron 등록(2026-08-22)
 

@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-10-10 (29th compile)
+
+**New topics:** none — 사용자 결정(2026-10-10): 성능 감사 2차는 새 토픽 없이 토픽별 분산 + 교차 패턴은 컨셉으로.
+**Topics updated (40):** web(3542줄·387 sources), api-contract(2946·122), shared(1983·216), friendly(1760·479), ai(1593·96), project-overview(1415·257), mobile(949·233), parking(680·87), utils(680·141), map(623·85), crawl(565·73), settlement(541·146), canonical(521·90), tour(514·120), housing(462·115), life-map(462·134), api-docs(458·74), saju-c(383·148), food(380·118), sea(364·55), subway(364·83), review-search(358·36), bus(355·66), transit(342·61), meal(334·132), weather(287·77), tarot(279·125), menu-grouping(260·39), meal-nutrition(258·57), air-quality(220·84), usage-quota(189·46), analytics(189·26), review-clustering(188·33), random-crawl(180·28), auto-discover(178·18), logs(174·37), schedule(158·28), telegram(153·23), saju-g(152·48), vote(111·25)
+**Untouched topics:** config(범위 안 변경 없음)
+**New concepts:** bounded-byte-caches, sqlite-write-lock-budget, lazy-heavy-imports, amplification-caps, target-scoped-queries
+**Concepts updated:** quota-proportional-loading("5번째 층" — `lib/upstream-guard.ts` 쿼터 칸막이·가짜 입력 쿼터 0·실패 쿨다운·IP 미스 예산·8초 예산; `upstream-quota-guard` 를 따로 만들지 않고 흡수), in-memory-singleton-gates(앱 싱글톤 일괄 정리 `app.crawl`·`app.analytics`·`app.weather`·HEIC 전역 1, `AsyncGate`, 세마포어 구현 4벌, 던진 503 이 전역 에러 핸들러에서 500 이 되는 함정), zod-ssot-buildless(번들 경계 — `constants.ts`·`restaurant.aggregates.ts`·`sideEffects: false`), anonymous-usage-quota(`review-ask`·회원 하루 100회·게스트 키가 한 달간 저장되지 않던 버그 `d71fdb08`), open-data-master-load(KOTSA 세 번째 원천 병합·원천 공통 정리 규칙·섀도 교체·이력 id = 캐시 버전), unknown-vs-zero(비정상 요금·추가요금 0원 → null), server-only-boot-effects(새 주기 작업 4종의 수명주기 지점), webgl-stage-lite-fallback(demand 프레임 `FrameDriver`), map-sheet-shell(한 벌 마운트·시트 재마운트 제거), dual-mount-shared-state(**superseded**)
+**Sources scanned:** ~4,261 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1,750 — 28차 1,670 → +80)
+**Sources changed:** 28차 위키 커밋 `da4c4d85`(2026-10-04) 이후 **40커밋·666파일**(+33,878/−6,019, 타로 카드 소형 이미지 159장 포함) — 성능 감사 2차 서버 15, 외부 API 문서 2, 웹 프론트 성능 14, 주차 KOTSA 3, 리뷰 반영 4, 기타 fix·chore 6(일부 겹침).
+**Notes:** 브리핑(scratchpad `brief-common.md`) + 병렬 에이전트 13개. 1차 실행이 세션 한도로 13개 모두 중간에 끊겼고(일부는 429), 같은 에이전트에 이어서 끝내라는 메시지를 보내 **문맥을 유지한 채 재개** — 13개 전원 완주(재개 후 4~18분). 부모는 기다리는 동안 컨셉을 코드로 검증하며 먼저 썼고, 에이전트 보고의 지적(세마포어 4벌, 스크립트 `new PrismaClient()` 67곳의 busy 5초, 503→500)으로 컨셉을 보정했다. 브리핑이 미리 제안한 컨셉 슬러그 중 `upstream-quota-guard`·`shadow-table-swap` 은 만들지 않아 재개 메시지로 링크 정정. 여러 토픽의 프론트매터 sources_count 가 실제 고유 링크 수와 어긋나 있던 것(tarot 94→실제 106, meal-nutrition 53→55, food 101→113, vote 15→19, shared 203→196 등)을 이번에 실측으로 맞췄다. 28차가 tour 10~14차(`fee9377a`·`8530b41d`·`067d89ed`, 10-04)를 흡수하지 않았던 것을 tour·api-contract·api-docs 에 요약으로 보충(코스 알고리즘 전체는 미반영). web 의 섹션 coverage 숫자는 실측이 아니라 누적 어림. 보조 스크립트 `gen-wiki-meta.mjs`·`check-wiki.mjs` 재작성(scratchpad).
+
 ## 2026-10-04 (28th compile)
 
 **New topics:** meal-nutrition(246줄·53 sources) — 식단 기록의 영양소 점검(KDRI 2020 대조·성별·출생연도·기록 부족이면 보류)과 영양제 조언(purpose `meal-supplement` 기본 kimi-k3, 성분·형태만, `sanitizeAdvice` 칸 단위 검사 → 서버 문장 교체, 저장본 재사용·일일 한도). 사용자 결정(2026-10-04): 영양만 meal 에서 떼고 추천·입력은 meal 에 남김.

@@ -1,7 +1,7 @@
 ---
 concept: 공용 익명 사용량 한도 — 게스트 키·IP·전역 일일 한도로 공개 LLM 기능을 연다
-last_compiled: 2026-09-26
-topics_connected: [usage-quota, tarot, saju-c, saju-g, ai, friendly, shared, web, api-docs]
+last_compiled: 2026-10-10
+topics_connected: [usage-quota, tarot, saju-c, saju-g, ai, friendly, shared, web, api-docs, review-search, mobile]
 status: active
 ---
 
@@ -12,11 +12,14 @@ status: active
 타로·사주는 "로그인 없이 무료"가 제품 전제인데 뒤에는 Ollama Cloud 호출 비용이 있다. 이 긴장을 한 번에 푸는 모듈이 `apps/friendly/src/modules/usage-quota`(2026-09-03, `cd5a29b`)다. 규칙은 네 겹이다.
 
 1. **정체성** — 회원은 `userId`, 게스트는 클라이언트가 만들어 보관하는 무작위 **게스트 키**(`packages/shared/src/stores/guestKeyStore.ts`, persist `guest-key-v1`, 재생성 API 없음; 헤더 `X-Guest-Key` `/^[A-Za-z0-9_-]{8,64}$/`, 없으면 `ip:<addr>` 대체). 앱은 `setGuestKeyStorage(AsyncStorage)` 와 WebView 임베드 `__LP_EMBED__.guestKey` 주입으로 앱↔WebView 가 같은 기기로 잡힌다([embedded-webview-bridge](embedded-webview-bridge.md)).
-2. **네 겹의 한도** — IP 분당 버스트(회원 포함, `@fastify/rate-limit` 의 `max` 를 설정 캐시를 읽는 함수로) / 기능 전역 일일 예산(전원이 소비하되 **게스트는 `guestCutoffPct`(기본 90%) 에서 먼저 잘리고** 나머지는 회원 몫) / IP 일일(게스트만) / 게스트 키 일일(게스트만). 회원은 기기·IP 한도 면제(사용자 결정 2026-09-02), `user` scope 는 통계용. 기능(feature)별로 따로 센다: `tarot-reading` 50/500/20/5000/90, `saju-reading` 30/300/20/3000/90, `saju-g-reading` 20/200/10/1000/90(게스트일·IP일·분당·전역일·게스트 컷%). env 는 없고 코드 기본값 + 어드민 "사용량 한도" 탭(`AdminQuotasPage`, `GET/PUT /admin/quotas`)의 DB 행, 30초 캐시(저장 시 무효화).
+2. **네 겹의 한도** — IP 분당 버스트(회원 포함, `@fastify/rate-limit` 의 `max` 를 설정 캐시를 읽는 함수로) / 기능 전역 일일 예산(전원이 소비하되 **게스트는 `guestCutoffPct`(기본 90%) 에서 먼저 잘리고** 나머지는 회원 몫) / IP 일일(게스트만) / 게스트 키 일일(게스트만). 회원은 기기·IP 한도 면제(사용자 결정 2026-09-02) — 단 **2026-10-05 부터 회원도 기능별 하루 `MEMBER_PER_DAY` 100회**(`user` scope 가 통계용에서 실제 한도로, 막히면 `member_daily` → 게스트처럼 정적 폴백, `null` 이면 예전처럼 무제한). 기능(feature)별로 따로 센다: `tarot-reading` 50/500/20/5000/90, `saju-reading` 30/300/20/3000/90, `saju-g-reading` 20/200/10/1000/90, `review-ask` 30/300/15/3000/90(게스트일·IP일·분당·전역일·게스트 컷%). env 는 없고 코드 기본값 + 어드민 "사용량 한도" 탭(`AdminQuotasPage`, `GET/PUT /admin/quotas`)의 DB 행, 30초 캐시(저장 시 무효화).
 3. **소비 시점과 순서** — 캐시 히트(같은 입력의 저장된 풀이·같은 날 일진)는 소비하지 않고(`remainingForGuest` 만 계산), LLM 을 실제로 부르는 요청만 1건. 카운터는 `MealDailyQuotaService` 의 "INSERT … ON CONFLICT … WHERE count < limit" 한 문장 원자 증가를 feature × scope × KST 날짜로 일반화한 것. 소비 순서는 전역→IP→게스트, 뒤 단계가 거부되면 앞 단계를 release(best effort). 사주(C)는 섹션 4개 병렬 호출을 **풀이 1건**으로 센다(호출 수가 아니라 사용자 체감 단위). 04:40 cron 이 30일 지난 카운터를 지운다.
 4. **초과는 강등** — 한도를 넘으면 LLM 을 건너뛰고 **정적 풀이**로 응답한다(429 가 아니라 품질 하향; 분당 버스트만 429). 사용량은 응답 `quota` 필드로 클라이언트에 돌려줘 UI 가 남은 횟수를 보여 준다. 옵셔널 인증이라 무효 토큰도 게스트로 처리(`resolveOptionalUser`).
 
 ## Instances
+
+- **2026-10-05** in [shared](../topics/shared.md) / [mobile](../topics/mobile.md) (`d71fdb08`): **1층(정체성)이 한 달간 비어 있었다.** zustand `persist` 는 저장분이 없을 때 초기 상태를 스토리지에 쓰지 않는데(`set` 이 불릴 때만 쓴다) `guestKeyStore` 엔 `set` 을 부르는 곳이 없어, 웹에선 **새로고침마다 새 게스트 키**가 만들어졌다 — 게스트 키 일일 한도와 타로 오늘의 카드 잠금이 새로고침으로 풀렸고, 실질 방어는 IP 일일 한도뿐이었다(2026-09-03 도입 이후). 복원이 끝났을 때 저장분이 없으면 지금 키를 한 번 써 두는 `persistKeyIfMissing`(동기 localStorage 는 `hasHydrated()` 로, 앱 AsyncStorage 는 `onFinishHydration` 으로)으로 고쳤다. 2026-07 의 앱 persist 주입 결함(`createJSONStorage` 가 팩토리를 1회만 부름)에 이은 두 번째 persist 함정.
+- **2026-10-05** in [usage-quota](../topics/usage-quota.md) / [review-search](../topics/review-search.md) (`78cbb457`·`ab7dad28`, [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md) 7차): 성능 감사 2차가 이 모듈을 두 방향으로 넓혔다. (1) **회원 면제 철회** — 무료 계정 하나로 전역 예산(사주 3,000/일)을 약 21분에 태워 그날 모든 게스트를 정적 폴백으로 밀어낼 수 있어(F-4) 회원 기능별 하루 100회(2026-09-02 결정 번복). (2) **첫 비-운세 기능** `review-ask` — 공개 리뷰 질문은 캐시 미스 1건 = 임베딩 1 + LLM 최대 3콜인데 IP 분당 15회 외엔 한도가 없었다(B-4). 같은 모듈에 기능 키만 추가(마이그레이션 없음), 같은 질문 답변 캐시 20분·진행 중 합류는 소비 없음, 거절은 정적 풀이 대신 confidence "none" 안내 답변 200(타로의 "강등" 태도를 답변형 기능에 옮긴 것). ⚠️ 라우트 description(`review-search.route.ts` 189행 → `docs/api/openapi.json`)은 아직 "회원(Bearer)은 전역 일일 예산만 적용된다" 라 코드·`docs/api/README.md`(회원 하루 100회)와 어긋난다.
 
 - **2026-09-24** in [api-docs](../topics/api-docs.md) / [friendly](../topics/friendly.md) (`1b621c4`): **한도가 외부 계약이 됐다.** 사용자 결정("다른 프로젝트에서 쓸 것 — 어드민 제외, 열 수 있는 건 다 열기(LLM 포함)")으로 CORS 가 어드민 외 `origin: '*'` 로 열리면서, 타로·사주(C)·사주(G) 의 LLM 해석을 어느 사이트의 브라우저든 부를 수 있게 됐다. 그래서 이 컨셉의 네 겹이 처음으로 **외부 문서의 한 절**이 됐다 — `docs/api/README.md` 5절이 기능별 기본 한도 표(게스트 기기/일·IP/일·IP/분·전역/일·게스트 컷 90%), `x-guest-key` 형식과 "기기마다 고정값을 계속 보내라", 소비 순서(전역 → IP 일일 → 기기 일일), 회원은 전역 예산만, **초과해도 에러가 아니라 LLM 없는 해석으로 200** 을 적고, `endpoints.md` 의 한도 열은 이 라우트들을 `설정값`(어드민 설정의 `ipPerMinute`)으로, OpenAPI 에는 `x-rate-limit` 이 `dynamic` 으로 찍힌다. 새로 드러난 약점도 같이 적혔다: 한도의 IP 축은 호출 경로에 민감하다 — 브라우저 직접 호출이면 사용자 IP 별로 세지만 **다른 프로젝트의 서버를 거치면 그 서버 IP 하나로 합산**돼 금방 걸리고, 반대로 IP 가 분산된 대량 호출은 IP 축을 약하게 만든다(`PLAN-perf-security.md` 가 #42 fail-closed 번복을 기록하며 남는 위험을 "비용 — LLM·업스트림 쿼터, IP 분산" 으로 명시). 그 경우 실제 방어선은 **전역 일일 예산과 게스트 컷**이다 — 게스트가 전역의 90% 까지만 쓰므로 외부 트래픽이 몰려도 회원 몫 10% 는 남는다. 트래픽을 보고 `CORS_ORIGIN` 목록으로 다시 좁히는 것이 예정된 후속.
 - **2026-09-06** in [saju-c](../topics/saju-c.md) (`f8e5dd0`): `SAJU_QUOTA_FEATURE = 'saju-reading'`, 오늘·궁합·택일·음식 단일 호출도 각 1건. 회원 오늘의 운세는 별도로 `dailyLockKey` 로 하루 1회 잠금(한도와 다른 축 — 같은 날 같은 사주는 재호출 자체를 막는다).
@@ -26,6 +29,8 @@ status: active
 ## What This Means
 
 지금까지 비용 통제는 [in-memory-singleton-gates](in-memory-singleton-gates.md)(동시성)와 [quota-proportional-loading](quota-proportional-loading.md)(외부 공공 API 쿼터)였다. 이 컨셉은 세 번째 축 — **우리가 돈을 내는 LLM 호출을 익명 사용자에게 얼마나 열어 줄지**를 제품 정책(기능별 일일 한도)으로 만든 것이다. 한도 초과가 오류가 아니라 정적 폴백이라는 점이 핵심 태도다: 기능은 항상 동작하고, AI 는 "있으면 더 좋은 것". 새 공개 LLM 기능은 (1) `UsageQuotaFeature` 에 키 추가 (2) 서비스에서 캐시 미스 시 1건 소비 (3) 정적 폴백 준비 — 이 셋을 갖추면 어드민 한도 탭에 자동으로 나타난다.
+
+**2026-10 보정 — 한도는 정체성의 강도와 우회 비용으로 다시 본다.** 이번 라운드의 두 변경은 같은 질문의 두 답이다. 게스트 키가 새로고침마다 바뀌면 기기 한도는 없는 것과 같고(정체성이 약하면 한도도 약하다), 회원 가입이 무료면 "회원은 면제" 는 "가입 한 번으로 우회" 다(우회 비용이 0 이면 면제는 구멍이다). 면제는 신원 확인에 비용이 있을 때만 정당하고, 그렇지 않으면 모든 주체에 기능별 상한을 두되 강도만 달리한다. 요청 1건의 비용을 묶는 [amplification-caps](amplification-caps.md) 와 짝 — 이 컨셉은 하루 동안 한 주체가 쓸 수 있는 몫을, 그 컨셉은 요청 하나가 키울 수 있는 몫을 묶는다.
 
 ## Sources
 
@@ -38,3 +43,9 @@ status: active
 - [../topics/shared](../topics/shared.md)
 - [../topics/web](../topics/web.md)
 - [../topics/api-docs](../topics/api-docs.md)
+- [review-search](../topics/review-search.md)
+- [mobile](../topics/mobile.md)
+- [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md)
+- [packages/shared/src/stores/guestKeyStore.ts](../../packages/shared/src/stores/guestKeyStore.ts)
+- [apps/friendly/src/modules/usage-quota/usage-quota.service.ts](../../apps/friendly/src/modules/usage-quota/usage-quota.service.ts)
+- [amplification-caps](amplification-caps.md)

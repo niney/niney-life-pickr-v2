@@ -1,12 +1,14 @@
 ---
 topic: review-clustering
-last_compiled: 2026-08-30
-sources_count: 27
+last_compiled: 2026-10-10
+sources_count: 33
 status: active
-aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, review_clusters, clusterVersion, CLUSTERING_VERSION, corpusSize, cluster_compute.py, UMAP, HDBSCAN, c-TF-IDF, medoid, aspect 극성 주입, NEG_INJECT_MIN, shouldRecluster, CLUSTER_AUTO_ENABLED, CLUSTER_RECONCILE_DELAY_MS, scheduleStartupReconcile, cluster-bg, cluster-pending, ClusterTopics, useRestaurantClusters, useClusterStatus, probe:cluster-health, buildLlmProviderEnv]
+aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, review_clusters, clusterVersion, CLUSTERING_VERSION, corpusSize, cluster_compute.py, UMAP, HDBSCAN, c-TF-IDF, medoid, aspect 극성 주입, NEG_INJECT_MIN, shouldRecluster, CLUSTER_AUTO_ENABLED, CLUSTER_RECONCILE_DELAY_MS, scheduleStartupReconcile, cluster-bg, cluster-pending, ClusterTopics, useRestaurantClusters, useClusterStatus, probe:cluster-health, buildLlmProviderEnv, buildClusterComputePayload, vecJson, isNonEmptyJsonArray, countEnrichedByRestaurant, 군집 입력 원문 이어 붙이기, 군집 대기 재발]
 ---
 
 # review-clustering — 비슷한 문맥 리뷰 군집화(bge-m3 → UMAP → HDBSCAN → c-TF-IDF → LLM 라벨)
+
+**2026-10-05 변경 흡수 — 군집 입력을 임베딩 원문 이어 붙이기로·enrich 카운트 GROUP BY·랜덤 크롤/자동 발견 경로의 군집 대기 재발 해소(`ab7dad28`·`12bc6ac5`, 성능 감사 2차 B-7·B-6·A-3)**: (1) **Python 입력(B-7)** — [review-clustering.service.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) 가 코퍼스를 읽을 때 `embeddingJson` 을 `JSON.parse` 해 `number[]` 로 들고 있다가 `runPython` 에서 `JSON.stringify({minClusterSize, aspectWeight, docs})` 로 다시 직렬화하던 것을, `Doc.vecJson`(저장된 원문 문자열)을 파싱 없이 들고 신규 export `buildClusterComputePayload(docs, minClusterSize, aspectWeight)` 가 **예전과 같은 키 순서·같은 바이트**로 문자열을 이어 붙여 만든다(`"vec":${vecJson}` — Node 는 벡터를 쓰지 않고 넘기기만 하므로). 빈 벡터 판정도 파싱 대신 `isNonEmptyJsonArray`(`length > 2` + `[`…`]` — 쓰는 곳이 `JSON.stringify(number[])` 하나뿐이라 `'[]'` 만 거르면 예전 판정과 같음). 측정(findings): 1,032건 가게 파싱 25~40ms + stringify 69~77ms(10.8MB)가 한 매크로태스크로 이어져 ~100~115ms 메인 스레드 블로킹 → 이어 붙이기 9.6ms(파싱 0). `aspectsJson`(작음)만 여전히 파싱(극성 주입 판정·영속 aspects). Python 스크립트는 그대로. (2) **enrich 카운트(B-6, `12bc6ac5`)** — 상태 표·`cluster-pending`·기동 리컨실이 쓰는 private `countEnrichedByRestaurant(ids?)` 가 `reviewSummary.findMany` 관계 select 로 전 행을 읽어 JS 로 세던 것을 review-search 쌍둥이처럼 `visitorReview.groupBy({ by: ['restaurantId'], where: { summary: { is: { embeddingJson: { not: null } } } }, _count })` 한 쿼리로(실측 임베딩 6.1만 행 1,134ms·63쿼리·RSS +165MB → review-search 판 229ms·1쿼리 수준). (3) **군집 '대기' 재발 해소(A-3)** — 랜덤 크롤 플러그인·자동 발견 라우트가 각자 `SummaryService`·`ReviewSearchService` 를 조립해, 그 경로로 등록한 가게의 enrich 는 plugins/summaries 의 `app.reviewSearch.onEnrichProgress` → 군집화 배선에 닿지 않았다(런타임 확인: `enrichListeners` app=1, random-crawl=0) — 2026-07-13 `1f5ed30` 이 고친 "군집 대기 잔존" 이 이 두 경로로 다시 나타난 셈이었다. `app.crawl` 싱글톤([crawl](crawl.md))으로 모든 진입점이 `app.summaries` → `app.reviewSearch` → 군집화를 탄다. 그 전에 쌓인 '대기' 는 배포 후 기동 리컨실(`scheduleStartupReconcile`)이 한 번 훑어 채운다. 테스트: [review-clustering.test.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) +2(페이로드가 예전 `JSON.stringify` 와 같은 바이트, 빈 벡터 `'[]'` 는 파싱 없이 제외). 스키마·라우트·`CLUSTERING_VERSION`(4) 변경 없음. 웹은 어드민 군집 상태 표 검색어 300ms 디바운스(`e50ccfe6` — [AdminReviewSearchPage.tsx](../../apps/web/src/routes/admin/AdminReviewSearchPage.tsx)). 원문: [PLAN-perf-2-findings.md](../../docs/PLAN-perf-2-findings.md) B-6·B-7·A-3. 관련 컨셉: [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)(싱글톤 공유가 깨지면 이벤트 배선도 끊긴다 — 2026-10-05 사례).
 
 **2026-08-22 변경 흡수 — provider env 조립 `buildLlmProviderEnv()`(`cc8399a`)**: `ReviewClusteringService` 는 [plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts) 가 만든 `AiConfigService` 를 주입받는데, 그 `.env` 블록이 자체 리터럴에서 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 바뀌었다. 이 모듈 자체 diff 는 [review-clustering.test.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) 의 가짜 `LlmProviderEnv.defaultModels` 가 5키(`meal-photo`·`meal-recommend`)로 늘어난 것뿐 — 테스트는 `.env` 를 읽지 않고 리터럴을 직접 적으므로 purpose 가 늘 때마다 함께 손본다. LLM 라벨링 호출(`getResolved('ollama-cloud','chat')`, format 미강제 견고 파싱)은 변경 없음. 배경은 [ai](ai.md).
 
@@ -22,12 +24,12 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 
 연구·방법 선택 배경은 `research/review-clustering/README.md`에, 운영 배포(Python 설치)는 [friendly](friendly.md) deploy 가이드에 있다.
 
-## Architecture [coverage: high — 9 sources]
+## Architecture [coverage: high — 11 sources]
 
 **분업(Node ↔ Python)** — probe 단계에서 검증한 경계다:
 
 - **Python** ([`scripts/cluster_compute.py`](../../apps/friendly/scripts/cluster_compute.py)) = **수학만**. stdin 으로 `{minClusterSize, aspectWeight, docs:[{reviewId, body, vec, aspects}]}` 를 받아 UMAP→HDBSCAN→c-TF-IDF 를 돌리고, stdout 으로 `{ok, params, clusters:[{members, keywords, repReviewIds}], noise}` 를 JSON 으로 돌려준다. LLM·DB·네트워크 없는 순수 함수. 의존성은 numpy/scikit-learn/umap-learn/hdbscan 만(`requirements-cluster.txt`) — bertopic 패키지는 torch/sentence-transformers 를 끌고 와 무겁고 임베딩은 이미 DB 에 있으므로, 같은 파이프라인만 가볍게 재현한다.
-- **Node** ([`review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts)) = **코퍼스 로드·LLM 라벨·DB 영속**. 통합 코퍼스를 로드해 Python 을 `spawn` 하고, 결과 군집에 운영 Ollama 로 한 줄 라벨을 붙여 `ReviewCluster` 로 영속한다.
+- **Node** ([`review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts)) = **코퍼스 로드·LLM 라벨·DB 영속**. 통합 코퍼스를 로드해 Python 을 `spawn` 하고, 결과 군집에 운영 Ollama 로 한 줄 라벨을 붙여 `ReviewCluster` 로 영속한다. 2026-10-05 부터 Node 는 임베딩을 **파싱하지 않는다** — 코퍼스 행의 `embeddingJson` 원문을 `Doc.vecJson` 으로 들고, `buildClusterComputePayload` 가 `{"minClusterSize":…,"aspectWeight":…,"docs":[{"reviewId":…,"body":…,"vec":<원문>,"aspects":…}]}` 를 문자열로 이어 붙여 stdin 에 쓴다(예전 `JSON.stringify` 결과와 바이트 동일 — 테스트 고정).
 
 **파이프라인 (`cluster_compute.compute`)**:
 1. L2 정규화(방어적·멱등) — Node 가 이미 했더라도 다시.
@@ -42,16 +44,16 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 **영속** (`persist`) — `ReviewCluster.deleteMany → create → ReviewSummary.updateMany(clusterId 배정)` 를 **한 트랜잭션**으로 통째 교체. 군집 행 삭제 시 멤버의 `clusterId` 는 FK `SetNull`.
 
 **트리거 경로** (세 갈래, 모두 `runForRestaurant` 로 수렴):
-- **자동** — 요약 종료 → enrich(임베딩) → 군집화 체이닝([`summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts) fire-and-forget). **reviewId 기반 해석**(commit 7407de9): 요약 큐 키가 소스별 자유형(naver=placeId, diningcode=`dc:..`, tabling=`tb:..`)이라 placeId 로는 비-네이버가 canonical 해석 안 돼 조용히 스킵됐다 → 훅이 `reviewIds[0]`→실제 `restaurantId` 를 풀어 `ensureClusteredByRestaurantId` 를 호출해 **모든 소스** 커버. 기존 `ensureClusteredByPlaceId`(공개 키)와 신규 `ensureClusteredByRestaurantId` 는 게이트·트래킹 로직을 담은 private `ensureClusteredForMembers(primaryId, memberIds)` 로 수렴. 피처 플래그(`CLUSTER_AUTO_ENABLED`) + 재군집 게이트 적용.
+- **자동** — 요약 종료 → enrich(임베딩) → 군집화. *(현재: 2026-07-13 `1f5ed30` 부터 요약 훅은 enrich 까지만 부르고, 군집화는 [plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts) 가 `app.reviewSearch.onEnrichProgress`(done)에 배선한 `ensureClusteredByRestaurantId` 가 맡는다 + 기동 리컨실. 이 배선은 앱 싱글톤 `app.reviewSearch` 에만 걸려 있어 2026-10-05 `ab7dad28` 전엔 랜덤 크롤·자동 발견이 따로 만든 인스턴스의 enrich 가 군집화로 이어지지 않았다. 아래는 원 서술.)* 예전: [`summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts) fire-and-forget 체이닝. **reviewId 기반 해석**(commit 7407de9): 요약 큐 키가 소스별 자유형(naver=placeId, diningcode=`dc:..`, tabling=`tb:..`)이라 placeId 로는 비-네이버가 canonical 해석 안 돼 조용히 스킵됐다 → 훅이 `reviewIds[0]`→실제 `restaurantId` 를 풀어 `ensureClusteredByRestaurantId` 를 호출해 **모든 소스** 커버. 기존 `ensureClusteredByPlaceId`(공개 키)와 신규 `ensureClusteredByRestaurantId` 는 게이트·트래킹 로직을 담은 private `ensureClusteredForMembers(primaryId, memberIds)` 로 수렴. 피처 플래그(`CLUSTER_AUTO_ENABLED`) + 재군집 게이트 적용.
 - **어드민 수동** — 단건 동기(`run`) / 단건 백그라운드(`cluster-bg`) / 미군집 일괄 순차(`cluster-pending`). 게이트 없이 강제.
 - **서비스 등록** — [`plugins/summaries.ts`](../../apps/friendly/src/plugins/summaries.ts) 에서 `ReviewClusteringService` 를 app 전역 singleton(`app.reviewClustering`)으로 decorate. 요약 훅과 라우트가 **같은 인스턴스**를 공유해야 진행 가드(in-memory Set)가 의미를 가진다 → [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
-## Talks To [coverage: high — 8 sources]
+## Talks To [coverage: high — 10 sources]
 
 - **[review-search](review-search.md)** (`retrieval.ts`) — `isJunk` 본문 필터를 재사용하고, 같은 `ReviewSummary.embeddingJson`(bge-m3)·`aspectsJson`·**canonical 통합 코퍼스**를 공유한다. ASPECTS 9축("맛/양/가격/주차/웨이팅/서비스/분위기/위생/재방문")도 retrieval.ts 와 동일하게 유지(극성 주입용).
 - **[canonical](canonical.md)** (`canonical-members.ts`) — `resolveCanonicalMembersByRestaurantId`/`...ByPlaceId`/`listPublicPlaces` 로 가게(canonical)의 공개 멤버 행 전체를 해석. 군집은 **대표 키(primary)** 로 영속하고 같은 키로 읽는다(다소스 행이 합쳐진 통합 코퍼스).
 - **[ai](ai.md)** (`AiConfigService.getResolved('ollama-cloud','chat')`) — LLM 라벨링용 운영 Ollama 해석. baseUrl/apiKey/defaultModel. `AiConfigService` 인스턴스는 plugins/summaries 가 `buildLlmProviderEnv()`(2026-08-22)로 조립해 주입.
-- **[summary](friendly.md)** (`summary.service.ts`) — 요약 종료 훅이 enrich 완료에 군집화를 체이닝(임베딩이 있어야 군집화 가능).
+- **[summary](friendly.md)** (`summary.service.ts`) — 요약 종료 훅이 enrich 를 부르고, enrich 완료 이벤트(plugins/summaries 배선)가 군집화를 부른다(임베딩이 있어야 군집화 가능). 2026-10-05 부터 크롤 진입점이 모두 `app.crawl` → `app.summaries` 라 랜덤 크롤·자동 발견 경로도 이 체인을 탄다([crawl](crawl.md)·[random-crawl](random-crawl.md)·[auto-discover](auto-discover.md)).
 - **[api-contract](api-contract.md)** (`schemas/review-clustering.ts` + `Routes.ReviewClustering`) — 모든 입출력 zod 스키마의 SSOT → [zod-ssot-buildless](../concepts/zod-ssot-buildless.md).
 - **[shared](shared.md)** (`review-clustering.api.ts` + `useReviewClusters.ts`) — 웹/앱 공통 API 함수 + React Query 훅.
 - **[web](web.md)** / **[mobile](mobile.md)** (`ClusterTopics.tsx`) — 분석 탭 "리뷰 주제" 섹션(읽기 전용) → [platform-ui-split](../concepts/platform-ui-split.md).
@@ -99,7 +101,11 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 
 **API 와이어 타입** ([`schemas/review-clustering.ts`](../../packages/api-contract/src/schemas/review-clustering.ts)) — `ClusterTone` enum, `ReviewClusterItem`(id/ordinal/label/tone/size/keywords/aspects/repReviews), `ReviewClusterAspect`(`{key, count}` — record 대신 배열로 zod 버전 무관·와이어 명시), `ReviewClusterAspectSummary`(폴백용 `{aspect, pos, neg, neu}`), `ReviewClustersResult`(공개), `ReviewClusterStatus*`(어드민), run/bg/pending 입출력.
 
-## Key Decisions [coverage: high — 10 sources]
+## Key Decisions [coverage: high — 13 sources]
+
+**2026-10-05: Node 는 임베딩을 파싱하지 않고 Python 에 원문 그대로 넘긴다** (`ab7dad28`, B-7) — Node 쪽은 벡터를 한 번도 쓰지 않는다(극성 판정은 `aspectsJson`, 대표 리뷰·군집은 Python). 파싱 → 재직렬화가 큰 가게에서 ~100ms 메인 스레드를 막는 백그라운드 경로(enrich 완료 → 자동 군집, 기동 리컨실, 버전 범프 시 전 가게)라 원문 이어 붙이기로 바꿨고, Python 입력 형태가 바이트까지 같아 스크립트는 손대지 않았다. findings 가 경로가 백그라운드라 HIGH 는 아니라며 MEDIUM 으로 올린 항목.
+
+**2026-10-05: enrich 카운트는 DB GROUP BY 로 — review-search 쌍둥이와 같은 방식** (`12bc6ac5`, B-6) — 직전 감사가 review-search 쪽만 고치고 남긴 관계 select 판. 상태 폴링(군집 진행 중 웹 5초)·기동 직후 리컨실과 겹치면 RSS 일시 +165MB 가 공개 경로 부하(B-1·B-3)와 포개질 수 있었다.
 
 **방법 = UMAP→HDBSCAN→c-TF-IDF (probe 비교로 채택)** — `research/review-clustering/README.md` 가 조연탄(793건)에 4종 비교: ② 연결요소(체이닝 붕괴 ✗), ③ HDBSCAN 직접(UMAP 없이, 노이즈 96% ✗), ① 응집 avg-linkage(○ 폴백, 자동 라벨 없음), ④ **UMAP→HDBSCAN→c-TF-IDF**(k9·노이즈7%·키워드 변별 ◎ 채택). 핵심 교훈: **정확도의 출처는 LLM 라벨이 아니라 UMAP 차원축소** — ③(UMAP 없이)이 96% 노이즈로 죽고 ④가 사는 차이가 증거.
 
@@ -119,7 +125,10 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 
 **clusterVersion 히스토리** — `CLUSTERING_VERSION=4`. v2: 극성 주입, v3: corpusSize(자동 게이트), v4: **canonical 통합 코퍼스**(다소스 행 합산). 상수 옆 줄단위 코멘트 → [versioned-llm-prompts](../concepts/versioned-llm-prompts.md).
 
-## Gotchas [coverage: medium — 4 sources]
+## Gotchas [coverage: high — 6 sources]
+
+- **페이로드는 DB 의 임베딩 문자열을 믿는다** (2026-10-05) — `isNonEmptyJsonArray` 는 대괄호만 보고 내용은 검사하지 않는다. 쓰는 곳이 `JSON.stringify(number[])` 하나뿐이라 지금은 안전하지만, `embeddingJson` 에 손으로 넣은 값·잘린 문자열이 하나라도 있으면 예전엔 그 행만 `safeParse` 로 빠졌던 것이 이제는 **가게 전체 페이로드 JSON 이 깨져** Python 이 읽지 못한다(사유는 '계산 엔진 오류'). 임베딩 열을 다른 경로로 쓰게 되면 이 판정부터 다시 볼 것.
+- **2026-10-05 이전 랜덤 크롤·자동 발견으로 등록된 가게는 군집이 '대기' 일 수 있다** — 그 경로의 enrich 가 군집화 배선에 닿지 않았다(A-3). 배포 뒤 기동 리컨실이 미군집 백로그를 한 번 훑으므로 보통 저절로 채워지고, 남아 있으면 어드민 `cluster-pending`.
 
 - **Python 런타임이 별도 의존성** — 운영 호스트에 `python3 + numpy/scikit-learn/umap-learn/hdbscan` 가 있어야 한다(Docker 금지 VM, venv 권장). `.env` 의 `CLUSTER_PYTHON_BIN` 으로 경로 지정(미지정 시 PATH `python3`). **미설치여도 서버는 정상** — 군집화만 graceful skip 되고 분석 탭 섹션이 안 뜰 뿐. 배포 후 `pnpm --filter friendly probe:cluster-health` 로 도달 확인. 설치 가이드는 [friendly](friendly.md) `docs/deploy-friendly.md` "리뷰 군집화" 섹션.
 - **임베딩 선행 필수** — 군집화는 enrich(임베딩)된 리뷰가 있어야 한다. review-search 의 임베딩 endpoint 가 먼저 설정되어 있어야 하고, `MIN_REVIEWS=30` 미만이면 스킵. 요약 종료 훅이 `enrich → clustering` 순서로 체이닝하는 이유.
@@ -128,15 +137,21 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 - **medoid vs 군집화 공간 분리** — 극성 주입 시 군집화는 증강 공간(9D concat)에서 하지만 대표 리뷰(medoid)는 **원본 임베딩 공간**에서 뽑는다(증강 좌표가 대표성을 왜곡하지 않게). 품질 지표(silhouette 등)도 원본 공간 기준.
 - **소량 코퍼스 조기 반환** — `cluster_compute` 는 `n < max(2*min, 10)` 이면 UMAP 도 안 돌리고 전부 노이즈로 반환. c-TF-IDF 는 빈 군집(`np.vstack([])`)·어휘 부족(`CountVectorizer` ValueError) 모두 우아하게 빈 결과/키워드 생략으로 처리.
 
-## Sources [coverage: high — 27 sources]
+## Sources [coverage: high — 33 sources]
 
 운영 (Node):
 - [`apps/friendly/src/modules/review-clustering/review-clustering.route.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.route.ts)
-- [`apps/friendly/src/modules/review-clustering/review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts)
-- [`apps/friendly/src/modules/review-clustering/review-clustering.test.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처)
+- [`apps/friendly/src/modules/review-clustering/review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) (2026-10-05 — `vecJson`·`buildClusterComputePayload`·`isNonEmptyJsonArray`; `countEnrichedByRestaurant` GROUP BY(`12bc6ac5`))
+- [`apps/friendly/src/modules/review-clustering/review-clustering.test.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처; 2026-10-05 — 페이로드 바이트 동일·빈 벡터 제외)
 - [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 플러그인 env 조립)
-- [`apps/friendly/src/plugins/summaries.ts`](../../apps/friendly/src/plugins/summaries.ts) (app singleton 등록)
-- [`apps/friendly/src/modules/summary/summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts) (요약 종료 → enrich → 군집 체이닝)
+- [`apps/friendly/src/plugins/summaries.ts`](../../apps/friendly/src/plugins/summaries.ts) (app singleton 등록 + enrich 완료 → 군집화 배선·기동 리컨실)
+- [`apps/friendly/src/modules/summary/summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts) (요약 종료 → enrich 훅)
+- [`apps/friendly/src/plugins/crawl.ts`](../../apps/friendly/src/plugins/crawl.ts) (신규 2026-10-05 — 크롤 앱 싱글톤, 모든 크롤 진입점을 이 체인에 잇는다)
+- [`apps/friendly/src/plugins/random-crawl.ts`](../../apps/friendly/src/plugins/random-crawl.ts) (2026-10-05 — 전용 요약·검색 서비스 조립 제거)
+- [`apps/friendly/src/modules/auto-discover/auto-discover.route.ts`](../../apps/friendly/src/modules/auto-discover/auto-discover.route.ts) (2026-10-05 — 동일)
+- [`apps/friendly/src/modules/review-search/review-search.service.ts`](../../apps/friendly/src/modules/review-search/review-search.service.ts) (`countEnrichedByRestaurant` 쌍둥이·`onEnrichProgress`)
+- [`docs/PLAN-perf-2-findings.md`](../../docs/PLAN-perf-2-findings.md) (B-6·B-7·A-3 측정 원문)
+- [`docs/PLAN-perf-2.md`](../../docs/PLAN-perf-2.md) (1차 "군집 enrich 카운트 GROUP BY"·8차 배선)
 
 운영 (Python 계산기):
 - [`apps/friendly/scripts/cluster_compute.py`](../../apps/friendly/scripts/cluster_compute.py)

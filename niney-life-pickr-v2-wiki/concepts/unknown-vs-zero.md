@@ -1,6 +1,6 @@
 ---
 concept: 모름과 없음을 계약에서 가른다 — null(관측 안 됨·범위 밖)·0(관측된 없음)·억제(말하지 않음)
-last_compiled: 2026-10-04
+last_compiled: 2026-10-10
 topics_connected: [housing, parking, sea, tour, air-quality, api-contract, web, life-map, meal, meal-nutrition]
 status: active
 ---
@@ -39,6 +39,8 @@ status: active
 2. **경계는 메타데이터에서 와야 한다.** "어디까지가 모름인가(커버리지)" 를 적재된 데이터에서 역추론하면, 불량 행 하나가 경계를 옮긴다(침수 커버리지 시도). 원천의 공식 범위(서울시 데이터 = 서울)나 적재 이력(`LifeMasterSync` 의 범위 필드)을 쓰는 편이 안전하다.
 3. **인코딩이 약할수록 소비자가 틀린다.** 필드 전체 `null` 은 타입이 강제하지만(`null` 체크 없이는 못 씀), "0 + 형제 `null`" 은 타입이 아무것도 막지 않는다. 새로 설계한다면 인프라도 `counts: null` 로 가는 편이 오독이 적다.
 4. **억제는 개인정보·이용 조건의 표현이다.** 여행로그처럼 표본 하한이 있는 집계는 "없음" 과 구분되는 별도 상태를 가져야 하고, 그 상태가 응답에 식별자 없이 드러나야 한다(`insufficient`·셀 `null`). 0 으로 채우면 하한을 둔 의미가 사라진다.
+
+5. **이상치는 모름으로 강등한다** (2026-10, 주차). 원천 값이 형식은 맞지만 상식 밖일 때(기본 0분 유료, 시간당 5만 원) 고칠 근거가 없으면 `null` 로 내린다 — 틀린 숫자는 "없음" 보다 해롭다. 강등은 원천 공통 함수 하나에서, 몇 행을 내렸는지 적재 리포트에 카운터로 남겨 다음 원천 갱신 때 비교할 수 있게 한다([open-data-master-load](open-data-master-load.md)).
 
 관련: [open-data-master-load](open-data-master-load.md) — "미적재" 가 모름의 흔한 원인이고, 이력 행이 그 판정의 진실이다. [quantile-graded-overlay](quantile-graded-overlay.md) — 소셀 억제. [external-api-proxy-fixture](external-api-proxy-fixture.md) — 원천이 비운 필드를 어댑터가 0 으로 채우지 않는 것이 이 구분의 입력단이다.
 

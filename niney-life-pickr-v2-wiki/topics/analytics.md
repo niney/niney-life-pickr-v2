@@ -1,12 +1,14 @@
 ---
 topic: analytics
-last_compiled: 2026-08-30
-sources_count: 19
+last_compiled: 2026-10-10
+sources_count: 26
 status: active
-aliases: [글로벌 머지, global-merge, 글로벌 메뉴, 글로벌 메뉴 통계, 카테고리 트리, category-tree, categoryPath, buildCategoryTree, GlobalMenuCanonical, GlobalMenuCanonicalLink, GlobalMergeChunkCache, global_merge_chunk_cache, GLOBAL_MERGE_VERSION, GLOBAL_MERGE_CHUNK_SIZE, MERGE_SCHEMA_HASH, mergeChunkCacheKey, TOP_WHITELIST, runGlobalMerge, executeGlobalMerge, callChunksPooled, callOneChunk, MERGE_POOL_SIZE, LINK_INSERT_BATCH, global-merge-job-registry, run-merge, probe:merge, snapshot:merge, useIsolatedDatabase, temp-db, 테스트 DB 격리, thinkOptionForModel, AdminAnalyticsPage]
+aliases: [글로벌 머지, global-merge, 글로벌 메뉴, 글로벌 메뉴 통계, 카테고리 트리, category-tree, categoryPath, buildCategoryTree, GlobalMenuCanonical, GlobalMenuCanonicalLink, GlobalMergeChunkCache, global_merge_chunk_cache, GLOBAL_MERGE_VERSION, GLOBAL_MERGE_CHUNK_SIZE, MERGE_SCHEMA_HASH, mergeChunkCacheKey, TOP_WHITELIST, runGlobalMerge, executeGlobalMerge, callChunksPooled, callOneChunk, MERGE_POOL_SIZE, LINK_INSERT_BATCH, global-merge-job-registry, run-merge, probe:merge, snapshot:merge, useIsolatedDatabase, temp-db, 테스트 DB 격리, thinkOptionForModel, AdminAnalyticsPage, app.analytics, AnalyticsService 싱글톤, 머지 상호배제, mergeInflight, busy, GlobalMergeResult.busy, BUSY_MESSAGE, 머지 저장 변경분만, unchangedIds, UNCHANGED_TOUCH_BATCH, SAVE_TX_TIMEOUT_MS, SAVE_TX_MAX_WAIT_MS, G-4, G-V2, useDebouncedText, DebouncedInput, RestaurantSearchInput, useIsDesktopXl]
 ---
 
 # analytics — 식당 가로지르기 글로벌 메뉴 머지·카테고리 트리·통계
+
+**2026-10-05 변경 흡수 — 머지 저장은 바뀐 키만 UPDATE(G-4)·`AnalyticsService` 를 앱 싱글톤 `app.analytics` 로(G-V2)(`622bfca2`) + 어드민 분석 화면의 재조회·재렌더 축소(`c5052742`)**: (1) **저장 변경분만** — `executeGlobalMerge` 의 저장 트랜잭션은 기존 `GlobalMenuCanonical` 행을 `displayName`·`categoryPath`·`version`·`model` 까지 미리 읽는다. 다음 값(`categoryPath` 는 비면 기존 값 보존 규칙 그대로)이 네 값 모두 같으면 키별 `update` 를 건너뛰고 id 만 모은다(`unchangedIds`). 모은 행은 `updateMany({ id: { in } , data: { updatedAt: now } })` 를 500개씩(`UNCHANGED_TOUCH_BATCH`) 묶어 updatedAt 만 이번 머지 시각으로 올린다 — overview 의 `lastGlobalMergeAt`(= max updatedAt)과 행별 의미가 그대로다. 트랜잭션에는 `timeout: 30_000`·`maxWait: 10_000`(`SAVE_TX_TIMEOUT_MS`/`SAVE_TX_MAX_WAIT_MS`)을 명시했다 — 기본(5초·2초)은 키 1만 개 안팎에서 닿아, 몇 시간짜리 LLM 머지 결과를 저장 단계에서 버릴 수 있었다. 이유는 매일 03:00 증분 경로(`full: false`)가 미링크 1건만 있어도 **전 키를 다시 저장**하는 구조라서다([findings](../../docs/PLAN-perf-2-findings.md) G-4 — 3,000키 재저장 1,501ms·3,012쿼리). 실측(커밋): 재저장 1,393 → 315ms, 다른 연결 쓰기 대기 1,308 → 168ms. 신규 테스트 "재저장: 값이 같은 키는 키별 UPDATE 를 생략하고, updatedAt 은 묶음으로" — 쿼리 이벤트로 키별 UPDATE 0·묶음 UPDATE ≥1, 한 키만 path 가 바뀌면 키별 UPDATE 1. (2) **`app.analytics` 싱글톤** — `mergeInflight`(머지 상호배제)와 통계 `readCache` 가 인스턴스 필드인데, `new AnalyticsService` 가 [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) 와 [analytics.route.ts](../../apps/friendly/src/modules/analytics/analytics.route.ts) 두 곳에 있었다. 그래서 어드민 수동 머지와 03:00 스케줄 머지가 동시에 전량 리셋 트랜잭션에 들어갈 수 있었고, 스케줄 머지 뒤 어드민 통계는 TTL(60초) 동안 옛 값을 보였다(findings G-V2). 이제 스케줄 플러그인이 만든 인스턴스를 `app.decorate('analytics', …)` 로 공유하고, 라우트는 `app.analytics` 를 쓴다(라우트의 자체 `AiConfigService`·`buildLlmProviderEnv()` import 제거). 겹친 호출은 `GlobalMergeResult.busy: true` 를 받는다. 어드민 잡은 0개 `done` 대신 `markFailed(jobId, 'busy', '다른 글로벌 머지(스케줄 자동 실행)가 진행 중입니다 — 끝난 뒤 다시 실행하세요.')` 로 닫히고, 스케줄은 `merge` 단계에 `skipped: 'busy'` 스텝을 남긴 채 run 을 done 으로 끝낸다([schedule](schedule.md)). busy 경로는 global-merge OperationRun 을 만들지 않는다(pino warn 만). 신규 테스트 3건: 같은 인스턴스 두 번째 호출 busy, `app.schedule` 의 `deps.analytics === app.analytics`, 스케줄 진행 중 어드민 잡이 `{ state: 'failed', errorCode: 'busy' }`. (3) **어드민 분석 화면**([AdminAnalyticsPage](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx)) — 전역 메뉴 검색·카테고리·식당 검색 입력이 `useDebouncedText`(300ms 멈춘 값만 URL 로 올림, 렌더 중 "우리가 올린 값이 돌아온 것 / 바깥 변화" 를 가르고 타이머만 effect)를 쓰는 `DebouncedInput`·`RestaurantSearchInput` 으로 바뀌었다. 목록·필터 줄은 `useIsDesktopXl()` 로 화면 폭에 맞는 한 벌만 그리고(예전엔 카드·표 두 벌을 그리고 CSS 로 숨김), 섹션은 전부 `memo`, `categoryPaths` 는 `useMemo` 다. 고친 버그: URL 동기화 effect 가 입력 중인 값을 덮어쓰던 것(한글 조합이 깨짐), 카테고리 트리 클릭이 `category` 외 파라미터(q·sort·page)까지 갈아 끼우던 것. 신규 [AdminAnalyticsPage.test](../../apps/web/src/routes/admin/AdminAnalyticsPage.test.tsx) 8건(좁은 화면 포함). (4) **남은 운영 증거** — [PLAN-perf-2](../../docs/PLAN-perf-2.md) "감사 범위 밖 결함" 의 `[global-merge] chunk failed` 1,645건(LLM 타임아웃 계열)은 이번 라운드에서 손대지 않았다(Gotchas). 쓰기 락을 서버 전체 예산으로 보는 같은 라운드의 다른 사례는 [sqlite-write-lock-budget](../concepts/sqlite-write-lock-budget.md), 상호배제를 한 인스턴스에 두는 규칙은 [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
 **2026-08-22 변경 흡수 — 글로벌 머지 테스트의 실 DB 격리(`517e465`) + provider env 조립 단일화 소비(`cc8399a`) + 청크 LLM 호출의 사고(think) 끄기(`15f2a91`)**: (1) **실 DB 를 갈아엎던 테스트** — [analytics.test.ts](../../apps/friendly/src/modules/analytics/analytics.test.ts) 의 `AnalyticsService.runGlobalMerge` describe 블록만 격리 DB 를 안 쓰고 있었다. 이 블록의 `afterEach` 는 `GlobalMenuCanonical`·`GlobalMergeChunkCache` 를 **전량** 비우고, 머지 자체도 트랜잭션 안에서 Link 전량 삭제 후 재작성한다 — 그래서 `pnpm --filter friendly test` 한 번이 `.env` 의 `DATABASE_URL` 이 가리키는 운영 스냅샷의 머지 결과(**5,446 그룹 + 링크 22,303 + 청크 캐시**)를 통째로 날렸고, LLM **1,352콜**을 다시 써서 복구했다. 수정은 삭제 범위를 좁히는 대신(전량 삭제가 "청크 캐시가 비어야 mock 호출 순서가 맞는다"는 이 테스트의 전제) `useIsolatedDatabase()`([test-utils/temp-db.ts](../../apps/friendly/src/test-utils/temp-db.ts), 2026-07-07 `4bb7144` 도입 — `getGlobalMenus / getOverview` 블록은 그때부터 격리)를 `beforeAll` 에서 열고 `afterAll` 에서 `restore()`. 격리하니 부수 문제가 드러났다 — 시드 4개만 있으면 pass1 청크와 pass2 입력이 **같은 변형 목록**이라 청크 캐시(`model|schemaHash|variants`)가 히트해 pass2 가 LLM 을 안 부르고 "pass1 1청크 + pass2 1청크 = 2호출" 전제가 깨진다(실데이터가 있을 땐 두 패스 목록이 달랐다). 채움 시드 8개(`채움메뉴0..7`)를 더해 distinct 12개(`GLOBAL_MERGE_CHUNK_SIZE = 10` → pass1 2청크)로 만들고, pass1 응답이 채움을 한 그룹으로 접어 pass2 입력이 어느 pass1 청크와도 달라지게 픽스처를 고쳤다(기대 호출 ≥ 3, 주석상 pass1 2 + pass2 2 = 4). (2) **env 조립** — [analytics.route.ts](../../apps/friendly/src/modules/analytics/analytics.route.ts)·[run-global-merge.ts](../../apps/friendly/scripts/run-global-merge.ts)·[probe-merge.ts](../../apps/friendly/scripts/probe-merge.ts) 의 자체 `LlmProviderEnv` 리터럴이 `buildLlmProviderEnv()`([ai](ai.md)) 로 바뀌었고, 테스트 픽스처의 `defaultModels` 는 5키(`meal-photo`·`meal-recommend` 추가). (3) **think 끄기** — `callOneChunk` 의 `provider.complete` 에 `think: thinkOptionForModel(model)`(`@repo/utils`, gpt-oss `'low'` / 그 외 `false`). 매핑 JSON 만 받으면 되는데 reasoning 모델이 사고에 출력 토큰·시간을 쓰던 "medium thinking 압박"을 제거 — 실측(2026-08-22) 청크 처리량이 눈에 띄게 달라졌다. 캐시 키가 `model + variants` 라 **기존 청크 캐시는 그대로 유효**(schemaHash 입력 아님).
 
@@ -22,26 +24,26 @@ aliases: [글로벌 머지, global-merge, 글로벌 메뉴, 글로벌 메뉴 통
 
 **18차(2026-06): 전량 재계산 성능 최적화** — 글로벌 머지를 자주, 전량(full=true)으로 돌리면서 (1) pm2 `max_memory_restart` 가 트리거하는 OOM, (2) 직렬 청크 호출의 느림, (3) 매번 변하지 않은 청크까지 LLM 재호출하는 낭비가 드러났다. 이를 청크 **병렬 풀** + **청크 결과 캐시** + **Link insert 배치 스트리밍** + **청크 재시도** + **단일 머지 락**으로 해소했다(commit e45fb0c). 관련 컨셉 [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)(병렬 풀·단일 락), [versioned-llm-prompts](../concepts/versioned-llm-prompts.md), [stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md)(잡 SSE).
 
-## Architecture [coverage: high — 7 sources]
+## Architecture [coverage: high — 11 sources]
 
-`apps/friendly/src/modules/analytics/` 한 모듈에 라우트·서비스·잡 레지스트리·프롬프트·트리 빌더가 모여 있다. 라우트는 admin 보호된 REST + SSE이고, 무거운 일은 모두 `AnalyticsService`로 위임된다. 글로벌 머지는 한 번에 하나만 도는 시스템 전역 잡 — placeId 단위가 아니다.
+`apps/friendly/src/modules/analytics/` 한 모듈에 라우트·서비스·잡 레지스트리·프롬프트·트리 빌더가 모여 있다. 라우트는 admin 보호된 REST + SSE이고, 무거운 일은 모두 `AnalyticsService`로 위임된다. 글로벌 머지는 한 번에 하나만 도는 시스템 전역 잡 — placeId 단위가 아니다. `AnalyticsService` 인스턴스는 프로세스에 **하나**다(2026-10-05~) — [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) 가 만들어 `app.analytics` 로 decorate 하고, 스케줄러와 어드민 라우트가 같이 쓴다.
 
 Key files:
-- [`analytics.route.ts`](../../apps/friendly/src/modules/analytics/analytics.route.ts) — Fastify 라우트, JWT/관리자 가드, SSE hijack, 잡 러너 entry. `operationLog` 주입(서비스 내부 OperationRun 계측).
-- [`analytics.service.ts`](../../apps/friendly/src/modules/analytics/analytics.service.ts) — `runGlobalMerge`(머지 락 + OperationRun 래퍼) → `executeGlobalMerge`(두-패스 본문), `callChunksPooled`(병렬 풀), `callOneChunk`(캐시+재시도), `parseMergeResponse`(mappings 배열 + 구형 호환), `getOverview`/`getGlobalMenus`/`getCategoryTree`, `normalizeCategoryPath`, `TOP_WHITELIST`, `mergeChunkCacheKey`/`MERGE_SCHEMA_HASH`, `TtlCache`
+- [`analytics.route.ts`](../../apps/friendly/src/modules/analytics/analytics.route.ts) — Fastify 라우트, JWT/관리자 가드, SSE hijack, 잡 러너 entry. 서비스는 `app.analytics`(2026-10-05 이전엔 라우트가 자체 `AiConfigService` + `new AnalyticsService` 를 만들었다). `operationLog` 는 스케줄 플러그인이 주입한 것을 그대로 쓴다. 잡 러너는 `result.busy` 면 `markFailed(jobId, 'busy', BUSY_MESSAGE)`.
+- [`analytics.service.ts`](../../apps/friendly/src/modules/analytics/analytics.service.ts) — `runGlobalMerge`(머지 락 + OperationRun 래퍼, 겹치면 `busy: true`) → `executeGlobalMerge`(두-패스 본문 + 변경분만 저장), `callChunksPooled`(병렬 풀), `callOneChunk`(캐시+재시도), `parseMergeResponse`(mappings 배열 + 구형 호환), `getOverview`/`getGlobalMenus`/`getCategoryTree`, `normalizeCategoryPath`, `TOP_WHITELIST`, `mergeChunkCacheKey`/`MERGE_SCHEMA_HASH`, `TtlCache`
 - [`category-tree.ts`](../../apps/friendly/src/modules/analytics/category-tree.ts) — `buildCategoryTree(leaves) → CategoryTreeNodeType[]`. categoryPath 리스트를 계층 트리로. 전역·식당별 공용
 - [`global-merge.prompts.ts`](../../apps/friendly/src/modules/analytics/global-merge.prompts.ts) — system prompt **v3**, JSON schema(`{ mappings: [...] }` 배열), `GLOBAL_MERGE_VERSION = 3`, `GLOBAL_MERGE_CHUNK_SIZE = 10`
 - [`global-merge-job-registry.ts`](../../apps/friendly/src/modules/analytics/global-merge-job-registry.ts) — in-memory 단일 잡 레지스트리, inflight 가드, pub/sub
-- [`analytics.test.ts`](../../apps/friendly/src/modules/analytics/analytics.test.ts) — 두-패스, **병렬 처리 직렬=병렬 동일**, **청크 캐시 무손실(재실행 LLM 0회)**, mappings 배열 파싱, categoryPath 보존, q/category(`찌개·전골`) 필터, category tree 누적 합산 등. `runGlobalMerge`·`getGlobalMenus/getOverview` 두 describe 모두 [`test-utils/temp-db.ts`](../../apps/friendly/src/test-utils/temp-db.ts) 의 `useIsolatedDatabase()` 로 **빈 격리 SQLite** 에서 돈다(2026-08-22 부터 머지 블록도) — dev.db 를 임시 디렉터리에 복사해 `_prisma_migrations` 외 모든 테이블을 `DELETE` 하고 `process.env.DATABASE_URL` 을 그 파일로 바꾼 뒤 `buildApp()`, `afterAll` 에서 원복+삭제. `vitest.config.ts` 의 `fileParallelism: false` 가 전역 env 스왑의 안전 전제
+- [`analytics.test.ts`](../../apps/friendly/src/modules/analytics/analytics.test.ts) — 두-패스, **병렬 처리 직렬=병렬 동일**, **청크 캐시 무손실(재실행 LLM 0회)**, mappings 배열 파싱, categoryPath 보존, q/category(`찌개·전골`) 필터, category tree 누적 합산, 2026-10-05 **재저장 키별 UPDATE 생략**(별도 `PrismaClient` 의 query 이벤트로 셈)·**같은 인스턴스 busy** 등. `runGlobalMerge`·`getGlobalMenus/getOverview` 두 describe 모두 [`test-utils/temp-db.ts`](../../apps/friendly/src/test-utils/temp-db.ts) 의 `useIsolatedDatabase()` 로 **빈 격리 SQLite** 에서 돈다(2026-08-22 부터 머지 블록도) — dev.db 를 임시 디렉터리에 복사해 `_prisma_migrations` 외 모든 테이블을 `DELETE` 하고 `process.env.DATABASE_URL` 을 그 파일로 바꾼 뒤 `buildApp()`, `afterAll` 에서 원복+삭제. `vitest.config.ts` 의 `fileParallelism: false` 가 전역 env 스왑의 안전 전제. 2026-10-05 의 세 번째 describe `app.analytics 싱글톤` 은 `buildFullApp()` 만 쓰고 격리하지 않는다(Gotchas)
 - 운영 스크립트: [`scripts/run-global-merge.ts`](../../apps/friendly/scripts/run-global-merge.ts), [`scripts/probe-merge.ts`](../../apps/friendly/scripts/probe-merge.ts), [`scripts/snapshot-global-merge.ts`](../../apps/friendly/scripts/snapshot-global-merge.ts). 셋 다 서버를 우회해 `new PrismaClient()` + `AiConfigService(prisma, buildLlmProviderEnv())` 로 직접 조립(`.env` 의 `DATABASE_URL` 을 그대로 문다 — 운영 DB 에 대고 도는 것이 의도)
 
 `runGlobalMerge` → `executeGlobalMerge` 흐름:
 
-1. **단일 머지 락** — `runGlobalMerge` 진입 시 인스턴스 플래그 `mergeInflight` 검사. 이미 진행 중이면 빈 결과로 skip(어드민 수동 + 스케줄 자동이 동시에 전량 리셋 트랜잭션에 진입해 서로의 중간 상태를 덮는 사고 방지). 단일 프로세스 + 앱 전역 singleton service 가정.
+1. **단일 머지 락** — `runGlobalMerge` 진입 시 인스턴스 플래그 `mergeInflight` 검사. 이미 진행 중이면 빈 결과에 `busy: true` 를 붙여 skip(어드민 수동 + 스케줄 자동이 동시에 전량 리셋 트랜잭션에 진입해 서로의 중간 상태를 덮는 사고 방지). OperationRun 은 만들지 않는다. 단일 프로세스 + 앱 전역 singleton service 가정 — 2026-10-05 전까지는 이 가정이 틀렸다(인스턴스가 둘이라 수동·스케줄 머지가 서로를 막지 못했다). 지금은 `app.analytics` 하나라 성립한다.
 2. `MenuCanonical` 전체에서 distinct `canonicalNorm` 별 가장 빈번한(동률은 사전순 첫) 표기를 골라 input variants 결정.
 3. **Pass 1** — chunk size **10**으로 분할, `callChunksPooled` 가 청크들을 **병렬 풀**로 LLM 호출(동시 in-flight 청크 promise 수 ≤ `MERGE_POOL_SIZE`). 각 청크는 `callOneChunk` — **캐시 조회 → 미스면 재시도 LLM 호출 → 성공 응답 캐시**. 응답은 `{ mappings: [{ variant, canonical, categoryPath }] }` 배열. 진행은 완료 순으로 emit 하되 결과는 인덱스 순 배열로 반영(순서 의존 보존).
 4. **Pass 2** — pass1의 distinct canonical 들 사이의 충돌을 다시 LLM에 태운다(청크간 보더 이슈 해소). 후보가 chunk size 이하면 한 콜, 넘으면 다시 청크 분할. pass2 categoryPath 우선, 없으면 pass1 path fallback.
-5. **DB 적용 (단일 트랜잭션)** — `GlobalMenuCanonical` upsert by globalKey + 미사용 globalKey 삭제, `GlobalMenuCanonicalLink` 전량 reset 후 재작성. Link 재작성은 **`LINK_INSERT_BATCH=1000` 단위로 스트리밍 createMany** — 전체를 단일 배열로 쌓아 한 방에 insert 하면 대량 데이터에서 피크 메모리가 터진다(pm2 OOM 의 실제 원인). 같은 트랜잭션 안에서 배치로 흘려보내 원자성은 유지하고 메모리만 상수화. 이번 런이 path를 못 주면 **기존 row의 categoryPath 보존**(`existingPathByKey`).
+5. **DB 적용 (단일 트랜잭션, `timeout 30s`·`maxWait 10s` 명시 — 2026-10-05)** — `GlobalMenuCanonical` upsert by globalKey + 미사용 globalKey 삭제, `GlobalMenuCanonicalLink` 전량 reset 후 재작성. 기존 행과 `displayName`·`categoryPath`(보존 적용 뒤)·`version`·`model` 이 모두 같은 키는 키별 `update` 를 생략하고 `updatedAt` 만 500개 묶음 `updateMany` 로 올린다(2026-10-05 G-4 — 그 전엔 미링크 1건짜리 증분 머지도 3,000키를 키마다 UPDATE 해 쓰기 락 1.3~1.5초). Link 재작성은 **`LINK_INSERT_BATCH=1000` 단위로 스트리밍 createMany** — 전체를 단일 배열로 쌓아 한 방에 insert 하면 대량 데이터에서 피크 메모리가 터진다(pm2 OOM 의 실제 원인). 같은 트랜잭션 안에서 배치로 흘려보내 원자성은 유지하고 메모리만 상수화. 이번 런이 path를 못 주면 **기존 row의 categoryPath 보존**(`existingPathByKey`).
 6. 트랜잭션 후 read 캐시(`readCache`) clear, OperationRun done 마감(skipped/failedChunks 메타 포함).
 
 LLM 호출은 grammar `format`을 **주지 않는다** — `callOneChunk` 주석대로 ollama-cloud에서 format을 주면 응답이 통째로 비거나 categoryPath가 빠진다. 프롬프트만 주고 파서가 견고히 JSON을 추출한다(`probe:merge`로 검증). 대신 **`think: thinkOptionForModel(model)`** 은 준다(2026-08-22) — reasoning 모델의 사고를 끄거나(`false`) gpt-oss 는 최저 레벨(`'low'`)로 낮춰 출력 토큰을 매핑 JSON 에 쓰게 한다. `temperature`/`maxTokens`/`numCtx` 와 나란히 실리고, 청크 캐시 키(`model|schemaHash|variants`)에는 들어가지 않는다.
@@ -50,23 +52,25 @@ LLM 호출은 grammar `format`을 **주지 않는다** — `callOneChunk` 주석
 
 - `GLOBAL_MERGE_RETRY_LIMIT = 3` — 청크 LLM 호출 점증 백오프 재시도(첫 시도 포함). 일시 timeout/429/upstream 흡수. summary.service 와 동일 패턴. 모두 소진하면 호출자가 식별 매핑으로 폴백하되 `failedChunks` 로 집계(조용한 손실 → 부분완료 가시화).
 - `LINK_INSERT_BATCH = 1000` — Link createMany 배치 크기(OOM 방어).
+- `UNCHANGED_TOUCH_BATCH = 500` — 값이 그대로인 글로벌 그룹의 `updatedAt` 묶음 갱신 IN 목록 크기(2026-10-05).
+- `SAVE_TX_TIMEOUT_MS = 30_000` / `SAVE_TX_MAX_WAIT_MS = 10_000` — 저장 `$transaction` 한도(2026-10-05). 기본 5초·2초로는 키 1만 개 안팎에서 타임아웃이 나 LLM 머지 결과를 버린다. 락 점유는 "같은 값 생략" 으로 줄인다.
 - `MERGE_POOL_SIZE = env.OLLAMA_CLOUD_MAX_CONCURRENT` — 동시에 메모리에 떠 있는 in-flight 청크 promise 수 상한. 실제 네트워크 동시성은 어댑터의 `ConcurrencyGate` 가 같은 env 로 강제(우회 불가)하므로, 풀을 게이트 cap 과 같게 잡아 큐 대기 없이 cap 을 꽉 채워 쓴다.
 - `MERGE_SCHEMA_HASH` — sha256(systemPrompt | version | TOP_WHITELIST | 샘플링 파라미터) 앞 16자. 청크 캐시 무효화 축(복합 해시 — 이 중 하나라도 바뀌면 캐시 키가 달라져 옛 청크 결과가 자연 미스).
 - `mergeChunkCacheKey(model, variants)` = sha256(model | schemaHash | `JSON.stringify(variants)`). variants 순서를 그대로 보존하므로 정확히 같은 입력일 때만 히트 → 히트 결과 = 그 입력의 실제 LLM 응답과 동일(**무손실**).
 
-## Talks To [coverage: high — 6 sources]
+## Talks To [coverage: high — 8 sources]
 
 - **`@repo/api-contract`** (zod import) — `AnalyticsOverview`, `GlobalMenuQuery`/`Result`, `GlobalMergeJob*`, `CategoryTreeNode`, `Routes.Analytics.*`. 모든 응답이 `fastify-type-provider-zod`로 자동 검증됨. 자세한 스키마는 [api-contract](api-contract.md).
-- **`ai` 모듈** ([`AiConfigService`](../../apps/friendly/src/modules/ai/ai.config.service.ts) + [`adapter-cache`](../../apps/friendly/src/modules/ai/adapter-cache.ts) + [`llm-provider-env`](../../apps/friendly/src/modules/ai/llm-provider-env.ts)) — `ollama-cloud` provider 해석(`getResolved('ollama-cloud', 'chat')`). 라우트·스크립트는 `AiConfigService(prisma, buildLlmProviderEnv())` 로 조립(2026-08-22 부터 자체 env 리터럴 없음). provider 미설정이면 `AnalyticsError('no_provider')`. 입력이 0이면 `AnalyticsError('no_inputs')`. 어댑터 `ConcurrencyGate` 가 실동시성을 `OLLAMA_CLOUD_MAX_CONCURRENT` 로 강제.
+- **`ai` 모듈** ([`AiConfigService`](../../apps/friendly/src/modules/ai/ai.config.service.ts) + [`adapter-cache`](../../apps/friendly/src/modules/ai/adapter-cache.ts) + [`llm-provider-env`](../../apps/friendly/src/modules/ai/llm-provider-env.ts)) — `ollama-cloud` provider 해석(`getResolved('ollama-cloud', 'chat')`). 서버 안의 단일 인스턴스는 스케줄 플러그인이 `AiConfigService(prisma, buildLlmProviderEnv())` 로 조립하고(2026-10-05 부터 라우트는 조립하지 않는다), 스크립트(`run-global-merge`·`probe-merge`)는 각자 조립한다(2026-08-22 부터 자체 env 리터럴 없음). provider 미설정이면 `AnalyticsError('no_provider')`. 입력이 0이면 `AnalyticsError('no_inputs')`. 어댑터 `ConcurrencyGate` 가 실동시성을 `OLLAMA_CLOUD_MAX_CONCURRENT` 로 강제.
 - **`@repo/utils`** — `thinkOptionForModel(model)` 로 청크 호출의 `think` 값을 정한다(gpt-oss `'low'`, 그 외 `false`). 판단 근거·실측은 [ai](ai.md).
 - **`logs` 모듈** ([`OperationLogService`](../../apps/friendly/src/modules/logs/operation-log.service.ts)) — `runGlobalMerge` 가 서비스 내부에서 `global-merge` OperationRun 을 감싼다. stage: load/resolve_provider/pass1/pass2/merge_chunk/save. 재시도 소진(식별 매핑 폴백)·skipped(no_new_inputs/no_inputs) 사유가 영속 로그·meta 로 남아 "조용한 손실"을 사후 추적. 호출자가 둘(어드민=jobId, 스케줄=parentRunId)이라 계측을 서비스 내부에 둬 누락을 막았다.
 - **`summary` 모듈** ([`extractFirstJsonObject`, `normalizeTerm`](../../apps/friendly/src/modules/summary/summary.service.ts)) — JSON 추출과 정규화 함수 재사용. `MenuMention.nameNorm` ↔ `MenuCanonical.nameNorm` 매칭으로 통계 join.
 - **`menu-grouping`(식당 단위)** — `MenuCanonical` 행을 입력으로 받기만 하고 직접 호출은 하지 않음. 의존 방향은 한 방향(이 토픽 → menu-grouping 산출물). [menu-grouping](menu-grouping.md).
 - **`restaurant` 모듈** — `category-tree.ts`의 `buildCategoryTree`를 import해 공개 식당별 카테고리 트리(`GET /restaurants/public/:placeId/category-tree`)를 같은 노드 구조로 만든다. 의존 방향은 restaurant → analytics(트리 빌더만).
-- **schedule** — 어드민이 cron으로 "미분류 식당 메뉴 정규화 → 전역 머지"를 자동 실행하는 루틴이 [schedule](schedule.md)에 있고, AdminAnalyticsPage가 그 UI를 같이 호스팅한다.
+- **schedule** — 어드민이 cron으로 "미분류 식당 메뉴 정규화 → 전역 머지"를 자동 실행하는 루틴이 [schedule](schedule.md)에 있고, AdminAnalyticsPage가 그 UI를 같이 호스팅한다. 2026-10-05 부터 이 모듈의 서비스 인스턴스 자체를 [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) 가 만들어 `app.analytics` 로 내놓는다 — 스케줄 머지와 어드민 머지가 한 `mergeInflight`·한 `readCache` 를 쓴다. 스케줄 머지가 busy 면 [schedule.service.ts](../../apps/friendly/src/modules/schedule/schedule.service.ts) 가 `skipped: 'busy'` 스텝만 남긴다.
 - **Prisma / SQLite** — 트랜잭션으로 `GlobalMenuCanonical*` reset + 배치 Link insert, raw SQL로 sentiment GROUP BY (Prisma의 N+1 회피), `GlobalMergeChunkCache` upsert/findUnique.
 
-## API Surface [coverage: high — 3 sources]
+## API Surface [coverage: medium — 4 sources]
 
 admin 라우트는 [`Routes.Analytics`](../../packages/api-contract/src/routes.ts), 공개 식당별 트리는 `Routes.Restaurant.publicCategoryTree`.
 
@@ -75,10 +79,12 @@ admin 라우트는 [`Routes.Analytics`](../../packages/api-contract/src/routes.t
 | GET | `/admin/analytics/overview` | 카드 카운터(`restaurantCount`, `analyzedReviewCount`, `globalLinkedRatio`, `lastGlobalMergeAt`, `globalVersion=3`) |
 | GET | `/admin/analytics/global-menus` | querystring: `q`, `category`(prefix, 예 `찌개·전골`), `sort`(`mentions`/`positive`/`positiveRatio`/`restaurants`), `minMentions`(기본 5), `page`/`pageSize`, `includeUnlinked` |
 | GET | `/admin/analytics/category-tree` | `currentVersion` + 트리 루트들. 자식 통계는 부모로 누적 합산 |
-| POST | `/admin/analytics/global-merge-jobs` | body `{ full: boolean }`. inflight 시 **409 + 기존 snapshot** |
+| POST | `/admin/analytics/global-merge-jobs` | body `{ full: boolean }`. 어드민 잡 inflight 시 **409 + 기존 snapshot**. 스케줄 머지가 같은 인스턴스에서 도는 중이면 200 으로 잡은 만들어지지만 곧 `state: 'failed'`·`errorCode: 'busy'`(2026-10-05) |
 | GET | `/admin/analytics/global-merge-jobs/:id` | snapshot 조회 (재접속/새로고침용) |
 | GET | `/admin/analytics/global-merge-jobs/:id/events` | SSE — `?token=` 쿼리 인증, `chunk`/`done` named event |
 | GET | `/restaurants/public/:placeId/category-tree` | 공개. 이 식당 멘션만 누적한 `{ roots: CategoryTreeNode[] }`. coverage 없으면 빈 배열 |
+
+웹 [AdminAnalyticsPage](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) 는 실패 잡의 `errorMessage` 를 그대로 보여 주므로 busy 사유 문구가 화면에 뜬다. 같은 화면의 필터 입력(전역 메뉴 `menu`·`category`, 식당 `q`)은 2026-10-05 부터 300ms 멈춘 값만 URL·쿼리로 올리고(`useDebouncedText`), 카테고리 트리 클릭은 `category` 만 바꾼다.
 
 SSE 약속: 연결 직후 `snapshot` 1회 emit(replay). 끝난 잡이면 `done` 즉시 + close. 진행 중이면 `chunk` push + 15초마다 `: hb` heartbeat. `GlobalMergeJobChunkProgress = { pass: 1|2, chunkIndex, chunkTotal, mappedInChunk }`. 병렬 풀이라 `chunk` event 는 도착(완료) 순으로 오고 인덱스가 단조 증가하지 않을 수 있다 — registry `recordChunk` 가 doneChunks/totalChunks 를 max 처리.
 
@@ -108,17 +114,21 @@ SSE 약속: 연결 직후 `snapshot` 1회 emit(replay). 끝난 잡이면 `done` 
 
 **v3는 마이그레이션 없음** — 스키마 변경이 아니라 categoryPath의 *값 규약*(택소노미)이 바뀐 것이라 DB 컬럼은 그대로다. 적용은 데이터 재작성(full 재머지)으로만 일어난다.
 
-잡 상태는 메모리만(`global-merge-job-registry.ts`). FINISHED_TTL 10분, 1분마다 GC. 통계 read 캐시 `TtlCache` 60초, 머지 done 시 `clear()`. 단일 인스턴스 가정 — [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
+잡 상태는 메모리만(`global-merge-job-registry.ts`). FINISHED_TTL 10분, 1분마다 GC. 통계 read 캐시 `TtlCache` 60초, 머지 done 시 `clear()` — 2026-10-05 부터 `app.analytics` 하나의 캐시라 스케줄 머지 뒤에도 어드민 통계가 바로 새 값이다(예전엔 라우트 인스턴스의 캐시가 TTL 동안 옛 값). 단일 인스턴스 가정 — [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
-## Key Decisions [coverage: high — 9 sources]
+`GlobalMenuCanonical.updatedAt` 은 값이 안 바뀐 행도 머지마다 이번 머지 시각으로 올라간다(묶음 `updateMany`) — overview 의 `lastGlobalMergeAt` 이 max(updatedAt) 이라 그 의미를 지키려는 것. 스키마·마이그레이션 변경은 없다.
 
+## Key Decisions [coverage: high — 11 sources]
+
+- **2026-10-05: 머지 상호배제는 모듈 변수가 아니라 앱 싱글톤으로(`622bfca2`, G-V2).** [findings](../../docs/PLAN-perf-2-findings.md) 의 두 수정안 중 "`mergeInflight` 를 모듈 수준 변수로" 대신 "스케줄 플러그인의 인스턴스를 `app.analytics` 로 공유" 를 골랐다. 통계 `readCache` 까지 하나가 돼 스케줄 머지 뒤 어드민 통계가 TTL 동안 옛 값이던 문제도 같이 풀리기 때문이다. 겹친 호출을 조용히 0개 `done` 으로 끝내지 않고 `busy` 를 결과에 실은 것은, 어드민이 "머지가 됐다" 고 오해하지 않게 하려는 것이다(잡은 failed + 사유 문구). 스케줄 쪽은 실패로 치지 않는다 — 진행 중인 어드민 머지가 결과를 저장한다. 같은 원리로 크롤은 `app.crawl`([crawl](crawl.md))로 모였다.
+- **2026-10-05: 저장은 "값이 같으면 UPDATE 생략" 만, 링크 재작성은 그대로(`622bfca2`, G-4).** findings 실측에서 키별 UPDATE 가 쓰기 락의 대부분이었고(3,000키 1.5초 → 생략 시 65ms), 링크 전량 재작성은 1,125행 기준 수십 ms 라 후순위였다. updatedAt 은 버리지 않고 묶음으로 올려 `lastGlobalMergeAt` 의 의미를 지켰다. 트랜잭션 timeout 을 넉넉히(30초) 둔 것은 "락을 오래 쥐어도 된다" 가 아니라 "몇 시간짜리 LLM 결과를 저장 단계 타임아웃으로 버리지 않는다" 는 안전망이다. [sqlite-write-lock-budget](../concepts/sqlite-write-lock-budget.md).
 - **2026-08-22: 머지 테스트는 삭제 범위를 좁히지 않고 DB 를 격리한다.** `runGlobalMerge` 테스트의 전량 삭제(`afterEach` 가 `GlobalMenuCanonical`·`GlobalMergeChunkCache` 를 비움)는 "청크 캐시가 비어야 callIndex 기반 mock 이 순서대로 호출된다"는 전제라 필요한 동작이다. 문제는 그 삭제가 `.env` 의 실 DB 에 닿는 것이었으므로, 삭제를 시드 범위로 좁히는 대신 `useIsolatedDatabase()` 로 **빈 복사본 DB** 에서 돌린다 — 운영 스냅샷(5,446 그룹·22,303 링크·청크 캐시)을 실제로 날리고 LLM 1,352콜로 복구한 사고의 결론. 격리 뒤 청크 캐시 히트로 pass2 가 LLM 을 안 부르는 새 문제는 픽스처(채움 8개 → 2청크)로 풀었다 — 캐시를 끄는 옵션을 만들지 않은 것도 의도(테스트가 곧 무손실 캐시의 회귀 검증).
 - **2026-08-22: 청크 호출은 `format` 없이·`think` 는 끄고.** `format` 은 ollama-cloud 에서 응답을 비우는 실측 때문에 계속 안 주지만, reasoning 모델이 사고에 토큰을 쓰는 것은 별개 문제라 `thinkOptionForModel` 을 실었다. 캐시 키에 `think` 를 넣지 않은 이유: 같은 입력에 대한 매핑 결과는 사고 여부와 무관해야 하고, 넣으면 전량 캐시 미스로 재머지 비용이 발생한다.
 - **18차(2026-06): 청크 병렬 풀(`callChunksPooled`, 풀 = 게이트 cap)** — 직렬 청크 호출이 전량 재계산을 느리게 했다. 청크를 병렬로 띄우되 동시 in-flight promise 수를 `MERGE_POOL_SIZE`(=`OLLAMA_CLOUD_MAX_CONCURRENT`)로 cap. 실 네트워크 동시성은 어댑터 게이트가 강제하므로 이 풀은 "메모리에 떠 있는 promise 수"를 게이트 cap 과 맞춰 큐 대기 없이 cap 을 꽉 채워 쓰는 용도(메모리 보호). 결과는 인덱스 순 배열로 반영 — categoryPath first-non-null 채택이 순서 의존이라 병렬이어도 직렬과 비트 동일. [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 - **18차(2026-06): 청크 결과 캐시(`GlobalMergeChunkCache`) — 무손실 메모이즈** — 같은 청크(입력 표기 배열, 순서 그대로)를 다시 묻지 않는다. cacheKey 가 variants 순서를 보존하므로 히트 결과 = 그 입력의 실제 LLM 응답과 동일(무손실). schemaHash 가 프롬프트·버전·화이트리스트·샘플링을 묶어, 그중 하나라도 바뀌면 키가 달라져 옛 캐시는 자연 미스. 캐시 조회/저장 실패(일시 DB 락)는 삼키고 미스로 간주 — 캐시는 최적화일 뿐 머지를 멈추면 안 된다.
 - **18차(2026-06): Link insert 배치 스트리밍(`LINK_INSERT_BATCH`) — OOM 수정** — 전체 링크(1천여 행 이상)를 단일 배열로 쌓아 한 방에 createMany 하면 피크 메모리가 터져 pm2 `max_memory_restart` 가 머지를 중단시켰다(실제 원인). 같은 트랜잭션 안에서 1000 단위로 흘려보내 원자성 유지 + 메모리 상수화.
 - **18차(2026-06): 청크 재시도(`GLOBAL_MERGE_RETRY_LIMIT=3`) + `failedChunks` 가시화** — 일시 timeout/429/upstream 을 점증 백오프로 흡수. 모두 소진하면 그 청크를 식별 매핑으로 폴백하되 `failedChunks` 로 집계해 result/run meta 에 노출 — 조용한 손실을 부분완료로 가시화.
-- **18차(2026-06): 단일 머지 락(`mergeInflight`)** — 어드민 수동 + 스케줄 자동이 동시에 전량 리셋 트랜잭션에 들어가면 서로의 중간 상태를 덮는다. 인스턴스 플래그 하나로 상호배제, 이미 진행 중이면 빈 결과 skip. 단일 프로세스 + 앱 전역 singleton 가정.
+- **18차(2026-06): 단일 머지 락(`mergeInflight`)** — 어드민 수동 + 스케줄 자동이 동시에 전량 리셋 트랜잭션에 들어가면 서로의 중간 상태를 덮는다. 인스턴스 플래그 하나로 상호배제, 이미 진행 중이면 빈 결과 skip. 단일 프로세스 + 앱 전역 singleton 가정 — 이 가정은 2026-10-05 `app.analytics` 도입 전까지 실제로는 성립하지 않았다(위 G-V2).
 - **17차(2026-06): 택소노미 음식종류→재료·메뉴군 전환 (`GLOBAL_MERGE_VERSION` 2→3, full 재머지 필요)** — 최상위 축을 *음식 종류*에서 **재료·메뉴군**으로: `고기 / 해산물 / 밥 / 면 / 국·탕 / 찌개·전골 / 김치 / 반찬 / 튀김 / 회·초밥 / 분식 / 디저트 / 음료 / 주류 / 기타`. 깊이 2~3단계. categoryPath 를 새로 채우려면 **full=true 재머지** 한 번. [versioned-llm-prompts](../concepts/versioned-llm-prompts.md) 인스턴스.
 - **17차(2026-06): 출력 맵→배열 (Ollama grammar fix)** — `{ mappings: [{variant,canonical,categoryPath}] }` 배열로 변경. Ollama(llama.cpp) grammar 가 additionalProperties 값 스키마를 변환 못 해 응답이 통째로 비던 버그 회피. 파서는 신규 배열 + 구형(맵/문자열) 모두 수용.
 - **17차(2026-06): 청크 50→10 (reasoning 모델 완주 우선)** — reasoning 모델은 청크가 크면 thinking 토큰 폭증으로 60s 타임아웃·truncation → 빈 응답 → 식별 매핑 silent 손상. `probe:merge`로 10개≈2900토큰 안정 확인. 작게 잡고 pass2 재통합 — 정확도보다 "완주" 우선.
@@ -129,8 +139,13 @@ SSE 약속: 연결 직후 `snapshot` 1회 emit(replay). 끝난 잡이면 `done` 
 - **단일-잡 + 409 응답** — `inflightJobId()` 한 줄 가드. 두 어드민이 동시에 눌러도 두 번째가 409 + 기존 snapshot을 받아 같은 진행 화면을 본다.
 - **SSE 첫 emit으로 snapshot 재생 / DB reset 후 createMany / 이전 버전 결정 보존** — 새로고침해도 SSE 한 번에 현재 상태; Link 는 매 머지마다 전량 reset(멱등+stale 청소); v1(string→string)·v2(`{canonical,categoryPath}` 객체) 회신도 fallback 수용하되 새 path 는 full 재실행 필요.
 
-## Gotchas [coverage: high — 8 sources]
+## Gotchas [coverage: high — 10 sources]
 
+- **상호배제는 서버 프로세스 안에서만 — CLI `run-merge` 는 막지 못한다.** `mergeInflight` 는 `app.analytics` 인스턴스 필드라, 서버 밖에서 `pnpm --filter friendly run-merge`([run-global-merge.ts](../../apps/friendly/scripts/run-global-merge.ts) — 자체 `new AnalyticsService`)를 돌리면 03:00 스케줄 머지나 어드민 머지와 같은 DB 에서 동시에 전량 리셋 트랜잭션에 들어갈 수 있다. 서버가 도는 동안 CLI 머지는 피하거나 스케줄을 끄고 돌릴 것.
+- **`model` 이 바뀌면 "같은 값 생략" 이 전부 풀린다.** 생략 조건에 `prev.model === model` 과 `prev.version === GLOBAL_MERGE_VERSION` 이 들어 있어, 모델(env·어드민 설정)이나 버전을 바꾼 첫 머지는 모든 키를 키별 UPDATE 한다(예전 비용 그대로, 1회). 청크 캐시도 모델이 키라 같이 미스다.
+- **busy 는 0개 성공이 아니다.** `runGlobalMerge` 를 새로 부르는 코드는 `result.busy` 를 확인해야 한다 — 빈 결과(`finalGroupCount: 0`)를 그대로 성공으로 다루면 "머지했는데 0개" 로 보인다. 어드민 라우트와 스케줄 서비스는 처리하지만, 스크립트는 각자 인스턴스라 busy 가 나지 않는다.
+- **`app.analytics 싱글톤` describe 는 격리 DB 를 쓰지 않는다.** `buildFullApp()` 위에서 `seedAuthUsers` 로 어드민 사용자(`an-merge-admin`)를 `.env` 의 DB 에 넣고, `runGlobalMerge` 는 spy 로 막는다. 머지 결과를 지우지는 않지만, 이 describe 에 실제 머지를 부르는 테스트를 더하면 위 2026-08-22 사고가 재발한다 — 그때는 `useIsolatedDatabase()` 부터.
+- **운영 로그의 `[global-merge] chunk failed` 1,645건은 그대로다.** [PLAN-perf-2](../../docs/PLAN-perf-2.md) 가 "감사 범위 밖 결함" 으로 적은 LLM 타임아웃 계열 실패(같은 기간 `[summary] all retries exhausted` 1,617건)는 이번 라운드 수정 대상이 아니었다. 실패 청크는 여전히 식별 매핑 폴백 + `failedChunks` 로만 드러난다.
 - **테스트는 `.env` 의 `DATABASE_URL` 을 그대로 쓴다 → DB 를 건드리는 테스트는 반드시 `useIsolatedDatabase()`.** [docs/data-sources.md](../../docs/data-sources.md) 의 경고 그대로: "테스트는 `.env` 의 `DATABASE_URL`(= prod.db)을 그대로 쓴다. 실 데이터를 지우는 테스트가 없도록 DB 를 건드리는 테스트는 반드시 `useIsolatedDatabase()` 로 격리한다." 이 모듈이 그 사고의 당사자다(2026-08-22, 머지 결과 전량 소실 → LLM 1,352콜 복구). 새 describe 가 `deleteMany`/전량 리셋 트랜잭션을 부르면 격리부터 건다. 격리 헬퍼는 스키마 원본으로 **`apps/friendly/data/dev.db` 를 경로 하드코딩으로 복사**하지 `DATABASE_URL` 의 파일을 복사하지 않는다 — `.env` 가 prod.db 를 가리켜도 격리 DB 스키마는 dev.db 에서 오므로 dev.db 마이그레이션이 뒤처져 있으면 테스트가 엉뚱하게 깨진다.
 - **격리하면 청크 캐시가 두 패스 사이에서 히트할 수 있다.** 시드가 `GLOBAL_MERGE_CHUNK_SIZE`(10) 이하면 pass1 청크 == pass2 입력(같은 변형 목록·같은 순서)이라 `mergeChunkCacheKey` 가 같아 pass2 LLM 호출이 0회가 된다. mock 호출 순서를 가정하는 테스트는 distinct 를 11개 이상 두고 pass1 응답이 입력 집합을 바꾸게(채움을 한 그룹으로 접기) 짜야 한다 — 실데이터 위에서만 우연히 통과하던 전제를 믿지 말 것.
 - **청크 캐시 테이블은 마이그레이션에 있다 (드리프트 아님)** — `global_merge_chunk_cache` 는 [`20260619075115_add_random_crawl`](../../apps/friendly/prisma/migrations/20260619075115_add_random_crawl/migration.sql) 가 `CREATE TABLE` 한다. 과거 개발 중 수동 생성(스키마 drift)으로 운영돼 본 이력이 있을 수 있으나, **현재 커밋된 코드는 정식 마이그레이션** 이다. 운영 DB 가 이 마이그레이션 이전 상태에서 수동 테이블로 굴러왔다면 `_prisma_migrations` 와 실제 스키마 정합을 한 번 확인(`db:migrate` 적용 시 "already exists" 충돌 가능).
@@ -143,18 +158,25 @@ SSE 약속: 연결 직후 `snapshot` 1회 emit(replay). 끝난 잡이면 `done` 
 - **하한 비교 관행은 남아 있다** — 두 describe 가 이제 빈 격리 DB 에서 돌아 입력 카운트가 결정적이지만, 테스트는 여전히 절대값 대신 `toBeGreaterThanOrEqual`(inputCount ≥ 12, calls ≥ 3) + 부분 매치를 쓴다(격리 이전 dev.db 잔재 시절의 방어가 그대로). afterEach 가 `globalMenuCanonical` + `globalMergeChunkCache` 를 비운다(캐시를 안 비우면 callIndex 기반 mock 이 히트로 호출이 줄어 깨진다). 새 테스트도 같은 패턴 + 격리 유지.
 - **다이닝코드 행은 placeId null** — analytics는 네이버 전용 스코프라 placeId null인 식당은 통계 집계에서 skip(스키마 응답이 `placeId: z.string()`이라 직렬화 실패 방지).
 
-## Sources [coverage: high — 19 sources]
+## Sources [coverage: high — 26 sources]
 
+- [`apps/friendly/src/plugins/schedule.ts`](../../apps/friendly/src/plugins/schedule.ts) (2026-10-05 — `AnalyticsService` 단일 인스턴스를 `app.analytics` 로 decorate)
+- [`apps/friendly/src/modules/schedule/schedule.service.ts`](../../apps/friendly/src/modules/schedule/schedule.service.ts) (2026-10-05 — 머지 `busy` 면 `skipped: 'busy'` 스텝)
+- [`apps/web/src/routes/admin/AdminAnalyticsPage.test.tsx`](../../apps/web/src/routes/admin/AdminAnalyticsPage.test.tsx) (신규 2026-10-05 — 검색 디바운스·딥링크·카테고리 클릭 보존·되돌아온 값 구분·cron 미리보기·한 벌 렌더 8건)
+- [`apps/web/src/lib/useDebounced.ts`](../../apps/web/src/lib/useDebounced.ts) (스케줄 cron 미리보기 300ms 디바운스에 사용)
+- [`apps/web/src/lib/useMediaQuery.ts`](../../apps/web/src/lib/useMediaQuery.ts) (`useIsDesktopXl` — 목록 한 벌만 그리기)
+- [`docs/PLAN-perf-2.md`](../../docs/PLAN-perf-2.md) (5차 G-4·8차 G-V2·"모듈 묶음 → ops" 의 머지 저장 1,393→315ms, 운영 증거 `chunk failed` 1,645건)
+- [`docs/PLAN-perf-2-findings.md`](../../docs/PLAN-perf-2-findings.md) (G-4 3,000키 재저장 측정·G-V2 인스턴스 둘의 근거)
 - [`apps/friendly/src/test-utils/temp-db.ts`](../../apps/friendly/src/test-utils/temp-db.ts) (`useIsolatedDatabase` — dev.db 복사·전량 DELETE·`DATABASE_URL` 스왑/원복)
 - [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 라우트·스크립트 env 조립)
 - [`packages/utils/src/aiModel.ts`](../../packages/utils/src/aiModel.ts) (`thinkOptionForModel`)
 - [`docs/data-sources.md`](../../docs/data-sources.md) (테스트 `DATABASE_URL` 경고)
 - [`apps/friendly/src/modules/analytics/global-merge.prompts.ts`](../../apps/friendly/src/modules/analytics/global-merge.prompts.ts)
-- [`apps/friendly/src/modules/analytics/analytics.service.ts`](../../apps/friendly/src/modules/analytics/analytics.service.ts)
+- [`apps/friendly/src/modules/analytics/analytics.service.ts`](../../apps/friendly/src/modules/analytics/analytics.service.ts) (2026-10-05 — `busy`, 같은 값 UPDATE 생략·`updatedAt` 묶음 갱신, 저장 트랜잭션 timeout)
 - [`apps/friendly/src/modules/analytics/category-tree.ts`](../../apps/friendly/src/modules/analytics/category-tree.ts)
-- [`apps/friendly/src/modules/analytics/analytics.route.ts`](../../apps/friendly/src/modules/analytics/analytics.route.ts)
+- [`apps/friendly/src/modules/analytics/analytics.route.ts`](../../apps/friendly/src/modules/analytics/analytics.route.ts) (2026-10-05 — `app.analytics` 사용, busy 잡 실패 처리)
 - [`apps/friendly/src/modules/analytics/global-merge-job-registry.ts`](../../apps/friendly/src/modules/analytics/global-merge-job-registry.ts)
-- [`apps/friendly/src/modules/analytics/analytics.test.ts`](../../apps/friendly/src/modules/analytics/analytics.test.ts) (2026-08-22 — `runGlobalMerge` 블록 격리 + 채움 시드 8개)
+- [`apps/friendly/src/modules/analytics/analytics.test.ts`](../../apps/friendly/src/modules/analytics/analytics.test.ts) (2026-08-22 — `runGlobalMerge` 블록 격리 + 채움 시드 8개; 2026-10-05 — 재저장 생략·busy·`app.analytics 싱글톤` describe)
 - [`apps/friendly/scripts/run-global-merge.ts`](../../apps/friendly/scripts/run-global-merge.ts) (2026-08-22 — `buildLlmProviderEnv()`)
 - [`apps/friendly/scripts/probe-merge.ts`](../../apps/friendly/scripts/probe-merge.ts) (2026-08-22 — 동일)
 - [`apps/friendly/scripts/snapshot-global-merge.ts`](../../apps/friendly/scripts/snapshot-global-merge.ts)
@@ -163,4 +185,4 @@ SSE 약속: 연결 직후 `snapshot` 1회 emit(replay). 끝난 잡이면 `done` 
 - [`apps/friendly/prisma/migrations/20260619075115_add_random_crawl/migration.sql`](../../apps/friendly/prisma/migrations/20260619075115_add_random_crawl/migration.sql)
 - [`packages/api-contract/src/schemas/analytics.ts`](../../packages/api-contract/src/schemas/analytics.ts)
 - [`packages/api-contract/src/schemas/restaurant.ts`](../../packages/api-contract/src/schemas/restaurant.ts)
-- [`apps/web/src/routes/admin/AdminAnalyticsPage.tsx`](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx)
+- [`apps/web/src/routes/admin/AdminAnalyticsPage.tsx`](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) (2026-10-05 — `useDebouncedText`·`DebouncedInput`·`RestaurantSearchInput`, 섹션 memo, 화면 폭별 한 벌 렌더)

@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-09-26
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, weather, air-quality, tarot, saju-c, usage-quota, parking, sea, housing]
+last_compiled: 2026-10-10
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, weather, air-quality, tarot, saju-c, usage-quota, parking, sea, housing, tour, meal-nutrition]
 status: active
 ---
 
@@ -13,6 +13,7 @@ status: active
 
 ## Instances
 
+- **2026-10-05 (성능 감사 2차 — "인스턴스가 여럿이면 게이트도 여럿" 의 일괄 정리)** in [crawl](../topics/crawl.md) / [analytics](../topics/analytics.md) / [weather](../topics/weather.md) / [meal](../topics/meal.md) / [settlement](../topics/settlement.md) / [friendly](../topics/friendly.md) ([docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md) 8차): 이 컨셉이 2026-05-19(SummaryService)·2026-08-21(WeatherService)에 두 번 기록한 결함 — **라우트·플러그인마다 서비스를 따로 조립하면 그 안의 캐시·대기열·상호배제도 따로 생긴다** — 이 세 곳에서 한꺼번에 확인되고 고쳐졌다. (1) `CrawlService` 를 4곳에서 조립 → 결과 캐시 4벌(무청소, 가게당 0.18~0.35MB 상주), 대기열이 인스턴스마다라 자동 발견 잡이 **다른 인스턴스의 슬롯을 영원히 기다림**, 요약·검색 배선이 갈려 재시작 뒤 군집화 누락(A-1·A-3·A-V1) → `plugins/crawl.ts` 앱 싱글톤(`ab7dad28`). (2) 글로벌 머지 상호배제 `mergeInflight` 가 인스턴스 필드인데 `AnalyticsService` 가 둘 → 수동·스케줄 머지 동시 실행(G-V2) → `plugins/schedule.ts` 가 만든 하나를 `app.analytics` 로 decorate 해 어드민이 공유(`622bfca2`). (3) 식단 추천의 별도 `WeatherService` → `plugins/weather.ts` `app.weather`(`fd957320`). (4) 같은 결함의 게이트판: HEIC 디코드 게이트가 식단(`lib/heic-worker.ts`)과 영수증에 따로 있어 두 장이 동시에 디코드(24MP ≈ +350MB 씩) → 영수증을 식단 워커 위 얇은 어댑터로 바꿔 **프로세스 전역 동시 1건**(`0157da60`). 새 공용 세마포어 `lib/async-gate.ts` `AsyncGate(limit, { maxQueue })`(FIFO, 대기열·대기 시간 상한 넘으면 `GateBusyError`)가 식단 백업·복원(동시 1·대기 8), 복원 입구 `meal-restore-intake.ts`(본문을 **읽기 전** preParsing 에서 자리 확보 — 기다리는 요청마다 75MB 본문이 쌓이던 것, `a026c6d9`), HEIC(1·8), 메뉴 칼로리 백그라운드 체인(2·16)에 쓰이고, 같은 모양이 공유 이미지 렌더 슬롯(`lib/share-render.ts` 동시 1·대기 16 → `ShareRenderBusyError` 503)·여행 집계 콜드 계산(동시 2)·리뷰 질문 LLM(동시 4)에도 있다. PLAN 은 "세마포어 구현 2종(`modules/ai/concurrency-gate`·`lib/async-gate`) 통합" 을 후속으로 적었지만 실제로는 **넷**이다 — 공유 렌더 슬롯(`share-render.ts` 의 `active`·`waiting`)과 썸네일 미스 동시 4·대기 128(`media/thumbnail-cache.ts`)도 각자 손으로 짠 카운터+대기열이다. 같은 라운드에 같은 모양을 네 번 만든 것 자체가 "공용 게이트가 있어도 찾지 않으면 다시 짠다" 의 사례.
 - **2026-09-24~25** in [parking](../topics/parking.md) / [sea](../topics/sea.md) / [housing](../topics/housing.md) (`2ff2c31`·`4a2bff1`·`ad48f96`): 이번 라운드의 세 도메인이 같은 도구 세 가지를 나눠 썼다. (1) **폴러 overlap skip** — `ParkingLiveService.poll()`·`EvStatusPoller` 가 `if (this.running) return` 으로 이전 tick 이 안 끝났으면 건너뛰고 `finally` 에서 푼다(schedule 레지스트리의 "동시 1개 inflight + overlap skip" 의 단일 서비스판). 실시간 값은 `lots: Map` 한 벌을 tick 마다 **새 Map 으로 통째 교체**하고, 원천별로 실패하면 그 원천만 직전 값 유지 + stale 표시 — 요청 경로는 이 Map 을 읽기만 해서 업스트림 0콜. (2) **캐시 + in-flight 합류** — `SeaService` 가 `cache: Map`(활동별 1시간·물때 12시간, 실패 시 12시간 stale) 옆에 `inflight: Map<key, Promise>` 를 두어 같은 키의 동시 미스가 한 번만 업스트림을 부른다(`load().finally(() => inflight.delete(key))` — 버스·지하철·대기의 in-flight 합류와 같은 형태). (3) **단일 적재 약속** — `HousingFloodIndex` 는 `pending: Promise` 하나로 메모리 격자(0.002°) 적재를 한 번만 돌리고, 최신 `LifeMasterSync(flood).id` 가 바뀔 때만 다시 짓는다(적재 이력 행이 캐시 버전). 셋 다 프로세스 메모리라 인스턴스 하나 전제이고, 폴러의 시작 자체는 `onListen` 에만 걸려 테스트·스크립트 프로세스에는 게이트가 생기지 않는다([server-only-boot-effects](server-only-boot-effects.md)).
 - **2026-09-06** in [saju-c](../topics/saju-c.md) (`saju-jobs.ts`): `SajuJobRegistry` — 풀이 1건이 섹션 4개 병렬 LLM 호출, 클라이언트는 `GET …/jobs/:id?after&wait` long-poll 로 도착 순 수신. 메모리 Map(단일 인스턴스), 완료 후 TTL 5분, 최대 200(넘치면 오래된 것부터), 서버 재시작이면 410 → 클라이언트는 정적 본문 유지 + 재시도. 회원 저장은 4개가 모두 끝난 뒤 한 번(`persistPending`).
 - **2026-09-03** in [tarot](../topics/tarot.md) / [usage-quota](../topics/usage-quota.md): LLM 호출은 기존 `ConcurrencyGate`/계정 게이트를 타고, 일일 한도는 DB 카운터([anonymous-usage-quota](anonymous-usage-quota.md)) — 메모리 게이트(동시성)와 DB 한도(예산)의 역할 분리가 명시됐다.
@@ -66,6 +67,8 @@ status: active
 9. **게이트 수명과 그 게이트를 쓰는 캐시 수명을 분리하라** (2026-06, ai) — `accountGateRegistry` 가 어댑터 캐시 회전과 독립 수명을 가지는 이유: 설정 변경으로 어댑터가 재생성되는 순간 새 어댑터가 새 게이트를 만들면, 옛 어댑터의 in-flight 와 합쳐져 같은 계정에 cap 초과 호출이 일시적으로 발생한다. **게이트는 그것이 보호하는 자원(계정)의 정체성에 묶여야지, 그 자원을 쓰는 캐시 엔트리에 묶이면 안 된다**.
 10. **회계 대상이 "사용권" 이면 게이트가 아니라 DB 다** (2026-08, meal) — 같은 "일일 한도" 라도 bus 는 시스템 외부 예산이라 in-memory 로 충분했고, meal 은 사용자별 사용권이라 SQLite 원자 upsert 로 갔다. 판별 기준은 "재시작으로 리셋돼도 되는가" 와 "우회되면 누가 손해를 보는가" — 사용자 간 공정성이나 비용이 새는 값은 영속화. 이 패턴이 디폴트라도 이 축에서는 예외가 옳고, 메모리 게이트(barrier·합류)는 그 옆에서 순서·중복만 맡는다.
 
+11. **싱글턴의 단위는 모듈이 아니라 앱이다** (2026-10, 성능 감사 2차). "모듈 스코프 변수 하나 = 게이트 하나" 는 그 모듈을 감싼 서비스 객체가 하나일 때만 참이다. 서비스가 생성자 안에 캐시·대기열·`inflight` 를 들고 있으면 `new` 할 때마다 게이트가 복제되고, 복제는 테스트에서 안 보인다(각 테스트는 한 경로만 친다). 이번 라운드에 같은 결함이 크롤·머지·날씨·HEIC 네 곳에서 한 번에 나온 뒤 처방이 굳었다 — **상태를 가진 서비스는 fastify 플러그인이 한 번 만들어 `app.<name>` 으로 decorate 하고, 라우트·스케줄·다른 플러그인은 그것만 쓴다**(`plugins/crawl.ts`·`schedule.ts`·`weather.ts`·`summaries.ts`). 정말 프로세스 전역이어야 하는 자원(HEIC wasm 메모리, 렌더 스레드풀)은 모듈 스코프 게이트 하나를 여러 어댑터가 공유한다. 싱글턴 동일성 자체를 테스트로 고정하는 것이 재발 방지책이다 — `crawl.test.ts` 의 `crawl singleton wiring & job list`(랜덤 크롤의 `deps.crawl` 이 `app.crawl` 과 같은 객체, 요약·검색 배선도 앱 싱글톤), `analytics.test.ts` 의 `app.analytics 싱글톤`. 게이트가 막는 대상도 넓어졌다 — 순서·슬롯 회계에서 **메모리 피크**(동시 디코드·렌더·복원 본문이 곱해지는 것)로. 메모리용 게이트는 "대기열이 넘치면 거절(503)" 이 기본이다 — 무한히 기다리게 하면 기다리는 요청 자체가 메모리를 든다. ⚠️ 단 그 503 이 클라이언트에 503 으로 닿는지는 별개다: 라우트가 `app.httpErrors.serviceUnavailable(...)` 를 **던지면** 전역 `plugins/error-handler.ts` 가 statusCode 500 이상을 전부 `500 Something went wrong` 으로 바꾼다(식단 백업·복원 바쁨 `meal.route.ts`, 영수증 HEIC 바쁨, 사주(G) — 2026-10-10 확인). `reply.status(503).send` 로 직접 답하는 실시간 API(`reply-upstream-error`)만 503 이 그대로 나간다. 문서(`docs/api/README.md`)는 503 이라 적고, 복원 입구 테스트는 에러 핸들러 없는 맨 Fastify 로 돌아 이 차이를 못 잡는다.
+
 이 패턴이 깨질 수 있는 시점:
 - **다중 Fastify 인스턴스로 스케일 아웃** — 모듈 싱글턴은 프로세스 안에서만 의미. 여러 인스턴스가 같은 placeId 잡을 돌리면 dedupe도 cap도 cross-process에서 안 통함. 그 시점이 진짜 외부 큐가 필요한 시점.
 - **사이드 이펙트가 있는 라이브러리 import** — 모듈 싱글턴은 import 한 번만 되면 인스턴스 1개. 그런데 jest/vitest의 모듈 분리, esm/cjs dual 빌드, 동일 패키지 두 개의 다른 버전 설치(워크스페이스에서) 같은 시나리오에서 두 인스턴스가 생길 수 있음. `pnpm dedupe`로 보호.
@@ -97,3 +100,10 @@ status: active
 - [sea](../topics/sea.md)
 - [housing](../topics/housing.md)
 - [server-only-boot-effects](server-only-boot-effects.md)
+- [tour](../topics/tour.md)
+- [meal-nutrition](../topics/meal-nutrition.md)
+- [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md)
+- [apps/friendly/src/lib/async-gate.ts](../../apps/friendly/src/lib/async-gate.ts)
+- [apps/friendly/src/plugins/crawl.ts](../../apps/friendly/src/plugins/crawl.ts)
+- [bounded-byte-caches](bounded-byte-caches.md)
+- [sqlite-write-lock-budget](sqlite-write-lock-budget.md)

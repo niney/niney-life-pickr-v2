@@ -1,12 +1,14 @@
 ---
 topic: ai
-last_compiled: 2026-10-04
-sources_count: 83
+last_compiled: 2026-10-10
+sources_count: 96
 status: active
-aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think, thinking, 추론, 추론 선택, 추론 5단계, LlmThinking, LlmThinkingType, LlmThinkingSetting, LLM_THINKING_SETTINGS, ThinkOption, thinkOptionFor, thinkTokenMult, isKimiModel, kimi 전용, kimi-only-thinking, llm_provider_configs.thinking, LlmProviderConfig.thinking, 20260912120000_add_llm_provider_thinking, add_llm_provider_thinking, aiModelThink, aiModelThink.test, THINKING_OPTIONS, THINK_TIMEOUT_MAX_MS, think-max, done_reason=length, meal-supplement, purpose-9종, 영양제 조언, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, MEAL_NUTRITION_ADVICE_VERSION, meal-nutrition-advice, MealNutritionAdviceService, sanitizeAdvice, MAX_ENTRIES=16, MEAL_RECOMMENDATION_VERSION, 추천 프롬프트 v5, common-meals, probe:meal-models, probe:meal-nutrition, 모델 비교, gpt-oss vs kimi-k3]
+aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think, thinking, 추론, 추론 선택, 추론 5단계, LlmThinking, LlmThinkingType, LlmThinkingSetting, LLM_THINKING_SETTINGS, ThinkOption, thinkOptionFor, thinkTokenMult, isKimiModel, kimi 전용, kimi-only-thinking, llm_provider_configs.thinking, LlmProviderConfig.thinking, 20260912120000_add_llm_provider_thinking, add_llm_provider_thinking, aiModelThink, aiModelThink.test, THINKING_OPTIONS, THINK_TIMEOUT_MAX_MS, think-max, done_reason=length, meal-supplement, purpose-9종, 영양제 조언, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, MEAL_NUTRITION_ADVICE_VERSION, meal-nutrition-advice, MealNutritionAdviceService, sanitizeAdvice, MAX_ENTRIES=16, MEAL_RECOMMENDATION_VERSION, 추천 프롬프트 v5, common-meals, probe:meal-models, probe:meal-nutrition, 모델 비교, gpt-oss vs kimi-k3, acquireLlmTelemetryStream, isLlmTelemetryConnected, 텔레메트리 스트림 공유, RecentCallRow, invalidateProviders, 모델 카탈로그 재조회, review-ask, ASK_CHAT_CONCURRENCY, askChatGate, chatJson, 게이트 밖 LLM 호출, MEMBER_PER_DAY, 회원 일일 100, member_daily, AsyncGate, GateBusyError, 세마포어 통합, TOUR_COLD_CONCURRENCY, BACKGROUND_CHAINS, FailureBackoff, MENU_FAILURE_BACKOFF_MS, MENU_FAILURE_GIVE_UP_AFTER, 메뉴 칼로리 LLM 동시 8]
 ---
 
 # ai — LLM 통합(Ollama Cloud): 용도별 provider 설정·어댑터·2단 게이트·텔레메트리
+
+> **2026-10-05 변경 흡수 — ai 모듈 서버 코드는 그대로이고, 바뀐 것은 둘레다: 텔레메트리 SSE 를 QueryClient 당 하나로 공유하고 AI 설정 저장 뒤 재조회를 줄였다(`c5052742`). LLM 앞단 한도·동시성 상한도 셋 늘었다 — 회원 하루 100회(`78cbb457`), 공개 리뷰 질문 `review-ask` 한도와 LLM 동시 4(`ab7dad28`), 메뉴 칼로리 백그라운드 LLM 최대 8(`7b060ca4`).** 이번 라운드 40커밋 중 `apps/friendly/src/modules/ai/` 를 고친 커밋은 없다. ai 쪽 변화는 shared 훅과 웹 어드민 화면, 그리고 이 모듈을 부르는 쪽의 한도·게이트다. (1) **텔레메트리 스트림 공유** — [useLlmTelemetry.ts](../../packages/shared/src/hooks/useLlmTelemetry.ts) 가 EventSource 를 훅마다 열지 않는다. `WeakMap<QueryClient, TelemetryStream>` 에 구독 수를 세어 첫 구독에 열고 마지막 해제에 닫는다(`acquireLlmTelemetryStream(qc)` — 같은 해제를 두 번 불러도 한 번만 센다). 연결 상태는 `useSyncExternalStore` 로 모든 훅이 같이 본다(`isLlmTelemetryConnected`). 끊기면 1→2→…→30초 백오프 재연결이고, 그 사이 구독이 다 풀리면 다시 열지 않는다. 예전엔 어드민 전 페이지 플로팅 패널([LlmUsagePanel](../../apps/web/src/components/admin/LlmUsagePanel.tsx))과 [AdminAiUsagePage](../../apps/web/src/routes/admin/AdminAiUsagePage.tsx) 가 각자 스트림을 열어 같은 스냅샷을 초당 두 번 받고 캐시를 두 번 덮어 두 화면을 두 번씩 그렸다. 사용량 페이지의 최근 호출 표는 `RecentCallRow`(`memo`, 비교 키 `id` + `at` — 서버 재시작 뒤 callId 가 1부터 다시 매겨져서)로 새 줄만 그린다. (2) **AI 설정 저장 뒤 재조회** — [useAi.ts](../../packages/shared/src/hooks/useAi.ts) 의 `useUpdateProvider`/`useDeleteProvider` 가 `['ai','providers']` 접두사 무효화 대신 `invalidateProviders(qc, catalogOf?)` 를 쓴다. 목록은 정확 일치(`exact: true`)로만 무효화하고, 모델 카탈로그(`['ai','providers',id,purpose,'models']` — 서버가 캐시 없이 외부 `/api/tags` 를 부른다)는 `apiKey`·`baseUrl` 이 바뀔 때(삭제 포함)만 같이 무효화한다. 용도 카드에서 모델만 저장하면 카탈로그 요청이 나가지 않는다. 신규 웹 테스트 [AdminAiKeysPage.test](../../apps/web/src/routes/admin/AdminAiKeysPage.test.tsx)·[AdminAiUsagePage.test](../../apps/web/src/routes/admin/AdminAiUsagePage.test.tsx), shared [useLlmTelemetry.test](../../packages/shared/src/hooks/useLlmTelemetry.test.ts) 5건. (3) **LLM 앞단 예산** — [usage-quota](usage-quota.md) 가 회원도 기능별 하루 100회(`MEMBER_PER_DAY = 100`, 거절 사유 `member_daily`)로 센다(`78cbb457`, findings F-4). 2026-09-02 의 "회원은 IP·개인 일일 한도 면제" 결정을 바꾼 것이다 — 무료 계정 하나로 전역 예산(사주 3,000/일)을 약 21분에 태워 그날 모든 게스트를 정적 폴백으로 밀어낼 수 있었다. 상수를 `null` 로 두면 예전처럼 무제한이다. 기능 enum 에 `review-ask`(공개 리뷰 질문 — 캐시 미스 1건 = 임베딩 1 + LLM 최대 3콜, 게스트 30·IP 300·전역 3,000/일)가 더해져 LLM 앞단 한도를 소비하는 공개 기능이 넷이 됐다(`ab7dad28`). (4) **이 모듈 밖에서 쓰는 동시성 상한** — 공개 리뷰 질문의 리랭크·답변·검증 LLM 은 [review-search.service.ts](../../apps/friendly/src/modules/review-search/review-search.service.ts) 의 `askChatGate = new ConcurrencyGate(4)`(`ASK_CHAT_CONCURRENCY`) 안에서만 돈다. 같은 질문은 20분 답변 캐시와 진행 중 합류로 받는다. 이 경로의 `chatJson` 은 `adapterCache` 가 아니라 `/api/chat` 직접 fetch 라 purpose·계정 게이트와 텔레메트리를 거치지 않는다 — 그래서 로컬 게이트로 묶었다. 이 사실은 이번에 확인한 것이고, 아래 Purpose·Gotchas 의 "review-search·review-clustering 은 chat purpose 게이트 경유" 라는 이전 서술을 고쳤다. 메뉴 칼로리 백그라운드 판정([food](food.md))은 프로세스 전역 2체인(`BACKGROUND_CHAINS`, 대기 16 — [lib/async-gate.ts](../../apps/friendly/src/lib/async-gate.ts) `AsyncGate`) × 체인당 LLM 4로 최대 8이다(PLAN 실측 64 → 8, `7b060ca4`). 실패한 이름은 30분 재시도 간격을 두고(`FailureBackoff`), 응답 해석 실패가 3번 쌓이면 '포기' 를 영구 저장한다. 업스트림 장애(타임아웃·429·5xx)는 이름 탓이 아니라 횟수에 넣지 않는다. 여행 인사이트 콜드 계산도 ai 의 `ConcurrencyGate`(`TOUR_COLD_CONCURRENCY = 2`)를 빌려 쓴다([tour](tour.md)). (5) **남은 것** — [PLAN-perf-2](../../docs/PLAN-perf-2.md) "남은 것(후속)": "세마포어 구현 2종(`modules/ai/concurrency-gate`·`lib/async-gate`) 통합". 실제로는 공유 이미지 렌더(`lib/share-render.ts` 의 `active` 카운터)와 썸네일 미스 게이트(`media/thumbnail-cache.ts` 의 `waiters`)까지 손으로 짠 세마포어가 넷이다(Gotchas).
 
 > **2026-09-25~10-04 변경 흡수 — 아홉 번째 purpose `meal-supplement`(영양제 조언, 기본 kimi-k3) 신설과 어댑터 캐시 상한 8 → 16(`3d067a0`), 식단 추천 프롬프트 v3~v5(`e3afe9c`·`2aaaa7e`), 모델 비교 프로브 2종(`probe:meal-models` `7056244` · `probe:meal-nutrition` `c502759`).** 41커밋 중 ai 모듈을 직접 고친 건 `3d067a0` 한 건(4파일: [`adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts)·`adapter-cache.test.ts`·[`ai.config.service.test.ts`](../../apps/friendly/src/modules/ai/ai.config.service.test.ts)·[`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts))이고, 사주(C)·타로 앱 네이티브 전환(`04f009e`~`64c49db`)은 기존 `saju`·`tarot` 경로를 그대로 부른다(shared `useSajuSession`·`useTarotSession` 은 HTTP 층이라 LLM 호출 옵션 변화 없음). (1) **용도 9종** — 계약 [`ai.ts`](../../packages/api-contract/src/schemas/ai.ts) `LlmProviderPurpose` 에 `meal-supplement`(텍스트 — 식단 기록 영양소 점검의 영양제 조언)를 `meal-recommend` 다음에 끼웠다. 같은 값을 `buildLlmProviderEnv().defaultModels`·utils `ModelPurpose`(순환 금지라 재선언)·어드민 `PURPOSE_ORDER`/`PURPOSE_META`(아이콘 `Pill`, placeholder `kimi-k3`, **`thinking: true`**) 네 곳에 더했고 `list()` 는 이제 **아홉 장**을 합성한다. env `OLLAMA_MEAL_SUPPLEMENT_MODEL` 은 `env.ts` **코드 기본값 `kimi-k3`**(tarot·saju·saju-g 에 이은 네 번째 비어 있지 않은 기본) — `.env` 에서 빈 값으로 덮으면 모델이 없어 서버 문장(`status: 'fallback'`)만 쓴다. `recommendModelForPurpose('meal-supplement')` 는 saju·saju-g 와 같은 계열 우선순위(`kimi-k3 → deepseek-v4-pro → kimi-k2.6`), 계열이 없으면 chat 과 같은 텍스트 중앙값(`aiModel.test` +1). (2) **`AdapterCache.MAX_ENTRIES` 8 → 16** — 27차까지 Gotchas 에 적었던 "상한이 purpose 수(8)와 같다" 가 용도 9개로 실제로 넘치게 되자 올렸다. 상한은 여전히 키 회전 쓰레기만 막는 안전벨트이고 축출은 삽입순이라 **가장 먼저 만들어진(대개 chat) 어댑터가 먼저 밀린다**는 주석이 붙었다. 신규 테스트 "용도 9개를 모두 써도 서로 밀어내지 않는다". (3) **새 컨슈머 [`MealNutritionAdviceService`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts)** — 판단(무엇이 얼마나 모자란지·부족분·상한)은 [`meal-nutrition.service`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts) 가 KDRI 2020 으로 결정적으로 끝내고 LLM 은 **최대 6개 '조언 대상'의 문장만** 쓴다([meal](meal.md)). 호출 프로필 temperature 0.3·maxTokens 2000·numCtx 8192·90s, `format` = 후보 key 를 `enum` 으로 박은 JSON schema(`buildMealNutritionAdviceJsonSchema(keys)`), `think = thinkOptionFor(model, resolved.thinking)` + `thinkTokenMult` 배수로 maxTokens·타임아웃(상한 180s) — **어드민 추론 설정을 읽는 두 번째 컨슈머**(사주(C) 다음). 응답은 `sanitizeAdvice` 가 칸마다 검사해 한자(`\p{Script=Han}`)·치료/완치/예방·점검 밖 영양소(마그네슘·아연·오메가-3…)·**프롬프트에 없는 용량 숫자**가 있으면 그 칸만 서버 문장으로 바꾸고, 영양제를 권하지 않는 영양소는 모델이 뭐라 써도 `supplementTip` 을 비운다. 프롬프트 [`meal-nutrition.prompts.ts`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.prompts.ts) `MEAL_NUTRITION_ADVICE_VERSION = 1` — 캐시 키(`adviceHash` = sha1(버전·days·분석))와 저장 행 `promptVersion` 에 함께 들어간다. 같은 날·같은 점검이면 저장본(`meal_nutrition_advices`, `done`·`insufficient` 만 재사용, fallback 은 다시 부름), 일일 한도 `MEAL_SUPPLEMENT_DAILY_LIMIT`(기본 10, `meal_daily_quotas.purpose = 'supplement'`)·분당 5(`RATE.mealSupplement`)는 **캐시 miss·조언 대상이 있을 때만** LLM 앞단에서 소비. 운영 로그 feature `meal-nutrition-advice`(어드민 로그 라벨 '영양제 조언'). (4) **식단 추천 프롬프트 v3 → v4 → v5**([`meal-recommendation.prompts.ts`](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.prompts.ts), 27차 위키는 v2 로 적고 있었다): v3 알레르기 줄 + "이번 추천의 중심"(4 이상 최고 중요도) 문장(`e3afe9c`), v4 반찬·안주·간식 단독 금지 + 건강 중심 힌트에 '전', v5 '안 드셨다' 근거 — 프로필 요약에 최근 2주 조리형태·주재료·계통 분포를 개수로 전부, 안 먹은 축 줄, 균형 태그는 실제로 2주간 안 먹은 축에만, 후보 줄에 그 조리형태 2주 개수(`2aaaa7e`). 호출 옵션은 그대로(0.4·1200·8192·60s·`thinkOptionForModel` — **어드민 추론 설정은 읽지 않는다**). 후보 풀은 새 [`common-meals.ts`](../../apps/friendly/src/modules/meal-recommendation/common-meals.ts)(13무리 209개 흔한 한 끼)부터 — LLM 이 아닌 후보 층의 변화. (5) **모델 비교 프로브 2종** — [`probe-meal-models.ts`](../../apps/friendly/scripts/probe-meal-models.ts)(`--models` 기본 `gpt-oss:120b,kimi-k3`, `--repeat`, `--from-raw` 로 저장한 원 응답 재채점, 18 시나리오 — 이유의 사실 확인 판정기 내장): v4 기준 p50 2.0s vs 5.7s · 틀린 주장 10/69(14%) vs 40/192(21%) · kimi 는 늘 5개를 고르고 세트 안 조리형태 겹침 3% vs 15% → **추천은 gpt-oss:120b 유지**, v5 재비교(18×2)도 p50 1.9s vs 6.5s·겹침 8%/6% vs 24%/26% 로 유지([PLAN-meal](../../docs/PLAN-meal.md) 10-04 기록). [`probe-meal-nutrition.ts`](../../apps/friendly/scripts/probe-meal-nutrition.ts)(`--models` 기본 `kimi-k3,gpt-oss:120b`, 가상 A·B·C·E + `--email`, prod.db 거부): kimi-k3 5/5·p50 12.9s·바꾼 칸 0 vs gpt-oss 5/5·4.3s 지만 '~합니다'체·나열식 → **영양제 조언은 kimi-k3**. 즉 같은 식단 도메인 안에서 "자주 누르는 추천은 빠르고 덜 틀리는 모델, 가끔 보는 리포트는 구체적인 모델" 로 용도를 갈랐다. 두 프로브 모두 `adapterCache` 경유(텔레메트리에 잡힘)지만 호출 상수(`LLM = {…}`)를 서비스에서 import 하지 않고 복사했고 `think` 는 `thinkOptionForModel` 이라 어드민 추론 설정을 반영하지 않는다(Gotchas). (6) **테스트 픽스처 누락은 더 늘었다** — `'meal-supplement'` 키를 넣은 `LlmProviderEnv` 픽스처는 `ai.config.service.test` 하나뿐이다 — `adapter-cache.test` 는 새 테스트의 용도 배열엔 넣었지만 파일 머리 `ENV.defaultModels`(18~19행)엔 빠졌고, 나머지 7개(`ai.service.test`·analytics·tabling.service·menu-grouping·review-clustering·saju·summary)도 9번째 키 없이 돈다(friendly tsconfig 가 `*.test.ts` 제외 — 27차 Gotchas 그대로).
 
@@ -24,7 +26,7 @@ aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, im
 >
 > **2026-05-25 변경 흡수 — provider purpose 분리 (chat/image) + 영수증 추출 vision LLM 컨슈머 신규.** `LlmProviderConfig` 의 unique 키가 `(provider, purpose)` 로 확장되어 같은 `ollama-cloud` 에서도 텍스트 추론 (`chat`) 과 비전 (`image`) 모델을 별도 row 로 운영한다. AI 라우트의 모든 `:id` 엔드포인트가 `:purpose` 파라미터를 추가로 받고, `AiConfigService.getResolved(provider, purpose)` 가 purpose 별로 다른 ResolvedProviderConfig 를 반환한다. `adapterCache` 키에도 purpose 가 포함돼 chat/image 어댑터·FIFO 게이트가 분리된다. env fallback 은 `chat` purpose 에만 적용 — `image` 는 DB row 가 있어야 활성화된다. 신규 컨슈머 [`settlement-extraction`](settlement.md) 모듈이 `getResolved('ollama-cloud', 'image')` 로 vision provider 를 얻어 영수증 → 구조화 항목 추출에 사용. 어드민 UI(`AdminAiKeysPage`)는 (provider × purpose) 조합별로 카드를 그리고 "다른 용도 추가" 버튼으로 신규 조합을 등록할 수 있다. `AdminAiTestPage` 는 현재 chat 만 다룬다.
 
-## Purpose [coverage: high — 15 sources]
+## Purpose [coverage: high — 17 sources]
 
 `apps/friendly`의 LLM 통합 모듈. Ollama Cloud(`https://ollama.com`)를 기본 백엔드로
 두고, 어드민 전용으로 노출되는 텍스트 컴플리션·배치 컴플리션·프로바이더 설정
@@ -81,9 +83,11 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
   (`MENU_GROUPING_VERSION`). `chat` purpose.
 - [`analytics`](analytics.md) 모듈 — 식당 가로지르기 글로벌 머지 두-패스
   (`GLOBAL_MERGE_VERSION`). `chat` purpose.
-- [`auto-discover`](auto-discover.md)(검색어 생성) / [`review-search`](review-search.md)(리랭크·
-  RAG·검증) / [`review-clustering`](review-clustering.md)(군집 라벨) / [`food`](food.md) 의
+- [`auto-discover`](auto-discover.md)(검색어 생성) / [`food`](food.md) 의
   `food-classify`(`FOOD_CLASSIFY_VERSION`, 40개 청크) — 모두 `chat` purpose. 상세는 각 토픽.
+  ([`review-search`](review-search.md)(리랭크·RAG·검증)·[`review-clustering`](review-clustering.md)(군집
+  라벨)도 `chat` row 의 키·모델을 쓰지만 **어댑터를 거치지 않는다** — 아래 "게이트 밖 컨슈머". 2026-10-05
+  이전 위키는 이 둘을 게이트 경유로 적고 있었다.)
 - [`settlement-extraction`](settlement.md) 모듈 — 영수증 이미지 → 메뉴/금액 구조화
   추출 (`EXTRACTION_VERSION`). **`image` purpose**. 도메인 자체는 settlement 토픽 참고.
 - [`log-analysis`](../../apps/friendly/src/modules/logs/log-analysis.service.ts) 모듈
@@ -117,16 +121,23 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
   분해(`MENU_LLM_MATCH_VERSION` / `MENU_LLM_DECOMPOSE_VERSION = 3`). **`chat` purpose + 모델
   override `OLLAMA_MENU_MATCH_MODEL`**. 어휘 단위 영구 캐시라 호출 자체가 드물다.
 
-임베딩 컨슈머(별개 경로 — LLM 게이트/텔레메트리 안 거침):
+게이트 밖 컨슈머(별개 경로 — LLM 게이트/텔레메트리 안 거침):
 
-- [`review-search`](review-search.md) / [`review-clustering`](review-clustering.md)
+- **임베딩** — [`review-search`](review-search.md) / [`review-clustering`](review-clustering.md)
   — Ollama 의 `/api/embed` 를 **직접 fetch** (전용 `OLLAMA_EMBED_BASE_URL`/
   `OLLAMA_EMBED_MODEL` env 를 `process.env` 에서 직접 읽음, `embed()` 내부 헬퍼;
   기본 `http://localhost:11434` + `bge-m3`). chat/image 어댑터·게이트와 무관하고
   텔레메트리 집계에도 안 잡힌다.
   ai 토픽에선 "임베딩은 별도 경로" 정도만 — 상세는 각 토픽.
+- **chat 도 직접 fetch** — 같은 두 모듈의 LLM 호출(review-search `chatJson` — 리랭크·답변·검증·enrich,
+  review-clustering 군집 라벨)은 `getResolved('ollama-cloud','chat')` 로 키·baseUrl·`defaultModel` 만 받아
+  `${baseUrl}/api/chat` 을 `fetchWithTimeout(…, 60s)` 로 직접 부른다(`adapterCache` import 없음). 그래서
+  purpose·계정 게이트, 429 백오프, `think` 조립, 텔레메트리가 모두 빠진다. 2026-10-05 `ab7dad28` 부터 공개
+  질문 경로만 모듈 로컬 `ConcurrencyGate(4)`(`ASK_CHAT_CONCURRENCY`)로 묶는다. 주석: "chatJson 은 어댑터의
+  계정 게이트를 거치지 않으므로, 몰리는 공개 질문이 요약·enrich 의 계정 동시성을 잠식하지 않게". enrich 는
+  자체 `ENRICH_CONCURRENCY` 로 따로 돈다.
 
-LLM 게이트 도메인들은 모두 같은 `adapterCache` import + `AiConfigService.getResolved(...)`
+LLM 게이트 도메인들(위 목록 — 게이트 밖 둘 제외)은 모두 같은 `adapterCache` import + `AiConfigService.getResolved(...)`
 경로를 거치므로 동시성 캡(2단) + 429 재시도/백오프 + 텔레메트리 계측이 도메인을
 가리지 않고 적용된다. 도메인별로 다른 건 prompt + JSON schema 모양 + 청크 사이즈 + purpose.
 
@@ -156,7 +167,7 @@ LLM 게이트 도메인들은 모두 같은 `adapterCache` import + `AiConfigSer
   쓰는지"를 실시간으로 본다. 모든 호출이 한 어댑터 경로로 수렴하는 구조를 이용해
   호출부 수정 없이 계측.
 
-## Architecture [coverage: high — 27 sources]
+## Architecture [coverage: high — 29 sources]
 
 ```
 apps/friendly/src/modules/ai/
@@ -386,8 +397,10 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 요청 흐름(공개 기능 — 타로 `tarot` / 사주(C) `saju` / 사주(G) `saju-g`, 2026-09-02~06):
 
 1. 라우트가 `resolveOptionalUser`(회원/게스트) → [usage-quota](usage-quota.md) 의 기능별 한도
-   (`tarot-reading`/`saju-reading`/`saju-g-reading`: 게스트 키·IP·전역 예산)를 **먼저 소비**.
-   초과면 429 — LLM 경로에 진입하지 않는다(meal 일일 quota 와 같은 "다른 층").
+   (`tarot-reading`/`saju-reading`/`saju-g-reading`, 2026-10-05 부터 공개 리뷰 질문 `review-ask` 까지 넷:
+   게스트는 게스트 키·IP·전역 예산, 회원은 전역 예산 + **기능별 하루 100회**(`MEMBER_PER_DAY`, 2026-10-05
+   `78cbb457` — 그 전엔 회원 무제한))를 **먼저 소비**. 초과면 429 — LLM 경로에 진입하지 않는다(meal 일일
+   quota 와 같은 "다른 층").
 2. 서비스가 lru 캐시(타로 `CACHE_MAX 2000`, 사주(C) 4000, TTL 24h; 키에 `*_PROMPT_VERSION` 포함)를
    본 뒤 `getResolved('ollama-cloud', <purpose>)` → `defaultModel` 비면 **정적 본문**(타로
    `buildStaticReading`/`buildStaticMenuVerdict`(`tarot-static.ts`), 사주(C) `buildStaticSections`,
@@ -417,9 +430,13 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 
 요청 흐름(메뉴 칼로리 매칭 — `chat` purpose + 모델 override, 2026-09-02 `d12b47d`):
 
-1. 식당 상세 응답 후 백그라운드로 `MenuLlmMatchService.matchMany`(식당당 최대 60개 이름,
-   `LLM_CONCURRENCY 4`, 30s) — 어휘 단위 캐시(`MenuLlmMatch` 행, `version >= MENU_LLM_MATCH_VERSION`)
-   미스만 LLM 에 묻는다.
+1. 공개 메뉴 칼로리 조회(`GET /restaurants/public/:placeId/menu-nutrition`) 응답 후 백그라운드로
+   `MenuLlmMatchService.matchMany`(식당당 최대 60개 이름, `LLM_CONCURRENCY 4`, 30s) — 어휘 단위 캐시(`MenuLlmMatch` 행,
+   `version >= MENU_LLM_MATCH_VERSION`) 미스만 LLM 에 묻는다. 2026-10-05 `7b060ca4` 부터 이 백그라운드 체인은
+   프로세스 전역 2개(`BACKGROUND_CHAINS`, 대기열 16 — 넘치면 이번엔 안 띄우고 다음 조회 때 다시 본다,
+   `lib/async-gate` `AsyncGate`)라 LLM 동시 호출이 최대 2×4 = 8이다(예전엔 placeId 를 훑으면 체인이 무한히 겹쳐
+   실측 64). 실패한 이름은 `FailureBackoff`(30분 간격, 해석 실패 3회면 '포기' 판정을 저장)로 다시 묻지 않는다.
+   판정이 끝난 응답에는 `Cache-Control: public, max-age=600`.
 2. `getResolved('ollama-cloud', 'chat')` 로 키·게이트를 받되 **모델은 `opts.model`**
    (`env.OLLAMA_MENU_MATCH_MODEL`, 기본 gemma4:31b)로 덮어쓴다. 비우면 chat 기본 모델.
 3. `format: MENU_LLM_MATCH_JSON_SCHEMA`, maxTokens 300, numCtx 4096(세트 분해는 2048),
@@ -465,7 +482,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
    (jwtVerify 우선, 실패 시 query token 검증). role !== ADMIN 이면 401. analytics/
    auto-discover SSE 와 동일 패턴 ([sse-token-auth](../concepts/sse-token-auth.md)).
 
-## Talks To [coverage: high — 25 sources]
+## Talks To [coverage: high — 30 sources]
 
 **상류(upstream — 모듈을 호출하는 측):**
 
@@ -480,14 +497,18 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   → 드롭다운 선택 → 저장". **2026-09-12 `a823af1` 부터 사주(C) 행에 "추론(thinking) — kimi 모델 전용"
   `<select>`**(`PURPOSE_META.saju.thinking = true` — 2026-10-04 부터 `PURPOSE_META['meal-supplement'].thinking = true`(아이콘 `Pill`, "영양제 조언")도 — + `isKimiModel(shownModel)` 일 때만 렌더, `THINKING_OPTIONS`
   5개, `thinkingDraft`/`thinkingDirty` 로 `UpdateLlmProviderInput.thinking` 을 PUT — shared `useUpdateProvider`
-  는 변경 없이 계약 타입을 그대로 흘린다). `AdminAiTestPage` 는 `useCompleteAi` / `useCompleteBatchAi`
+  는 변경 없이 계약 타입을 그대로 흘린다). 2026-10-05 부터 저장·삭제 뒤 무효화는 목록(`['ai','providers']`
+  정확 일치)만 하고, 모델 카탈로그는 `apiKey`·`baseUrl` 이 바뀌었을 때(삭제 포함)만 다시 받는다(`invalidateProviders`
+  — 용도 카드에서 모델만 바꾸면 외부 `/api/tags` 재호출 없음). `AdminAiTestPage` 는 `useCompleteAi` / `useCompleteBatchAi`
   로 단건/배치 + 모델 비교 + 샘플 N개 모드 — 현재 chat purpose 만(thinking 레벨 시험 통로 없음).
 - **어드민 텔레메트리 UI** — [`LlmUsagePanel`](../../apps/web/src/components/admin/LlmUsagePanel.tsx)
   (어드민 전 페이지 상시 플로팅 패널, 접힘/코너 localStorage 영속) +
   [`AdminAiUsagePage`](../../apps/web/src/routes/admin/AdminAiUsagePage.tsx)(상세 표).
   둘 다 [`useLlmTelemetry`](../../packages/shared/src/hooks/useLlmTelemetry.ts) 로
   같은 SSE 스냅샷(React Query 캐시 공유)을 구독 — 초기 REST 스냅샷 → 이후 SSE 가
-  캐시 덮어쓰기, `onerror` 지수 백오프 재연결. 패널의 핵심 게이지는 **계정 게이트
+  캐시 덮어쓰기, `onerror` 지수 백오프(1→30초) 재연결. 2026-10-05 `c5052742` 부터 **EventSource 는
+  QueryClient 당 하나**다(`acquireLlmTelemetryStream` 이 구독 수를 세어 첫 구독에 열고 마지막 해제에 닫음,
+  `connected` 는 `useSyncExternalStore` 로 공유) — 패널과 페이지가 함께 떠도 스트림 1개. 패널의 핵심 게이지는 **계정 게이트
   합산**(`sumGates`) inflight/limit + 큐, purpose 배지, active 호출, 1·5·60분 윈도우.
 - [`summary`](friendly.md) 모듈 — `adapterCache.get(resolved)` 로 같은 chat 어댑터를
   가져다 리뷰 단위 구조화 분석 (`ANALYSIS_VERSION = 4`, traits + menus[].sentiment
@@ -538,9 +559,10 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   키·게이트를 받고 **모델은 `OLLAMA_MENU_MATCH_MODEL`(gemma4:31b) 로 override**.
   [`restaurant.route.ts`](../../apps/friendly/src/modules/restaurant/restaurant.route.ts) 가
   `app.aiConfig`(summaries 플러그인이 decorate) + `{ model: env.OLLAMA_MENU_MATCH_MODEL }` 로 두
-  서비스를 만든다. maxTokens 300, numCtx 4096/2048, 30s, 동시 4, 어휘 단위 영구 캐시(`MenuLlmMatch`·
-  `MenuLlmDecomposition` 행). 골든셋 84건: gemma4:31b 88% / qwen3.5:397b 77% / gpt-oss:120b 68%,
-  재측정 `probe:menu-decompose`.
+  서비스를 만든다. maxTokens 300, numCtx 4096/2048, 30s, 동시 4(분해 3), 어휘 단위 영구 캐시(`MenuLlmMatch`·
+  `MenuLlmDecomposition` 행). 2026-10-05 부터 백그라운드 체인 전역 2개 → LLM 최대 8, 실패 이름 30분 백오프·
+  해석 실패 3회 '포기' 저장([`menu-failure-backoff.ts`](../../apps/friendly/src/modules/food/menu-failure-backoff.ts)).
+  골든셋 84건: gemma4:31b 88% / qwen3.5:397b 77% / gpt-oss:120b 68%, 재측정 `probe:menu-decompose`.
 - [`tarot`](tarot.md)(2026-09-02 `cd5a29b`) — `tarot` purpose. `TarotService.readWithLlm` 이
   `getResolved` → `adapterCache` → `requestTarotLlm`(export, 프로브 공유). 20s `AbortController`,
   실패는 정적 해석. 테스트 seam `deps.cache`/`deps.llmTimeoutMs`. 환경 `OLLAMA_TAROT_MODEL`
@@ -558,13 +580,15 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `requestSajuGLlm`(`saju-g.prompts.ts`) 은 원본 생년월일·계정·좌표를 모델에 보내지 않고 서버가
   확정한 `facts` 만 JSON 으로 넘긴다. 궁합은 `saju-g-pair.prompts.ts`/`saju-g-pair.service.ts`.
   환경 `OLLAMA_SAJU_G_MODEL` 기본 `kimi-k3`(사주(C)와 별도 변수).
-- **임베딩 컨슈머(별도 경로)** — [`review-search`](review-search.md) /
+- **임베딩 + chat 직접 fetch 컨슈머(별도 경로)** — [`review-search`](review-search.md) /
   [`review-clustering`](review-clustering.md) 은 Ollama `/api/embed` 를 직접 fetch
   (`OLLAMA_EMBED_BASE_URL`/`OLLAMA_EMBED_MODEL` 전용 env 를 `process.env` 에서 직접
-  읽음, `review-search.service.ts` 의 `embed()` private 헬퍼). chat/image 어댑터·
-  게이트·텔레메트리와 **무관** — ai 모듈의 `LLMProvider`/`adapterCache` 를 쓰지
-  않는다. 여기서는 "임베딩은 별도
-  경로" 만 기억하고 상세는 각 토픽.
+  읽음, `review-search.service.ts` 의 `embed()` private 헬퍼). **LLM(chat) 호출도**
+  `getResolved('ollama-cloud','chat')` 로 키·모델만 받아 [`review-search.service.ts`](../../apps/friendly/src/modules/review-search/review-search.service.ts)
+  `chatJson`·[`review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts)
+  가 `/api/chat` 을 직접 부른다. chat/image 어댑터·게이트·텔레메트리와 **무관** — ai 모듈의 `LLMProvider`/`adapterCache` 를 쓰지
+  않는다(ai 모듈에서 가져다 쓰는 것은 `AiConfigService` 와, 2026-10-05 부터 공개 질문 로컬 게이트용
+  `ConcurrencyGate` 클래스뿐). 상세는 각 토픽.
 
 **하류(downstream — 모듈이 의존하는 측):**
 
@@ -600,8 +624,9 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   (2026-09 8종·5단계 → 2026-10-04 9종으로 동기화됨).
   `thinkOptionForModel` 은 이제 tarot/saju/saju-g/menu-llm-match/meal-recommendation 까지 JSON 호출 전부가 쓰고, 사주(C)와
   영양제 조언(2026-10-04)만 그 위에 `thinkOptionFor(model, resolved.thinking)` 를 얹는다.
-- `usage-quota`([usage-quota](usage-quota.md)) — ai 모듈의 의존은 아니지만 공개 기능 3종의
-  LLM 호출 앞단에서 한도를 소비하는 층. 게이트·텔레메트리와 무관(초과 요청은 어댑터에 안 닿음).
+- `usage-quota`([usage-quota](usage-quota.md)) — ai 모듈의 의존은 아니지만 공개 기능 4종(타로·사주(C)·사주(G)·
+  2026-10-05 `review-ask`)의 LLM 호출 앞단에서 한도를 소비하는 층. 2026-10-05 부터 회원도 기능별 하루 100회
+  (`MEMBER_PER_DAY`, `78cbb457`). 게이트·텔레메트리와 무관(초과 요청은 어댑터에 안 닿음).
   로그인 식단 기능 3종(인식·추천·영양제 조언)은 이 층 대신 `meal_daily_quotas`(`purpose` 열 `recognition`/`recommendation`/
   `supplement`)를 쓴다.
 - `plugins/empty-body-parser.ts` — fastify 기본 JSON 파서를 교체. 빈 바디를
@@ -625,7 +650,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 - 게이트 acquire 순서는 모든 호출자에서 동일(purpose → account)이라 두 게이트가
   교착하지 않는다. release 는 역순.
 
-## API Surface [coverage: high — 16 sources]
+## API Surface [coverage: high — 19 sources]
 
 모든 라우트 prefix는 `Routes.Ai`(=`/api/v1/admin/ai/*`)이며, 항상
 `onRequest: [authenticate, requireAdmin]` 가드가 걸려 있다. provider 식별은
@@ -691,7 +716,12 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 - [`ConcurrencyGate` / `AccountGateRegistry` / `accountGateRegistry`](../../apps/friendly/src/modules/ai/concurrency-gate.ts)
   — signal-aware FIFO 게이트 클래스 + 키 단위 공유 레지스트리(모듈 싱글턴).
   `gate.acquire(signal)` / `release()` / `setLimit(n)` / `snapshot()`,
-  `registry.get(apiKey, baseUrl, purpose, purposeLimit)` / `snapshots()`.
+  `registry.get(apiKey, baseUrl, purpose, purposeLimit)` / `snapshots()`. 2026-10-05 부터 클래스가 ai 밖에서도
+  쓰인다 — review-search 공개 질문 `askChatGate`(4, `ab7dad28`), 여행 인사이트 콜드 계산
+  [`tour-aggregate-cache.ts`](../../apps/friendly/src/modules/tour/tour-aggregate-cache.ts) `coldGate`(2, `78ea38a5`).
+  같은 라운드에 생긴 [`lib/async-gate.ts`](../../apps/friendly/src/lib/async-gate.ts) `AsyncGate` 는 대기열 상한·대기 시간
+  상한·`GateBusyError`·`tryAcquire`·자리 넘김 release 를 가진 별도 구현이다(식단 백업·복원, HEIC 워커, 메뉴 칼로리
+  백그라운드 체인). 두 구현의 통합은 PLAN-perf-2 후속 과제다(Gotchas).
 - [`llmTelemetry` (`LlmTelemetry`)](../../apps/friendly/src/modules/ai/llm-telemetry.ts)
   — 표시 전용 인메모리 집계 싱글턴. `record(purpose, event)` / `snapshot()` /
   `subscribe(fn)` / `registerPurposeGate(purpose, snap)` / `hasActivity()`.
@@ -788,7 +818,8 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   접힘/코너 localStorage 영속. `useLlmTelemetry(true)` 구독. 상세 페이지 링크.
 - [`AdminAiUsagePage.tsx`](../../apps/web/src/routes/admin/AdminAiUsagePage.tsx) —
   같은 SSE 스냅샷을 큰 지면에. 상단 요약 카드(누적 요청/토큰/진행중/429 재시도) +
-  롤링 윈도우 표 + 용도별/모델별 분해 표 + 최근 호출 표(큐 대기 vs 모델 소요 분리).
+  롤링 윈도우 표 + 용도별/모델별 분해 표 + 최근 호출 표(큐 대기 vs 모델 소요 분리). 2026-10-05 부터 패널과
+  같은 스트림 하나를 공유하고, 최근 호출 행은 `RecentCallRow`(`memo`, `id`+`at` 비교)라 1초 스냅샷마다 새 줄만 그린다.
 - [`AdminAiTestPage.tsx`](../../apps/web/src/routes/admin/AdminAiTestPage.tsx) —
   4개 모드: 단건 / Batch(서로 다른 prompt N개) / 모델 비교(같은 prompt × 모델
   N개) / 샘플 N개(같은 prompt × 같은 모델 × N회). Temperature 는 opt-in 토글
@@ -924,7 +955,7 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
 | meal-recommendation | **meal-recommend** | `MEAL_RECOMMENDATION_VERSION = 5`(2026-10-04 `e3afe9c` v3 알레르기·중심 → v4 반찬 단독 금지 → `2aaaa7e` v5 '안 드셨다' 근거; ~09 은 2) | 1 | `MEAL_RECOMMENDATION_JSON_SCHEMA`, temp 0.4, numCtx 8192, maxTokens 1200, 60s, `thinkOptionForModel`(gpt-oss `'low'`, 어드민 추론 무시) | 사용자 요청 단위 — 일일 quota 20 + 같은 날·끼니·프로필 캐시 |
 | meal-nutrition-advice | **meal-supplement** | `MEAL_NUTRITION_ADVICE_VERSION = 1`(캐시 해시·저장 행 `promptVersion`) | 1 (조언 대상 최대 6개 = 1콜) | `buildMealNutritionAdviceJsonSchema(keys)` — `{ summary, items:[{ nutrient(enum=후보 key), reason, foodTip, supplementTip }] }`, temp 0.3, numCtx 8192, maxTokens 2000×배수, 90s×배수(상한 180s), **`think` = 어드민 `thinking`(kimi 전용, 기본 off)** | 사용자 요청 단위 — 일일 quota 10(`supplement`)·분당 5, 같은 날·같은 점검이면 저장본 |
 | food-classify | chat | `FOOD_CLASSIFY_VERSION = 1` | 40 | (food 토픽), `think` 끔 | 카탈로그 적재 회차 단위 |
-| menu-llm-match / decompose | chat(**모델 override** `OLLAMA_MENU_MATCH_MODEL`) | `MENU_LLM_MATCH_VERSION` / `MENU_LLM_DECOMPOSE_VERSION = 3` | 이름 1개/호출, 식당당 ≤60, 동시 4 | `MENU_LLM_MATCH_JSON_SCHEMA`(choice/canonical/confidence/reason), maxTokens 300, numCtx 4096/2048, `think` 끔 | 어휘 단위 영구 캐시 미스 때만 |
+| menu-llm-match / decompose | chat(**모델 override** `OLLAMA_MENU_MATCH_MODEL`) | `MENU_LLM_MATCH_VERSION` / `MENU_LLM_DECOMPOSE_VERSION = 3` | 이름 1개/호출, 식당당 ≤60, 체인당 동시 4(분해 3) × 전역 2체인 = 최대 8(2026-10-05), 실패 이름 30분 백오프 | `MENU_LLM_MATCH_JSON_SCHEMA`(choice/canonical/confidence/reason), maxTokens 300, numCtx 4096/2048, `think` 끔 | 어휘 단위 영구 캐시 미스 때만 |
 | tarot | **tarot** | `TAROT_PROMPT_VERSION = 2`(캐시 키·저장 행 `promptVersion`) | 1 (스프레드 1건 = 1콜, 수리 재시도 +1) | `TAROT_JSON_SCHEMA`(cards[].text/summary/advice/keyword/choice?/menu?), temp 0.8, numCtx 8192, maxTokens 600+300×N, 20s, `think` 끔 | 사용자 요청 단위 — usage-quota `tarot-reading` 앞단, lru 2000·24h |
 | saju(사주(C)) | **saju** | `SAJU_PROMPT_VERSION = 3`(8차 `739705e`; ~09-07 은 2) | 섹션 4개 병렬(각 1콜) + 테마 3개 병렬(8차) + 오늘/궁합/택일/음식/묻기(9차) 단일 | `SAJU_SECTION_JSON_SCHEMA[section]`·`SAJU_THEME_JSON_SCHEMA[theme]`·`SAJU_ASK_JSON_SCHEMA` 등, temp 0.8, numCtx 8192, maxTokens 섹션 900/700/700/700·테마 900/800/800·오늘 400·궁합 900·택일 600·음식 500·묻기 700, 25s/호출, **`think` = 어드민 `thinking`(kimi 전용, 기본 off → `false`)** — 켜면 maxTokens·타임아웃 ×1.5/2/3/5(상한 120s) | 사용자 요청 단위 — `saju-reading` 앞단, lru 4000·24h, 오늘은 회원 하루 1회 잠금 |
 | saju-g(사주(G)) | **saju-g** | `SAJU_G_PROMPT_VERSION = 4` / 궁합 `SAJU_G_PAIR_PROMPT_VERSION = 2` | 1 (원국/기간 1콜, 궁합 1콜) | 프롬프트 내 JSON 형식 지시(`format` 미사용 — 파서가 검증), temp 0.45, numCtx 16384, maxTokens 5000/3500/3000, 60s, `think` 끔 | 사용자 요청 단위 — `saju-g-reading` 앞단, 요청 키에 model 포함 |
@@ -960,8 +991,21 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   `/complete-batch`)에만 적용** — 백그라운드 도메인은 `AiService` 를 거치지
   않으므로 영향 없음. 영속성 없음 (프로세스 재시작 시 리셋).
 
-## Key Decisions [coverage: high — 28 sources]
+## Key Decisions [coverage: high — 34 sources]
 
+- **2026-10-05 (`78cbb457`): 회원 LLM 은 기능별 하루 100회 — 2026-09-02 "회원 무제한" 결정 변경.** 회원은 IP·게스트
+  한도를 면제받았기 때문에 무료 계정 하나가 전역 예산을 태워 게스트 전원을 정적 폴백으로 밀어낼 수 있었다(findings F-4).
+  어드민 설정·스키마 없이 상수 하나(`MEMBER_PER_DAY`, `null` 이면 예전처럼 무제한)로 켜고 끈다. 소유·상세는
+  [usage-quota](usage-quota.md). ai 모듈 관점에선 "LLM 앞단 한도는 사용자 종류를 가리지 않는다" 로 층이 단순해졌다 —
+  로그인 식단 기능은 여전히 `meal_daily_quotas` 라는 다른 층이다.
+- **2026-10-05 (`c5052742`): 텔레메트리 스트림은 훅이 아니라 QueryClient 에 붙인다.** 27차까지 Gotchas 에 "구독 컴포넌트 수만큼
+  커넥션 — 허용 범위" 로 적어 두었던 것을 고쳤다. 커넥션 수보다 같은 스냅샷을 두 번 받아 캐시를 두 번 덮고 두 화면을 두 번
+  그리는 비용이 컸다. 구독 수 세기는 모듈 `WeakMap` 이라 테스트처럼 QueryClient 가 여럿이면 스트림도 따로다.
+- **2026-10-05 (`ab7dad28`·`7b060ca4`): 게이트를 거치지 않는 LLM 경로는 호출하는 쪽이 동시성을 묶는다.** review-search 질문
+  경로는 어댑터 대신 직접 fetch 라 계정 게이트가 없다. 그래서 ai 의 `ConcurrencyGate` 를 모듈 로컬로 하나 두어 동시 4로 묶었다.
+  메뉴 칼로리는 어댑터 경유지만, 무인증 GET 이 체인을 무한히 띄우는 것이 문제라 체인 수를 `AsyncGate(2)` 로 묶었다(어댑터
+  게이트는 "동시에 몇 개" 만 막고 "몇 개를 띄울지" 는 막지 못한다). 게이트를 ai 모듈 안으로 옮기는 대신 각 컨슈머에 둔 것은
+  변경 범위를 감사 묶음별로 나눴기 때문이다 — 그 결과 세마포어 구현이 여럿 남았다(PLAN 후속).
 - **2026-10-04 (`3d067a0`·`c502759`·`7056244`): 같은 식단 도메인에서도 "자주 누르는 추천은 gpt-oss:120b, 가끔 보는
   리포트는 kimi-k3" — 그래서 영양제 조언은 `meal-recommend` 를 빌리지 않고 새 purpose `meal-supplement`.** 사용자 요청이
   "KIMI-3 기본으로" 였고, 같은 날 `probe:meal-models` 가 추천에선 kimi 가 3배 느리고(p50 2.0 vs 5.7s) 틀린 주장이 더 많으며
@@ -1189,8 +1233,19 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   어댑터가 `listModels`를 구현 안 했거나 호출 실패 시 `{ models: [] }` 반환.
   UI는 `<datalist>`로 자동완성하되 자유 입력도 허용.
 
-## Gotchas [coverage: high — 25 sources]
+## Gotchas [coverage: high — 31 sources]
 
+- **review-search·review-clustering 의 LLM 은 사용량 패널에 안 보인다(임베딩만이 아니다).** 두 모듈은 `chat` row 의 키·모델을
+  읽지만 `/api/chat` 을 직접 fetch 한다 — purpose·계정 게이트, 어댑터의 429 백오프, `think` 조립(`thinkOptionForModel`),
+  텔레메트리가 전부 빠진다. 공개 리뷰 질문 하나가 LLM 최대 3콜이므로, "AI 사용량" 패널의 계정 게이트 합산이 실제 Ollama
+  동시 호출보다 작게 보일 수 있다(2026-10-05 부터 질문 경로만 로컬 게이트 4, enrich 는 `ENRICH_CONCURRENCY`). 기본 chat 모델이
+  gpt-oss 처럼 `think` 가 필요한 계열이면 이 경로는 아래 "think 를 안 보내면 content 가 빈다" 에 그대로 노출된다 — 두 모듈은 빈
+  응답을 `null`·폴백으로 처리한다.
+- **세마포어 구현이 넷이다 — 통합은 후속.** ai 의 `ConcurrencyGate`(signal-aware FIFO, `setLimit`·`snapshot`, 대기열 무제한 —
+  어댑터 2단 게이트·review-search·tour), [`lib/async-gate.ts`](../../apps/friendly/src/lib/async-gate.ts) `AsyncGate`(대기열·대기 시간
+  상한 → `GateBusyError`, signal 없음 — 식단·HEIC·메뉴 칼로리), `lib/share-render.ts` 의 `active` 카운터(렌더 동시 1), `media/thumbnail-cache.ts` 의
+  `waiters`(썸네일 미스 동시 4·대기 128 초과 503). PLAN-perf-2 "남은 것" 은 앞의 두 개만 적는다. 새 상한을 둘 때 대기열 상한·거절이
+  필요하면 `AsyncGate`, 취소 신호·한도 변경·스냅샷이 필요하면 `ConcurrencyGate` — 섞어 쓰면 대기 큐가 두 겹이 될 수 있다.
 - **`thinking` 은 어느 용도 row 에도 저장되지만 읽는 곳은 사주(C)와 영양제 조언 둘(2026-09-12 `a823af1` → 2026-10-04 `3d067a0`).**
   `UpdateLlmProviderInput.thinking` 은 purpose 를 가리지 않고 `AiConfigService.update` 도 그대로 저장한다(테스트도
   `saju` 로만 검증). `resolved.thinking` 을 소비하는 서비스는 [`saju.service.ts`](../../apps/friendly/src/modules/saju/saju.service.ts)
@@ -1350,7 +1405,7 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   표시한다. 청구/감사 용도로 쓰면 안 된다 (Ollama Cloud 콘솔이 진실원).
 - **임베딩은 텔레메트리/게이트에 안 잡힌다.** review-search/review-clustering 의
   `/api/embed` 호출은 ai 모듈의 어댑터를 안 거치므로 사용량 패널·계정 게이트에
-  나타나지 않는다. "AI 사용량" 패널 숫자가 실제 Ollama 비용보다 작을 수 있다.
+  나타나지 않는다. "AI 사용량" 패널 숫자가 실제 Ollama 비용보다 작을 수 있다(같은 두 모듈의 chat 호출도 마찬가지 — 맨 위 항목).
 - **마이그레이션 이름이 `pnpm_filter_friendly_test_src_modules_ai` typo.**
   prisma CLI 의 `--name` 자리에 명령어가 잘못 들어간 흔적 — 실제 내용은 ai
   purpose 컬럼 추가이며 rollback 시 이름으로 헷갈리지 말 것.
@@ -1403,10 +1458,11 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   `thinkOptionFor`). 또 thinking
   토큰은 `completionTokens`(Ollama eval_count)에 합산되므로 텔레메트리 출력 토큰이
   부풀 수 있다(사주 max 실측 400 → 1,600~1,900).
-- **텔레메트리 SSE 는 구독 컴포넌트 수만큼 커넥션이 생긴다.** `useLlmTelemetry(true)`
-  를 패널과 페이지가 둘 다 호출하면 EventSource 가 2개 — React Query 캐시는
-  공유하지만 커넥션은 별개. 어드민 1명 기준 허용 범위지만, 다른 화면에서 무심코
-  `enabled=true` 로 또 구독하지 않게 주의.
+- **~~텔레메트리 SSE 는 구독 컴포넌트 수만큼 커넥션이 생긴다~~ → 2026-10-05 `c5052742` 에서 해소.** 지금은 QueryClient 하나에
+  EventSource 하나다(`acquireLlmTelemetryStream` 구독 수 세기). 남은 주의: (a) 스트림은 **마지막 구독이 풀릴 때** 닫히므로,
+  `useLlmTelemetry(true)` 를 부른 컴포넌트가 하나라도 남아 있으면(어드민 전 페이지의 플로팅 패널) 계속 열려 있다. (b) `enabled=false`
+  호출은 캐시만 읽고 `connected` 를 늘 `false` 로 본다. (c) 공유 상태가 모듈 `WeakMap` 이라 QueryClient 를 새로 만들면(테스트·
+  마이크로 프론트) 스트림도 새로 열린다.
 - **caller abort vs timeout 우선순위는 caller 우선.** 둘이 동시에 발화해도
   `opts.signal?.aborted` 체크가 먼저라 `LLMCancelledError`. 메트릭에서
   타임아웃이 과소집계될 수 있다.
@@ -1434,7 +1490,7 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   재사용할 수 있어 의도적으로 피한 것 — 미리보기는 비용이 작고(`/models` 한
   번) 빈도도 낮으므로 캐시 효용이 미미.
 
-## Sources [coverage: high — 83 sources]
+## Sources [coverage: high — 96 sources]
 
 - [`apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts) (신규 2026-10-04 `3d067a0` — `meal-supplement` 컨슈머, `thinkOptionFor`·`thinkTokenMult`, 0.3·2000·8192·90s(상한 180s), `sanitizeAdvice` 칸 단위 검사, 저장본·`inFlight`·`mealMutationBarrier`)
 - [`apps/friendly/src/modules/meal-nutrition/meal-nutrition.prompts.ts`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.prompts.ts) (신규 — `MEAL_NUTRITION_ADVICE_VERSION = 1`·시스템 프롬프트·후보 enum JSON schema·`supplementAllowed`·IU 환산)
@@ -1502,9 +1558,22 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
 - [`apps/friendly/src/modules/ai/ai.test.ts`](../../apps/friendly/src/modules/ai/ai.test.ts)
 - [`apps/friendly/src/modules/logs/log-analysis.service.ts`](../../apps/friendly/src/modules/logs/log-analysis.service.ts) (신규 컨슈머 — `log-analysis` purpose)
 - [`packages/utils/src/aiModel.ts`](../../packages/utils/src/aiModel.ts) (모델 식별/추천 헬퍼; 2026-08-22 `MULTIMODAL_FAMILY_RE`·`thinkOptionForModel`; 2026-09-06 `ModelPurpose` 8종·`saju-g` 계열 우선순위·`saju` 최대·`tarot` 중앙값; 2026-10-04 `ModelPurpose` 9종·`meal-supplement` 계열 우선순위)
-- [`packages/shared/src/hooks/useLlmTelemetry.ts`](../../packages/shared/src/hooks/useLlmTelemetry.ts) (신규 — SSE 구독 훅)
+- [`packages/shared/src/hooks/useLlmTelemetry.ts`](../../packages/shared/src/hooks/useLlmTelemetry.ts) (신규 — SSE 구독 훅; 2026-10-05 `acquireLlmTelemetryStream`·`isLlmTelemetryConnected` — QueryClient 당 스트림 1개)
+- [`packages/shared/src/hooks/useLlmTelemetry.test.ts`](../../packages/shared/src/hooks/useLlmTelemetry.test.ts) (신규 2026-10-05 — 두 곳 구독에도 스트림 1개·이중 해제·재구독·끊김 뒤 재연결/취소·QueryClient 별 스트림 5건)
 - [`apps/web/src/components/admin/LlmUsagePanel.tsx`](../../apps/web/src/components/admin/LlmUsagePanel.tsx) (신규 — 플로팅 사용량 패널)
-- [`apps/web/src/routes/admin/AdminAiUsagePage.tsx`](../../apps/web/src/routes/admin/AdminAiUsagePage.tsx) (신규 — 사용량 상세 페이지)
+- [`apps/web/src/routes/admin/AdminAiUsagePage.tsx`](../../apps/web/src/routes/admin/AdminAiUsagePage.tsx) (신규 — 사용량 상세 페이지; 2026-10-05 `RecentCallRow` memo)
+- [`apps/web/src/routes/admin/AdminAiUsagePage.test.tsx`](../../apps/web/src/routes/admin/AdminAiUsagePage.test.tsx) (신규 2026-10-05 — 패널+페이지 동시 표시에도 스트림 1개·스냅샷/연결 상태 공유)
+- [`apps/web/src/routes/admin/AdminAiKeysPage.test.tsx`](../../apps/web/src/routes/admin/AdminAiKeysPage.test.tsx) (신규 2026-10-05 — 용도 모델만 저장 시 카탈로그 미재조회, 계정 키 저장 시 재조회)
+- [`apps/friendly/src/modules/review-search/review-search.service.ts`](../../apps/friendly/src/modules/review-search/review-search.service.ts) (게이트 밖 chat 직접 fetch `chatJson`; 2026-10-05 `askChatGate = new ConcurrencyGate(4)`·답변 캐시 20분)
+- [`apps/friendly/src/modules/review-clustering/review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) (게이트 밖 chat 직접 fetch — 군집 라벨)
+- [`apps/friendly/src/modules/tour/tour-aggregate-cache.ts`](../../apps/friendly/src/modules/tour/tour-aggregate-cache.ts) (2026-10-05 — ai `ConcurrencyGate` 를 콜드 계산 게이트(2)로 재사용)
+- [`apps/friendly/src/lib/async-gate.ts`](../../apps/friendly/src/lib/async-gate.ts) (신규 2026-10-05 — `AsyncGate`·`GateBusyError`, `ConcurrencyGate` 와 별개인 세마포어, 소유 friendly)
+- [`apps/friendly/src/modules/food/menu-nutrition.service.ts`](../../apps/friendly/src/modules/food/menu-nutrition.service.ts) (2026-10-05 — 백그라운드 체인 전역 2·대기 16 → 메뉴 칼로리 LLM 최대 8)
+- [`apps/friendly/src/modules/food/menu-failure-backoff.ts`](../../apps/friendly/src/modules/food/menu-failure-backoff.ts) (신규 2026-10-05 — `FailureBackoff` 30분·3회 포기)
+- [`apps/friendly/src/modules/usage-quota/usage-quota.service.ts`](../../apps/friendly/src/modules/usage-quota/usage-quota.service.ts) (2026-10-05 — `MEMBER_PER_DAY = 100`·`review-ask` 기본값)
+- [`packages/api-contract/src/schemas/usage-quota.ts`](../../packages/api-contract/src/schemas/usage-quota.ts) (`UsageQuotaFeature` 4종 — 2026-10-05 `review-ask`)
+- [`docs/PLAN-perf-2.md`](../../docs/PLAN-perf-2.md) (7차 F-4 회원 한도 결정 변경, 묶음 crawl·meal·share 의 LLM 동시 상한, "남은 것" 세마포어 통합)
+- [`docs/PLAN-perf-2-findings.md`](../../docs/PLAN-perf-2-findings.md) (B-4 공개 질문 LLM 무제한, C-3 메뉴 칼로리 병렬 기동, F-4 회원 면제)
 - [`apps/friendly/src/modules/summary/summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts)
 - [`apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts`](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts)
 - [`apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts`](../../apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts)
@@ -1517,7 +1586,7 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
 - [`packages/api-contract/src/routes.ts`](../../packages/api-contract/src/routes.ts) (수정 — `Routes.Ai.telemetry` / `telemetryStream` 추가)
 - [`packages/api-contract/src/index.ts`](../../packages/api-contract/src/index.ts) (barrel — 신규 schema 자동 re-export)
 - [`packages/shared/src/api/ai.api.ts`](../../packages/shared/src/api/ai.api.ts) (수정 — `aiApi.telemetry` + `buildAiTelemetryStreamUrl`)
-- [`packages/shared/src/hooks/useAi.ts`](../../packages/shared/src/hooks/useAi.ts) (수정 — purpose 별 모델 훅)
+- [`packages/shared/src/hooks/useAi.ts`](../../packages/shared/src/hooks/useAi.ts) (수정 — purpose 별 모델 훅; 2026-10-05 `invalidateProviders` — 목록 정확 일치 무효화, 카탈로그는 키·Base URL 변경 시만)
 - [`apps/friendly/src/config/env.ts`](../../apps/friendly/src/config/env.ts) (수정 — 용도별 모델 변수 8종; 2026-09 `OLLAMA_TAROT_MODEL`(기본 gpt-oss:120b)·`OLLAMA_SAJU_MODEL`·`OLLAMA_SAJU_G_MODEL`(기본 kimi-k3)·`OLLAMA_MENU_MATCH_MODEL`(gemma4:31b) — 프로브 근거 주석 포함; 2026-10-04 `OLLAMA_MEAL_SUPPLEMENT_MODEL`(기본 kimi-k3)·`MEAL_SUPPLEMENT_DAILY_LIMIT`(10))
 - [`apps/web/src/routes/admin/AdminAiKeysPage.tsx`](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) (수정 — 계정 카드 + 용도 카드 분리, `KeySourceBadge`, `recommendModelForPurpose`; 2026-09 `PURPOSE_ORDER`/`PURPOSE_META` 8용도 — 타로·사주(C)·사주(G) 카드 Sparkles; 2026-10-04 `meal-supplement` 카드(Pill·`thinking: true`))
 - [`apps/web/src/routes/admin/AdminAiTestPage.tsx`](../../apps/web/src/routes/admin/AdminAiTestPage.tsx)

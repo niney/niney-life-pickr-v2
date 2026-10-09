@@ -1,6 +1,6 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
-last_compiled: 2026-10-04
+last_compiled: 2026-10-10
 topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, api-docs]
 status: active
 ---
@@ -41,6 +41,8 @@ status: active
 
 - **2026-09-24**(외부 투영) in [api-docs](../topics/api-docs.md) / [friendly](../topics/friendly.md) / [project-overview](../topics/project-overview.md) (`1b621c4`, `2ff2c31` 재생성): SSOT 가 **모노레포 밖으로 처음 나갔다** — 단, 패키지를 publish 하지 않고 **생성물로**. 같은 zod 라우트 스키마가 `fastify-type-provider-zod` → `@fastify/swagger`(이제 전 환경에서 스펙 생성기만 등록, HTTP 미노출)를 거쳐 `export:openapi` 스크립트로 `docs/api/openapi.json`·`endpoints.md`(192개 = 공개 83·선택 인증 15·로그인 94, 어드민 제외)로 떨어지고, 사용자의 다른 프로젝트는 `openapi-typescript` + `openapi-fetch` 로 타입을 만든다(`docs/api/README.md` 8절). 내부 컨슈머는 여전히 `@repo/api-contract` 를 src 그대로 import 하고, 외부는 커밋된 JSON 을 읽는 **두 개의 투영**이다. 라우트 schema 의 한국어 `summary`·`security: OPTIONAL_BEARER` 와 swagger transform 이 가드 훅에서 읽어 붙이는 `x-auth`·`x-rate-limit` 까지 "문서도 스키마에서" 가 됐다. 투영의 손실도 문서화됐다(README 9절): 재귀 트리(`category-tree` 의 `children`)는 zod→JSON Schema 변환 한계로 `any`, 스키마에 선언되지 않은 헤더(`x-guest-key`)는 스펙에 없음, 이미지·HTML 미리보기·SSE 는 제외.
 
+- **2026-10-05**(번들 경계) in [api-contract](../topics/api-contract.md) / [web](../topics/web.md) / [shared](../topics/shared.md) / [utils](../topics/utils.md) / [project-overview](../topics/project-overview.md) (`da755684`): **SSOT 한 파일 = 한 청크라는 비용**이 드러났다. 웹 엔트리 경로의 스토어·API 클라이언트가 스키마 파일의 상수(한도·헤더 이름·확인 문구)를 **값으로** import 하자, 그 상수 하나 때문에 zod(55kB)와 스키마 전체가 첫 로드에 실렸다. 처방은 SSOT 를 쪼개지 않고 **값과 검증을 다른 모듈에** 두는 것 — FE 가 값으로 쓰는 상수는 zod 없는 `src/constants.ts`, 순수 계산(`recomputeCanonicalAggregates`)은 `src/restaurant.aggregates.ts` 로 옮기고 스키마가 거기서 가져다 쓴다(정의는 여전히 한 곳). shared `apiFetch` 의 오류 응답 판정도 zod 대신 타입 가드로. 세 패키지에 `sideEffects: false` 를 선언해 배럴 import 가 쓰는 모듈만 싣게 했다. 둘 다 CLAUDE.md 규칙으로 승격(핵심 규칙 1 보강, "`packages/*` 에 부작용 전용 모듈 금지"), 웹 `firstLoadGuard` 가 첫 로드에 zod 가 끼면 경고한다 — 자세한 경위는 [lazy-heavy-imports](lazy-heavy-imports.md). 규칙의 대상은 FE 가 값으로 쓰는 상수뿐이다 — 서버만 쓰는 값(예: `MEAL_MAX_ENTRIES_PER_USER`)은 스키마 파일에 남아도 첫 로드와 무관하다.
+
 ## What This Means
 
 빌드 없는 src export는 단순히 빌드 시간 절약이 아니다 — **Zod SSOT의 약속을 지키는 인프라**다. 만약 api-contract에 tsup 단계를 추가하면 즉각 watch 재기동·d.ts 캐시 무효화 문제가 따라붙고, "스키마 한 곳만 고치면 된다"는 약속이 부분적으로 깨진다. 그래서 두 결정은 사실상 한 묶음이다.
@@ -59,7 +61,7 @@ status: active
 
 이게 깨질 수 있는 시점:
 - **api-contract가 외부 패키지를 npm에 publish해야 할 때** — 그 시점엔 빌드 단계가 필요해진다. 그 전까지는 workspace 안에서만 사용. (2026-09-24: 외부 소비는 publish 대신 `docs/api/openapi.json` 생성물로 해결 — 위 문단)
-- **공유 패키지에 사이드 이펙트가 생길 때** — 현재 모두 순수 (utils는 외부 의존 0, api-contract는 zod만, shared는 react/zustand/tanstack-query peer로). 사이드 이펙트가 들어오면 트리 셰이킹·SSR 호환성 문제가 시작됨
+- **공유 패키지에 사이드 이펙트가 생길 때** — 현재 모두 순수 (utils는 외부 의존 0, api-contract는 zod만, shared는 react/zustand/tanstack-query peer로). 사이드 이펙트가 들어오면 트리 셰이킹·SSR 호환성 문제가 시작됨. 2026-10-05 부터는 세 패키지가 `sideEffects: false` 를 선언해 이 위험이 **조용한 기능 누락**으로 바뀌었다 — import 만으로 등록·구독하는 모듈은 번들러가 지운다(CLAUDE.md "안 되는 것")
 - **TypeScript의 `verbatimModuleSyntax`를 끄고 싶어질 때** — 이 옵션이 켜져 있어야 isolatedModules 환경(Vite/Metro/tsx)에서 src 직접 import가 안전. 끄는 순간 미묘한 type-only import 문제 발생
 
 순환 의존 금지 규칙(`shared → api-contract`만 허용)도 이 패턴의 보호 장치다 — api-contract는 leaf로 유지돼야 SSOT 노드가 다중화되지 않는다.
@@ -89,3 +91,6 @@ status: active
 - [[../topics/meal]]
 - [[../topics/utils]]
 - [api-docs](../topics/api-docs.md)
+
+- [lazy-heavy-imports](lazy-heavy-imports.md)
+- [CLAUDE.md](../../CLAUDE.md)

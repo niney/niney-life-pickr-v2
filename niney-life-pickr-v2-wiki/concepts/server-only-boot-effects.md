@@ -1,6 +1,6 @@
 ---
 concept: 부팅 부수효과는 서버 프로세스에만 — 수명주기 훅 선택이 곧 가드
-last_compiled: 2026-09-26
+last_compiled: 2026-10-10
 topics_connected: [friendly, parking, api-docs, logs, housing, review-clustering, canonical, life-map, schedule, random-crawl, telegram, food, meal]
 status: active
 ---
@@ -28,6 +28,7 @@ friendly 의 `buildApp()` 을 부르는 프로세스는 서버 하나가 아니�
 
 ## Instances
 
+- **2026-10-05** in [friendly](../topics/friendly.md) / [settlement](../topics/settlement.md) / [project-overview](../topics/project-overview.md) (성능 감사 2차 `2b072b53`·`622bfca2`): 새 주기 작업 4종이 전부 **"플러그인 등록 본문 + `NODE_ENV !== 'test'`"** 지점에 걸렸다 — `plugins/mem-telemetry.ts`(10분 `"mem"` 로그, `setInterval(...).unref()`), `plugins/prisma.ts` 매일 04:30 `PRAGMA optimize=0x10002`(croner `unref`), `media.route.ts` 썸네일 디스크 정리(부팅 60초 뒤 1회 `setTimeout(...).unref()` + `scheduleRegistry` cron), `settlement-extraction.route.ts` 미참조 영수증 정리 매일 04:20(logs 04:00·usage-quota GC 04:40 과 비켜 둠). 표의 첫 행과 같은 지점이라 inject 테스트는 막지만 `export:openapi`·프로브 같은 비테스트 `buildApp()` 은 통과한다 — 전부 `unref` + `onClose` 해제라 짧은 스크립트는 끝나기 전에 닿지 않고(60초 지연·새벽 cron), 닿아도 하는 일이 정리·관측뿐이라 `onListen` 으로 올리지 않은 선택으로 읽힌다. 대신 "부팅 직후 한꺼번에" 의 효과는 **배포**에서 드러난다: 첫 배포 뒤 1분이면 썸네일 2GB 초과분이, 첫 04:20 에 30일 넘은 미참조 영수증이 한꺼번에 지워질 수 있어 PLAN 배포 체크리스트 6번에 따로 적혔다.
 - **2026-09-25** in [parking](../topics/parking.md) (`2ff2c31`): 가장 명시적인 사례. `parking.route.ts` 가 `ParkingLiveService`(`PARKING_LIVE_CRON` 기본 5분)·`EvStatusPoller`(`EV_STATUS_CRON` 기본 10분)를 `onListen` 에서만 `start()` 하고 `onClose` 에서 `stop()` 하며, 주석이 이유를 적는다 — *"폴러는 실제로 포트를 열 때만(onListen) — export:openapi 처럼 app.ready() 만 하는 스크립트·inject 테스트에서 업스트림을 부르지 않게"*. 생성자에는 `cron: isTest ? '' : env.PARKING_LIVE_CRON`(빈 값 = 끔)을 넘겨 테스트에서 한 번 더 막는다. 폴러가 쓰는 예산이 작다(공항·서울 실시간 각 하루 ~290콜, 충전기 상태는 개발계정 일 1,000건 중 ~290) — 테스트 한 번이 하루 예산을 건드리지 않게 하는 게 이 배치의 목적.
 - **2026-09-24** in [api-docs](../topics/api-docs.md) / [logs](../topics/logs.md) (`1b621c4`): `export:openapi` 는 `tsx --env-file=.env` 로 `buildApp({ logger: false })` → `app.ready()` → `app.swagger()` → `app.close()` 를 한다. `onListen` 은 타지 않으니 주차 폴러는 안전하지만, **등록 본문은 탄다** — `plugins/logs.ts` 는 `NODE_ENV !== 'test'` 이면 등록 시점에 `sweepStaleOperationRuns` 로 모든 `running` OperationRun 을 `failed`/`server_restart` 로, `pending`·`running` 분석 보고서를 `failed` 로 바꾸는데, 스크립트는 `.env` 의 `NODE_ENV=development` 로 돈다. 그래서 **dev 서버가 크롤·요약을 진행 중일 때 문서를 재생성하면 그 run 이 잠깐 `server_restart` 실패로 보인다**(`finishRun` 이 id 로 덮어써 작업이 끝나면 최종 상태는 복구되지만, 그 사이 로그 화면·실패 run 분석 판단이 틀어질 수 있다). CLAUDE.md 6번 규칙이 비-어드민 라우트를 바꿀 때마다 이 스크립트를 돌리라고 하므로 빈도가 낮지 않다. 같은 등록 본문에서 `plugins/meal.ts` 의 사진 GC(삭제 outbox·고아 사진·추적 안 된 파일 정리)도 실제 저장소를 상대로 한 번 돈다. 같은 스크립트에서 housing cron(`unref`)과 군집 리컨실(60초 지연 `unref`)은 프로세스가 먼저 끝나 실효가 없다 — 보조 가드가 설계대로 작동하는 예.
 - **2026-09-26** in [friendly](../topics/friendly.md) / [canonical](../topics/canonical.md) (`420a6be`): 같은 부류의 테스트 사고 — 서버 부팅 ①단계 함수 `cleanupStaleReviewSummaries` 를 검증하던 테스트가 격리 DB 없이 실 `dev.db` 에서 돌아, 대기 중이던 요약 행 전체를 `failed(server_restart)` 로 바꿨다(작업 기록: 수동 크롤한 한 가게의 533행). 테스트를 `useIsolatedDatabase()` 로 옮겨 해결. 서버 전용 함수를 서버 밖에서 부를 때의 위험이 테스트 쪽에서 나타난 형태다.

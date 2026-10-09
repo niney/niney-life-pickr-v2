@@ -1,7 +1,7 @@
 ---
 concept: WebGL 3D 무대 + Lite 폴백 — 연출은 선택, 기능은 항상
-last_compiled: 2026-10-04
-topics_connected: [tarot, saju-c, web, mobile, shared]
+last_compiled: 2026-10-10
+topics_connected: [tarot, saju-c, web, mobile, shared, saju-g]
 status: active
 ---
 
@@ -17,6 +17,8 @@ status: active
 - **검증** — 테스트는 Lite 모드로 렌더(jsdom 에 WebGL 없음), 3D 는 Playwright headless 크롬 + SwiftShader(`--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`)로 실측. 실제 GPU 확인은 원격 크롬 확장으로.
 
 ## Instances
+
+- **2026-10-05** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [saju-g](../topics/saju-g.md) / [web](../topics/web.md) / [shared](../topics/shared.md) (`43a1f078`·`34274dd3`): **무대가 있어도 늘 그릴 필요는 없다** — 무대 비용의 두 번째 축. Lite 폴백이 "무대를 띄울지" 를 정했다면 이번 라운드는 "띄운 무대를 언제 그릴지" 를 정했다. 두 무대 Canvas 를 `frameloop="demand"` 로 두고 `stage/FrameDriver.tsx` 가 다음 프레임을 요청한다 — 연출 단계와 단계·시선·포인터가 바뀐 뒤 `STAGE_SETTLE_S` 2초는 매 프레임, 폼을 채우거나 풀이를 읽는 대기는 `STAGE_IDLE_FPS` 30. frameloop prop 을 always↔demand 로 바꾸지 않는 이유가 함정으로 남았다: R3F 는 frameloop 가 바뀔 때마다 clock 을 0 으로 되돌려, `elapsedTime` 으로 도는 별·파티클·무대 타임라인이 튄다. 같은 커밋이 무대에 보는 필드만 넘기고 memo 해 폼 입력이 무대를 다시 그리지 않게 했고(세션 훅 반환 참조 고정), 사주는 30Hz `setTick` 을 연출 중과 전환 뒤 2초에만 돌린다. 측정(헤드리스 Chromium + D3D11, 1280×800): 사주 대기 60fps·R3F 커밋 24회/초 → 31fps·0, 연출 중은 60fps 그대로. 카드 썸네일은 1024px 원본 대신 112·224px 변형(`34274dd3`).
 
 - **2026-09-06~07** in [saju-c](../topics/saju-c.md) (`0a7f637`, 5~7차): 원판·고리 다이얼·인장 낙하·일간/띠 카드·오행 구슬. 실측에서 `Seal` 의 `return null` 이 `useMemo` 앞에 있어 훅 순서 오류로 무대 전체가 흰 화면 → 훅 순서 수정 + 에러 바운더리 추가. 7차에 효과음(WebAudio 합성, 기본 꺼짐)도 무대 콜백에 얹음. 원격 실브라우저는 OS reduced-motion 이라 기본 Lite 로 떴다.
 - **2026-09-03~05** in [tarot](../topics/tarot.md) / [web](../topics/web.md) (`6a414ef`, `7de9033`, `2eee38c`): 원형. 부채꼴 호버를 "정지 포즈 투영" 기준으로 계산해 팝콘 떨림 제거, 겹침 순서를 엄격 단조로 고정. Lite 폴백·임베드 모드가 같은 커밋에 있다.

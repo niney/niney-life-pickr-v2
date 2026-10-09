@@ -1,12 +1,14 @@
 ---
 topic: saju-g
-last_compiled: 2026-10-04
-sources_count: 41
+last_compiled: 2026-10-10
+sources_count: 48
 status: active
-aliases: [사주, 사주(G), saju-g, 명식, 만세력, 오행, 일간, 십성, 절기, 음력, 윤달, 궁합, 출생 프로필, kimi-k3, saju-g-reading, SajuGPage, SajuGPairPage, share-fonts, loadShareFonts, loadShareFallbackAsset, 한자 대체 글꼴]
+aliases: [사주, 사주(G), saju-g, 명식, 만세력, 오행, 일간, 십성, 절기, 음력, 윤달, 궁합, 출생 프로필, kimi-k3, saju-g-reading, SajuGPage, SajuGPairPage, share-fonts, loadShareFonts, loadShareFallbackAsset, 한자 대체 글꼴, share-render, SharePngCache, ShareRenderBusyError, svgToPng, guest-share, GuestShareLedger, 게스트 공유 재사용, revokeToken 재사용, MEMBER_PER_DAY, MEMBER_LIMIT_LABEL, 회원 하루 100회, F-7, no-store 해제, SajuGHistoryPage, useMySajuGReadings enabled, useSajuGProfiles staleTime, SAJU_G_GUEST_KEY_HEADER, SAJU_G_PROFILES_MAX, constants.ts]
 ---
 
 # saju-g — 사주(G), 나의 오행 지도
+
+**2026-10-05 변경 흡수 — 성능 감사 2차(perf-2) share 묶음·웹 재조회 줄이기·상수 이동(`78cbb457`·`43a1f078`·`da755684`)**: (1) **공유 PNG** — `renderSajuGSharePng` 가 satori·resvg 정적 import 대신 friendly [share-render](../../apps/friendly/src/lib/share-render.ts) 의 `loadSatori()`·`svgToPng(svg)`(resvg `renderAsync` + `loadSystemFonts:false`)를 쓴다 — 사주(G) 단일 카드 미스 253ms 중 시스템 글꼴 적재가 188~192ms 였다(PLAN-perf-2 F-7 측정). 렌더는 타로·사주(C)·정산 카드와 프로세스 전역 동시 1, 대기 16 초과면 `503`(`app.httpErrors.serviceUnavailable`). 라우트의 이미지 캐시는 개수 LRU 50 → `SharePngCache` 2MB·1시간(장당 60~80KB), 같은 토큰 렌더는 합류, 취소하면 `images.delete` 로 즉시 지운다. (2) **캐시 헤더(F-7 결정)** — 공유 이미지 `no-store` → `public, max-age=300`, 살아 있는 공유의 OG HTML `no-store` → `public, max-age=60`(없거나 취소된 공유는 여전히 `no-store`·404). 엣지·크롤러가 반복 요청을 흡수하는 대신 **취소가 이미지는 최대 5분, OG 는 60초 늦게** 반영된다. (3) **게스트 공유 재사용** — 같은 소유자(`guest:<기기 키|IP>`)가 같은 공개 결과(`publicJson`)·같은 `readingId` 를 다시 공유하면 [guest-share](../../apps/friendly/src/lib/guest-share.ts) `GuestShareLedger` 가 앞서 발급한 `{token, path, revokeToken}` 을 그대로 돌려준다(DB 행이 남아 있을 때만 — 취소한 공유는 되살리지 않는다). 새로 만들 때만 IP 하루 200개를 세고 넘으면 429(F-6). (4) **회원 하루 100회** — `saju-g-reading` 도 [usage-quota](usage-quota.md) 의 `MEMBER_PER_DAY`(기능별)로 회원 1인 하루 100회를 넘으면 `source: "basic"`·`fallbackReason: "quota"`. 2026-09-02 "회원 한도 없음" 결정의 변경이며 풀이 라우트 설명은 `MEMBER_LIMIT_LABEL`. (5) **웹**(`43a1f078`) — 보관함 상세(`/me/saju-g/:id`)는 목록을 그리지 않으므로 `useMySajuGReadings({ enabled: !id || detail.isError })` 로 목록 요청을 끄고(상세를 못 불러와 목록이 대신 나올 때만 켬), `useSajuGProfiles` 는 `staleTime` 0 → 30초·`save`/`remove`/`refresh` 를 `useCallback` 으로 고정·쿼리 결과를 통째로 펼치지 않고 쓰는 값만 반환(`isFetching` 변화에 다시 그려지지 않게)·프로필 없을 때 같은 빈 배열 상수. WebGL2 판정(`detectTarotRender` → `hasWebGL2`)은 성공을 기억하고 프로브 컨텍스트를 즉시 반납한다([tarot](tarot.md)). 사주(G) 3D 천문대의 `frameloop`(보일 때 `always`, 아닐 때 `never`)는 이번 demand 전환 대상이 아니었다. (6) **상수 이동**(`da755684`) — `SAJU_G_GUEST_KEY_HEADER`·`SAJU_G_PROFILES_MAX` 가 `schemas/saju-g.ts` 에서 zod 없는 [constants.ts](../../packages/api-contract/src/constants.ts) 로(헤더 값은 타로 상수를 재사용하지 않고 같은 문자열 `'x-guest-key'` 를 따로 둔다). 명식 계산·프롬프트·DB 는 바뀌지 않았다.
 
 **2026-09-25~10-04 변경 흡수 — 공유 PNG 글꼴 공용화(`2d249f4`, 2026-09-26)**: 사주(C) 공유 카드의 본문 한자 □ 버그를 고치며 friendly `lib/share-fonts` 에 `loadShareFonts()`(늘 같은 Plex 배열 — satori 는 파싱한 글꼴을 이 배열을 키로 캐시하므로 호출마다 새 배열이면 매번 다시 파싱했다)와 `loadShareFallbackAsset`(satori `loadAdditionalAsset` — 글꼴에 없는 글자 묶음에 한자가 있을 때만 Noto Sans CJK KR 한자 서브셋을 보탬)을 두고 사주(C)·사주(G)·타로 카드에 연결했다. G 카드는 원래 한자 대신 벡터 상징으로 그려(`saju-g-share-card.ts` 주석 "한자 글리프를 포함하지 않는 공유용 폰트에서도 깨지지 않는 벡터 상징") 화면 변화는 없고, 글꼴 배열 재사용과 한자가 들어올 경우의 안전망만 생겼다. 그 밖의 G 코드 변경은 없다(사주(C) 10차 앱 네이티브 전환은 [saju-c](saju-c.md)).
 
@@ -26,27 +28,29 @@ aliases: [사주, 사주(G), saju-g, 명식, 만세력, 오행, 일간, 십성, 
 
 KASI 2023·2026년 월력요항의 음력 월초/일진 25건·절입 24건과 IANA 표준시 변경 4건을 고정 fixture로 대조한다. 53개 통과, 절입의 분 단위 공표값과 최대 28초 차이. 음력 월건을 사주의 절기 월주로 오인해 비교하지 않는다. 계산 관례의 재현성 검증이며 미래 예측 검증은 아니다.
 
-## AI·한도 [coverage: high — 5 sources]
+## AI·한도 [coverage: high — 6 sources]
 
 2026-09-07 v4: 원국에 `lifeScenes`(첫 만남·바쁜 날·갈등 대화)를 추가했다. 출력 한도는 원국 5,000/기간 3,500토큰, 60초·최대 두 호출이다. 장면 ID·순서·근거·문단/긴 문장 중복·시기 예측 문구·일간/간지/점수를 검사하며, 일간 미확정 장면은 `scope` 근거만 허용한다. 이전 보관·기간·궁합과 호환하도록 계약은 optional이고 새 원국 AI 생성만 필수다. 12개 평가와 보강 후 문제 사례 2회 검증은 [모델 평가](../../apps/friendly/research/saju-g/README.md)에 구분해 기록했다. 아래 v3 측정은 이전 버전 기록이다.
 
-`OLLAMA_SAJU_G_MODEL=kimi-k3`, purpose `saju-g`, quota feature `saju-g-reading`. 기존 키 상속·AdapterCache·공통 SQLite 한도를 사용한다. API에는 구조화 명식이 먼저 있고 LLM은 그 근거 ID·기간 관계와 질문으로 해석한다. 원본 생년월일·정확한 시각·계정은 모델에 보내지 않는다. 원본 질문은 지시가 아닌 데이터로 취급한다.
+`OLLAMA_SAJU_G_MODEL=kimi-k3`, purpose `saju-g`, quota feature `saju-g-reading`. 기존 키 상속·AdapterCache·공통 SQLite 한도를 사용한다. 회원은 기기·IP 일일 한도 대신 2026-10-05(`78cbb457`)부터 기능별 하루 100회(`MEMBER_PER_DAY`, 그 전엔 면제)이고, 넘으면 게스트처럼 `fallbackReason: "quota"` 기본 풀이다. 풀이·궁합 라우트(각 분당 10)를 합쳐도 이 상한 하나를 함께 쓴다. API에는 구조화 명식이 먼저 있고 LLM은 그 근거 ID·기간 관계와 질문으로 해석한다. 원본 생년월일·정확한 시각·계정은 모델에 보내지 않는다. 원본 질문은 지시가 아닌 데이터로 취급한다.
 
 프롬프트 v3는 모델에 오행 개수 대신 상징 의미를 전달하고 개수→성격 강약·능력 결핍 연결을 금지한다. Zod 형식, 섹션 순서, 근거 ID, 허용 한글/한자 간지·일간, 점수·확률, 긴 질문 원문 재인용, 문단 통째 중복, 올해/오늘 주제의 기간 근거를 검사한다. 같은 모델에서 최대 1회 재시도, 전체 60초 후 기본 풀이를 제공한다. 같은 소유자의 동시 요청은 합류하며 캐시는 입력·기간·계산/프롬프트 버전·모델을 포함한다. 성공한 AI만 캐시하므로 기본 풀이 뒤 즉시 재시도할 수 있다.
 
 최신 v3 합성 사례: K3 12/12 첫 호출 통과·중앙 12.574초. 이전 v2 비교: K3 10/10·10.62초, DeepSeek V4 Pro 10/10·6.73초. 이는 출력 검사 통과율이며 모든 해석의 타당성을 증명하지 않는다. 상세 수치는 [모델 평가](../../apps/friendly/research/saju-g/README.md) 참고.
 
-## 보관·공유 [coverage: high — 6 sources]
+## 보관·공유 [coverage: high — 10 sources]
 
 기본 조회는 메모리만 사용한다. 회원 보관은 소유자 영수증으로 `SajuGReading.snapshotJson`에 명식·풀이·출생 입력을 저장하며 `(userId, requestKey)`가 유일하다. 기본 풀이를 저장해도 추후 AI 생성을 막지 않는다. 게스트 기기 보관은 principal별 localStorage 최근 20개이며 자동 저장하지 않는다.
 
-회원 저장 시 같은 입력의 캐시·영수증에 저장 ID를 반영한다. 삭제하면 연결된 캐시·영수증도 무효화해 이전 탭의 영수증으로 삭제 결과를 되살리거나 공유하지 못하게 한다. 공유·회원 보관 화면은 공통 설정과 별도로 탭 복귀 시 재조회하며 오류 응답에 이전 상세 카드를 숨긴다.
+회원 저장 시 같은 입력의 캐시·영수증에 저장 ID를 반영한다. 삭제하면 연결된 캐시·영수증도 무효화해 이전 탭의 영수증으로 삭제 결과를 되살리거나 공유하지 못하게 한다. 공유·회원 보관 화면은 공통 설정과 별도로 탭 복귀 시 재조회하며 오류 응답에 이전 상세 카드를 숨긴다. 2026-10-05(`43a1f078`)부터 보관함 상세(`/me/saju-g/:id`)는 목록 쿼리를 부르지 않고(`useMySajuGReadings({ enabled })`), 상세를 못 불러와 아래에 목록이 대신 나올 때만 켠다.
 
 공유는 `SajuGShare.publicJson`의 허용 필드만 공개한다. 생년월일·시간·원본 명식·질문·AI 자유문장은 공개하지 않는다. 게스트의 오래된 로컬 결과도 출생 입력을 서버에서 다시 계산해 공유할 수 있다. 보기 토큰과 취소 자격증명은 별개이며 후자는 생성 브라우저의 저장소에 남는다. 회원 저장 결과에 연결한 공유는 결과 삭제 시 cascade한다. 독립 공유는 각각 취소한다.
 
 새 공유 ID는 타로와 같은 7바이트 CSPRNG/base64url 10자다. `SajuGShareToken`이 새 10자·기존 32자를 API와 OG에서 동일하게 검증한다. 취소 키·영수증은 32자를 유지한다. DB 저장의 P2002 충돌에 대해 총 5회까지 저장을 시도해 조회 후 저장 사이의 경쟁도 처리한다. 소진 시 공유 생성 라우트가 명시적인 503을 반환한다(공통 오류 처리기는 5xx를 500으로 정규화하므로 제어된 응답을 직접 보낸다). 기존 링크나 DB 행을 갱신하는 migration은 없다.
 
-PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. 이미지 캐시를 읽기 전에 DB 행 존재를 확인한다. OG는 공통 web-index helper를 사용하고 취소 후 404·일반 문구를 반환한다. nginx `/saju-g/s/` 프록시가 필요하다. 2026-09-26(`2d249f4`)부터 PNG 글꼴은 공통 [share-fonts](../../apps/friendly/src/lib/share-fonts.ts)의 `loadShareFonts()`·`loadShareFallbackAsset`을 쓴다(이전에는 호출마다 Plex 배열을 새로 만들었다). 한자 대체 글꼴은 한자가 든 글자 묶음에서만 불러오므로 상징을 벡터로 그리는 G 카드는 평소 불러오지 않는다.
+2026-10-05(`78cbb457`)부터 게스트 공유는 같은 소유자·같은 공개 결과·같은 `readingId` 면 메모리 장부(`GuestShareLedger`, 24시간·5,000건)가 앞서 발급한 토큰과 같은 `revokeToken` 을 돌려준다. 저장 직전 `sajuGShare` 행이 살아 있는지 확인하므로 취소한 공유는 되살리지 않고 새로 만든다. 새 발급만 IP 하루 200개로 세며 넘으면 429다. 장부는 재시작하면 비어 같은 입력도 새 공유가 된다. 회원 공유는 재사용하지 않는다.
+
+PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이다. 캐시 헤더는 ~2026-10-04 이미지·OG 모두 no-store였고, 2026-10-05(F-7 결정)부터 이미지 `public, max-age=300`, 살아 있는 공유의 OG `public, max-age=60`(없거나 취소된 공유는 no-store)이다 — 취소가 엣지·브라우저 사본에는 최대 5분·60초 늦게 반영된다(revoke 시 Cloudflare purge 는 걸지 않는다). 이미지 캐시를 읽기 전에 DB 행 존재를 확인하므로 서버 캐시는 취소 즉시 끊기고, 취소 라우트가 `images.delete` 로 진행 중 렌더까지 캐시에 남기지 않는다. 서버 이미지 캐시는 개수 LRU 50 → 바이트 상한 `SharePngCache` 2MB·1시간. OG는 공통 web-index helper를 사용하고 취소 후 404·일반 문구를 반환한다. nginx `/saju-g/s/` 프록시가 필요하다. 2026-09-26(`2d249f4`)부터 PNG 글꼴은 공통 [share-fonts](../../apps/friendly/src/lib/share-fonts.ts)의 `loadShareFonts()`·`loadShareFallbackAsset`을 쓴다(이전에는 호출마다 Plex 배열을 새로 만들었다). 한자 대체 글꼴은 한자가 든 글자 묶음에서만 불러오므로 상징을 벡터로 그리는 G 카드는 평소 불러오지 않는다. 2026-10-05부터 래스터는 [share-render](../../apps/friendly/src/lib/share-render.ts) `svgToPng`(스레드풀 `renderAsync`, 시스템 글꼴 끔)이고, 렌더 슬롯이 타로·사주(C)·정산 카드와 프로세스 전역 1개라 대기 16 을 넘으면 이미지 라우트가 503이다.
 
 ## 이야기 카드 [coverage: high — 5 sources]
 
@@ -64,11 +68,11 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 
 같은 날 실제 서버를 추가 검증했다. 기본 DB의 사주·한도 테이블 누락을 확인하고 `.tmp/saju-g-runtime/local.db` 복사본에 미적용 마이그레이션 10개를 적용했다. 실제 서버 3000 + 웹 5173에서 v2 Kimi K3 HTTP 요청 8건이 모두 AI 응답으로 완료되었다(약 8.46~15.88초). v3에서도 실제 K3 응답 1건(14.729초)으로 회원 보관·공유·PNG 다운로드·삭제에 따른 공유 취소를 재확인했다. 원본 DB와 `.env`는 변경하지 않았으며 복사본의 외부 자동 작업은 비활성화했다. [최종 검토 기록](../../docs/REVIEW-saju-g.md)을 참고한다.
 
-## 출생 프로필 [coverage: high — 5 sources]
+## 출생 프로필 [coverage: high — 6 sources]
 
 `/me/saju-g/profiles`에서 별명·출생 입력을 최대 20명까지 관리한다. 회원은 `SajuGProfile`의 소유자 API, 게스트는 `lp:saju-g-profiles:v1:guest` 기기 저장소다. 로그인 시 게스트 입력을 자동 업로드하지 않는다. 저장 전에 명식 엔진으로 윤달·미래일·DST를 검증한다. 서버 트랜잭션과 클라이언트 직렬 큐/Web Locks, 양쪽 `revision` 검사로 수정 충돌을 감지한다. 저장 실패를 숨기거나 오래된 프로필을 밀어내지 않는다.
 
-현재 결과·보관함에서 프로필 생성, 프로필의 나의 사주·오늘·올해 및 궁합 바로가기를 지원한다. 링크는 프로필 ID만 전달한다. 캐시된 프로필의 자동 읽기는 취소 가능한 microtask에서 시작해 StrictMode cleanup 후 로딩이 남는 문제를 방지한다. 계정별 Query 키, 탭 복귀 재조회, 게스트 storage 이벤트로 외부 변경을 반영한다. 프로필 삭제와 별도로 저장한 풀이·독립 공유 삭제는 분리되어 있다.
+현재 결과·보관함에서 프로필 생성, 프로필의 나의 사주·오늘·올해 및 궁합 바로가기를 지원한다. 링크는 프로필 ID만 전달한다. 캐시된 프로필의 자동 읽기는 취소 가능한 microtask에서 시작해 StrictMode cleanup 후 로딩이 남는 문제를 방지한다. 계정별 Query 키, 탭 복귀 재조회, 게스트 storage 이벤트로 외부 변경을 반영한다. `useSajuGProfiles` 의 `staleTime` 은 0 이었다가 2026-10-05(`43a1f078`)부터 30초다(페이지를 오가거나 저장 창을 열 때마다 다시 부르지 않게 — 저장·삭제는 직접 무효화, 다른 창 변경은 포커스 `'always'`·storage 이벤트로 따라잡는다). 반환은 `isLoading`·`isError`·`refetch`·`profiles`·`principal`·`save`·`remove` 만이고(쿼리 결과를 펼치지 않아 `isFetching` 변화로 다시 그려지지 않음), `save`·`remove` 는 고정 참조, 프로필이 없으면 같은 빈 배열 상수다(`SajuGNext.test` 가 고정). 프로필 삭제와 별도로 저장한 풀이·독립 공유 삭제는 분리되어 있다.
 
 초기 G 단독 구현의 프로필 migration은 리베이스 과정에서 `20260906170000_add_saju_g`로 통합했다. 현재는 C 테이블과 분리된 G 테이블을 직접 생성하며 운영 적용은 별도다.
 
@@ -94,7 +98,7 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 
 통합 타입 검사 6개 작업, API 202개·웹 116개·shared 81개·utils 307개가 통과했다. 전체 migration을 빈 DB에 적용해 현재 Prisma 스키마와 일치함을 확인했다. 아래 소스 목록은 G 기능 기준이며 전체 위키 재컴파일은 아니다.
 
-## Sources [coverage: high — 41 sources]
+## Sources [coverage: high — 48 sources]
 
 - [이야기 공용 콘텐츠](../../packages/utils/src/saju-g-stories.ts)
 - [이야기 카드 UI](../../apps/web/src/components/saju-g/SajuGDiscoveries.tsx)
@@ -103,6 +107,7 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 - [이야기 카드 UI 검증](../../apps/web/src/components/saju-g/SajuGDiscoveries.test.tsx)
 
 - [입력·응답 계약](../../packages/api-contract/src/schemas/saju-g.ts)
+- [값 상수(헤더·프로필 상한, 2026-10-05 이동)](../../packages/api-contract/src/constants.ts)
 - [경로 계약](../../packages/api-contract/src/routes.ts)
 - [상징·관계 표](../../packages/utils/src/saju-g.ts)
 - [계산 엔진](../../apps/friendly/src/modules/saju-g/saju-g.engine.ts)
@@ -111,10 +116,14 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 - [라우트](../../apps/friendly/src/modules/saju-g/saju-g.route.ts)
 - [PNG](../../apps/friendly/src/modules/saju-g/saju-g-share-card.ts)
 - [공유 PNG 글꼴(공통)](../../apps/friendly/src/lib/share-fonts.ts)
+- [공유 PNG 렌더·바이트 상한 캐시(공통, 2026-10-05)](../../apps/friendly/src/lib/share-render.ts)
+- [게스트 공유 재사용 장부(공통, 2026-10-05)](../../apps/friendly/src/lib/guest-share.ts)
+- [회원 하루 상한 `MEMBER_PER_DAY`(공통 한도)](../../apps/friendly/src/modules/usage-quota/usage-quota.service.ts)
 - [OG](../../apps/friendly/src/modules/saju-g/saju-g-preview.ts)
 - [공통 훅](../../packages/shared/src/hooks/useSajuG.ts)
 - [보관 스토어](../../packages/shared/src/stores/sajuGHistoryStore.ts)
 - [사주 페이지](../../apps/web/src/routes/SajuGPage.tsx)
+- [보관함 화면(상세에서 목록 쿼리 끔)](../../apps/web/src/routes/SajuGHistoryPage.tsx)
 - [웹 컴포넌트](../../apps/web/src/components/saju-g/)
 - [명식 테스트](../../apps/friendly/src/modules/saju-g/saju-g.engine.test.ts)
 - [외부 자료 대조 테스트](../../apps/friendly/src/modules/saju-g/saju-g.reference.test.ts)
@@ -138,3 +147,5 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 - [DB 이전 검증](../../apps/friendly/src/modules/saju-g/saju-g-migration.test.ts)
 - [이전 기기 키 정의](../../packages/shared/src/stores/sajuGStorageMigration.ts)
 - [기기 저장소 이전 검증](../../packages/shared/src/stores/sajuGStorageMigration.test.ts)
+- [성능 감사 2차 계획·진행 로그(share 묶음·결정 8·9)](../../docs/PLAN-perf-2.md)
+- [성능 감사 2차 발견 원문(F-2·F-6·F-7)](../../docs/PLAN-perf-2-findings.md)
