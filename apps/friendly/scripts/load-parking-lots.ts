@@ -142,8 +142,8 @@ const loadKotsa = async (today: string): Promise<KotsaReport> => {
   console.log(
     `[KOTSA] 시설 ${n(report.facilityRows)}행 중 공영 ${n(report.publicRows)} → ${n(report.rows.length)}곳(운영정보 ${n(report.withOperation)})` +
       ` · 좌표 없어 주소로 찾을 곳 ${n(report.needGeocode)}` +
-      ` · 뺀 것: 요금 구분 없음 ${n(report.droppedNoFeeType)} · 거주자 구획 ${n(report.droppedResidentOnly)} · 좌표·주소 없음 ${n(report.droppedNoLocation)} · 이름 없음 ${n(report.droppedNoName)}` +
-      ` · 중복 ID ${n(report.droppedDupId)} · 쓰레기 ID ${n(report.droppedJunkId)}`,
+      ` · 뺀 것: 요금 구분 없음 ${n(report.droppedNoFeeType)} · 거주자 구획(월정액만) ${n(report.droppedResidentOnly)} · 좌표·주소 없음 ${n(report.droppedNoLocation)} · 이름 없음 ${n(report.droppedNoName)}` +
+      ` · 중복 ID ${n(report.droppedDupId)} · 쓰레기 ID ${n(report.droppedJunkId)} · 요금 규칙 비정상 ${n(report.feeRuleCleared)}`,
   );
   if (unlisted.length > 0) {
     console.log(`[KOTSA] 원천 결함 — 건수만 오고 목록이 빈 시군구 ${unlisted.length}곳: ${unlisted.map((c) => nameOf.get(c) ?? c).join(', ')}`);
@@ -165,7 +165,7 @@ const main = async (): Promise<void> => {
     const rep = normalizeSeoulParkingRows(info, live, today);
     seoulRows = rep.rows;
     console.log(
-      `\n[서울] 안내 ${n(info.length)}행 → 주차장 ${n(rep.rows.length)}곳 (구획 행 접힘 ${n(rep.folded)} · 버스전용 제외 ${rep.droppedBusOnly} · 거주자 전용 제외 ${rep.droppedResidentOnly} · 실시간 목록 보충 ${rep.liveOnlyAdded}) · 좌표 결측 ${n(rep.coordMissing)}`,
+      `\n[서울] 안내 ${n(info.length)}행 → 주차장 ${n(rep.rows.length)}곳 (구획 행 접힘 ${n(rep.folded)} · 버스전용 제외 ${rep.droppedBusOnly} · 거주자 전용 제외 ${rep.droppedResidentOnly} · 실시간 목록 보충 ${rep.liveOnlyAdded}) · 좌표 결측 ${n(rep.coordMissing)} · 요금 규칙 비정상 ${n(rep.feeRuleCleared)}`,
     );
   }
 
@@ -183,7 +183,9 @@ const main = async (): Promise<void> => {
     }
     const rep = normalizeStdParkingRows(items);
     stdRows = rep.rows;
-    console.log(`[표준데이터] ${n(rep.rows.length)}곳 (관리번호 중복 접힘 ${n(rep.duplicates)} · 식별자 없음 ${rep.droppedBadId}) · 좌표 결측 ${n(rep.coordMissing)}`);
+    console.log(
+      `[표준데이터] ${n(rep.rows.length)}곳 (관리번호 중복 접힘 ${n(rep.duplicates)} · 식별자 없음 ${rep.droppedBadId} · 등록 차량 전용 ${n(rep.droppedPermitOnly)}) · 좌표 결측 ${n(rep.coordMissing)} · 요금 규칙 비정상 ${n(rep.feeRuleCleared)}`,
+    );
   }
 
   // ── 한국교통안전공단 ──

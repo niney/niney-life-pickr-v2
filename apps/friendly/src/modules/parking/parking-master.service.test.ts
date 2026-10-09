@@ -4,9 +4,11 @@ import { EV_LEVELS, PARKING_FEE_TYPES, PARKING_LEVELS, PARKING_LOT_TYPES, PARKIN
 import {
   canonKeys,
   dropParkingDuplicates,
+  isStdPermitOnly,
   matchParkingDuplicates,
   normalizeSeoulParkingRows,
   normalizeStdParkingRows,
+  sanitizeParkingFeeRule,
   seoulExcludedOper,
   type ParkingLotRow,
 } from './parking-master.service.js';
@@ -56,6 +58,71 @@ describe('주차 코드표 — api-contract enum 과 @repo/utils 목록 동기�
     expect(ParkingSource.options).toEqual([...PARKING_SOURCES]);
     expect(ParkingLevel.options).toEqual([...PARKING_LEVELS]);
     expect(EvLevel.options).toEqual([...EV_LEVELS]);
+  });
+});
+
+describe('요금 정리·등록 차량 전용(원천 공통 규칙)', () => {
+  const fee = (p: Partial<ParkingLotRow>): ParkingLotRow =>
+    ({
+      id: 'std:x',
+      source: 'std',
+      name: '공영주차장',
+      feeType: 'paid',
+      baseMin: 30,
+      baseFee: 1000,
+      addMin: 10,
+      addFee: 500,
+      dayPassFee: null,
+      monthlyFee: null,
+      note: null,
+      ...p,
+    }) as ParkingLotRow;
+
+  it('기본 시간 0분·시간당 2만 원 넘는 기본/추가 요금은 시간 요금 전체를 정보 없음으로(1일권·월정액은 둔다)', () => {
+    // 표준데이터 실측 — '기본 0분 1,500원', '1분 400원', '추가 1분 1,000원'(분·시간 혼동), '추가 2분 51,000원'.
+    for (const bad of [
+      { baseMin: 0, baseFee: 1500, addMin: null, addFee: null },
+      { baseMin: 1, baseFee: 400, addMin: null, addFee: null },
+      { baseMin: 2, baseFee: 0, addMin: 1, addFee: 1000, monthlyFee: 30000 },
+      { baseMin: 5, baseFee: 250, addMin: 2, addFee: 51000 },
+    ]) {
+      const row = fee(bad);
+      expect(sanitizeParkingFeeRule(row)).toBe(true);
+      expect(row).toMatchObject({ baseMin: null, baseFee: null, addMin: null, addFee: null, monthlyFee: bad.monthlyFee ?? null });
+    }
+    // 정상(30분 1,000원 + 10분 500원 = 시간당 3,000원)·무료·요금 없음은 그대로.
+    for (const ok of [fee({}), fee({ feeType: 'free', baseMin: null, baseFee: null, addMin: null, addFee: null }), fee({ baseMin: 60, baseFee: 20000 })]) {
+      const before = { ...ok };
+      expect(sanitizeParkingFeeRule(ok)).toBe(false);
+      expect(ok).toEqual(before);
+    }
+  });
+
+  it("월정액만 + 이름·비고의 '…전용'만 등록 차량 전용 — 시간대 전용·시간 요금 있는 곳·'전용' 없는 거주자 우선은 남긴다", () => {
+    const monthly = { baseMin: null, baseFee: null, addMin: null, addFee: null, monthlyFee: 40000 };
+    // 관악구 실측 — 이름엔 거주자 단어가 없고 비고에만 '거주자주차제 전용'.
+    expect(isStdPermitOnly(fee({ ...monthly, name: '낙성대제3공영주차장', note: '거주자주차제 전용' }))).toBe(true);
+    expect(isStdPermitOnly(fee({ ...monthly, name: '제1주거지전용주차장' }))).toBe(true);
+    expect(isStdPermitOnly(fee({ ...monthly, monthlyFee: 10000, name: '간석초등학교(부설)(정기차량전용)' }))).toBe(true);
+    // 울산 남구 — 18~24시만 전용.
+    expect(isStdPermitOnly(fee({ ...monthly, monthlyFee: 10000, name: '궁거랑공영주차장', note: '18:00~24:00 거주자우선주차 전용' }))).toBe(false);
+    // 하남 — '+거주자우선주차장'(전용 아님), 시간 요금 정보만 빠졌다.
+    expect(isStdPermitOnly(fee({ ...monthly, monthlyFee: 20000, name: '덕풍1동 주민센터', note: '경차·장애인·유공자등 50프로 할인+월야간 20000원+거주자우선주차장' }))).toBe(false);
+    // 시간 요금이 있으면(공유 구획) 이름에 전용이 있어도 남긴다.
+    expect(isStdPermitOnly(fee({ monthlyFee: 40000, name: '주거지전용주차장' }))).toBe(false);
+    // 무료 '주거지 주차장'(지자체 사업 공영)은 남긴다.
+    expect(isStdPermitOnly(fee({ ...monthly, monthlyFee: null, feeType: 'free', name: '합천읍 교동 주거지주차장' }))).toBe(false);
+  });
+
+  it('표준데이터 정규화 — 요금 정리 수와 등록 차량 전용 제외 수를 센다', () => {
+    const rep = normalizeStdParkingRows([
+      stdSnake({}),
+      stdSnake({ PRKPLCE_NO: '2', PRKPLCE_NM: '노상2지구', BASIC_TIME: '0', BASIC_CHARGE: '200', ADD_UNIT_TIME: '10', ADD_UNIT_CHARGE: '200' }),
+      stdSnake({ PRKPLCE_NO: '3', PRKPLCE_NM: '낙성대제3공영주차장', BASIC_TIME: '', BASIC_CHARGE: '', ADD_UNIT_TIME: '', ADD_UNIT_CHARGE: '', DAY_CMMTKT: '', MONTH_CMMTKT: '40000', SPCMNT: '거주자주차제 전용' }),
+    ]);
+    expect(rep.rows.map((r) => r.id)).toEqual(['std:111-1-000001', 'std:2']);
+    expect(rep.rows[1]).toMatchObject({ baseMin: null, baseFee: null, addMin: null, addFee: null });
+    expect(rep).toMatchObject({ feeRuleCleared: 1, droppedPermitOnly: 1 });
   });
 });
 

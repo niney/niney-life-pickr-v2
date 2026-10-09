@@ -15,8 +15,8 @@
 //   - 추가 요금 0원(예: '30분 900원 + 10분 0원', 공영 운영정보 13,074행 중 11,200행)은 정보 없음 — 0 으로 두면 예상 요금이
 //     기본 요금에서 멈춘다.
 //   - 운영시간은 평일 요일끼리·일요일과 휴일이 항상 같았다(실측 0건 차이) — 다르면 월요일 기준 + 참고 문구.
-//   - 기본요금에 정수 최댓값(2,147,483,647)·월정액을 잘못 넣은 행이 있다 — 1만 원(30분) 넘으면 정보 없음. 거주자 우선 주차 구획
-//     ('(주거지)'·'업무지 N구간'·'거주자우선주차장')은 뺀다.
+//   - 기본요금에 정수 최댓값(2,147,483,647)·월정액을 잘못 넣은 행이 있다 — 원천 공통 sanitizeParkingFeeRule(시간당 2만 원 상한)로
+//     정보 없음. 거주자 우선 주차 구획('(주거지)'·'업무지 N구간'·'○○거주자우선주차장')은 요금이 월정액뿐일 때만 뺀다.
 //   - 대표 좌표: 이름이 다른 주차장 여럿이 한 좌표에 몰린 곳이 있다(구미 35곳·대구 북구 11곳이 한 점, 3곳 이상 몰린 좌표 63곳·
 //     283행) — markKotsaPlaceholderCoords 가 좌표를 지워 주소로 다시 찾게 하고, 주소도 뭉뚱그려져(부산 범일동 거주자 구획 등)
 //     지오코딩이 다시 한 점에 모이면 뺀다. 같은 주차장이 관리 ID 만 달리 여러 번 실린 행(이름 같고 300m 안 — 실측 1천여 행)은
@@ -25,7 +25,7 @@
 import { haversineM, normalizeParkingHhmm, normalizeParkingName, parseParkingLotType, type ParkingFeeType } from '@repo/utils';
 import { coerceStrOrNull, isObject, numOrNull } from '../../lib/narrow.js';
 import { KOTSA_PAGE_SIZE, fetchKotsaPage, type FetchLike, type KotsaOp, type ParkingPage } from './parking-api.adapter.js';
-import type { ParkingLotRow } from './parking-master.service.js';
+import { isMonthlyOnlyFee, sanitizeParkingFeeRule, type ParkingLotRow } from './parking-master.service.js';
 
 const LAT_MIN = 33;
 const LAT_MAX = 39;
@@ -33,13 +33,11 @@ const LNG_MIN = 124;
 const LNG_MAX = 132;
 // 한 시군구 안에서 이보다 많이 반복되는 관리 ID 는 쓰레기 값으로 본다.
 const JUNK_ID_REPEAT = 10;
-// 거주자 우선 주차 구획 — 월정액만 받는 등록 거주자용이라 방문자가 쓸 수 없다(서울 원천의 '거주자 우선 전용' 제외와 같은 취지).
-// 실측: 부산 동구 '수5-5(주거지)'·'초량3동-업무지7구간'(월 4만~6만 원, 시간 요금 없음), '○○거주자우선주차장'. '업무지구'(북구 동편
-// 업무지구 공영)는 실제 공영이라 남긴다.
+// 거주자 우선 주차 구획 — 이름이 거주자 류이고 요금이 월정액뿐(isMonthlyOnlyFee)이면 등록 거주자용이라 방문자가 쓸 수 없다(서울 원천의
+// '거주자 우선 전용' 제외와 같은 취지). KOTSA 엔 비고가 없어 표준데이터('…전용' 표기)와 달리 이름으로 본다. 실측: 부산 동구
+// '수5-5(주거지)'·'초량3동-업무지7구간'(월 4만~6만 원만). 시간 요금이 있는 공유 구획('거주자우선주차 05-05' 30분 1,500원)과
+// '업무지구'(북구 동편업무지구 공영)는 남긴다.
 const RESIDENT_ONLY_NAME = /주거지|업무지(?!구)|거주자/;
-// 기본요금(실측 기본 시간은 모두 30분) 상한 — 넘으면 입력 오류로 보고 정보 없음(정수 최댓값 2,147,483,647 이 80행, 월정액을 잘못 넣은
-// 4만 원 등).
-const MAX_BASE_FEE = 10_000;
 
 const text = (v: unknown): string | null => {
   const s = coerceStrOrNull(v)?.replace(/\s+/g, ' ').trim() ?? '';
@@ -118,7 +116,7 @@ export const kotsaOperationFields = (opr: Record<string, unknown> | undefined, f
   const paid = feeType !== 'free';
   const baseMin = paid ? positive(int(basic['parking_chrge_bs_time'])) : null;
   const baseFee = paid ? positive(int(basic['parking_chrge_bs_chrge'])) : null;
-  const hasBase = baseMin !== null && baseFee !== null && baseFee <= MAX_BASE_FEE;
+  const hasBase = baseMin !== null && baseFee !== null;
   const addMin = hasBase ? positive(int(basic['parking_chrge_adit_unit_time'])) : null;
   // 추가 요금 0 은 정보 없음(실측 — 기본 요금만 채우고 추가는 0 으로 두는 행이 대부분이다).
   const addFee = addMin !== null ? positive(int(basic['parking_chrge_adit_unit_chrge'])) : null;
@@ -207,8 +205,10 @@ export interface KotsaReport {
   droppedJunkId: number;
   droppedDupId: number;
   droppedNoName: number;
-  // 거주자 우선 주차 구획(이름으로 — RESIDENT_ONLY_NAME).
+  // 거주자 우선 주차 구획(이름 RESIDENT_ONLY_NAME + 월정액만).
   droppedResidentOnly: number;
+  // 시간 요금 규칙이 비정상이라 요금을 정보 없음으로 바꾼 행(sanitizeParkingFeeRule).
+  feeRuleCleared: number;
   // 좌표도 주소도 없음.
   droppedNoLocation: number;
   // 좌표가 없어 주소로 찾아야 하는 행(rows 에 lat/lng null 로 들어 있다 — 로더가 지오코딩, 못 찾으면 뺀다).
@@ -228,6 +228,7 @@ export const emptyKotsaReport = (): KotsaReport => ({
   droppedDupId: 0,
   droppedNoName: 0,
   droppedResidentOnly: 0,
+  feeRuleCleared: 0,
   droppedNoLocation: 0,
   needGeocode: 0,
   droppedNoFeeType: 0,
@@ -260,10 +261,6 @@ export const normalizeKotsaSigungu = (input: KotsaSigunguInput, loadDate: string
       report.droppedJunkId += 1;
       continue;
     }
-    if (RESIDENT_ONLY_NAME.test(name)) {
-      report.droppedResidentOnly += 1;
-      continue;
-    }
     const feeType = feeTypeOf(r);
     if (feeType === null) {
       report.droppedNoFeeType += 1;
@@ -277,15 +274,7 @@ export const normalizeKotsaSigungu = (input: KotsaSigunguInput, loadDate: string
       report.droppedNoLocation += 1;
       continue;
     }
-    const prevIdx = report.seenIds.get(id);
-    if (prevIdx !== undefined) {
-      report.droppedDupId += 1;
-      if (!hasCoord || report.rows[prevIdx]!.lat !== null) continue;
-      report.needGeocode -= 1;
-    }
     const opr = oprById.get(id);
-    if (opr && prevIdx === undefined) report.withOperation += 1;
-    if (!hasCoord) report.needGeocode += 1;
     const row: ParkingLotRow = {
       id: `kotsa:${id}`,
       source: 'kotsa',
@@ -310,6 +299,21 @@ export const normalizeKotsaSigungu = (input: KotsaSigunguInput, loadDate: string
       geoSource: hasCoord ? 'source' : null,
       baseDate: loadDate,
     };
+    // 요금 정리가 먼저 — 오입력 기본요금(정수 최댓값 등)이 시간 요금으로 보여 월정액 구획을 놓치지 않게.
+    const cleared = sanitizeParkingFeeRule(row);
+    if (RESIDENT_ONLY_NAME.test(name) && isMonthlyOnlyFee(row)) {
+      report.droppedResidentOnly += 1;
+      continue;
+    }
+    const prevIdx = report.seenIds.get(id);
+    if (prevIdx !== undefined) {
+      report.droppedDupId += 1;
+      if (!hasCoord || report.rows[prevIdx]!.lat !== null) continue;
+      report.needGeocode -= 1;
+    }
+    if (cleared && prevIdx === undefined) report.feeRuleCleared += 1;
+    if (opr && prevIdx === undefined) report.withOperation += 1;
+    if (!hasCoord) report.needGeocode += 1;
     if (prevIdx !== undefined) {
       report.rows[prevIdx] = row;
     } else {

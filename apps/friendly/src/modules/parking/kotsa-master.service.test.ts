@@ -152,23 +152,58 @@ describe('normalizeKotsaSigungu', () => {
   });
 });
 
-describe('normalizeKotsaSigungu — 거주자 구획', () => {
-  it('주거지·업무지 N구간·거주자우선주차장은 빼고 업무지구 공영은 남긴다', () => {
+describe('normalizeKotsaSigungu — 거주자 구획·요금 정리', () => {
+  // 부산 동구 실측 모양 — 시간 요금 없이 월정액만.
+  const monthlyOnly = (id: string, mon: string) =>
+    opr({
+      prk_center_id: id,
+      basic_info: { parking_chrge_bs_time: '30', parking_chrge_bs_chrge: '0', parking_chrge_adit_unit_time: '10', parking_chrge_adit_unit_chrge: '0' },
+      fxamt_info: { parking_chrge_one_day_chrge: '0', parking_chrge_mon_unit_chrge: mon },
+    });
+  const hourly = (id: string) =>
+    opr({
+      prk_center_id: id,
+      basic_info: { parking_chrge_bs_time: '30', parking_chrge_bs_chrge: '1500', parking_chrge_adit_unit_time: '10', parking_chrge_adit_unit_chrge: '0' },
+    });
+
+  it('이름이 거주자 류이고 월정액만이면 빼고, 시간 요금이 있는 공유 구획·업무지구 공영은 남긴다', () => {
     const rep = normalizeKotsaSigungu(
       {
         sigunguCd: '26170',
         facility: [
           fac({ prk_center_id: 'r1', prk_plce_nm: '수5-5(주거지)' }),
           fac({ prk_center_id: 'r2', prk_plce_nm: '초량3동-업무지7구간' }),
-          fac({ prk_center_id: 'r3', prk_plce_nm: '태평2동거주자우선주차장' }),
+          fac({ prk_center_id: 'r3', prk_plce_nm: '덕풍동 거주자우선주차장(중3류10호)' }),
+          fac({ prk_center_id: 'share', prk_plce_nm: '거주자우선주차 05-05' }),
           fac({ prk_center_id: 'ok', prk_plce_nm: '동편업무지구(공영)' }),
         ],
-        operation: [],
+        operation: [monthlyOnly('r1', '40000'), monthlyOnly('r2', '60000'), monthlyOnly('r3', '20000'), hourly('share'), monthlyOnly('ok', '50000')],
       },
       '2026-10-05',
     );
-    expect(rep.rows.map((r) => r.name)).toEqual(['동편업무지구(공영)']);
+    expect(rep.rows.map((r) => r.name)).toEqual(['거주자우선주차 05-05', '동편업무지구(공영)']);
+    expect(rep.rows[0]).toMatchObject({ baseMin: 30, baseFee: 1500 });
     expect(rep.droppedResidentOnly).toBe(3);
+  });
+
+  it('정수 최댓값·월정액 오입력 기본요금은 공통 요금 정리로 정보 없음 — 그 뒤 월정액만이면 거주자 구획 판정에도 걸린다', () => {
+    const bad = (id: string, fee: string) =>
+      opr({
+        prk_center_id: id,
+        basic_info: { parking_chrge_bs_time: '30', parking_chrge_bs_chrge: fee, parking_chrge_adit_unit_time: '10', parking_chrge_adit_unit_chrge: '500' },
+        fxamt_info: { parking_chrge_one_day_chrge: '0', parking_chrge_mon_unit_chrge: '40000' },
+      });
+    const rep = normalizeKotsaSigungu(
+      {
+        sigunguCd: '26290',
+        facility: [fac({ prk_center_id: 'max', prk_plce_nm: '문현2동 주민센터윗편' }), fac({ prk_center_id: 'res', prk_plce_nm: '용호동 거주자우선' })],
+        operation: [bad('max', '2147483647'), bad('res', '40000')],
+      },
+      '2026-10-05',
+    );
+    expect(rep.rows.map((r) => r.name)).toEqual(['문현2동 주민센터윗편']);
+    expect(rep.rows[0]).toMatchObject({ baseMin: null, baseFee: null, addMin: null, addFee: null, monthlyFee: 40000 });
+    expect(rep).toMatchObject({ feeRuleCleared: 1, droppedResidentOnly: 1 });
   });
 });
 
@@ -187,14 +222,6 @@ describe('kotsaOperationFields', () => {
       'paid',
     );
     expect(noBase).toMatchObject({ baseMin: null, baseFee: null, addMin: null, addFee: null });
-    // 정수 최댓값·월정액 오입력 — 1만 원(30분) 넘는 기본요금은 정보 없음.
-    for (const bad of ['2147483647', '40000']) {
-      const out = kotsaOperationFields(
-        opr({ basic_info: { parking_chrge_bs_time: '30', parking_chrge_bs_chrge: bad, parking_chrge_adit_unit_time: '10', parking_chrge_adit_unit_chrge: '500' } }),
-        'paid',
-      );
-      expect(out).toMatchObject({ baseMin: null, baseFee: null, addMin: null, addFee: null, monthlyFee: 100000 });
-    }
   });
 
   it('평일 요일마다 다르면 월요일 기준 + 참고, 회차 무료 분, 일요일이 비면 휴일 시간', () => {

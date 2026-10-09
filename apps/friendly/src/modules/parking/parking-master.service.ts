@@ -105,16 +105,52 @@ const dateOf = (v: unknown): string | null => {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 };
 
+// ── 요금 정리(원천 공통) ─────────────────────────────────────────────────────
+// 시간 요금 규칙이 말이 안 되면 기본·추가 요금을 통째로 정보 없음으로(1일권·월정액은 둔다) — 그대로 두면 상세의 예상 요금이 틀린
+// 금액으로 나온다. 실측(2026-10-10 표준·서울): 기본 시간 0분 116곳('기본 0분 1,500원'), 분·시간 혼동 17곳('추가 1분 1,000원' →
+// 1시간 58,000원), KOTSA 기본요금 정수 최댓값 80행. 상한은 시간당 2만 원(30분 1만 원) — 공영은 실측 최대 시간당 9천 원 남짓.
+const MAX_HOURLY_FEE = 20_000;
+const overHourly = (fee: number | null, min: number | null): boolean => fee !== null && min !== null && min > 0 && (fee / min) * 60 > MAX_HOURLY_FEE;
+
+// 고쳤으면 true(행을 바꾼다).
+export const sanitizeParkingFeeRule = (row: ParkingLotRow): boolean => {
+  const baseWithoutTime = row.baseFee !== null && (row.baseMin === null || row.baseMin === 0);
+  if (!baseWithoutTime && !overHourly(row.baseFee, row.baseMin) && !overHourly(row.addFee, row.addMin)) return false;
+  row.baseMin = null;
+  row.baseFee = null;
+  row.addMin = null;
+  row.addFee = null;
+  return true;
+};
+
+// 월정액만 받는 유료 주차장(시간 요금·1일권 없음) — 등록 차량(거주자 우선·정기차량) 전용일 가능성이 큰 요금 구조.
+// sanitizeParkingFeeRule 뒤에 본다(오입력 기본요금이 시간 요금으로 보이지 않게).
+export const isMonthlyOnlyFee = (row: ParkingLotRow): boolean =>
+  row.feeType !== 'free' && row.monthlyFee !== null && (row.baseFee === null || !row.baseMin) && row.dayPassFee === null;
+
+// 표준데이터의 등록 차량 전용 — 월정액만 + 이름·비고에 '…전용'(거주자주차제 전용·주거지전용·정기차량전용). 비고에 시간대
+// ('18:00~24:00 거주자우선주차 전용')가 있으면 그 밖의 시간엔 쓸 수 있어 남긴다. 실측(2026-10-10): 관악구 '○○동제N공영주차장'
+// (비고 '거주자주차제 전용', 이름엔 거주자 단어가 없다) 21·부산 남구 주거지전용 3·인천 학교 부설 정기차량전용 3 = 27곳. 이름에
+// '거주자'·'주거지'만 든 곳은 대부분 일반 공영이라(지자체 '주거지 주차장' 사업·공유 구획) 이름만으로는 빼지 않는다.
+const STD_PERMIT_MARK = /(거주자주차제|거주자|주거지|정기차량)\s*(우선주차\s*)?전용|주거지전용|정기차량전용/;
+const TIME_WINDOW = /\d{1,2}:\d{2}\s*~/;
+export const isStdPermitOnly = (row: ParkingLotRow): boolean =>
+  isMonthlyOnlyFee(row) && STD_PERMIT_MARK.test(`${row.name} ${row.note ?? ''}`) && !TIME_WINDOW.test(row.note ?? '');
+
 // ── 전국주차장정보표준데이터 ─────────────────────────────────────────────────
 export interface StdParkingReport {
   rows: ParkingLotRow[];
   droppedBadId: number;
   duplicates: number;
   coordMissing: number;
+  // 시간 요금 규칙이 비정상이라 요금을 정보 없음으로 바꾼 행.
+  feeRuleCleared: number;
+  // 등록 차량 전용(isStdPermitOnly)이라 뺀 행.
+  droppedPermitOnly: number;
 }
 
 export const normalizeStdParkingRows = (rawItems: Record<string, unknown>[]): StdParkingReport => {
-  const report: StdParkingReport = { rows: [], droppedBadId: 0, duplicates: 0, coordMissing: 0 };
+  const report: StdParkingReport = { rows: [], droppedBadId: 0, duplicates: 0, coordMissing: 0, feeRuleCleared: 0, droppedPermitOnly: 0 };
   const byId = new Map<string, ParkingLotRow>();
   for (const raw of rawItems) {
     const r = canonKeys(raw);
@@ -183,7 +219,14 @@ export const normalizeStdParkingRows = (rawItems: Record<string, unknown>[]): St
     }
     byId.set(row.id, row);
   }
-  report.rows = [...byId.values()];
+  for (const row of byId.values()) {
+    if (sanitizeParkingFeeRule(row)) report.feeRuleCleared += 1;
+    if (isStdPermitOnly(row)) {
+      report.droppedPermitOnly += 1;
+      continue;
+    }
+    report.rows.push(row);
+  }
   report.coordMissing = report.rows.filter((r) => r.lat === null).length;
   return report;
 };
@@ -199,6 +242,8 @@ export interface SeoulParkingReport {
   // 실시간 목록에만 있던 코드로 보충한 수.
   liveOnlyAdded: number;
   coordMissing: number;
+  // 시간 요금 규칙이 비정상이라 요금을 정보 없음으로 바꾼 행.
+  feeRuleCleared: number;
 }
 
 const SEOUL_PREFIX = '서울특별시';
@@ -287,6 +332,7 @@ export const normalizeSeoulParkingRows = (
     droppedBadId: 0,
     liveOnlyAdded: 0,
     coordMissing: 0,
+    feeRuleCleared: 0,
   };
   const byCode = new Map<string, { row: ParkingLotRow; coords: { lat: number; lng: number }[] }>();
   const rowCount = new Map<string, number>();
@@ -333,6 +379,7 @@ export const normalizeSeoulParkingRows = (
       row.lng = coords.reduce((s, c) => s + c.lng, 0) / coords.length;
       row.geoSource = 'source';
     }
+    if (sanitizeParkingFeeRule(row)) report.feeRuleCleared += 1;
     report.rows.push(row);
   }
   report.coordMissing = report.rows.filter((r) => r.lat === null).length;
