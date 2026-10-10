@@ -284,11 +284,14 @@ export const MenuGrid = ({
   // 주어지면 멘션 통계가 있는 메뉴를 클릭 가능하게 렌더해 리뷰 필터로 연결.
   // 멘션 없는(stats 없는) 메뉴는 클릭해도 결과가 비므로 정적 카드로 둔다.
   onSelectMenu,
+  // 메뉴명 → 등록 가격과 다른 메뉴판 사진 가격(사진이 등록 메뉴 업데이트보다 최신일 때만 서버가 준다).
+  boardPriceByName,
 }: {
   menus: RestaurantPublicDetailType['menus'];
   insights: RestaurantInsightsType | undefined;
   kcalByName?: ReadonlyMap<string, RestaurantMenuKcalItemType>;
   onSelectMenu?(name: string): void;
+  boardPriceByName?: ReadonlyMap<string, { price: string; uploadedOn: string }>;
 }) => {
   const mentionByName = new Map<string, { positive: number; negative: number; count: number }>();
   if (insights) {
@@ -301,6 +304,7 @@ export const MenuGrid = ({
         {menus.map((m, idx) => {
           const stats = mentionByName.get(m.name);
           const kcal = kcalByName?.get(m.name);
+          const boardPrice = boardPriceByName?.get(m.name);
           const clickable = !!onSelectMenu && !!stats;
           const text = (
             <>
@@ -316,6 +320,14 @@ export const MenuGrid = ({
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs tabular-nums text-muted-foreground">
                   {m.price && <span>{formatWonPrice(m.price)}</span>}
                   {kcal && <MenuKcalChip item={kcal} />}
+                </div>
+              )}
+              {boardPrice && (
+                <div
+                  className="text-[11px] tabular-nums text-amber-700 dark:text-amber-400"
+                  title="가게가 올린 메뉴판 사진의 가격 — 등록 메뉴보다 최근 사진이에요"
+                >
+                  메뉴판 사진 {formatWonPrice(boardPrice.price)} · {boardPrice.uploadedOn}
                 </div>
               )}
               {m.description && (

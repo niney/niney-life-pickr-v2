@@ -4,6 +4,7 @@ import type {
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { useRestaurantPublicMenuNutrition } from '@repo/shared';
+import { MenuBoardSection } from './MenuBoardSection';
 import { MenuGrid } from './shared';
 
 interface Props {
@@ -21,8 +22,23 @@ export const MenuTab = ({ placeId, detail, insights, onSelectMenu }: Props) => {
   const kcalByName = new Map<string, RestaurantMenuKcalItemType>(
     (nutrition.data?.items ?? []).map((item) => [item.name, item]),
   );
+  // 메뉴판 사진(네이버) — 등록 메뉴 아래 따로. 등록 가격과 다른 최신 사진 가격은 등록 메뉴 카드에 한 줄로.
+  const menuBoard = detail.menuBoard;
+  const boardPriceByName = new Map((menuBoard?.newerPrices ?? []).map((p) => [p.name, p]));
+  const boardSection = menuBoard ? (
+    <div className="border-t pt-4">
+      <MenuBoardSection menuBoard={menuBoard} />
+    </div>
+  ) : null;
 
   if (!hasMenus) {
+    if (menuBoard) {
+      return (
+        <div className="p-4">
+          <MenuBoardSection menuBoard={menuBoard} />
+        </div>
+      );
+    }
     return (
       <div className="px-4 py-8 text-center text-sm text-muted-foreground">
         등록된 메뉴가 없습니다.
@@ -60,9 +76,11 @@ export const MenuTab = ({ placeId, detail, insights, onSelectMenu }: Props) => {
               insights={insights}
               kcalByName={kcalByName}
               onSelectMenu={onSelectMenu}
+              boardPriceByName={boardPriceByName}
             />
           </section>
         ))}
+        {boardSection}
       </div>
     );
   }
@@ -78,7 +96,9 @@ export const MenuTab = ({ placeId, detail, insights, onSelectMenu }: Props) => {
         insights={insights}
         kcalByName={kcalByName}
         onSelectMenu={onSelectMenu}
+        boardPriceByName={boardPriceByName}
       />
+      {boardSection}
     </div>
   );
 };
