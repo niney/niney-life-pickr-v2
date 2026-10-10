@@ -21,7 +21,7 @@ const TITLE_RULES: TitleRule[] = [
   { match: (p) => p.startsWith('/admin/crawl-test'), label: '크롤링 테스트' },
   { match: (p) => p.startsWith('/admin/ai-keys'), label: 'AI 키' },
   { match: (p) => p.startsWith('/admin/ai-test'), label: 'AI 테스트' },
-  { match: (p) => p.startsWith('/admin/smartly-test'), label: '메뉴판 AI 테스트' },
+  { match: (p) => p.startsWith('/admin/menu-board'), label: '메뉴판 읽기' },
   { match: (p) => p.startsWith('/admin/map-keys'), label: '지도 키' },
   { match: (p) => p.startsWith('/admin/settings'), label: '설정' },
   { match: (p) => p === '/admin', label: '홈' },

@@ -137,11 +137,6 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
-      // smartly(apps/smartly, Python) — 어드민 '메뉴판 AI 테스트' 전용. 로컬 체험 서버라 운영 nginx 에는 없다.
-      '/smartly-api': {
-        target: 'http://127.0.0.1:8700',
-        changeOrigin: true,
-      },
     },
   },
   test: {

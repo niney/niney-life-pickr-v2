@@ -59,7 +59,7 @@ const NAV: NavItem[] = [
       { to: '/admin/diningcode-test', label: '다이닝코드', icon: Beaker },
       { to: '/admin/tabling-test', label: '테이블링', icon: Beaker },
       { to: '/admin/ai-test', label: 'AI', icon: Sparkles },
-      { to: '/admin/smartly-test', label: '메뉴판 AI', icon: ScanText },
+      { to: '/admin/menu-board', label: '메뉴판 읽기', icon: ScanText },
     ],
   },
   { to: '/admin/logs', label: '로그', icon: ScrollText },
