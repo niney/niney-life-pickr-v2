@@ -23,7 +23,7 @@ export const menuBoardPriceCheck = (
   registeredPrice: string | null,
   photoPrice: string | null,
 ): MenuBoardPriceCheckType => {
-  if (registeredPrice?.includes('~')) return 'range'; // 크기별 범위 — 사진은 첫 가격(대개 가장 큰 크기)만 읽는다
+  if (registeredPrice?.includes('~')) return 'range'; // 크기별 범위('39,000~49,000원') — 사진 쪽은 크기마다 따로라 한 값과 견줄 수 없다
   const expected = parsePrice(registeredPrice);
   const got = parsePrice(photoPrice);
   if (expected === null || got === null) return 'unknown';

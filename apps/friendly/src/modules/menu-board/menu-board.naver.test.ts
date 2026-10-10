@@ -7,13 +7,16 @@ import {
   menuBoardPriceCheck,
   toPublicMenuBoard,
 } from './menu-board.naver-match.js';
+import { MENU_BOARD_PROMPT_VERSION } from './menu-board.prompt.js';
 import { MenuBoardError } from './menu-board.service.js';
 
 const item = (name: string, price: string | null = null): MenuBoardItemType => ({ name, price, description: null });
 const image = (url: string, uploadedOn: string | null, items?: MenuBoardItemType[]): NaverMenuBoardImageType => ({
   url,
   uploadedOn,
-  ...(items ? { read: { items, model: 'kimi-k3', readAt: '2026-10-10T00:00:00.000Z' } } : {}),
+  ...(items
+    ? { read: { items, model: 'kimi-k3', readAt: '2026-10-10T00:00:00.000Z', promptVersion: MENU_BOARD_PROMPT_VERSION } }
+    : {}),
 });
 
 describe('buildMenuBoardMenus — 구분값 origin', () => {
@@ -163,6 +166,16 @@ describe('NaverMenuBoardReader', () => {
       'https://x/b.png',
     ]);
     expect(summary).toMatchObject({ total: 4, alreadyRead: 1, read: 2, failed: [], added: 1, noProvider: false });
+  });
+
+  it('옛 프롬프트 버전(없으면 1)으로 읽은 사진은 다시 읽는다', async () => {
+    const read = vi.fn(ok);
+    const old = { url: 'https://x/old.png', uploadedOn: null, read: { items: [], model: 'kimi-k3', readAt: 'x' } };
+    const { reader, saveNaverMenuBoardReads } = setup([old, image('https://x/now.png', null, [])], read);
+    expect(await reader.pendingCount('p')).toBe(1);
+    expect(await reader.readPending('p')).toMatchObject({ read: 1, alreadyRead: 1 });
+    const saved = (saveNaverMenuBoardReads.mock.calls[0]![1] as Map<string, { promptVersion: number }>).get('https://x/old.png');
+    expect(saved?.promptVersion).toBe(MENU_BOARD_PROMPT_VERSION);
   });
 
   it('모델·키가 없으면 바로 멈추고, 사진 하나가 실패해도 나머지는 읽는다', async () => {

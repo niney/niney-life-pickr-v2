@@ -46,6 +46,9 @@ describe('parseMenuBoardItems', () => {
   it('규칙 보강 두 줄이 프롬프트에 들어 있다', () => {
     expect(MENU_BOARD_PROMPT).toContain('"LUNCH COURSE A"');
     expect(MENU_BOARD_PROMPT).toContain('price 를 null 로 따로 넣는다');
+    // v2 — 크기·인분별 가격은 크기마다 한 항목.
+    expect(MENU_BOARD_PROMPT).toContain('크기마다 한 항목으로 나누고');
+    expect(MENU_BOARD_PROMPT).not.toContain('첫 번째만');
     expect(MENU_BOARD_PROMPT.trimEnd().endsWith('- 설명 없이 JSON 만 출력.')).toBe(true);
   });
 });

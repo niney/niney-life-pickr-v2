@@ -117,6 +117,8 @@ export const NaverMenuBoardRead = z.object({
   items: z.array(MenuBoardItem),
   model: z.string(),
   readAt: z.string(),
+  // 읽을 때의 메뉴판 읽기 프롬프트 버전(없으면 1). 프롬프트가 바뀌면 낮은 버전은 다시 읽는다.
+  promptVersion: z.number().int().positive().optional(),
 });
 export type NaverMenuBoardReadType = z.infer<typeof NaverMenuBoardRead>;
 

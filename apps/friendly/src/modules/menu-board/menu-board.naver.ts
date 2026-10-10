@@ -1,10 +1,16 @@
-import type { NaverMenuBoardReadType } from '@repo/api-contract';
+import type { NaverMenuBoardImageType, NaverMenuBoardReadType } from '@repo/api-contract';
+import { MENU_BOARD_PROMPT_VERSION } from './menu-board.prompt.js';
 import type { RestaurantService } from '../restaurant/restaurant.service.js';
 import { MenuBoardError, type MenuBoardService } from './menu-board.service.js';
 
 // 네이버 맛집 메뉴판 사진 자동 읽기 — 크롤 직후(백그라운드)와 read:naver-menu-boards 스크립트가 부른다.
-// 스냅샷의 menuBoardImages 중 아직 안 읽은 사진만 메뉴판 읽기(purpose menu-board)로 읽어 결과를 붙이고, 저장 때
-// 등록 메뉴와의 짝(menuBoardMenus, 구분값 origin)이 다시 계산된다. 같은 주소의 사진은 재크롤 때 다시 읽지 않는다.
+// 스냅샷의 menuBoardImages 중 아직 안 읽었거나 옛 프롬프트로 읽은 사진만 메뉴판 읽기(purpose menu-board)로 읽어
+// 결과를 붙이고, 저장 때 등록 메뉴와의 짝(menuBoardMenus, 구분값 origin)이 다시 계산된다. 같은 주소·같은 프롬프트
+// 버전의 사진은 재크롤 때 다시 읽지 않는다.
+
+// 다시 읽어야 하는 사진 — 안 읽었거나 지금보다 낮은 프롬프트 버전(없으면 1)으로 읽은 것.
+export const needsMenuBoardRead = (image: NaverMenuBoardImageType): boolean =>
+  !image.read || (image.read.promptVersion ?? 1) < MENU_BOARD_PROMPT_VERSION;
 
 // 가게당 한 번에 읽는 사진 상한 — 로컬 네이버 23곳은 1~10장(평균 3.2장). 넘는 사진은 다음 크롤에서 이어 읽는다.
 export const NAVER_MENU_BOARD_MAX_READS = 12;
@@ -14,7 +20,7 @@ const UA =
 
 export interface NaverMenuBoardReadSummary {
   total: number; // 스냅샷의 메뉴판 사진 수
-  alreadyRead: number;
+  alreadyRead: number; // 지금 프롬프트 버전으로 이미 읽은 장수
   read: number; // 이번에 읽어 붙인 장수
   failed: { url: string; error: string }[];
   added: number; // 저장 뒤 '사진에만 있는 메뉴'(origin=menu-board) 수
@@ -41,7 +47,7 @@ export class NaverMenuBoardReader {
   // 아직 안 읽은 메뉴판 사진 수(이번에 읽을 상한 적용 전). 사진 목록을 모르면 0.
   async pendingCount(placeId: string): Promise<number> {
     const state = await this.restaurants.findNaverMenuBoardState(placeId);
-    return (state?.menuBoardImages ?? []).filter((image) => !image.read).length;
+    return (state?.menuBoardImages ?? []).filter(needsMenuBoardRead).length;
   }
 
   // 사진 목록을 모르는(크롤 전·수집 전) 가게는 null. 사진이 없거나 다 읽었으면 모델을 부르지 않는다.
@@ -49,7 +55,7 @@ export class NaverMenuBoardReader {
     const state = await this.restaurants.findNaverMenuBoardState(placeId);
     if (!state || !Array.isArray(state.menuBoardImages)) return null;
     const pending = state.menuBoardImages
-      .filter((image) => !image.read)
+      .filter(needsMenuBoardRead)
       .slice(0, this.deps.maxReads ?? NAVER_MENU_BOARD_MAX_READS);
     const reads = new Map<string, NaverMenuBoardReadType>();
     const failed: NaverMenuBoardReadSummary['failed'] = [];
@@ -58,7 +64,12 @@ export class NaverMenuBoardReader {
       try {
         const buffer = await (this.deps.fetchImage ?? fetchImage)(image.url);
         const result = await this.menuBoards.read(buffer);
-        reads.set(image.url, { items: result.items, model: result.model, readAt: new Date().toISOString() });
+        reads.set(image.url, {
+          items: result.items,
+          model: result.model,
+          readAt: new Date().toISOString(),
+          promptVersion: MENU_BOARD_PROMPT_VERSION,
+        });
       } catch (e) {
         if (e instanceof MenuBoardError && e.code === 'no_provider') {
           noProvider = true; // 설정이 없으면 다른 사진도 같은 결과 — 바로 멈춘다
@@ -73,7 +84,7 @@ export class NaverMenuBoardReader {
         : { attached: 0, menuBoardMenus: state.menuBoardMenus ?? [] };
     return {
       total: state.menuBoardImages.length,
-      alreadyRead: state.menuBoardImages.filter((i) => i.read).length,
+      alreadyRead: state.menuBoardImages.filter((i) => !needsMenuBoardRead(i)).length,
       read: saved.attached,
       failed,
       added: saved.menuBoardMenus.filter((m) => m.origin === 'menu-board').length,
