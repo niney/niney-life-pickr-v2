@@ -22,5 +22,6 @@ export const buildLlmProviderEnv = (): LlmProviderEnv => ({
     tarot: env.OLLAMA_TAROT_MODEL,
     saju: env.OLLAMA_SAJU_MODEL,
     'saju-g': env.OLLAMA_SAJU_G_MODEL,
+    'menu-board': env.OLLAMA_MENU_BOARD_MODEL,
   },
 });

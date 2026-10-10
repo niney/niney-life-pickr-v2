@@ -50,3 +50,7 @@ export const MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION = 'DELETE_OLD_MEAL_PHOTOS'
 // 스키마(AirHistoryTerm·AirForecastCode)는 이 튜플로 z.enum 을 만든다.
 export const AIR_HISTORY_TERMS = ['DAILY', 'MONTH', '3MONTH'] as const;
 export const AIR_FORECAST_CODES = ['PM10', 'PM25', 'O3'] as const;
+
+// ── 메뉴판 읽기(어드민) ──────────────────────────────────────────────────────
+// 업로드 한도 — 캐치테이블 메뉴판 사진은 원본이 9MB 까지 있다(서버가 긴 변을 2,000px 로 맞춘 JPEG 로 바꿔 모델에 넘긴다).
+export const MENU_BOARD_MAX_UPLOAD_MB = 20;

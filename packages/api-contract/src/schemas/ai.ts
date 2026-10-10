@@ -98,6 +98,7 @@ export type LlmProviderIdType = z.infer<typeof LlmProviderId>;
 //  - meal-supplement 텍스트 — 식단 기록 영양소 점검의 영양제 조언(식단 관리). 기본 kimi-k3
 //  - tarot          텍스트 — 타로 해석. 무인증 공개 기능이라 전용 키(own)를 두면 계정 한도가 분리된다
 //  - saju           텍스트 — 사주 풀이(섹션 병렬·오늘·궁합·택일·음식). 타로와 같은 공개 기능
+//  - menu-board     비전 — 메뉴판 사진 읽기(어드민 테스트). 기본 kimi-k3(docs/menu-board-ocr-probe.md)
 export const LlmProviderPurpose = z.enum([
   'chat',
   'image',
@@ -108,6 +109,7 @@ export const LlmProviderPurpose = z.enum([
   'tarot',
   'saju',
   'saju-g',
+  'menu-board',
 ]);
 export type LlmProviderPurposeType = z.infer<typeof LlmProviderPurpose>;
 

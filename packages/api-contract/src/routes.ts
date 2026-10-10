@@ -422,6 +422,16 @@ export const SettingsTelegram = {
   resolveChatId: `${API_PREFIX}/admin/settings/telegram/resolve-chat-id`,
 } as const;
 
+// 메뉴판 읽기 — 어드민 테스트(/admin/menu-board). 사진 한 장을 비전 LLM(purpose menu-board)이 메뉴 목록으로
+// 읽는다. 샘플은 collect:menu-boards 가 모은 캐치테이블 메뉴판 사진(key = '<shopRef>__board-N'), 정확도는
+// eval:menu-boards 가 남긴 회귀 평가 리포트.
+export const MenuBoard = {
+  read: `${API_PREFIX}/admin/menu-board/read`,
+  samples: `${API_PREFIX}/admin/menu-board/samples`,
+  sampleImage: (key: string) => `${API_PREFIX}/admin/menu-board/samples/${key}/image`,
+  evalReport: `${API_PREFIX}/admin/menu-board/eval`,
+} as const;
+
 // 정산하기의 영수증 업로드/추출 엔드포인트. 인증된 사용자(USER+) 만 사용
 // 가능 — 정산 자체가 로그인 사용자 기능. 추출은 vision LLM 호출이라 비용이
 // 들지만 MVP 에서는 제한 없음.

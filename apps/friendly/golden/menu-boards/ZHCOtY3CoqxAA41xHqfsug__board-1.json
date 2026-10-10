@@ -1,0 +1,83 @@
+{
+ "shop": "그랜드조선부산 팔레드 신",
+ "note": "코스 한 개(200,000원, 1인) + 와인 추천 2종. 코스 구성 요리 7개는 가격이 없는 구성이라 optional",
+ "items": [
+  {
+   "name": "금풍옥로",
+   "price": "200,000",
+   "alt": [
+    "금풍옥로 金風玉露 GEUMPUNGOKRO",
+    "금풍옥로 (GEUMPUNGOKRO)",
+    "GEUMPUNGOKRO",
+    "金風玉露",
+    "금풍옥로 코스"
+   ]
+  },
+  {
+   "name": "E.Guigal, Condrieu Blanc, 2022",
+   "price": "225,000",
+   "alt": [
+    "WHITE I E.Guigal, Condrieu Blanc, 2022",
+    "E.Guigal Condrieu Blanc 2022",
+    "WHITE E.Guigal, Condrieu Blanc, 2022",
+    "E.Guigal, Condrieu Blanc"
+   ]
+  },
+  {
+   "name": "E.Guigal, Chateauneuf-du-Pape, 2021",
+   "price": "210,000",
+   "alt": [
+    "RED I E.Guigal, Chateauneuf-du-Pape, 2021",
+    "E.Guigal Chateauneuf-du-Pape 2021",
+    "RED E.Guigal, Chateauneuf-du-Pape, 2021",
+    "E.Guigal, Chateauneuf-du-Pape"
+   ]
+  }
+ ],
+ "optional": [
+  "영추 – 추리향계 迎秋 – 秋梨香鷄",
+  "산진 – 산진 딤섬 2종 (돼지고기:국내산) 山珍 – 山珍點心",
+  "금탕 – 황탕해진 金湯 – 黃湯海珍",
+  "풍해 – 삼발 소스 은사 대하찜 豊海 – 銀絲蒸大蝦",
+  "추야 – 연향 송이 진갈비 (소고기:미국산) 秋野 – 蓮香松耳牛排",
+  "풍년 – 추향 에그누들 豊年 – 秋香鷄蛋面",
+  "추월 – 망고월병 & 리치 소르베 秋月 – 芒果月餅 & 荔枝冰",
+  "영추 – 추리향계",
+  "추리향계",
+  "영추",
+  "산진 – 산진 딤섬 2종 (돼지고기:국내산)",
+  "산진 딤섬 2종",
+  "산진",
+  "금탕 – 황탕해진",
+  "황탕해진",
+  "금탕",
+  "풍해 – 삼발 소스 은사 대하찜",
+  "삼발 소스 은사 대하찜",
+  "풍해",
+  "추야 – 연향 송이 진갈비 (소고기:미국산)",
+  "연향 송이 진갈비",
+  "추야",
+  "풍년 – 추향 에그누들",
+  "추향 에그누들",
+  "풍년",
+  "추월 – 망고월병 & 리치 소르베",
+  "망고월병 & 리치 소르베",
+  "추월",
+  "Salsa-Glazed Chicken with Pear, Pickled Fig & Dill",
+  "Two Kinds of Dim Sum",
+  "Pan-Fried Delicacy of sea with Snow Crab in Golden Broth",
+  "Steamed King Prawns with Vermicelli Noodles & Sambal Sauce",
+  "Braised Beef Short Ribs with Pine Mushroom Wrapped in Lotus Leaf & Black Pepper Sauce",
+  "Stir-Fried Egg Noodles with Seasonal Vegetables & Soy Sauce",
+  "Mango Moonclake & Lychee Sorbet",
+  "Mango Mooncake & Lychee Sorbet",
+  "APPETIZER",
+  "DIMSUM",
+  "MAIN",
+  "NOODLE",
+  "DESSERT",
+  "Wine Recommendation",
+  "WHITE",
+  "RED"
+ ]
+}

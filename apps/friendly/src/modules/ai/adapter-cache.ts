@@ -13,7 +13,7 @@ import { llmTelemetry } from './llm-telemetry.js';
 // 캐시를 밀어내 어댑터가 매번 재생성된다 — FIFO 게이트가 리셋되면 실효
 // 동시성이 maxConcurrent 를 초과해 429 위험. 키별 Map 으로 용도별 어댑터를
 // 공존시킨다. 상한은 키 회전 등으로 죽은 엔트리가 무한히 쌓이는 것만 막는
-// 안전벨트 — 용도(LlmProviderPurpose)가 9개라 전부 쓰여도 밀려나지 않게 여유를 둔다
+// 안전벨트 — 용도(LlmProviderPurpose)가 10개라 전부 쓰여도 밀려나지 않게 여유를 둔다
 // (상한에 닿으면 삽입 순으로 가장 오래된 것부터 지워 자주 쓰는 chat 이 먼저 밀려난다).
 const MAX_ENTRIES = 16;
 

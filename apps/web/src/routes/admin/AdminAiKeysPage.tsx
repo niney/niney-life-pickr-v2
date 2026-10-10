@@ -11,6 +11,7 @@ import {
   PlugZap,
   RefreshCw,
   Save,
+  ScanText,
   ScrollText,
   Sparkles,
   Trash2,
@@ -58,6 +59,7 @@ const PURPOSE_ORDER: LlmProviderPurposeType[] = [
   'tarot',
   'saju',
   'saju-g',
+  'menu-board',
 ];
 
 interface PurposeMeta {
@@ -85,6 +87,12 @@ const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
     icon: Sparkles,
     label: '사주(G) 해석',
     desc: '계산된 명식을 한국어로 풀어 주는 모델. Kimi K3 · Kimi K2.6 등 상위 모델을 선택할 수 있습니다.',
+    placeholder: 'kimi-k3',
+  },
+  'menu-board': {
+    icon: ScanText,
+    label: '메뉴판 읽기',
+    desc: '어드민 테스트 — 메뉴판 사진을 메뉴·가격 목록으로 읽는 비전 모델. 기본 kimi-k3(검수 20장 F1 99.8%, OCR 없이)',
     placeholder: 'kimi-k3',
   },
   chat: {

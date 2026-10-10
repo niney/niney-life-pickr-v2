@@ -1,0 +1,41 @@
+{
+ "shop": "보보식당",
+ "note": "559x794 작은 사진, 런치 세트 2개(구성 요리는 optional)",
+ "items": [
+  {
+   "name": "Double set",
+   "price": "57,000원",
+   "alt": [
+    "Double set (2인)",
+    "더블 세트",
+    "시그니처 런치세트 Double set",
+    "Double set 2인"
+   ]
+  },
+  {
+   "name": "Big set",
+   "price": "130,000원",
+   "alt": [
+    "Big set (4인)",
+    "빅 세트",
+    "시그니처 런치세트 Big set",
+    "Big set 4인"
+   ]
+  }
+ ],
+ "optional": [
+  "오이 샐러드",
+  "XO소스 가리비찜",
+  "마라소스 가지튀김",
+  "식사",
+  "산동 샤오찌",
+  "동파육",
+  "식사2종",
+  "디저트",
+  "전복삼선짜장",
+  "SIGNATURE LUNCH SET",
+  "시그니처 런치세트",
+  "Double set 인원 추가",
+  "인당 28,500원"
+ ]
+}

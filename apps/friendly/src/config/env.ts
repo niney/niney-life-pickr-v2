@@ -45,6 +45,9 @@ const EnvSchema = z.object({
   OLLAMA_SAJU_MODEL: z.string().default('kimi-k3'),
   // 사주(C)의 OLLAMA_SAJU_MODEL과 별도로 사주(G)의 모델을 설정한다.
   OLLAMA_SAJU_G_MODEL: z.string().default('kimi-k3'),
+  // 메뉴판 읽기(menu-board, vision) — 어드민 테스트. 검수 정답 20장(2026-10-10): kimi-k3 + 규칙 프롬프트 F1 99.8%·
+  // 장당 중앙 약 7초(OCR 힌트 없이도 같은 점수). gemma4:31b 는 OCR 힌트가 없으면 89.6%. 재측정: eval:menu-boards.
+  OLLAMA_MENU_BOARD_MODEL: z.string().default('kimi-k3'),
   // 메뉴 칼로리 LLM 매칭(chat 용도 키 상속, 모델만 지정). 골든셋 84건 실측(2026-09-02):
   // gemma4:31b 88%(high 신뢰도만 29/30, p50 1.2s) / qwen3.5:397b 77% / gpt-oss:120b 68%.
   // 비우면 chat 기본 모델. 재측정: pnpm --filter friendly probe:menu-decompose.

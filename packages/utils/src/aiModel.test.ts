@@ -128,6 +128,12 @@ describe('recommendModelForPurpose', () => {
       'gpt-oss:20b',
     );
   });
+  it('메뉴판 읽기는 Kimi K3, 없으면 가장 작은 비전 모델을 추천한다', () => {
+    expect(recommendModelForPurpose('menu-board', ['gemma4:31b', 'kimi-k3', 'gpt-oss:120b'])).toBe('kimi-k3');
+    expect(recommendModelForPurpose('menu-board', ['qwen3-vl:235b', 'gemma4:31b', 'gpt-oss:120b'])).toBe(
+      'gemma4:31b',
+    );
+  });
   // 규모: gpt-oss:20b(20) · gpt-oss:120b(120) · deepseek-v4-pro:671b(671) —
   //       gemma4:31b(31, vision) · qwen3-vl:235b(235, vision) · qwen3.5:397b(397, vision)
   const catalog = [

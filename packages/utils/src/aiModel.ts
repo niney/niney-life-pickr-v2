@@ -91,12 +91,14 @@ type ModelPurpose =
   | 'meal-supplement'
   | 'tarot'
   | 'saju'
-  | 'saju-g';
+  | 'saju-g'
+  | 'menu-board';
 
 // 용도별로 카탈로그에서 합리적인 기본 모델을 한 개 고른다. UI 가 키 입력 후
 // "추천값"을 폼에 프리필하는 용도 — 강제가 아니라 시작점이다. 적합한 후보가
 // 없으면 null (그땐 프리필하지 않는다).
 //   image·meal-photo    vision 계열 중 가장 작은 모델 (대개 충분 + 저렴). 없으면 null.
+//   menu-board          kimi-k3 우선(메뉴판 검수 F1 99.8%), 없으면 image 와 같은 규칙.
 //   log-analysis·saju   텍스트 계열 중 가장 큰 모델 (원인 추론·명리 풀이는 추론력·한국어 품질 우선).
 //   chat·meal-recommend 텍스트 계열 중 중간 규모 (속도·품질 균형).
 export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]): string | null => {
@@ -112,7 +114,13 @@ export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]
     }
   }
 
-  if (purpose === 'image' || purpose === 'meal-photo') {
+  if (purpose === 'menu-board') {
+    // 메뉴판 읽기 실측(2026-10-10, 검수 20장): kimi-k3 + 규칙 프롬프트 99.8%, gemma4:31b 는 OCR 힌트 없이 89.6%.
+    const candidate = list.find((id) => id.toLowerCase().split(':')[0] === 'kimi-k3');
+    if (candidate) return candidate;
+  }
+
+  if (purpose === 'image' || purpose === 'meal-photo' || purpose === 'menu-board') {
     const vision = list.filter(isVisionModel).sort((a, b) => modelSizeB(a) - modelSizeB(b));
     return vision[0] ?? null;
   }

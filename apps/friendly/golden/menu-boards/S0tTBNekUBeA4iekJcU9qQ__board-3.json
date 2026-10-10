@@ -1,0 +1,102 @@
+{
+ "shop": "푸에르코 한남",
+ "note": "메뉴 9개 + 영어 병기 + 긴 설명문, 가격 '38,0'(천 원 단위)",
+ "items": [
+  {
+   "name": "플루마",
+   "price": "38,0",
+   "alt": [
+    "플루마 Iberico Pluma",
+    "플루마 (Iberico Pluma)",
+    "BEST 플루마"
+   ]
+  },
+  {
+   "name": "황제살",
+   "price": "32,0",
+   "alt": [
+    "황제살 Iberico Sirloin",
+    "황제살 (Iberico Sirloin)",
+    "BEST 황제살"
+   ]
+  },
+  {
+   "name": "갈비살",
+   "price": "25,0",
+   "alt": [
+    "갈비살 Spare Rib",
+    "갈비살 (Spare Rib)",
+    "BEST 갈비살"
+   ]
+  },
+  {
+   "name": "항정살",
+   "price": "23,0",
+   "alt": [
+    "항정살 Jowl Meat",
+    "항정살 (Jowl Meat)",
+    "BEST 항정살"
+   ]
+  },
+  {
+   "name": "꽃목살",
+   "price": "22,0",
+   "alt": [
+    "꽃목살 Boston Butt",
+    "꽃목살 (Boston Butt)",
+    "BEST 꽃목살"
+   ]
+  },
+  {
+   "name": "골든듀록삼겹",
+   "price": "22,0",
+   "alt": [
+    "골든듀록삼겹 Golden Duroc Pork Belly",
+    "골든듀록삼겹 (Golden Duroc Pork Belly)",
+    "BEST 골든듀록삼겹"
+   ]
+  },
+  {
+   "name": "수제치즈소시지",
+   "price": "18,0",
+   "alt": [
+    "수제치즈소시지 Cheese Sausage",
+    "수제치즈소시지 (Cheese Sausage)",
+    "BEST 수제치즈소시지"
+   ]
+  },
+  {
+   "name": "구워먹는임실치즈",
+   "price": "12,0",
+   "alt": [
+    "구워먹는임실치즈 Imsil Cheese",
+    "구워먹는임실치즈 (Imsil Cheese)",
+    "BEST 구워먹는임실치즈"
+   ]
+  },
+  {
+   "name": "구워먹는 야채",
+   "price": "5,0",
+   "alt": [
+    "구워먹는 야채 Grilled vegetables",
+    "구워먹는 야채 (Grilled vegetables)",
+    "BEST 구워먹는 야채"
+   ]
+  }
+ ],
+ "optional": [
+  "Iberico Pluma",
+  "Iberico Sirloin",
+  "Spare Rib",
+  "Jowl Meat",
+  "Boston Butt",
+  "Golden Duroc Pork Belly",
+  "Cheese Sausage",
+  "Imsil Cheese",
+  "Grilled vegetables",
+  "PREMIUM IBERICO PORK",
+  "이베리코에서만 맛볼 수 있는 특수부위",
+  "스트로베리 샤벳",
+  "LIMITED"
+ ]
+}
