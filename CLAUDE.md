@@ -91,7 +91,6 @@ pnpm dev:web          # 웹만
 pnpm dev:mobile       # 앱만 (Expo Dev Tools, 인터랙티브 키)
 pnpm dev:ios          # 앱 iOS 시뮬레이터 직행
 pnpm dev:android      # 앱 Android 에뮬레이터 직행
-pnpm dev:smartly      # 메뉴판 AI 체험 서버(apps/smartly, Python·로컬 임시) — 처음엔 pnpm --filter smartly setup
 pnpm typecheck        # 전체 타입체크
 pnpm test             # 전체 테스트
 pnpm --filter <name>  # 특정 워크스페이스만

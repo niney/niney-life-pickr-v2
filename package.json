@@ -18,7 +18,6 @@
     "dev:android:local": "pnpm --filter mobile android:local",
     "dev:android:prod": "pnpm --filter mobile android:prod",
     "dev:api": "turbo dev --filter=friendly",
-    "dev:smartly": "pnpm --filter smartly serve",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
