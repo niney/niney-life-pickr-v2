@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   __test_extractBaeminMenuGroups as extractBaeminMenuGroups,
+  __test_extractMenuUpdatedOn as extractMenuUpdatedOn,
   __test_flattenMenuGroups as flattenMenuGroups,
   __test_isVisitorReviewsGraphqlRequestBody as isVisitorReviewsGraphqlRequestBody,
   __test_parseVisitorReviewsFromCaptured as parseVisitorReviews,
   __test_resolveMenuGroups as resolveMenuGroups,
   createVisitorWireAccumulator,
+  extractNaverMenuBoardImages as extractMenuBoardImages,
 } from './naver-place.playwright.adapter.js';
 
 // Minimal wire shape mimicking what Naver returns from the visitor reviews
@@ -459,5 +461,58 @@ describe('baemin menu completeness', () => {
   it('is incomplete when baemin.menus lists more than the groups hold', () => {
     const resolved = resolveMenuGroups(baeminState(5), PLACE_ID);
     expect(resolved.complete).toBe(false);
+  });
+});
+
+describe('menuImages — 메뉴판 이미지로 보기', () => {
+  const stateWith = (menuImages: unknown) => ({
+    ROOT_QUERY: {
+      __typename: 'Query',
+      [`placeDetail({"input":{"deviceType":"mobile","id":"${PLACE_ID}","isNx":false}})`]: {
+        __typename: 'PlaceDetail',
+        ...(menuImages === undefined ? {} : { menuImages }),
+      },
+    },
+  });
+
+  it('주소·올린 날짜를 뽑고 같은 주소는 한 번, http 는 https 로, 주소가 아닌 값은 버린다', () => {
+    const images = [
+      { __typename: 'MenuImage', imageUrl: 'https://ldb-phinf.pstatic.net/20250429_145/1745888204161LhRfs_PNG/a.png' },
+      { __typename: 'MenuImage', imageUrl: 'https://ldb-phinf.pstatic.net/20250429_145/1745888204161LhRfs_PNG/a.png' },
+      { __typename: 'MenuImage', imageUrl: 'http://ldb-phinf.pstatic.net/20260615_184/b.jpg' },
+      { __typename: 'MenuImage', imageUrl: 'https://example.com/no-date.jpg' },
+      { __typename: 'MenuImage', imageUrl: '/relative.jpg' },
+      { __typename: 'MenuImage', imageUrl: null },
+    ];
+    expect(extractMenuBoardImages(stateWith(images), PLACE_ID)).toEqual([
+      { url: 'https://ldb-phinf.pstatic.net/20250429_145/1745888204161LhRfs_PNG/a.png', uploadedOn: '2025-04-29' },
+      { url: 'https://ldb-phinf.pstatic.net/20260615_184/b.jpg', uploadedOn: '2026-06-15' },
+      { url: 'https://example.com/no-date.jpg', uploadedOn: null },
+    ]);
+  });
+
+  it('사진이 없으면 빈 배열, 응답에 필드가 없으면 null(저장 때 직전 값 유지)', () => {
+    expect(extractMenuBoardImages(stateWith([]), PLACE_ID)).toEqual([]);
+    expect(extractMenuBoardImages(stateWith(undefined), PLACE_ID)).toBeNull();
+    expect(extractMenuBoardImages(null, PLACE_ID)).toBeNull();
+  });
+});
+
+describe('placeMenus.updatedAt — 등록 메뉴 최근 업데이트', () => {
+  const stateWith = (updatedAt: unknown) => ({
+    ROOT_QUERY: {
+      __typename: 'Query',
+      [`placeDetail({"input":{"deviceType":"mobile","id":"${PLACE_ID}","isNx":false}})`]: {
+        __typename: 'PlaceDetail',
+        placeMenus: { __typename: 'PlaceMenus', items: [], categories: [], menuCount: 0, updatedAt },
+      },
+    },
+  });
+
+  it("'26.07.16' 과 ISO 를 'YYYY-MM-DD' 로, 없거나 모양이 다르면 null", () => {
+    expect(extractMenuUpdatedOn(stateWith('26.07.16'), PLACE_ID)).toBe('2026-07-16');
+    expect(extractMenuUpdatedOn(stateWith('2026-09-30T15:10:09.543+09:00'), PLACE_ID)).toBe('2026-09-30');
+    expect(extractMenuUpdatedOn(stateWith('최근'), PLACE_ID)).toBeNull();
+    expect(extractMenuUpdatedOn(stateWith(undefined), PLACE_ID)).toBeNull();
   });
 });

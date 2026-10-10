@@ -71,6 +71,7 @@ import { RestaurantService } from '../restaurant/restaurant.service.js';
 import type { SummaryService } from '../summary/summary.service.js';
 import type { ProposalService } from '../canonical/proposal.service.js';
 import type { CanonicalService } from '../canonical/canonical.service.js';
+import type { NaverMenuBoardReader } from '../menu-board/menu-board.naver.js';
 import { scoreMatch } from '../../lib/matching.js';
 
 // 크롤 결과 캐시 — 30초 안의 같은 가게 create 재요청만 단락한다. 엔트리(스냅샷 + 리뷰 ≤200)가
@@ -119,6 +120,7 @@ export class CrawlService {
   // 범용 작업 로그 — null 이면 run/스텝 기록 없이 silent (테스트 단순화).
   // 운영 라우트는 항상 app.operationLog 를 주입한다.
   private readonly operationLog: OperationLogService | null;
+  private readonly menuBoardReader: NaverMenuBoardReader | null;
   // jobId → OperationRun id. startCrawl 에서 등록, 종료 경로에서 정리 —
   // runJob/cancel 이 같은 run 에 스텝과 마감을 연결하기 위한 매핑.
   private readonly runIdsByJob = new Map<string, string>();
@@ -132,7 +134,10 @@ export class CrawlService {
     proposals: ProposalService | null = null,
     canonical: CanonicalService | null = null,
     operationLog: OperationLogService | null = null,
+    // null 이면 크롤 뒤 메뉴판 사진 자동 읽기 skip(테스트·모델 없는 환경).
+    menuBoardReader: NaverMenuBoardReader | null = null,
   ) {
+    this.menuBoardReader = menuBoardReader;
     this.registry = registry;
     this.restaurants = restaurants;
     this.summaries = summaries;
@@ -215,6 +220,50 @@ export class CrawlService {
   // 임계 통과 못 하면 silent skip — ProposalService 가 별도 채널로 후보 큐 적재.
   //
   // 실패해도 Naver 흐름은 막지 않음 (fire-and-forget 호출 + try/catch).
+  private async readMenuBoardsAfterCrawl(placeId: string): Promise<void> {
+    const reader = this.menuBoardReader;
+    if (!reader) return;
+    const oplog = this.operationLog;
+    let runId: string | null = null;
+    try {
+      const pending = await reader.pendingCount(placeId);
+      if (pending === 0) return; // 읽을 사진이 없으면 run 도 만들지 않는다
+      runId = oplog
+        ? await oplog.startRun({ feature: 'menu-board-read', subjectId: placeId, trigger: 'crawl', meta: { pending } })
+        : null;
+      const summary = await reader.readPending(placeId);
+      if (!summary) return;
+      const meta = { ...summary, failed: summary.failed.length, failedUrls: summary.failed.slice(0, 5) };
+      const allFailed = summary.read === 0 && summary.failed.length > 0;
+      if (oplog && runId) {
+        oplog.log({
+          runId,
+          stage: 'read',
+          level: summary.noProvider || summary.failed.length > 0 ? 'warn' : 'info',
+          message: summary.noProvider
+            ? '메뉴판 읽기 모델·키가 없어 건너뜀'
+            : `메뉴판 사진 ${summary.read}장 읽음(전체 ${summary.total}장) · 사진에만 있는 메뉴 ${summary.added}개` +
+              (summary.failed.length > 0 ? ` · 실패 ${summary.failed.length}장` : ''),
+          meta,
+        });
+        await oplog.finishRun(runId, {
+          status: allFailed ? 'failed' : 'done',
+          ...(allFailed ? { errorCode: 'menu_board_read_failed', errorMessage: summary.failed[0]!.error } : {}),
+          meta,
+        });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (oplog && runId) {
+        await oplog
+          .finishRun(runId, { status: 'failed', errorCode: 'menu_board_read_error', errorMessage: message })
+          .catch(() => undefined);
+      } else {
+        console.warn(`[menu-board-read] placeId=${placeId} 실패: ${message}`);
+      }
+    }
+  }
+
   private async tryAutoMatchDiningcode(canonicalId: string): Promise<void> {
     if (!this.canonical) return;
     try {
@@ -1223,7 +1272,9 @@ export class CrawlService {
             jobId,
             'parsing_main',
             info.suspicious ? 'warn' : 'info',
-            info.suspicious ? '메뉴 0건 — 네이버 메뉴 구조 변경 의심' : `메뉴 ${info.menuCount}개 추출`,
+            info.suspicious
+              ? '메뉴 0건 — 네이버 메뉴 구조 변경 의심'
+              : `메뉴 ${info.menuCount}개 추출${info.menuBoardImageCount ? ` · 메뉴판 사진 ${info.menuBoardImageCount}장` : ''}`,
             { ...info },
           ),
         onVisitorProgress: (count, page) =>
@@ -1280,6 +1331,9 @@ export class CrawlService {
         if (canonicalIdForAuto) {
           void this.tryAutoMatchDiningcode(canonicalIdForAuto);
         }
+        // 메뉴판 사진 중 새 사진만 읽어 등록 메뉴와 짝짓는다(가게당 평균 3장·장당 약 6초) — done 을 막지 않게
+        // fire-and-forget. 결과는 작업 로그 'menu-board-read' run 으로 남는다.
+        void this.readMenuBoardsAfterCrawl(placeId);
       }
 
       this.logStep(jobId, 'done', 'info', '크롤 완료', {

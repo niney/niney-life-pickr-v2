@@ -1,7 +1,7 @@
 // 네이버 맛집 메뉴 백필 — 2026-09 네이버 메뉴 구조 개편(placeMenus) 뒤 파싱이 0건이 돼
 // 메뉴 없이 저장된 가게의 메뉴만 다시 받는다. 홈 1장(+부족할 때만 /menu/list)만 열고
-// 리뷰 서브페이지는 열지 않으므로 전체 재크롤보다 가볍다. 스냅샷의 menus/menuGroups 만
-// 바꾸고 리뷰·요약·다른 필드는 건드리지 않는다.
+// 리뷰 서브페이지는 열지 않으므로 전체 재크롤보다 가볍다. 스냅샷의 menus/menuGroups 와
+// 메뉴판 사진(menuBoardImages)만 바꾸고 리뷰·요약·다른 필드는 건드리지 않는다.
 //
 // 실행: pnpm --filter friendly backfill:naver-menus [옵션]
 //   (기본)          스냅샷 메뉴가 0건인 네이버 가게 전부, 최근 크롤 순
@@ -75,13 +75,18 @@ const main = async (): Promise<void> => {
     try {
       const r = await fetchNaverPlaceMenusWithPlaywright(t.placeId);
       const { info } = r;
-      const detail = `${info.source} · 메뉴 ${t.menuCount}→${info.menuCount} · 그룹 ${info.groupCount} · 전체 ${info.expectedCount ?? '?'} · menu/list ${info.menuListPage}`;
+      const detail = `${info.source} · 메뉴 ${t.menuCount}→${info.menuCount} · 그룹 ${info.groupCount} · 전체 ${info.expectedCount ?? '?'} · menu/list ${info.menuListPage} · 메뉴판 사진 ${info.menuBoardImageCount ?? '?'}`;
       if (r.menus.length === 0) {
         empty += 1;
         console.log(`${head} — 0건${info.suspicious ? ' ⚠️ 구조 변경 의심' : ''} (${detail})`);
         continue;
       }
-      if (!DRY_RUN) await restaurants.updateNaverMenus(t.placeId, r.menus, r.menuGroups);
+      if (!DRY_RUN) {
+        await restaurants.updateNaverMenus(t.placeId, r.menus, r.menuGroups, {
+          menuBoardImages: r.menuBoardImages,
+          menuUpdatedOn: r.menuUpdatedOn,
+        });
+      }
       updated += 1;
       console.log(`${head} — ${DRY_RUN ? '확인' : '갱신'} (${detail})`);
     } catch (e) {

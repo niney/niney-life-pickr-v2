@@ -66,6 +66,9 @@ describe('채점', () => {
     expect(parsePrice('1만5천')).toBe(15000);
     expect(parsePrice('12000원')).toBe(12000);
     expect(parsePrice('4P 22,000')).toBe(22000);
+    // 천 원 단위 소수 표기 — 쉼표도 소수점으로 쓰는 메뉴판이 많다.
+    expect(parsePrice('25,9')).toBe(25900);
+    expect(parsePrice('38,0')).toBe(38000);
     expect(parsePrice('시가')).toBeNull();
     expect(parsePrice(null)).toBeNull();
   });

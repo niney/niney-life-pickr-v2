@@ -5,6 +5,7 @@ import {
   bulkJobItemTailFields,
   makeBulkJobSchemas,
 } from './bulk-job.js';
+import { MenuBoardItem } from './menu-board.js';
 
 export const CrawlMode = z.enum(['create', 'recrawl', 'update']);
 export type CrawlModeType = z.infer<typeof CrawlMode>;
@@ -108,6 +109,55 @@ export const PersistedVisitorReview = VisitorReview.extend({
 });
 export type PersistedVisitorReviewType = z.infer<typeof PersistedVisitorReview>;
 
+// 메뉴판 사진 — 네이버 '메뉴판 이미지로 보기'(placeDetail.menuImages). 메뉴 항목 사진(MenuItem.imageUrls)과 다르다.
+// uploadedOn 은 사진 주소의 올린 날짜(ldb-phinf.pstatic.net/YYYYMMDD_…, 'YYYY-MM-DD') — 사장님이 올린 옛 가격판이 섞여
+// 있어 등록 메뉴와 어느 쪽이 최신인지 가늠할 때 쓴다. 모르면 null.
+// 사진 한 장을 메뉴판 읽기(purpose menu-board)로 읽은 결과. 같은 주소의 사진은 재크롤 때 다시 읽지 않고 이어받는다.
+export const NaverMenuBoardRead = z.object({
+  items: z.array(MenuBoardItem),
+  model: z.string(),
+  readAt: z.string(),
+});
+export type NaverMenuBoardReadType = z.infer<typeof NaverMenuBoardRead>;
+
+export const NaverMenuBoardImage = z.object({
+  url: z.string().url(),
+  uploadedOn: z.string().nullable(),
+  // 아직 안 읽었거나 읽기에 실패했으면 없다(다음 크롤에서 다시 읽는다).
+  read: NaverMenuBoardRead.optional(),
+});
+export type NaverMenuBoardImageType = z.infer<typeof NaverMenuBoardImage>;
+
+// 메뉴판 사진에서 읽은 메뉴(여러 장을 합쳐 같은 이름은 한 번 — 최근 사진 우선)를 등록 메뉴와 짝지은 결과.
+// 사진을 다시 읽지 않아도 등록 메뉴가 바뀌면 저장 때 다시 계산된다(어드민 전용 — 공개 화면·칼로리·정산엔 아직 안 쓴다).
+export const MenuBoardMenuOrigin = z.enum([
+  'menu-board', // 등록 메뉴에 없고 메뉴판 사진에만 있는 메뉴 — 이미지로 등록된 메뉴
+  'registered', // 등록 메뉴와 같은 메뉴 — 사진은 확인·가격 비교용
+]);
+export type MenuBoardMenuOriginType = z.infer<typeof MenuBoardMenuOrigin>;
+
+// origin='registered' 일 때 사진 가격과 등록 가격 비교.
+export const MenuBoardPriceCheck = z.enum([
+  'same',
+  'different',
+  'range', // 등록 가격이 '39,000~49,000원' 같은 크기별 범위 — 사진은 첫 가격만 읽어 견주지 않는다
+  'unknown', // 어느 한쪽에 가격이 없다
+]);
+export type MenuBoardPriceCheckType = z.infer<typeof MenuBoardPriceCheck>;
+
+export const MenuBoardMenu = z.object({
+  name: z.string(), // 사진에 적힌 그대로
+  price: z.string().nullable(),
+  description: z.string().nullable(),
+  origin: MenuBoardMenuOrigin,
+  registeredName: z.string().nullable(),
+  registeredPrice: z.string().nullable(),
+  priceCheck: MenuBoardPriceCheck.nullable(), // 등록 메뉴와 1:1 로 짝지은 것만 — 사진에만 있거나 크기·옵션 변형이면 null
+  imageUrl: z.string().url(), // 근거 사진
+  uploadedOn: z.string().nullable(),
+});
+export type MenuBoardMenuType = z.infer<typeof MenuBoardMenu>;
+
 export const NaverPlaceData = z.object({
   placeId: z.string(),
   name: z.string(),
@@ -129,6 +179,11 @@ export const NaverPlaceData = z.object({
   reviewCount: z.number().nullable(),
   menus: z.array(MenuItem),
   menuGroups: z.array(MenuGroup).optional(),
+  // 없으면 수집 전 스냅샷이거나 네이버 응답에 필드가 없던 크롤(저장 때 직전 값을 유지한다).
+  menuBoardImages: z.array(NaverMenuBoardImage).optional(),
+  menuBoardMenus: z.array(MenuBoardMenu).optional(),
+  // 등록 메뉴 최근 업데이트(placeMenus.updatedAt '26.07.16' → '2026-07-16') — 사진 날짜와 견줘 어느 쪽 가격이 최신인지 본다.
+  menuUpdatedOn: z.string().nullable().optional(),
   reviewStats: ReviewStats.nullable(),
   blogReviews: z.array(BlogReview),
   visitorReviews: z.array(VisitorReview),

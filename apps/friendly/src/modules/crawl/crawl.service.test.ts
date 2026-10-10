@@ -157,3 +157,30 @@ describe('CrawlService 결과 캐시 상한 (A-1)', () => {
     expect(adapterCalls.at(-1)).toBe('500');
   });
 });
+
+describe('CrawlService 메뉴판 사진 자동 읽기', () => {
+  it('크롤이 끝나면 그 가게의 안 읽은 메뉴판 사진을 읽는다(done 을 막지 않는다)', async () => {
+    const registry = new JobRegistry();
+    const reader = {
+      pendingCount: vi.fn(async () => 2),
+      readPending: vi.fn(async () => ({ total: 2, alreadyRead: 0, read: 2, failed: [], added: 5, noProvider: false })),
+    };
+    const svc = new CrawlService(fakeRestaurants, fakeSummaries, registry, null, null, null, reader as never);
+    const r = await svc.startCrawl(url('777'), ACTOR);
+    if (!r.ok) throw new Error('unreachable');
+    await registry.waitForTerminal(r.jobId, 2_000);
+    await vi.waitFor(() => expect(reader.readPending).toHaveBeenCalledWith('777'));
+    expect(reader.pendingCount).toHaveBeenCalledWith('777');
+  });
+
+  it('읽을 사진이 없으면 모델을 부르지 않는다', async () => {
+    const registry = new JobRegistry();
+    const reader = { pendingCount: vi.fn(async () => 0), readPending: vi.fn() };
+    const svc = new CrawlService(fakeRestaurants, fakeSummaries, registry, null, null, null, reader as never);
+    const r = await svc.startCrawl(url('778'), ACTOR);
+    if (!r.ok) throw new Error('unreachable');
+    await registry.waitForTerminal(r.jobId, 2_000);
+    await vi.waitFor(() => expect(reader.pendingCount).toHaveBeenCalledWith('778'));
+    expect(reader.readPending).not.toHaveBeenCalled();
+  });
+});

@@ -15,6 +15,7 @@ import type {
   MenuGroupItemType,
   MenuGroupType,
   MenuItemType,
+  NaverMenuBoardImageType,
   NaverPlaceDataType,
   RatingDistributionBucketType,
   ReviewStatsType,
@@ -62,6 +63,8 @@ export interface MenuExtractionInfo {
   menuListPage: 'skipped' | 'used' | 'not_better' | 'failed';
   // 메뉴 탭이 있거나 전체 수가 양수인데 0건 — 네이버 구조 변경 의심.
   suspicious: boolean;
+  // '메뉴판 이미지로 보기' 사진 수. 응답에 필드가 없으면 null(구조 변경 의심 — 저장 때 직전 값을 유지).
+  menuBoardImageCount: number | null;
 }
 
 export interface ExistingReviewKeys {
@@ -717,6 +720,19 @@ const findPlaceMenus = (
   return isObject(resolved) ? resolved : null;
 };
 
+// 등록 메뉴 최근 업데이트 — placeMenus.updatedAt('26.07.16'). 'YYYY-MM-DD' 로, 없거나 모양이 다르면 null.
+const extractMenuUpdatedOn = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): string | null => {
+  const raw = findPlaceMenus(state, placeDetail)?.['updatedAt'];
+  if (typeof raw !== 'string') return null;
+  const short = /^(\d{2})\.(\d{2})\.(\d{2})$/.exec(raw.trim());
+  if (short) return `20${short[1]}-${short[2]}-${short[3]}`;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw.trim());
+  return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
+};
+
 interface PlaceMenuExtraction {
   groups: MenuGroupType[];
   itemCount: number;
@@ -865,9 +881,29 @@ export const __test_extractBaeminMenuGroups = (state: unknown): MenuGroupType[] 
 
 export const __test_flattenMenuGroups = flattenMenuGroups;
 
+export const __test_extractMenuUpdatedOn = (state: unknown, placeId: string): string | null => {
+  const stateObj = isObject(state) ? state : null;
+  return extractMenuUpdatedOn(stateObj, findPlaceDetailContainer(stateObj, placeId));
+};
+
+
 export const __test_resolveMenuGroups = (state: unknown, placeId: string): ResolvedMenuGroups => {
   const stateObj = isObject(state) ? state : null;
   return resolveMenuGroups(stateObj, findPlaceDetailContainer(stateObj, placeId));
+};
+
+// 플레이스 페이지의 Apollo 상태 → 메뉴판 사진(크롤과 같은 해석). 응답에 필드가 없으면 null.
+export const extractNaverMenuBoardImages = (state: unknown, placeId: string): NaverMenuBoardImageType[] | null => {
+  const stateObj = isObject(state) ? state : null;
+  return extractMenuBoardImages(stateObj, findPlaceDetailContainer(stateObj, placeId));
+};
+
+// 플레이스 메뉴 페이지의 Apollo 상태 → 등록 메뉴(평탄화). 크롤과 같은 해석 — 메뉴판 사진 프리뷰
+// (scripts/probe-naver-menu-boards.ts)가 사진에서 읽은 메뉴와 대조할 때 쓴다.
+export const extractNaverPlaceMenus = (state: unknown, placeId: string): { menus: MenuItemType[]; complete: boolean } => {
+  const stateObj = isObject(state) ? state : null;
+  const resolved = resolveMenuGroups(stateObj, findPlaceDetailContainer(stateObj, placeId));
+  return { menus: flattenMenuGroups(resolved.groups), complete: resolved.complete };
 };
 
 const extractReviewStats = (
@@ -1902,8 +1938,36 @@ const fetchMenuGroupsViaMenuList = async (
 interface ExtractedMenus {
   menus: MenuItemType[];
   menuGroups: MenuGroupType[];
+  // null = 응답에 menuImages 필드가 없었다.
+  menuBoardImages: NaverMenuBoardImageType[] | null;
+  menuUpdatedOn: string | null;
   info: MenuExtractionInfo;
 }
+
+// '메뉴판 이미지로 보기' — placeDetail.menuImages[{ imageUrl }] (메뉴 탭·홈 응답 모두). 메뉴 항목 사진
+// (PlaceMenuImage)과 다르다. 올린 날짜는 사진 주소(ldb-phinf.pstatic.net/YYYYMMDD_…)에서 읽는다.
+const MENU_BOARD_DATE = /pstatic\.net\/(\d{4})(\d{2})(\d{2})_/;
+
+const extractMenuBoardImages = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): NaverMenuBoardImageType[] | null => {
+  const raw = placeDetail?.['menuImages'];
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set<string>();
+  const out: NaverMenuBoardImageType[] = [];
+  for (const entry of raw) {
+    const image = deref(state, entry);
+    const raw = isObject(image) ? image['imageUrl'] : null;
+    // 계약이 URL 검증을 하므로(어드민 상세가 스냅샷을 그대로 검증) http(s) 주소만 받는다.
+    const url = typeof raw === 'string' && /^https?:\/\//i.test(raw) ? normalizeImageUrl(raw) : null;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const date = MENU_BOARD_DATE.exec(url);
+    out.push({ url, uploadedOn: date ? `${date[1]}-${date[2]}-${date[3]}` : null });
+  }
+  return out;
+};
 
 // 홈 Apollo 상태로 메뉴를 뽑고, 홈이 전부 담지 못했을 때만 /menu/list 를 더 연다
 // (2026-09 기준 홈이 배민 그룹·placeMenus 모두 전체를 담는다 — 추가 페이지는 예외 경로).
@@ -1938,6 +2002,7 @@ const extractMenusWithFallback = async (
 
   const grouped = flattenMenuGroups(resolved.groups);
   const menus = grouped.length > 0 ? grouped : extractMenus(placeId, state, placeDetail);
+  const menuBoardImages = extractMenuBoardImages(state, placeDetail);
   const source: MenuExtractionInfo['source'] =
     grouped.length > 0 ? resolved.source : menus.length > 0 ? 'legacy' : 'none';
   const info: MenuExtractionInfo = {
@@ -1948,12 +2013,19 @@ const extractMenusWithFallback = async (
     hasMenuTab,
     menuListPage,
     suspicious: menus.length === 0 && (hasMenuTab === true || (resolved.expectedCount ?? 0) > 0),
+    menuBoardImageCount: menuBoardImages?.length ?? null,
   };
   if (info.suspicious) {
     console.warn(`[crawl] 메뉴 0건 — 네이버 메뉴 구조 변경 의심 placeId=${placeId}`, info);
   }
   hooks?.onMenuExtracted?.(info);
-  return { menus, menuGroups: resolved.groups, info };
+  return {
+    menus,
+    menuGroups: resolved.groups,
+    menuBoardImages,
+    menuUpdatedOn: extractMenuUpdatedOn(state, placeDetail),
+    info,
+  };
 };
 
 const buildPlaceData = (
@@ -1962,7 +2034,7 @@ const buildPlaceData = (
   node: Record<string, unknown>,
   state: Record<string, unknown> | null,
   placeDetail: Record<string, unknown> | null,
-  extracted: Pick<ExtractedMenus, 'menus' | 'menuGroups'>,
+  extracted: Pick<ExtractedMenus, 'menus' | 'menuGroups' | 'menuBoardImages' | 'menuUpdatedOn'>,
   visitorReviews: VisitorReviewType[] | null,
 ): NaverPlaceDataType => {
   const coordinates = isObject(node['coordinate']) ? node['coordinate'] : node;
@@ -1981,6 +2053,8 @@ const buildPlaceData = (
     reviewCount: pickNumber(node, 'visitorReviewsTotal', 'reviewCount'),
     menus: extracted.menus,
     menuGroups: extracted.menuGroups,
+    ...(extracted.menuBoardImages ? { menuBoardImages: extracted.menuBoardImages } : {}),
+    menuUpdatedOn: extracted.menuUpdatedOn,
     reviewStats: extractReviewStats(state, placeDetail, placeId),
     blogReviews: extractBlogReviews(state, placeDetail),
     visitorReviews: visitorReviews ?? [],

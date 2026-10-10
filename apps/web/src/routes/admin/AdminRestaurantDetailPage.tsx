@@ -32,6 +32,7 @@ import type { TabKey } from '~/components/restaurant/detail/tabs';
 import { TourEvidenceSection } from '~/components/admin/tour/TourEvidencePanel';
 import { AdminDetailHeader } from '~/components/admin/restaurant-detail/AdminDetailHeader';
 import { AdminLocationAside } from '~/components/admin/restaurant-detail/AdminLocationAside';
+import { AdminMenuBoardSection } from '~/components/admin/restaurant-detail/AdminMenuBoardSection';
 import { AdminRawInfo } from '~/components/admin/restaurant-detail/AdminRawInfo';
 import {
   AdminReviewsTab,
@@ -268,6 +269,11 @@ const AdminRestaurantDetail = ({ placeId }: { placeId: string }) => {
             {withPublic((d) => (
               <MenuTab placeId={placeId} detail={d} insights={insights.data} onSelectMenu={selectMenu} />
             ))}
+            {detail.snapshot.menuBoardImages && (
+              <div className="border-t p-4 sm:p-6">
+                <AdminMenuBoardSection snapshot={detail.snapshot} />
+              </div>
+            )}
             <div className="border-t p-4 sm:p-6">
               <MenuRankingSection placeId={placeId} />
             </div>

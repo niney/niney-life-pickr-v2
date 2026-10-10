@@ -1,8 +1,13 @@
 import fp from 'fastify-plugin';
+import { isTest } from '../config/env.js';
+import { AiConfigService } from '../modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 import { CanonicalService } from '../modules/canonical/canonical.service.js';
 import { ProposalService } from '../modules/canonical/proposal.service.js';
 import { CrawlService } from '../modules/crawl/crawl.service.js';
 import { jobRegistry } from '../modules/crawl/job-registry.js';
+import { NaverMenuBoardReader } from '../modules/menu-board/menu-board.naver.js';
+import { MenuBoardService } from '../modules/menu-board/menu-board.service.js';
 import { RestaurantService } from '../modules/restaurant/restaurant.service.js';
 
 // CrawlService 를 app 전역 singleton 으로 — 크롤 라우트·자동 발견·여행 시드 등록·랜덤 크롤이
@@ -24,6 +29,13 @@ export default fp(
       new ProposalService(app.prisma, canonical),
       canonical,
       app.operationLog,
+      // 크롤 뒤 메뉴판 사진 자동 읽기(purpose menu-board) — 테스트에선 외부 사진·모델을 부르지 않게 끈다.
+      isTest
+        ? null
+        : new NaverMenuBoardReader(
+            restaurants,
+            new MenuBoardService(new AiConfigService(app.prisma, buildLlmProviderEnv())),
+          ),
     );
     app.decorate('crawl', crawl);
   },

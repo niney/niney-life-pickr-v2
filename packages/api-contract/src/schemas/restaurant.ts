@@ -653,6 +653,29 @@ export const PublicTablingAddon = z.object({
 export type PublicTablingAddonType = z.infer<typeof PublicTablingAddon>;
 
 // 공개 식당 상세. 기존 스칼라 필드 (name/category/address/rating 등) 는
+// 공개 상세의 메뉴판 사진 — 가게가 네이버에 올린 메뉴판 사진과, 그 사진을 AI(메뉴판 읽기)가 읽어 찾은 '등록 메뉴에
+// 없는 메뉴'. 등록 메뉴와 섞지 않고 사진 날짜와 함께 따로 보인다. 가격은 숫자로 읽히면 '17900' 처럼 숫자만, 아니면
+// 사진 표기 그대로('시가'). newerPrices 는 등록 메뉴와 가격이 다른데 사진이 등록 메뉴 업데이트보다 최신인 것만.
+export const RestaurantPublicMenuBoard = z.object({
+  images: z.array(z.object({ url: z.string().url(), uploadedOn: z.string().nullable() })),
+  addedMenus: z.array(
+    z.object({
+      name: z.string(),
+      price: z.string().nullable(),
+      description: z.string().nullable(),
+      uploadedOn: z.string().nullable(),
+    }),
+  ),
+  newerPrices: z.array(
+    z.object({
+      name: z.string(), // 등록 메뉴 이름(menus[].name 과 같다)
+      price: z.string(),
+      uploadedOn: z.string(),
+    }),
+  ),
+});
+export type RestaurantPublicMenuBoardType = z.infer<typeof RestaurantPublicMenuBoard>;
+
 // 세 출처가 머지된 결과 — 전 필드 Naver 1순위, 비면 폴백 (영업시간·메뉴는
 // 테이블링 > DC, 그 외 DC > 테이블링). 출처별 분리값은 `sources` 에 따로
 // 노출되어 UI 가 헤더 등에서 표시할 수 있다.
@@ -678,6 +701,8 @@ export const RestaurantPublicDetail = z.object({
   // 원본 메뉴 그룹. 기존 `menus` 는 계속 평탄화 목록으로 제공하고, 그룹을
   // 표시할 수 있는 클라이언트만 이 optional 필드를 사용한다.
   menuGroups: z.array(MenuGroup).optional(),
+  // 네이버 메뉴판 사진이 있을 때만.
+  menuBoard: RestaurantPublicMenuBoard.optional(),
   // Naver blogReviews + DC blogsFirstPage 합쳐 dedup.
   blogReviews: z.array(BlogReview),
   rawSourceUrl: z.string(),

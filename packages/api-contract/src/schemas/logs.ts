@@ -21,6 +21,7 @@ export const OperationFeature = z.enum([
   'meal-recognition',
   'meal-recommendation',
   'meal-nutrition-advice',
+  'menu-board-read',
 ]);
 export type OperationFeatureType = z.infer<typeof OperationFeature>;
 

@@ -82,6 +82,8 @@
     "eval:extraction": "tsx scripts/eval-extraction.ts",
     "collect:menu-boards": "tsx --env-file=.env scripts/collect-menu-boards.ts",
     "eval:menu-boards": "tsx --env-file=.env scripts/eval-menu-boards.ts",
+    "probe:naver-menu-boards": "tsx --env-file=.env scripts/probe-naver-menu-boards.ts",
+    "read:naver-menu-boards": "tsx --env-file=.env scripts/read-naver-menu-boards.ts",
     "probe:bus": "tsx --env-file=.env scripts/probe-bus-api.ts",
     "probe:airkorea": "tsx --env-file=.env scripts/probe-airkorea-api.ts",
     "probe:hira": "tsx --env-file=.env scripts/probe-hira-api.ts",

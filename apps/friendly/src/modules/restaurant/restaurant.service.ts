@@ -30,6 +30,11 @@ import { getRestaurantTourMatchInfo } from '../tour/restaurant-tour-match.servic
 import { getRestaurantTourSummary, travelerWeight } from '../tour/tour-public.service.js';
 import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
 import {
+  buildMenuBoardMenus,
+  carryMenuBoardReads,
+  toPublicMenuBoard,
+} from '../menu-board/menu-board.naver-match.js';
+import {
   aggregateSummaryBuckets,
   emptySummaryBucket,
   foldAscii,
@@ -310,19 +315,65 @@ export class RestaurantService {
     });
   }
 
-  // 직전 스냅샷의 메뉴. 없거나 0건·파손이면 null.
-  private async findPreviousNaverMenus(
+  // 메뉴판 사진과 등록 메뉴 짝(구분값 origin). 사진 목록을 모르면(undefined) 두 필드 모두 빼 직전 값을 덮지 않는다.
+  private menuBoardFields(
+    menus: NaverPlaceDataType['menus'],
+    images: NaverPlaceDataType['menuBoardImages'],
+  ): Pick<NaverPlaceDataType, 'menuBoardImages' | 'menuBoardMenus'> {
+    if (!Array.isArray(images)) return {};
+    return { menuBoardImages: images, menuBoardMenus: buildMenuBoardMenus(menus, images) };
+  }
+
+  // 메뉴판 사진 자동 읽기용 — 스냅샷의 등록 메뉴와 사진 목록. 네이버 행이 없거나 파손이면 null.
+  async findNaverMenuBoardState(
     placeId: string,
-  ): Promise<Pick<NaverPlaceDataType, 'menus' | 'menuGroups'> | null> {
+  ): Promise<Pick<NaverPlaceDataType, 'menus' | 'menuBoardImages' | 'menuBoardMenus'> | null> {
+    const snap = await this.findPreviousNaverSnapshot(placeId);
+    if (!snap) return null;
+    return {
+      menus: Array.isArray(snap.menus) ? snap.menus : [],
+      menuBoardImages: snap.menuBoardImages,
+      menuBoardMenus: snap.menuBoardMenus,
+    };
+  }
+
+  // 읽은 결과를 주소로 붙여 저장하고 짝을 다시 계산한다. 읽는 동안 재크롤이 사진 목록을 바꿨을 수 있어
+  // 저장 직전 스냅샷에 붙인다(목록에서 빠진 사진의 결과는 버린다). 붙인 장수와 다시 계산한 짝을 돌려준다.
+  async saveNaverMenuBoardReads(
+    placeId: string,
+    reads: Map<string, NonNullable<NonNullable<NaverPlaceDataType['menuBoardImages']>[number]['read']>>,
+  ): Promise<{ attached: number; menuBoardMenus: NonNullable<NaverPlaceDataType['menuBoardMenus']> }> {
+    const row = await this.prisma.restaurant.findUnique({
+      where: { source_sourceId: { source: 'naver', sourceId: placeId } },
+      select: { id: true, snapshotJson: true },
+    });
+    if (!row) return { attached: 0, menuBoardMenus: [] };
+    const snap = JSON.parse(row.snapshotJson) as NaverPlaceDataType;
+    if (!Array.isArray(snap.menuBoardImages)) return { attached: 0, menuBoardMenus: snap.menuBoardMenus ?? [] };
+    let attached = 0;
+    const images = snap.menuBoardImages.map((image) => {
+      const read = reads.get(image.url);
+      if (!read) return image;
+      attached += 1;
+      return { ...image, read };
+    });
+    const boards = this.menuBoardFields(snap.menus ?? [], images);
+    await this.prisma.restaurant.update({
+      where: { id: row.id },
+      data: { snapshotJson: JSON.stringify({ ...snap, ...boards }) },
+    });
+    return { attached, menuBoardMenus: boards.menuBoardMenus ?? [] };
+  }
+
+  // 직전 스냅샷. 없거나 파손이면 null.
+  private async findPreviousNaverSnapshot(placeId: string): Promise<Partial<NaverPlaceDataType> | null> {
     const row = await this.prisma.restaurant.findUnique({
       where: { source_sourceId: { source: 'naver', sourceId: placeId } },
       select: { snapshotJson: true },
     });
     if (!row) return null;
     try {
-      const snap = JSON.parse(row.snapshotJson) as Partial<NaverPlaceDataType>;
-      if (!Array.isArray(snap.menus) || snap.menus.length === 0) return null;
-      return { menus: snap.menus, menuGroups: snap.menuGroups };
+      return JSON.parse(row.snapshotJson) as Partial<NaverPlaceDataType>;
     } catch {
       return null;
     }
@@ -337,9 +388,23 @@ export class RestaurantService {
     // 메뉴 0건으로 기존 메뉴를 덮지 않는다 — 2026-09 네이버 메뉴 구조 개편 때 파싱이
     // 조용히 0건이 되면서 재크롤마다 메뉴가 지워졌다. 메뉴를 전부 내린 가게는 드물고,
     // 그 경우 크롤 로그 경고로 드러난다.
+    // 메뉴판 사진도 같은 원칙 — 응답에 필드가 없던 크롤(undefined)은 직전 값을 둔다. 빈 배열은 사진을 내린 것이라 그대로.
+    // 같은 주소의 사진은 직전 읽기 결과를 이어받고, 등록 메뉴와의 짝(menuBoardMenus)은 매번 다시 계산한다.
+    const previous =
+      rest.menus.length === 0 || rest.menuBoardImages === undefined || rest.menuBoardImages.length > 0
+        ? await this.findPreviousNaverSnapshot(data.placeId)
+        : null;
     const keptMenus =
-      rest.menus.length === 0 ? await this.findPreviousNaverMenus(data.placeId) : null;
-    const snapshotJson = JSON.stringify({ ...rest, imageUrls, ...keptMenus });
+      rest.menus.length === 0 && Array.isArray(previous?.menus) && previous.menus.length > 0
+        ? { menus: previous.menus, menuGroups: previous.menuGroups }
+        : null;
+    const boards = this.menuBoardFields(
+      keptMenus?.menus ?? rest.menus,
+      rest.menuBoardImages === undefined
+        ? previous?.menuBoardImages
+        : carryMenuBoardReads(rest.menuBoardImages, previous?.menuBoardImages),
+    );
+    const snapshotJson = JSON.stringify({ ...rest, imageUrls, ...keptMenus, ...boards });
     // 신규 행은 자기 전용 Canonical 1행을 같이 만든다 (1:1 시작). 어드민이
     // 나중에 merge API 로 같은 가게의 다른 source 행을 같은 canonicalId 로 통합.
     const r = await this.prisma.restaurant.upsert({
@@ -391,10 +456,16 @@ export class RestaurantService {
 
   // 메뉴 백필(backfill:naver-menus) — 스냅샷의 menus/menuGroups 만 바꾸고 나머지
   // 필드·리뷰는 건드리지 않는다. 0건은 쓰지 않는다(크롤 upsert 와 같은 보호).
+  // extra.menuBoardImages 를 주면(응답에 필드가 있었으면) 메뉴판 사진도 바꾼다 — 같은 주소는 읽기 결과를 이어받고,
+  // 등록 메뉴와의 짝은 새 메뉴로 다시 계산한다.
   async updateNaverMenus(
     placeId: string,
     menus: NaverPlaceDataType['menus'],
     menuGroups: NonNullable<NaverPlaceDataType['menuGroups']>,
+    extra: {
+      menuBoardImages?: NaverPlaceDataType['menuBoardImages'] | null;
+      menuUpdatedOn?: string | null;
+    } = {},
   ): Promise<{ id: string } | null> {
     if (menus.length === 0) return null;
     const row = await this.prisma.restaurant.findUnique({
@@ -402,10 +473,24 @@ export class RestaurantService {
       select: { id: true, snapshotJson: true },
     });
     if (!row) return null;
-    const snap = JSON.parse(row.snapshotJson) as Record<string, unknown>;
+    const snap = JSON.parse(row.snapshotJson) as Partial<NaverPlaceDataType>;
+    const boards = this.menuBoardFields(
+      menus,
+      extra.menuBoardImages
+        ? carryMenuBoardReads(extra.menuBoardImages, snap.menuBoardImages)
+        : snap.menuBoardImages,
+    );
     await this.prisma.restaurant.update({
       where: { id: row.id },
-      data: { snapshotJson: JSON.stringify({ ...snap, menus, menuGroups }) },
+      data: {
+        snapshotJson: JSON.stringify({
+          ...snap,
+          menus,
+          menuGroups,
+          ...boards,
+          ...(extra.menuUpdatedOn !== undefined ? { menuUpdatedOn: extra.menuUpdatedOn } : {}),
+        }),
+      },
     });
     if (menuGroups.length > 0) {
       await this.replaceRestaurantMenuGroups(row.id, menuGroups).catch((err) => {
@@ -1395,6 +1480,7 @@ export class RestaurantService {
     const coords = mergeCoordinates(naverSnap, dcSnap, tbSnap);
     const store = await getRestaurantStoreInfo(this.prisma, naverRow.canonicalId);
     const tour = await getRestaurantTourSummary(this.prisma, naverRow.canonicalId);
+    const menuBoard = toPublicMenuBoard(naverSnap);
 
     return {
       // placeId 로 findUnique 했으니 일치 행은 반드시 placeId 가 채워져 있다.
@@ -1412,6 +1498,7 @@ export class RestaurantService {
       imageUrls: mergePhotos(naverSnap, dcSnap, tbSnap),
       menus: mergeMenus(naverSnap, dcSnap, tbSnap),
       menuGroups: mergeMenuGroups(naverSnap, dcSnap, tbSnap),
+      ...(menuBoard ? { menuBoard } : {}),
       blogReviews: mergeBlogReviews(naverSnap, dcSnap),
       rawSourceUrl: naverRow.rawSourceUrl,
       firstCrawledAt: naverRow.firstCrawledAt.toISOString(),

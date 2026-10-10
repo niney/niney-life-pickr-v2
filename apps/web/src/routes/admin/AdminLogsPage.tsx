@@ -33,6 +33,7 @@ export const FEATURE_LABEL: Record<OperationFeatureType, string> = {
   'meal-recognition': '식단 사진 인식',
   'meal-recommendation': '식단 추천',
   'meal-nutrition-advice': '영양제 조언',
+  'menu-board-read': '메뉴판 사진 읽기',
 };
 
 const STATUS_LABEL: Record<OperationRunStatusType, string> = {

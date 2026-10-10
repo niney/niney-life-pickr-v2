@@ -153,6 +153,86 @@ describe('RestaurantService', () => {
     expect(row!.name).toBe('이름 바뀜');
   });
 
+  it('upsert: 메뉴판 사진은 응답에 필드가 없을 때만 직전 값을 두고, 빈 배열이면 비운다', async () => {
+    const boards = [
+      { url: 'https://ldb-phinf.pstatic.net/20250429_145/a.png', uploadedOn: '2025-04-29' },
+    ];
+    const base = placeData({ menuBoardImages: boards });
+    const { id } = await service.upsertRestaurantFromCrawl(base);
+    const snapOf = async () =>
+      JSON.parse((await app.prisma.restaurant.findUnique({ where: { id } }))!.snapshotJson) as Record<
+        string,
+        unknown
+      >;
+    expect((await snapOf()).menuBoardImages).toEqual(boards);
+
+    const { menuBoardImages: _absent, ...withoutField } = base;
+    await service.upsertRestaurantFromCrawl(withoutField);
+    expect((await snapOf()).menuBoardImages).toEqual(boards);
+
+    await service.upsertRestaurantFromCrawl({ ...base, menuBoardImages: [] });
+    expect((await snapOf()).menuBoardImages).toEqual([]);
+  });
+
+  it('메뉴판 사진 읽기 결과를 저장하면 짝(구분값)이 생기고, 재크롤은 같은 사진의 결과를 이어받아 짝을 다시 계산한다', async () => {
+    const url = 'https://ldb-phinf.pstatic.net/20250429_145/a.png';
+    const menu = { name: '짬뽕', price: '9000', description: null, recommend: false, imageUrls: [] };
+    const base = placeData({ menus: [menu], menuBoardImages: [{ url, uploadedOn: '2025-04-29' }] });
+    const { id } = await service.upsertRestaurantFromCrawl(base);
+    const snapOf = async () =>
+      JSON.parse((await app.prisma.restaurant.findUnique({ where: { id } }))!.snapshotJson) as NaverPlaceDataType;
+
+    const read = {
+      items: [
+        { name: '짬뽕', price: '9,000', description: null },
+        { name: '고량주', price: '9,000', description: null },
+      ],
+      model: 'kimi-k3',
+      readAt: '2026-10-10T00:00:00.000Z',
+    };
+    const saved = await service.saveNaverMenuBoardReads(
+      base.placeId,
+      new Map([
+        [url, read],
+        ['https://ldb-phinf.pstatic.net/20250101_1/gone.png', read], // 목록에 없는 사진 — 버린다
+      ]),
+    );
+    expect(saved.attached).toBe(1);
+    expect(saved.menuBoardMenus.map((m) => [m.name, m.origin, m.priceCheck])).toEqual([
+      ['짬뽕', 'registered', 'same'],
+      ['고량주', 'menu-board', null],
+    ]);
+    expect((await service.findNaverMenuBoardState(base.placeId))?.menuBoardImages?.[0]?.read).toEqual(read);
+
+    // 재크롤 — 사진 목록은 그대로(읽기 결과 없이 받음), 사장님이 고량주를 등록했다.
+    await service.upsertRestaurantFromCrawl({
+      ...base,
+      menus: [menu, { ...menu, name: '고량주' }],
+    });
+    const snap = await snapOf();
+    expect(snap.menuBoardImages?.[0]?.read).toEqual(read);
+    expect(snap.menuBoardMenus?.map((m) => [m.name, m.origin])).toEqual([
+      ['짬뽕', 'registered'],
+      ['고량주', 'registered'],
+    ]);
+  });
+
+  it('updateNaverMenus: 메뉴판 사진을 주면 같이 바꾸고, 안 주면 그대로 둔다', async () => {
+    const boards = [{ url: 'https://ldb-phinf.pstatic.net/20260615_184/b.jpg', uploadedOn: '2026-06-15' }];
+    const base = placeData({ menuBoardImages: [] });
+    const { id } = await service.upsertRestaurantFromCrawl(base);
+    const menu = { name: '칼국수', price: '10000', description: null, recommend: false, imageUrls: [] };
+    await service.updateNaverMenus(base.placeId, [menu], [], { menuBoardImages: boards });
+    const snapOf = async () =>
+      JSON.parse((await app.prisma.restaurant.findUnique({ where: { id } }))!.snapshotJson) as Record<
+        string,
+        unknown
+      >;
+    expect((await snapOf()).menuBoardImages).toEqual(boards);
+    await service.updateNaverMenus(base.placeId, [menu], [], { menuBoardImages: null });
+    expect((await snapOf()).menuBoardImages).toEqual(boards);
+  });
+
   it('updateNaverMenus: replaces only menus in the snapshot', async () => {
     const base = placeData({ rating: 4.5 });
     const { id } = await service.upsertRestaurantFromCrawl(base);
@@ -1066,6 +1146,36 @@ describe('Public restaurant routes', () => {
       url: `/api/v1/restaurants/public/${PUB_PREFIX}nope`,
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /restaurants/public/:placeId — 메뉴판 사진은 사진에만 있는 메뉴와 사진이 더 최신인 가격만 공개한다', async () => {
+    const { id, placeId } = await seedRestaurant({ name: '메뉴판집' });
+    const row = await app.prisma.restaurant.findUnique({ where: { id } });
+    const snap = JSON.parse(row!.snapshotJson) as Record<string, unknown>;
+    const url = 'https://ldb-phinf.pstatic.net/20260513_1/a.png';
+    const base = { description: null, imageUrl: url, uploadedOn: '2026-05-13' };
+    snap.menuUpdatedOn = '2026-01-01';
+    snap.menuBoardImages = [
+      { url, uploadedOn: '2026-05-13', read: { items: [], model: 'kimi-k3', readAt: '2026-10-10T00:00:00.000Z' } },
+    ];
+    snap.menuBoardMenus = [
+      { ...base, name: '고량주', price: '9,0', origin: 'menu-board', registeredName: null, registeredPrice: null, priceCheck: null },
+      { ...base, name: '짜장면', price: '7,000원', origin: 'registered', registeredName: '북경짜장면', registeredPrice: '5000', priceCheck: 'different' },
+      { ...base, name: '짬뽕', price: '9,000', origin: 'registered', registeredName: '짬뽕', registeredPrice: '9000', priceCheck: 'same' },
+    ];
+    await app.prisma.restaurant.update({ where: { id }, data: { snapshotJson: JSON.stringify(snap) } });
+
+    const res = await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${placeId}` });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { menuBoard?: unknown }).menuBoard).toEqual({
+      images: [{ url, uploadedOn: '2026-05-13' }],
+      addedMenus: [{ name: '고량주', price: '9000', description: null, uploadedOn: '2026-05-13' }],
+      newerPrices: [{ name: '북경짜장면', price: '7000', uploadedOn: '2026-05-13' }],
+    });
+    // 메뉴판 사진이 없는 가게는 필드가 없다.
+    const plain = await seedRestaurant({ name: '사진없는집' });
+    const plainRes = await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${plain.placeId}` });
+    expect((plainRes.json() as { menuBoard?: unknown }).menuBoard).toBeUndefined();
   });
 
   it('GET /restaurants/public/:placeId — returns flattened analysis only for done summaries', async () => {

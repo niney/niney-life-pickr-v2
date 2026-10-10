@@ -104,9 +104,10 @@ export const nameScore = (truth: string, name: string): number => {
   return Math.min(best, 1);
 };
 
-const PRICE = /(\d{1,3}(?:[,.]\d{3})+|\d+(?:\.\d)?)\s*(만\s*원|천\s*원|원|won|₩|k)?/iu;
+const PRICE = /(\d{1,3}(?:[,.]\d{3})+|\d+(?:[.,]\d)?)\s*(만\s*원|천\s*원|원|won|₩|k)?/iu;
 
-// '10,000' '11.0' '9.5' '12000원' '1만5천' 같은 표기를 원 단위 정수로. 1,000 미만은 천 원 단위(메뉴판 관례).
+// '10,000' '11.0' '9.5' '25,9' '12000원' '1만5천' 같은 표기를 원 단위 정수로. 1,000 미만은 천 원 단위(메뉴판 관례 —
+// '25,9'·'25.9' 는 25,900원).
 export const parsePrice = (text: string | null | undefined): number | null => {
   if (!text) return null;
   const s = String(text).normalize('NFKC').replace(/ /g, '');
@@ -120,7 +121,7 @@ export const parsePrice = (text: string | null | undefined): number | null => {
   if (/^\d{1,3}(?:[,.]\d{3})+$/u.test(digits)) {
     value = Number(digits.replace(/[,.]/g, ''));
   } else {
-    value = Number(digits);
+    value = Number(digits.replace(',', '.'));
     if (value < 1000) value *= 1000;
     value = Math.round(value);
   }

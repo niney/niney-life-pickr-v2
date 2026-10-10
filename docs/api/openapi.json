@@ -25138,6 +25138,91 @@
                         "additionalProperties": false
                       }
                     },
+                    "menuBoard": {
+                      "type": "object",
+                      "properties": {
+                        "images": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "url": {
+                                "type": "string",
+                                "format": "uri"
+                              },
+                              "uploadedOn": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "url",
+                              "uploadedOn"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "addedMenus": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "price": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "description": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "uploadedOn": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "price",
+                              "description",
+                              "uploadedOn"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "newerPrices": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "price": {
+                                "type": "string"
+                              },
+                              "uploadedOn": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "price",
+                              "uploadedOn"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "images",
+                        "addedMenus",
+                        "newerPrices"
+                      ],
+                      "additionalProperties": false
+                    },
                     "blogReviews": {
                       "type": "array",
                       "items": {
