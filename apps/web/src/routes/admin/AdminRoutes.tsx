@@ -59,6 +59,9 @@ const AdminReviewSearchPage = lazy(() =>
 const AdminSettingsPage = lazy(() =>
   import('./AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })),
 );
+const AdminSmartlyTestPage = lazy(() =>
+  import('./AdminSmartlyTestPage').then((m) => ({ default: m.AdminSmartlyTestPage })),
+);
 const AdminTablingPage = lazy(() => import('./AdminTablingPage').then((m) => ({ default: m.AdminTablingPage })));
 const AdminTablingTestPage = lazy(() =>
   import('./AdminTablingTestPage').then((m) => ({ default: m.AdminTablingTestPage })),
@@ -98,6 +101,7 @@ const AdminRoutes = () => (
       <Route path="logs" element={<AdminLogsPage />} />
       <Route path="logs/:runId" element={<AdminLogRunDetailPage />} />
       <Route path="ai-test" element={<AdminAiTestPage />} />
+      <Route path="smartly-test" element={<AdminSmartlyTestPage />} />
       {/* review-search 정식 도메인 (DB 영속) */}
       <Route path="review-search" element={<AdminReviewSearchPage />} />
       {/* /admin/ai-keys 로 들어와도 신규 위치로 보낸다 — 옛 북마크 호환. */}
