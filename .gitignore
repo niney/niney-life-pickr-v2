@@ -70,6 +70,12 @@ apps/friendly/src/modules/crawl/__debug__/
 # Python (리뷰 군집화 배치 계산기 / 연구 프로브)
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# smartly — AI 허브 배포본에서 꺼낸 모델·데이터(약 6GB)는 리포에 넣지 않는다. 재현: pnpm --filter smartly setup
+apps/smartly/.venv/
+apps/smartly/models/
+apps/smartly/data/
 
 # tsc -b emit artifacts beside .ts source (apps/web build script)
 apps/web/src/**/*.js
