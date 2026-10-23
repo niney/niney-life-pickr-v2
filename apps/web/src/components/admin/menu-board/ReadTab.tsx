@@ -80,7 +80,8 @@ export const ReadTab = () => {
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    // grid-cols-1(minmax(0, 1fr)) — 좁은 화면에서 긴 샘플 이름 select 가 칸을 화면 밖으로 밀지 않게.
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">메뉴판 사진</CardTitle>
