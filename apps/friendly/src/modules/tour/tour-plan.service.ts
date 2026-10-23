@@ -22,12 +22,17 @@
 //     표본이 모자라 풀린 조건도 버리지 않는다 — 그 조건 하나만 같은 여행의 선호를 순위에 남긴다(조건이 달라도 같은 코스가
 //     나오던 것을 줄인다).
 //
+//   · 운영 정보(15차) — 한국관광공사 관광정보와 맞춘 곳(tour-kto.service.ts, sync:tour-kto)의 이용 시간·쉬는 날·주차·요금을
+//     목록과 일정에 싣는다. 출발 요일(startDow)을 주면 그 요일에 매주 쉬는 곳을 그날 일정에서 뺀다. 서버는 관광정보를 부르지
+//     않는다 — 미리 받아 둔 표만 읽는다.
+//
 // 지역 프로필(후보·시간대·일차 위치·여행별 요약·권역·이동 모델)은 지역 키로 10분 캐시한다. 적재·제거(다른 프로세스)로 데이터
 // 버전이 바뀌면 프로필을 버리고 다음 요청부터 새로 만든다(tour-data-version.ts). docs/PLAN-tour-log.md §10차·§11차.
 
 import type { Prisma, PrismaClient } from '@prisma/client';
-import type { TourInsightsQueryType, TourPlanAltType, TourPlanBodyType, TourPlanDayType, TourPlanPlaceKeyType, TourPlanPlaceType, TourPlanResultType } from '@repo/api-contract';
+import type { TourInsightsQueryType, TourPlanAltType, TourPlanBodyType, TourPlanDayType, TourPlanPlaceInfoType, TourPlanPlaceKeyType, TourPlanPlaceType, TourPlanResultType } from '@repo/api-contract';
 import {
+  TOUR_INFO_NOTE,
   TOUR_ITINERARY_REGIONS,
   TOUR_K_MIN,
   TOUR_PLAN_FAMES,
@@ -49,6 +54,7 @@ import {
 import { withTourColdSlot } from './tour-aggregate-cache.js';
 import { TourVersionedCache, tourDataVersion } from './tour-data-version.js';
 import { TOUR_INSIGHTS_MIN_TRIPS, attrWhere, countMap, median, round2 } from './tour-insights.service.js';
+import { loadTourPlaceInfos, type TourPlaceInfo } from './tour-kto.service.js';
 import {
   PLAN_SLOT_MEAL,
   PLAN_SLOT_SIGHT,
@@ -166,6 +172,8 @@ interface PoolPlace {
   pos: { first: number; mid: number; last: number };
   // 사실상 같은 곳 묶음의 대표 id(없으면 자기 id).
   group: string;
+  // 운영 정보(15차) — 관광정보와 맞춘 곳만.
+  info: TourPlaceInfo | null;
 }
 // 여행 1건의 요약 — 간 후보 장소·유형별 방문 수·일차별 유형 순서. 메모리 안에서만 쓰고 응답에는 집계로만 나간다.
 interface TripFacts {
@@ -183,6 +191,8 @@ interface RegionProfile {
   totalTrips: number;
   pool: PoolPlace[];
   excludedClosed: number;
+  // 운영 정보가 붙은 후보가 하나라도 있는가(응답 infoNote).
+  hasInfo: boolean;
   trips: Map<string, TripFacts>;
   typeVisits: Map<string, number>;
   typeVisitsTotal: number;
@@ -292,6 +302,8 @@ const zoneAreas = (zones: PlanZone[], places: RoutablePlace[], withSido: boolean
     return { label: dup === 1 ? base : `${base} ${dup}`, n: ps.length };
   });
 };
+// 응답에 싣는 운영 정보 — 쉬는 요일(읽어 낸 값)은 일정에만 쓰고 싣지 않는다(문구가 그대로 나간다).
+const publicInfo = (info: TourPlaceInfo | null): TourPlanPlaceInfoType | null => (info ? { hours: info.hours, closed: info.closed, parking: info.parking, fee: info.fee } : null);
 // 이름(+읍면동)으로 가리킨 장소 — 같은 이름이 여럿이면 방문이 가장 많은 곳.
 const matchesKey = (p: PoolPlace, key: TourPlanPlaceKeyType): boolean => p.name === key.name && (!key.emd || p.emd === key.emd);
 
@@ -325,7 +337,7 @@ export class TourPlanService {
   private async buildProfile(region: TourRegionKey): Promise<RegionProfile> {
     const cfg = TOUR_ITINERARY_REGIONS[region] ?? null;
     const placeWhere = tourRegionPlaceWhere(region);
-    const [placeRows, tripRows, visitRows, closedRows] = await Promise.all([
+    const [placeRows, tripRows, visitRows, closedRows, infos] = await Promise.all([
       this.prisma.tourPlace.findMany({
         where: { ...placeWhere, nTravelers: { gte: TOUR_K_MIN }, nRated: { gte: TOUR_RATING_MIN_N }, bayesScore: { not: null }, typeShort: { notIn: [...PLAN_EXCLUDED_TYPES] } } as Prisma.TourPlaceWhereInput,
         select: { id: true, name: true, typeShort: true, sido: true, sigungu: true, emd: true, lat: true, lng: true, isIsland: true, nTravelers: true, bayesScore: true, stayMedian: true, spendPpMedian: true, spendN: true },
@@ -339,6 +351,7 @@ export class TourPlanService {
         select: { travelId: true, placeId: true, typeShort: true, dayIndex: true, visitOrder: true, arrivalHour: true },
       }),
       this.prisma.tourPlaceBizStatus.findMany({ where: { bStt: { in: CLOSED_BSTT } }, select: { placeId: true } }),
+      loadTourPlaceInfos(this.prisma),
     ]);
 
     const closed = new Set(closedRows.map((r) => r.placeId));
@@ -368,6 +381,7 @@ export class TourPlanService {
         bands: emptyPlanBands(),
         pos: { first: 0, mid: 0, last: 0 },
         group: p.id,
+        info: infos.get(p.id) ?? null,
       });
     }
 
@@ -394,6 +408,7 @@ export class TourPlanService {
         head.n += p.n;
         head.stayMin ??= p.stayMin;
         head.spendPp ??= p.spendPp;
+        head.info ??= p.info;
         head.ids.push(p.id);
         alias.set(p.id, head.id);
         pool.delete(p.id);
@@ -541,7 +556,7 @@ export class TourPlanService {
       };
     }
 
-    return { totalTrips: tripRows.length, pool: places, excludedClosed, trips, typeVisits, typeVisitsTotal, posBase, typeStay, itinerary };
+    return { totalTrips: tripRows.length, pool: places, excludedClosed, hasInfo: places.some((p) => p.info !== null), trips, typeVisits, typeVisitsTotal, posBase, typeStay, itinerary };
   }
 
   async plan(body: TourPlanBodyType): Promise<TourPlanResultType> {
@@ -706,7 +721,20 @@ export class TourPlanService {
       const candidates: PlanCandidate[] = [];
       for (const x of scored) {
         if (!routable(x.p) || avoidIds.has(x.p.id)) continue;
-        candidates.push({ id: x.p.id, kind: x.p.kind, slot: slotOf(x.p.kind), lat: x.p.lat, lng: x.p.lng, score: x.score, stayMin: x.p.stayMin, bands: x.p.bands, pos: x.p.pos, registered: registered.has(x.p.id), group: x.p.group });
+        candidates.push({
+          id: x.p.id,
+          kind: x.p.kind,
+          slot: slotOf(x.p.kind),
+          lat: x.p.lat,
+          lng: x.p.lng,
+          score: x.score,
+          stayMin: x.p.stayMin,
+          bands: x.p.bands,
+          pos: x.p.pos,
+          registered: registered.has(x.p.id),
+          group: x.p.group,
+          closedDows: x.p.info?.closedDows ?? undefined,
+        });
       }
       const transit = body.transport === 'transit';
       const legModel = transit ? it.legModels.transit : it.legModels.car;
@@ -734,6 +762,7 @@ export class TourPlanService {
         hubKm: it.cfg.hubKm,
         mealFallback: it.cfg.mealFallback,
         variant: body.variant,
+        startDow: body.startDow,
       });
       const toAlt = (id: string): TourPlanAltType => {
         const p = byId.get(id)!;
@@ -764,7 +793,10 @@ export class TourPlanService {
               spendPp: p.spendPp,
               pinned: s.pinned,
               purposeFit: purposeFitIds.has(p.id),
-              alternatives: s.altIds.map(toAlt),
+              info: publicInfo(p.info),
+              closedThatDay: s.closed,
+              // 이름만 같은 다른 장소(300m 밖이라 합쳐지지 않은 곳)가 둘 다 대안이면 한 번만 낸다 — 응답에서는 구별되지 않는다.
+              alternatives: s.altIds.map(toAlt).filter((a, i, all) => a.name !== p.name && all.findIndex((b) => b.name === a.name) === i),
             };
           }),
           moveMin: d.stops.reduce((a, s) => a + (s.moveMin ?? 0), 0),
@@ -819,6 +851,7 @@ export class TourPlanService {
       spendPp: x.p.spendPp,
       placeId: registered.get(x.p.id) ?? null,
       purposeFit: x.purposeFit,
+      info: publicInfo(x.p.info),
     });
 
     return {
@@ -843,6 +876,7 @@ export class TourPlanService {
             .map(({ label, n }) => ({ label, n }))
         : [],
       excludedClosed: profile.excludedClosed,
+      infoNote: profile.hasInfo ? TOUR_INFO_NOTE : null,
       sampleLabel: TOUR_SAMPLE_LABEL,
       sourceNote: TOUR_SOURCE_NOTE,
     };

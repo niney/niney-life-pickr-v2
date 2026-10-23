@@ -15,6 +15,8 @@ import { TravelPlanPage } from './TravelPlanPage';
 // 12차 — ⑦ 출발일을 넣으면 예보(단기·중기)를 불러 비 오는 일차 번호를 보내고, 일차 카드에 날짜·예보·비 표시를 붙인다.
 // 14차 — ⑨ 목적·장소(유명도) 옵션은 기본값이 아닐 때만 요청에 실리고 목적은 셋까지 ⑩ "다른 코스 보기" 는 변형 번호를 올려 다시
 // 짜고(폼으로 다시 찾으면 처음 코스로, 일정 편집은 보던 번호 유지) ⑪ 목적에 맞는 곳 표시.
+// 15차 — ⑫ 출발일을 넣으면 첫날의 요일(startDow)도 간다 ⑬ 운영 정보(이용 시간·쉬는 날)가 있는 곳은 접힌 한 줄로 보이고,
+// 꼭 갈 곳이 쉬는 요일에 놓였으면 표시하며, 출처·주의 한 줄(infoNote)을 붙인다.
 // 13차 — ⑧ 제주 밖 지역도 일정표·일정 옵션이 나오고('전체' 만 장소만), 거점 동네를 알리고, 예보는 응답이 알려 준 지점으로 불러
 // 다음에 찾을 때부터 비 오는 일차를 보낸다. 식당이 없는 날은 그렇게 알린다.
 
@@ -33,6 +35,7 @@ const place = (over: Partial<TourPlanPlaceType> & Pick<TourPlanPlaceType, 'name'
   spendPp: null,
   placeId: null,
   purposeFit: false,
+  info: null,
   ...over,
 });
 const stop = (over: Partial<TourPlanStopType> & Pick<TourPlanStopType, 'name' | 'kind' | 'arriveMin'>): TourPlanStopType => ({
@@ -47,6 +50,8 @@ const stop = (over: Partial<TourPlanStopType> & Pick<TourPlanStopType, 'name' | 
   spendPp: null,
   pinned: false,
   purposeFit: false,
+  info: null,
+  closedThatDay: false,
   alternatives: [],
   ...over,
 });
@@ -109,6 +114,7 @@ const RESULT: TourPlanResultType = {
     { label: '서귀포시 성산읍', n: 3 },
   ],
   excludedClosed: 2,
+  infoNote: null,
   sampleLabel: '2023년 4~9월 여행자 표본',
   sourceNote: '출처 문구(aihub.or.kr)',
 };
@@ -359,8 +365,11 @@ describe('TravelPlanPage', () => {
     expect(asked[0]).toMatch(/nx=\d+&ny=\d+/);
     submit();
     await screen.findByRole('heading', { name: '추천 일정' });
-    // 날짜가 아니라 비 오는 일차 번호만 간다.
-    expect(bodies).toEqual([{ ...BASE_BODY, nights: 1, wetDays: [2] }]);
+    // 날짜가 아니라 비 오는 일차 번호와 첫날의 요일만 간다.
+    const dow = (ymd: string): number => new Date(`${ymd}T00:00:00Z`).getUTCDay();
+    expect(bodies).toEqual([{ ...BASE_BODY, nights: 1, wetDays: [2], startDow: dow(TODAY) }]);
+    // 이 서버에 운영 정보가 없으면(infoNote null) 쉬는 요일 이야기는 하지 않는다.
+    expect(screen.queryByText(/매주 그 요일에 쉬는 것으로 나와 있는 곳/)).not.toBeInTheDocument();
 
     const day1 = screen.getByRole('article', { name: '1일차' });
     expect(within(day1).getByText(formatYmdWithWeekday(TODAY))).toBeInTheDocument();
@@ -376,7 +385,7 @@ describe('TravelPlanPage', () => {
     expect(await screen.findByText('예보는 열흘 뒤까지만 나옵니다 — 날짜만 붙입니다')).toBeInTheDocument();
     submit();
     await waitFor(() => expect(bodies).toHaveLength(2));
-    expect(bodies[1]).toEqual({ ...BASE_BODY, nights: 1 });
+    expect(bodies[1]).toEqual({ ...BASE_BODY, nights: 1, startDow: dow(plus(40)) });
     expect(await within(screen.getByRole('article', { name: '1일차' })).findByText(formatYmdWithWeekday(plus(40)))).toBeInTheDocument();
   });
 
@@ -440,7 +449,8 @@ describe('TravelPlanPage', () => {
     expect(screen.getByText(/일정을 만들면 그 동네 예보를 붙입니다/)).toBeInTheDocument();
     submit();
     await screen.findByRole('heading', { name: '추천 일정' });
-    expect(bodies).toEqual([{ ...BASE_BODY, region: 'gangwon', nights: 1 }]);
+    const startDow = new Date(`${TODAY}T00:00:00Z`).getUTCDay();
+    expect(bodies).toEqual([{ ...BASE_BODY, region: 'gangwon', nights: 1, startDow }]);
     expect(asked.every((q) => q.includes(`nx=${grid.nx}&ny=${grid.ny}`))).toBe(true);
 
     // 거점 안내 · 일정 고지(제주 밖은 섬을 따로 빼지 않는다) · 식당 없는 날.
@@ -463,7 +473,7 @@ describe('TravelPlanPage', () => {
     // 다시 찾으면 비 오는 일차가 실린다.
     submit();
     await waitFor(() => expect(bodies).toHaveLength(2));
-    expect(bodies[1]).toEqual({ ...BASE_BODY, region: 'gangwon', nights: 1, wetDays: [2] });
+    expect(bodies[1]).toEqual({ ...BASE_BODY, region: 'gangwon', nights: 1, wetDays: [2], startDow });
     expect(await within(screen.getByRole('article', { name: '2일차' })).findByText('비 예보 · 실내 위주')).toBeInTheDocument();
 
     // 숙소 동네를 고르면 거점 안내는 사라진다(그곳이 거점이다).
@@ -547,5 +557,72 @@ describe('TravelPlanPage', () => {
     submit();
     await waitFor(() => expect(bodies).toHaveLength(7));
     expect(bodies[6]).toEqual({ ...BASE_BODY, avoid: [{ name: '용두암', emd: '용담이동' }] });
+  });
+
+  it('운영 정보 — 이용 시간·쉬는 날을 접힌 한 줄로 보여 주고, 출발일의 요일을 보내며, 쉬는 날에 놓인 꼭 갈 곳을 표시한다', async () => {
+    const INFO_NOTE = '이용 시간·쉬는 날은 한국관광공사 관광정보에서 가져온 것입니다(테스트 문구).';
+    const museum = { hours: '09:00~18:00 / 입장 마감 17:30', closed: '매주 월요일', parking: null, fee: '성인 2,000원' };
+    const withInfo: TourPlanResultType = {
+      ...RESULT,
+      infoNote: INFO_NOTE,
+      places: [place({ name: '제주민속자연사박물관', kind: '문화', emd: '일도이동', info: museum }), ...RESULT.places],
+      itinerary: {
+        ...RESULT.itinerary!,
+        days: [
+          dayOf({
+            day: 1,
+            area: '제주시 일도이동',
+            stops: [
+              // 꼭 갈 곳인데 그날이 쉬는 요일이다.
+              stop({ name: '제주민속자연사박물관', kind: '문화', emd: '일도이동', arriveMin: 600, pinned: true, closedThatDay: true, info: museum }),
+              stop({ name: '우진해장국', kind: '식당', emd: '삼도이동', arriveMin: 720, moveMin: 5, moveKm: 0.5, info: { hours: null, closed: null, parking: '가능', fee: null } }),
+            ],
+          }),
+          RESULT.itinerary!.days[1]!,
+        ],
+      },
+    };
+    server.use(
+      http.get('/api/v1/weather/forecast', () => HttpResponse.json({ grid: { nx: 52, ny: 38 }, base: null, fallback: false, hours: [], days: [], total: 0, fetchedAt: new Date().toISOString(), stale: false })),
+      http.get('/api/v1/weather/mid', () => HttpResponse.json({ tmFc: '202610040600', announcedAt: null, fallback: false, land: null, ta: null, outlook: null, fetchedAt: new Date().toISOString(), stale: false })),
+    );
+    const bodies = usePlan(() => withInfo);
+    renderPage();
+    // 오늘 이후의 첫 월요일에 떠난다.
+    const monday = (() => {
+      const d = new Date(`${todayKst()}T00:00:00Z`);
+      while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1);
+      return d.toISOString().slice(0, 10);
+    })();
+    fireEvent.click(screen.getByRole('button', { name: '1박' }));
+    fireEvent.change(screen.getByLabelText('여행 시작일'), { target: { value: monday } });
+    submit();
+    await screen.findByRole('heading', { name: '추천 일정' });
+    expect(bodies[0]).toMatchObject({ nights: 1, startDow: 1 });
+
+    const day1 = screen.getByRole('article', { name: '1일차' });
+    const summary = '이용 09:00~18:00 / 입장 마감 17:30 · 쉬는 날 매주 월요일';
+    expect(within(day1).getByText(summary)).toBeInTheDocument();
+    expect(within(day1).getByText('이날은 쉬는 요일로 나와 있습니다 — 꼭 갈 곳이라 넣었습니다.')).toBeInTheDocument();
+    // 펼친 항목 — 요금까지. 이용 시간·쉬는 날이 없는 곳은 있는 항목 하나를 한 줄로.
+    expect(within(day1).getByText('성인 2,000원')).toBeInTheDocument();
+    expect(within(day1).getByText('주차 가능')).toBeInTheDocument();
+    expect(within(day1).getAllByTitle('운영 정보 펼치기')).toHaveLength(2);
+    // 운영 정보가 없는 곳에는 줄이 없다.
+    expect(within(screen.getByRole('article', { name: '2일차' })).queryByTitle('운영 정보 펼치기')).not.toBeInTheDocument();
+
+    // 추천 목록에도 같은 줄이, 결과 아래에 출처·주의가 붙는다.
+    expect(within(listSection()).getByText(summary)).toBeInTheDocument();
+    expect(within(listSection()).getAllByTitle('운영 정보 펼치기')).toHaveLength(1);
+    expect(screen.getByText(INFO_NOTE)).toBeInTheDocument();
+    expect(screen.getByText(/매주 그 요일에 쉬는 것으로 나와 있는 곳은 그날 일정에서 뺐습니다/)).toBeInTheDocument();
+
+    // 출발일을 지우고 다시 찾으면 요일도 가지 않고, 쉬는 요일 안내도 없다.
+    fireEvent.change(screen.getByLabelText('여행 시작일'), { target: { value: '' } });
+    submit();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual({ ...BASE_BODY, nights: 1 });
+    await waitFor(() => expect(screen.queryByText(/매주 그 요일에 쉬는 것으로 나와 있는 곳/)).not.toBeInTheDocument());
+    expect(screen.getByText(INFO_NOTE)).toBeInTheDocument();
   });
 });

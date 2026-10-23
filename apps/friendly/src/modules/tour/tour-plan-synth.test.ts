@@ -645,3 +645,68 @@ describe('다른 코스 보기(14차) — 변형 번호', () => {
     }
   });
 });
+
+describe('쉬는 날(15차) — 출발 요일을 주면 그 요일에 쉬는 곳을 그날 자리에서 뺀다', () => {
+  // 월요일(1)에 떠나면 1일차 월 · 2일차 화 · 3일차 수. 기본 일정은 첫날 제주시내(A) · 가운데 날 한림(B) · 마지막 날 성산(C).
+  const MON = 1;
+  const withClosed = (closed: Record<string, number[]>): PlanCandidate[] => candidates.map((c) => (closed[c.id] ? { ...c, closedDows: closed[c.id] } : c));
+  const plan = (over: Partial<PlanSynthInput> = {}) => synthesizePlanItinerary(baseInput(over));
+  const idsOf = (r: ReturnType<typeof plan>): string[][] => r.days.map((d) => d.stops.map((s) => s.id));
+
+  it('쉬는 요일을 모르는 후보뿐이면 요일을 줘도 일정은 그대로', () => {
+    expect(plan({ startDow: MON })).toEqual(plan());
+    expect(plan().days.flatMap((d) => d.stops.map((s) => s.closed))).not.toContain(true);
+  });
+
+  it('그날이 쉬는 요일인 곳은 그날 자리에도 대안에도 없다 — 다른 요일에 떠나면 그대로 든다', () => {
+    // 한림의 1등 볼거리(b-beach)가 화요일에 쉰다 — 2일차(화)가 한림이다.
+    const closed = withClosed({ 'b-beach': [2] });
+    const base = plan();
+    expect(idsOf(base)[1]).toContain('b-beach');
+    const tue = plan({ candidates: closed, startDow: MON });
+    expect(tue.days.map((d) => d.pos)).toEqual(['first', 'mid', 'last']);
+    expect(idsOf(tue)[1]).not.toContain('b-beach');
+    expect(tue.days[1]!.stops.flatMap((s) => s.altIds)).not.toContain('b-beach');
+    // 다른 날의 일정은 달라지지 않는다.
+    expect(idsOf(tue)[0]).toEqual(idsOf(base)[0]);
+    expect(idsOf(tue)[2]).toEqual(idsOf(base)[2]);
+    // 일요일에 떠나면 2일차가 월요일 — 쉬는 날이 아니다.
+    expect(idsOf(plan({ candidates: closed, startDow: 0 }))).toEqual(idsOf(base));
+    // 요일을 주지 않으면 쉬는 요일은 쓰이지 않는다.
+    expect(idsOf(plan({ candidates: closed }))).toEqual(idsOf(base));
+  });
+
+  it('요일은 7로 돌아간다 — 토요일(6)에 떠난 3일차는 월요일', () => {
+    const closed = withClosed({ 'c-peak': [1] });
+    expect(idsOf(plan({ candidates: closed, startDow: 6 }))[2]).not.toContain('c-peak');
+    expect(idsOf(plan({ candidates: closed, startDow: 5 }))[2]).toContain('c-peak');
+  });
+
+  it('꼭 갈 곳은 열려 있는 날에 놓는다 — 가운데 날이 쉬는 요일이면 첫날·마지막 날로', () => {
+    // 요일을 모르면 꼭 갈 곳(섭지코지)의 동네 성산이 가운데 날로 온다(11차).
+    expect(plan({ pinned: new Set(['c-cape']) }).days[1]!.stops.map((s) => s.id)).toContain('c-cape');
+    // 화요일(2일차)에 쉬면 성산은 가운데 날을 받지 않는다 — 열려 있는 날 중 성산을 가장 잘 채우는 마지막 날(수)에 놓인다.
+    const r = plan({ candidates: withClosed({ 'c-cape': [2] }), pinned: new Set(['c-cape']), startDow: MON });
+    expect(r.unplaced).toEqual([]);
+    expect(r.days.map((d) => d.pos)).toEqual(['first', 'mid', 'last']);
+    expect(idsOf(r)[1]).not.toContain('c-cape');
+    expect(r.days[2]!.stops.find((s) => s.id === 'c-cape')).toMatchObject({ pinned: true, closed: false });
+  });
+
+  it('어느 날에 놓아도 쉬는 요일이면 그래도 넣고 표시한다', () => {
+    const r = plan({ candidates: withClosed({ 'c-cape': [1, 2, 3] }), pinned: new Set(['c-cape']), startDow: MON });
+    expect(r.unplaced).toEqual([]);
+    const stop = r.days.flatMap((d) => d.stops).find((s) => s.id === 'c-cape');
+    expect(stop).toMatchObject({ pinned: true, closed: true });
+    // 표시는 그 장소에만.
+    expect(r.days.flatMap((d) => d.stops).filter((s) => s.closed).map((s) => s.id)).toEqual(['c-cape']);
+  });
+
+  it('당일 — 1등 장소가 쉬는 요일이면 다음 장소가 그 자리를 채운다', () => {
+    const one = plan({ days: 1 });
+    const top = one.days[0]!.stops[0]!.id;
+    const r = plan({ days: 1, candidates: withClosed({ [top]: [4] }), startDow: 4 });
+    expect(r.days).toHaveLength(1);
+    expect(r.days[0]!.stops.map((s) => s.id)).not.toContain(top);
+  });
+});

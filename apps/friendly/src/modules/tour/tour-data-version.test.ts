@@ -9,6 +9,7 @@ import prismaPlugin from '../../plugins/prisma.js';
 import sensiblePlugin from '../../plugins/sensible.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { TourVersionedCache, tourDataVersion } from './tour-data-version.js';
+import { TOUR_KTO_SYNC_LAYER } from './tour-kto-info.js';
 import { TourInsightsService } from './tour-insights.service.js';
 import { unloadTourTables } from './tour-master.service.js';
 import tourPublicRoutes from './tour-public.route.js';
@@ -110,7 +111,7 @@ describe('여행로그 데이터 버전 (격리 DB)', () => {
     isolated.restore();
   });
 
-  it('tourDataVersion — 여행로그 네 layer 의 가장 큰 이력 id. 다른 layer 는 세지 않고, 이력이 없으면 0', async () => {
+  it('tourDataVersion — 여행로그 네 layer 와 관광정보 동기화 layer 의 가장 큰 이력 id. 다른 layer 는 세지 않고, 이력이 없으면 0', async () => {
     const p = app.prisma;
     try {
       expect(await tourDataVersion(p)).toBe(0);
@@ -128,6 +129,10 @@ describe('여행로그 데이터 버전 (격리 DB)', () => {
       // 뒤이어 다른 layer 가 적재돼도 여행로그 버전은 그대로.
       await p.lifeMasterSync.create({ data: { layer: 'hospital', count: 1 } });
       expect(await tourDataVersion(p)).toBe(last);
+      // 관광정보 동기화(sync:tour-kto — 코스 프로필이 읽는 운영 정보)는 버전을 올린다.
+      const kto = await p.lifeMasterSync.create({ data: { layer: TOUR_KTO_SYNC_LAYER, count: 1 } });
+      expect(await tourDataVersion(p)).toBe(kto.id);
+      expect(kto.id).toBeGreaterThan(last);
     } finally {
       await p.lifeMasterSync.deleteMany();
     }

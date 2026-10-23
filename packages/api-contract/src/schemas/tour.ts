@@ -581,6 +581,9 @@ export type TourInsightsResultType = z.infer<typeof TourInsightsResult>;
 //   fame: 추천 점수에서 여행 수가 차지하는 몫(famous √n(기본) · mixed n^¼ · hidden 여행 수를 보지 않음). 목록 순위에도 반영된다.
 //   purposes: 여행 목적(최대 3) — 그 목적의 여행이 평균보다 더 간 곳을 앞세운다(목록 순위에도).
 //   variant: 다른 코스 보기(0~99, 0 = 점수가 가장 높은 코스). 같은 번호는 같은 코스 — 1등 대신 상위권에서 번갈아 고른다.
+// 15차 운영 정보 —
+//   startDow: 첫날의 요일(0 일 … 6 토). 화면이 출발일에서 뽑아 보낸다 — 일차마다 요일이 정해져, 그 요일에 쉬는 곳(한국관광공사
+//   관광정보의 쉬는 날 문구에서 읽은 "매주 쉬는 요일")을 그날 일정에서 뺀다. 꼭 갈 곳은 열려 있는 날에 놓는다.
 export const TOUR_PLAN_PACE_KEYS = ['relaxed', 'normal', 'packed'] as const;
 export const TourPlanPace = z.enum(TOUR_PLAN_PACE_KEYS);
 export type TourPlanPaceType = z.infer<typeof TourPlanPace>;
@@ -619,8 +622,21 @@ export const TourPlanBody = z.object({
   fame: TourPlanFame.optional(),
   purposes: z.array(TourPlanPurpose).max(3).optional(),
   variant: z.number().int().min(0).max(99).optional(),
+  startDow: z.number().int().min(0).max(6).optional(),
 });
 export type TourPlanBodyType = z.infer<typeof TourPlanBody>;
+
+// 운영 정보(15차) — 한국관광공사 관광정보(TourAPI, data.go.kr 15101578)와 이름·거리로 맞춘 곳만 값이 있다. 여행로그(2023년
+// 표본)에는 없는 "지금" 의 정보다. 문구는 그쪽 원문을 한 줄로 줄인 것(항목마다 최대 240자)이라 형식이 제각각이고 바뀔 수 있다 —
+// 방문 전에 확인하라는 안내(응답 infoNote)와 같이 보여 준다.
+export const TourPlanPlaceInfo = z.object({
+  // 이용 시간 · 쉬는 날 · 주차 · 요금. 없는 항목은 null(넷 다 null 인 곳은 info 자체가 null).
+  hours: z.string().nullable(),
+  closed: z.string().nullable(),
+  parking: z.string().nullable(),
+  fee: z.string().nullable(),
+});
+export type TourPlanPlaceInfoType = z.infer<typeof TourPlanPlaceInfo>;
 
 // 추천 장소(10차) — 공개 가능 여부와 표시 숫자는 **지역 표본 전체** 기준이고(여행 5건·평가 3건 이상), 내 조건(비슷한 여행)은
 // 정렬 가중치로만 쓴다. 그래서 조건을 좁혀도 장소가 사라지지 않는다. 장소 좌표와 여행로그 장소 id 는 싣지 않는다.
@@ -645,6 +661,8 @@ export const TourPlanPlace = z.object({
   placeId: z.string().nullable(),
   // 고른 여행 목적(purposes)에 맞는 곳인가(14차) — 그 목적의 여행 5건 이상이 갔고 평균의 1.3배 이상. 목적을 안 줬으면 false.
   purposeFit: z.boolean(),
+  // 운영 정보(15차) — 관광정보와 맞춘 곳만, 아니면 null.
+  info: TourPlanPlaceInfo.nullable(),
 });
 export type TourPlanPlaceType = z.infer<typeof TourPlanPlace>;
 
@@ -679,6 +697,11 @@ export const TourPlanStop = z.object({
   pinned: z.boolean(),
   // 고른 여행 목적(purposes)에 맞는 곳인가(14차) — 그 목적의 여행 5건 이상이 갔고 평균의 1.3배 이상. 목적을 안 줬으면 false.
   purposeFit: z.boolean(),
+  // 운영 정보(15차) — 관광정보와 맞춘 곳만, 아니면 null.
+  info: TourPlanPlaceInfo.nullable(),
+  // 그날이 이 장소가 매주 쉬는 요일이다(15차, startDow 를 줬을 때) — 꼭 갈 곳(must)만 그럴 수 있다(그 밖의 곳은 그날 일정에서
+  // 빠진다). 어느 날에 놓아도 쉬는 요일일 때만 true 가 된다.
+  closedThatDay: z.boolean(),
   // 같은 자리에 넣을 만한 다른 후보(최대 2).
   alternatives: z.array(TourPlanAlt),
 });
@@ -745,6 +768,8 @@ export const TourPlanResult = z.object({
   areas: z.array(TourPlanArea),
   // 폐업·휴업으로 확인돼 후보에서 뺀 장소 수(국세청 조회 결과가 있는 곳만).
   excludedClosed: z.number().int(),
+  // 운영 정보(places[].info · stops[].info)의 출처와 주의 한 줄(15차) — 이 서버에 관광정보가 붙어 있지 않으면 null.
+  infoNote: z.string().nullable(),
   sampleLabel: z.string(),
   sourceNote: z.string(),
 });

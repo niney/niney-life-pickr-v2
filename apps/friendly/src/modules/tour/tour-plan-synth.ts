@@ -264,6 +264,8 @@ export interface PlanCandidate {
   registered: boolean;
   // 사실상 같은 곳 묶음(13차 — "대왕암공원" 과 "대왕암공원 출렁다리"). 한 일정에는 묶음에서 한 곳만 쓴다. 없으면 자기 혼자.
   group?: string;
+  // 매주 쉬는 요일(15차 — 0 일 … 6 토). 출발 요일(startDow)을 줬을 때, 그 요일인 날의 후보에서 뺀다.
+  closedDows?: readonly number[];
 }
 export interface PlanSynthInput {
   days: number;
@@ -305,6 +307,10 @@ export interface PlanSynthInput {
   // 번갈아 뽑히게 한다. 같은 번호는 같은 결과다(난수를 차례로 뽑지 않고 번호와 후보 id 로 정한다 — 권역을 견줄 때와 채울 때
   // 같은 후보가 같은 점수로 보여야 한다).
   variant?: number;
+  // ── 15차 쉬는 날 ──
+  // 첫날의 요일(0 일 … 6 토). 주면 일차마다 요일이 정해지고, 그 요일에 쉬는 후보(closedDows)는 그날 자리에 넣지 않는다.
+  // 꼭 갈 곳은 쉬는 날이어도 넣되(사용자가 고른 것) 열려 있는 날에 놓이도록 날을 고르고, 그래도 쉬는 날이면 표시한다.
+  startDow?: number;
 }
 export interface PlanSynthStop {
   id: string;
@@ -313,6 +319,8 @@ export interface PlanSynthStop {
   moveMin: number | null;
   moveKm: number | null;
   pinned: boolean;
+  // 그날이 이 장소가 쉬는 요일이다(15차) — 꼭 갈 곳만 그럴 수 있다.
+  closed: boolean;
   altIds: string[];
 }
 export interface PlanSynthDay {
@@ -357,6 +365,8 @@ const STAY_SCALE_KM = 45;
 const BAND_HOUR = [9, 12, 15, 18, 21] as const;
 // 거점 반경 안에서 날을 다 못 채우면 이 배수까지 넓혀 한 번 더 짠다(그래도 모자라면 채운 날만 낸다).
 const HUB_RELAX = 2;
+// 꼭 갈 곳이 쉬는 요일에 놓인 날의 점수 배수(15차) — 열려 있는 날이 있으면 그 날이 이긴다.
+const CLOSED_PIN_FACTOR = 0.3;
 // 변형(14차)의 잡음 폭 — 후보 점수 ±35%, 권역 점수 ±30%. 1등의 절반에 못 미치는 후보는 어떤 번호에서도 1등을 못 이긴다
 // (0.65 ÷ 1.35 ≈ 0.48). 권역은 하루 점수의 합이라 후보 잡음이 서로 지워진다 — 권역에도 따로 준다.
 const VARIANT_CANDIDATE_SPREAD = 0.35;
@@ -416,6 +426,8 @@ interface DayPlan {
   sk: PickedPlanSkeleton;
   zone: number;
   wet: boolean;
+  // 그날의 요일(출발 요일을 줬을 때) — 쉬는 곳을 가린다.
+  dow: number | null;
 }
 
 const permutations = <T>(xs: T[]): T[][] => (xs.length <= 1 ? [xs] : xs.flatMap((x, i) => permutations([...xs.slice(0, i), ...xs.slice(i + 1)]).map((rest) => [x, ...rest])));
@@ -455,9 +467,13 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
   // 그 장소에 가장 많이 가는 시각에 자리를 하나 늘린다) ② 남은 자리를 앞에서부터 — 묶음이 같은 후보 중 점수 × 시간대 적합 ×
   // 일차 위치 적합 × 가까움이 큰 곳으로 채운다.
   const wetOf = (c: PlanCandidate, wet: boolean): number => (wet ? (input.wetFactor?.get(c.kind) ?? 1) : 1);
-  const fillDay = (zi: number, sk: PickedPlanSkeleton, pos: PlanDayPos, used: ReadonlySet<string>, wet: boolean): DayFill => {
+  // 쉬는 날(15차) — dow 는 그날의 요일(모르면 null). 그 요일에 쉬는 후보는 그날 후보에서 빠진다(꼭 갈 곳은 남긴다).
+  const closedOn = (c: PlanCandidate, dow: number | null): boolean => dow !== null && (c.closedDows?.includes(dow) ?? false);
+  const startDow = input.startDow === undefined ? null : ((Math.round(input.startDow) % 7) + 7) % 7;
+  const dowOf = (di: number): number | null => (startDow === null ? null : (startDow + di) % 7);
+  const fillDay = (zi: number, sk: PickedPlanSkeleton, pos: PlanDayPos, used: ReadonlySet<string>, wet: boolean, dow: number | null): DayFill => {
     const zone = input.zones[zi]!;
-    const reach = reachByZone[zi]!.filter((c) => !used.has(c.id));
+    const reach = reachByZone[zi]!.filter((c) => !used.has(c.id) && (pinned.has(c.id) || !closedOn(c, dow)));
     const slots: Slot[] = sk.types.map((type, i) => ({ type, hour: sk.hours[i]!, fixed: null }));
     const pins = reach.filter((c) => pinned.has(c.id)).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
     for (const pin of pins) {
@@ -516,9 +532,13 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
       if (pick.slot !== PLAN_SLOT_MEAL) sightKinds.add(pick.kind);
       prev = pick;
     }
-    // 자리를 다 못 채운 권역은 그만큼 깎는다(인기 장소 하나로 하루를 차지하지 않게).
-    return { slots: filled, total: filled.reduce((a, s) => a + s.score, 0) * (filled.length / slots.length) };
+    // 자리를 다 못 채운 권역은 그만큼 깎는다(인기 장소 하나로 하루를 차지하지 않게). 꼭 갈 곳이 쉬는 요일에 놓였으면 더 깎는다 —
+    // 그 권역을 열려 있는 날에 주게 된다.
+    const closedPins = filled.filter((s) => s.pinned && closedOn(s.c, dow)).length;
+    return { slots: filled, total: filled.reduce((a, s) => a + s.score, 0) * (filled.length / slots.length) * CLOSED_PIN_FACTOR ** closedPins };
   };
+  // 이 권역에서 하루를 채우면 드는 꼭 갈 곳 중 그 요일에 쉬는 곳이 있는가.
+  const pinClosedOn = (zi: number, dow: number | null): boolean => dow !== null && reachByZone[zi]!.some((c) => pinned.has(c.id) && closedOn(c, dow));
   // 꼭 갈 곳이 든 날은 한 곳뿐이어도 살린다.
   const enough = (f: DayFill): boolean => f.slots.length >= (f.slots.some((s) => s.pinned) ? 1 : MIN_STOPS);
   const none: ReadonlySet<string> = new Set();
@@ -551,10 +571,11 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
       sk: pickPlanSkeleton(pos, pos === 'mid' ? midNth++ : 0, input.skeletons.similar, input.skeletons.region, input.lenShift ?? 0),
       zone: -1,
       wet: input.wetDays?.has(di + 1) ?? false,
+      dow: dowOf(di),
     }));
 
     // 거점(13차) — 숙소 동네가 있으면 그곳, 꼭 갈 곳이 있으면 그 권역(점수 합이 가장 큰 곳), 아니면 며칠을 가장 알차게 채우는 동네:
-    // 권역마다 하루를 채운 점수를 내고(첫 일차 뼈대 기준. 날씨는 보지 않는다 — 예보가 거점을 흔들면 예보 지점도 따라 바뀐다),
+    // 권역마다 하루를 채운 점수를 내고(첫 일차 뼈대 기준. 날씨와 요일은 보지 않는다 — 예보나 출발일이 거점을 흔들면 예보 지점도 따라 바뀐다),
     // 반경의 절반 안에 있는 권역의 점수를 높은 것부터 일수만큼 더한 값이 가장 큰 묶음을 찾아, 그 묶음에서 하루 점수가 가장 높은
     // 권역을 거점으로 삼는다. 절반으로 재는 이유 — 반경 전체로 재면 두 도시의 중간(강릉과 속초 사이의 주문진)이 양쪽을 다 품어
     // 일정이 두 도시를 오간다. 묶음의 중심이 아니라 가장 센 권역을 거점으로 삼는 이유 — 중심은 이름 없는 길목이기 쉽다.
@@ -567,7 +588,7 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
     let within: boolean[] | null = null;
     if (limitKm !== null) {
       const first = plans[0]!;
-      const fills = input.zones.map((_, zi) => fillDay(zi, first.sk, first.pos, none, false));
+      const fills = input.zones.map((_, zi) => fillDay(zi, first.sk, first.pos, none, false, null));
       const dayValue = fills.map((f, zi) => (enough(f) ? f.total * zoneNoise[zi]! : 0));
       const spot = input.zones.map((z, zi) => {
         const cs = dayValue[zi]! > 0 ? fills[zi]!.slots.map((x) => x.c) : [];
@@ -616,23 +637,26 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
       input.zones
         .map((_, zi) => zi)
         .filter((zi) => within === null || within[zi]!)
-        .map((zi) => ({ zi, ...fillDay(zi, p.sk, p.pos, used, p.wet) }))
+        .map((zi) => ({ zi, ...fillDay(zi, p.sk, p.pos, used, p.wet, p.dow) }))
         .filter(enough)
         .map((r) => ({ ...r, total: r.total * stayFactor[r.zi]! * zoneNoise[r.zi]! }))
         .sort((a, b) => b.total - a.total || a.zi - b.zi);
     const takenZones = new Set<number>();
 
     // 권역 배정 ① 꼭 갈 곳이 든 권역을 먼저 날에 준다 — 가운데 날부터, 없으면 첫날·마지막 날. 그 권역을 가장 잘 채우는 날에
-    // 놓는다. 날보다 권역이 많으면 점수 합이 큰 권역부터.
+    // 놓는다(꼭 갈 곳이 쉬는 요일인 날은 점수가 깎여 밀린다 — 15차). 날보다 권역이 많으면 점수 합이 큰 권역부터.
     for (const zi of pinZones) {
       const free = plans.map((_, di) => di).filter((di) => plans[di]!.zone < 0);
-      const mids = free.filter((di) => plans[di]!.pos === 'mid');
-      const pool = mids.length > 0 ? mids : free;
+      // 꼭 갈 곳이 열려 있는 날이 하나라도 있으면 그런 날 중에서만 고른다(가운데 날이 전부 쉬는 요일이면 첫날·마지막 날로).
+      const open = free.filter((di) => !pinClosedOn(zi, plans[di]!.dow));
+      const days = open.length > 0 ? open : free;
+      const mids = days.filter((di) => plans[di]!.pos === 'mid');
+      const pool = mids.length > 0 ? mids : days;
       if (pool.length === 0) break;
       let bestDay = pool[0]!;
       let bestTotal = -1;
       for (const di of pool) {
-        const total = fillDay(zi, plans[di]!.sk, plans[di]!.pos, none, plans[di]!.wet).total;
+        const total = fillDay(zi, plans[di]!.sk, plans[di]!.pos, none, plans[di]!.wet, plans[di]!.dow).total;
         if (total > bestTotal) {
           bestTotal = total;
           bestDay = di;
@@ -649,7 +673,7 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
       let bestTotal = -1;
       plans.forEach((plan, di) => {
         if (plan.zone >= 0) return;
-        const fill = fillDay(hubZone!, plan.sk, plan.pos, none, plan.wet);
+        const fill = fillDay(hubZone!, plan.sk, plan.pos, none, plan.wet, plan.dow);
         if (enough(fill) && fill.total > bestTotal) {
           bestTotal = fill.total;
           bestDay = di;
@@ -674,8 +698,10 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
     }
 
     // 가운데 날 순서 — 첫날 → … → 마지막 날 권역 중심을 잇는 길이가 가장 짧은 순열(가운데 날은 많아야 3개). 비 오는 날과 아닌 날이
-    // 섞여 있으면 바꾸지 않는다 — 권역을 그날 날씨에 맞춰 골랐으므로 날짜를 옮기면 안 된다.
-    if (n > 3 && new Set(plans.slice(1, n - 1).map((p) => p.wet)).size === 1) {
+    // 섞여 있으면 바꾸지 않는다 — 권역을 그날 날씨에 맞춰 골랐으므로 날짜를 옮기면 안 된다. 꼭 갈 곳이 있고 요일을 아는 일정도
+    // 바꾸지 않는다(15차 — 꼭 갈 곳이 열려 있는 날을 골라 놓았다). 그 밖에는 요일을 알아도 바꾼다: 쉬는 곳은 채울 때 그날
+    // 요일로 다시 가려지므로, 요일은 권역이 아니라 날짜에 붙여 둔다.
+    if (n > 3 && new Set(plans.slice(1, n - 1).map((p) => p.wet)).size === 1 && !(startDow !== null && pinZones.length > 0)) {
       const mids = plans.slice(1, n - 1);
       const pathKm = (seq: DayPlan[]): number => {
         const pts = [plans[0]!, ...seq, plans[n - 1]!].filter((p) => p.zone >= 0).map((p) => input.zones[p.zone]!);
@@ -693,6 +719,9 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
         }
       }
       plans.splice(1, n - 2, ...best);
+      plans.forEach((p, di) => {
+        p.dow = dowOf(di);
+      });
     }
 
     // 채우기 → 시간표. 한 번 쓴 장소는 다시 쓰지 않는다. 배정과 같은 순서(첫날 → 마지막 날 → 가운데 날)로 채워, 후보가 모자랄 때
@@ -705,7 +734,7 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
     for (const di of order) {
       const plan = plans[di]!;
       let zone = plan.zone;
-      let fill: DayFill | null = zone >= 0 ? fillDay(zone, plan.sk, plan.pos, used, plan.wet) : null;
+      let fill: DayFill | null = zone >= 0 ? fillDay(zone, plan.sk, plan.pos, used, plan.wet, plan.dow) : null;
       if (!fill || !enough(fill)) {
         // 배정한 권역에 남은 후보가 모자라다 — 지금 남은 후보로 가장 잘 채워지는 권역으로.
         const next = rankZones(plan, used)[0];
@@ -729,7 +758,7 @@ export const synthesizePlanItinerary = (input: PlanSynthInput): PlanSynthResult 
         const arriveMin = Math.round(t / 10) * 10;
         if (arriveMin > LAST_ARRIVE_MIN) break;
         const stayMin = clamp(Math.round((s.c.stayMin ?? input.typeStay.get(s.c.kind) ?? STAY_DEFAULT) / 10) * 10, STAY_RANGE[0], STAY_RANGE[1]);
-        stops.push({ id: s.c.id, arriveMin, stayMin, moveMin, moveKm, pinned: s.pinned, c: s.c, ranked: s.ranked });
+        stops.push({ id: s.c.id, arriveMin, stayMin, moveMin, moveKm, pinned: s.pinned, closed: closedOn(s.c, plan.dow), c: s.c, ranked: s.ranked });
         t = arriveMin + stayMin;
         prev = s.c;
       }

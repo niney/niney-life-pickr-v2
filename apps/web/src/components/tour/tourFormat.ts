@@ -71,7 +71,7 @@ export interface TourPlanOptionsValue {
   focus: TourPlanFocusType[];
   transport: TourPlanTransportType;
   // 여행 시작일 "YYYY-MM-DD"(12차) — 일정에 날짜를 붙이고, 예보가 닿는 날은 비 오는 날을 실내 위주로 짠다. 서버에는 날짜가 아니라
-  // 비 오는 일차 번호(wetDays)만 간다.
+  // 비 오는 일차 번호(wetDays)와 첫날의 요일(startDow, 15차 — 쉬는 요일인 곳을 그날 일정에서 뺀다)만 간다.
   startDate: string | null;
   // 14차 다양화 — 유명도(점수에서 여행 수의 몫)와 여행 목적(최대 TOUR_PLAN_PURPOSE_MAX 개). 둘 다 목록 순위에도 반영된다.
   fame: TourPlanFameType;
@@ -90,6 +90,11 @@ export const addDaysYmd = (ymd: string, n: number): string => {
   const d = new Date(`${ymd}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
+};
+// "YYYY-MM-DD" 의 요일(0 일 … 6 토, 달력 계산만 — 시간대 무관). 모양이 아니면 null.
+export const ymdDow = (ymd: string): number | null => {
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? Date.parse(`${ymd}T00:00:00Z`) : Number.NaN;
+  return Number.isNaN(t) ? null : new Date(t).getUTCDay();
 };
 // 일차별 날짜·예보 — forecast 는 "비 70%" 같은 한 줄(예보가 닿지 않는 날은 null), wet 은 비 예보 여부.
 export interface TourDayWeather {

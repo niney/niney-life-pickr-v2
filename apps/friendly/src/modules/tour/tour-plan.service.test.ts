@@ -21,6 +21,7 @@ import errorHandlerPlugin from '../../plugins/error-handler.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import sensiblePlugin from '../../plugins/sensible.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { TOUR_KTO_SYNC_LAYER } from './tour-kto-info.js';
 import { TourPlanService } from './tour-plan.service.js';
 import tourPublicRoutes from './tour-public.route.js';
 
@@ -30,6 +31,7 @@ import tourPublicRoutes from './tour-public.route.js';
 // 뼈대는 식사·볼거리 두 묶음의 순서이고, 장소 유형은 방문 기록에 가장 많이 적힌 것이다(⑧).
 // 11차 입력 확장 — ⑨ 숙소 동네 선택지 ⑩ 속도 ⑪ 취향 ⑫ 이동수단 ⑬ 숙소 동네 ⑭ 꼭 갈 곳·뺄 곳 ⑮ 선택지 키 동일성. 12차 — 비 오는 날.
 // 프로필 캐시 — 빈 프로필은 남기지 않고, 적재 이력(데이터 버전)이 바뀌면 버린다.
+// 15차 운영 정보 — 관광정보와 맞춘 곳의 이용 시간·쉬는 날, 출발 요일을 줬을 때 쉬는 요일인 곳 빼기.
 // 제주 밖 지역의 일정표(13차 — 거점 반경·같은 곳 합치기·식사 자리 대체)는 tour-plan.service.mainland.test.ts.
 
 const FORBIDDEN_KEYS = /^(travelId|visitAreaId|travelerLabel|photoId|tourPlaceId|lat|lng|latitude|longitude)$/;
@@ -289,7 +291,7 @@ describe('tour plan (격리 DB)', () => {
     expect(r).toMatchObject({ regionTrips: 30, matchedTrips: 24, relaxed: [], insufficient: false, excludedClosed: 1 });
 
     // 우진해장국 — 지역 24건·보정 4.6, 비슷한 여행 24건 전부 방문 → (24+3) ÷ (24×24/30+3) = 1.2배.
-    expect(place(r, '우진해장국')).toEqual({ name: '우진해장국', kind: '식당', sigungu: '제주시', emd: '삼도이동', n: 24, mean: 4.6, score: 7.7, similarN: 24, lift: 1.2, peak: '점심', stayMin: 50, spendPp: 11000, placeId: 'n-ujin', purposeFit: false });
+    expect(place(r, '우진해장국')).toEqual({ name: '우진해장국', kind: '식당', sigungu: '제주시', emd: '삼도이동', n: 24, mean: 4.6, score: 7.7, similarN: 24, lift: 1.2, peak: '점심', stayMin: 50, spendPp: 11000, placeId: 'n-ujin', purposeFit: false, info: null });
     // 용두암은 지역 30건이 다 가는 곳이라 평균 그대로(1.0배).
     expect(place(r, '용두암')).toMatchObject({ n: 30, mean: 4, similarN: 24, lift: 1, peak: '오후', placeId: null });
     // 비슷한 여행이 가지 않은 곳도 사라지지 않는다 — 숫자는 그대로, similarN·lift 만 비운다.
@@ -540,6 +542,78 @@ describe('tour plan (격리 DB)', () => {
     expect(wet.itinerary!.days[1]!.stops.map((s) => s.name)).toEqual(['협재해수욕장', '협재 흑돼지', '한림공원', '금능 카페']);
   });
 
+  it('운영 정보(15차) — 관광정보와 맞춘 곳은 이용 시간·쉬는 날이 붙고, 출발 요일을 주면 그 요일에 쉬는 곳을 그날에서 뺀다', async () => {
+    const p = app.prisma;
+    const names = (r: TourPlanResultType): string[][] => r.itinerary!.days.map((d) => d.stops.map((x) => x.name));
+    const stopOf = (r: TourPlanResultType, name: string) => r.itinerary!.days.flatMap((d) => d.stops.map((x) => ({ day: d.day, ...x }))).find((x) => x.name === name);
+    // 관광정보가 붙어 있지 않은 서버 — 운영 정보도 안내도 없다.
+    const bare = await service.plan({ region: 'jeju', ...MAIN });
+    expect(bare.infoNote).toBeNull();
+    expect(bare.places.every((x) => x.info === null)).toBe(true);
+    expect(bare.itinerary!.days.flatMap((d) => d.stops).every((x) => x.info === null && !x.closedThatDay)).toBe(true);
+
+    // sync:tour-kto(다른 프로세스)가 남기는 것 — 맞춤·소개 정보와 적재 이력(떠 있는 서비스의 프로필 캐시를 새로 만들게 한다).
+    const at = new Date('2026-10-04T00:00:00Z');
+    await p.tourKtoIntro.createMany({
+      data: [
+        { contentId: 'K-park', contentTypeId: '12', hours: '09:00~18:00\n(입장 마감 17:00)', closed: '매주 화요일', parking: '가능', fee: '성인 15,000원', fetchedAt: at },
+        { contentId: 'K-sun', contentTypeId: '12', hours: '07:00~20:00', closed: '매월 첫째 월요일', fetchedAt: at },
+        // 문구가 하나도 없는 콘텐츠 — 정보 없음으로 본다.
+        { contentId: 'K-empty', contentTypeId: '39', fetchedAt: at },
+      ],
+    });
+    await p.tourPlaceKto.createMany({
+      data: [
+        { placeId: 'B2', contentId: 'K-park', title: '한림공원', distM: 40, nameScore: 1, matchedAt: at },
+        { placeId: 'C1', contentId: 'K-sun', title: '성산일출봉 [유네스코 세계자연유산]', distM: 120, nameScore: 1, matchedAt: at },
+        { placeId: 'A3', contentId: 'K-empty', title: '우진해장국', distM: 10, nameScore: 1, matchedAt: at },
+      ],
+    });
+    await p.lifeMasterSync.create({ data: { layer: TOUR_KTO_SYNC_LAYER, count: 3, geocoded: 3 } });
+    try {
+      const r = await service.plan({ region: 'jeju', ...MAIN });
+      expect(r.infoNote).toContain('한국관광공사');
+      // 문구는 한 줄로(줄바꿈 → " / "), 읽어 낸 쉬는 요일은 싣지 않는다.
+      expect(place(r, '한림공원')!.info).toEqual({ hours: '09:00~18:00 / (입장 마감 17:00)', closed: '매주 화요일', parking: '가능', fee: '성인 15,000원' });
+      expect(place(r, '성산일출봉')!.info).toEqual({ hours: '07:00~20:00', closed: '매월 첫째 월요일', parking: null, fee: null });
+      expect(place(r, '우진해장국')!.info).toBeNull();
+      // 요일을 주지 않으면 일정은 그대로 — 정보만 붙는다.
+      expect(names(r)).toEqual(names(bare));
+      expect(stopOf(r, '한림공원')).toMatchObject({ day: 2, info: { closed: '매주 화요일' }, closedThatDay: false });
+      expect(stopOf(r, '협재해수욕장')).toMatchObject({ info: null, closedThatDay: false });
+
+      // 월요일(1)에 떠나면 2일차가 화요일 — 한림공원이 그날 일정에서 빠진다(목록에는 남는다). 다른 날은 그대로.
+      const mon = await service.plan({ region: 'jeju', ...MAIN, startDow: 1 });
+      expect(names(mon)[1]).not.toContain('한림공원');
+      expect(mon.itinerary!.days[1]!.stops.flatMap((x) => x.alternatives.map((a) => a.name))).not.toContain('한림공원');
+      expect(names(mon)[0]).toEqual(names(bare)[0]);
+      expect(names(mon)[2]).toEqual(names(bare)[2]);
+      expect(place(mon, '한림공원')).toBeDefined();
+      // "매월 첫째 월요일" 은 매주 쉬는 요일이 아니다 — 월요일에 놓여도 빠지지 않는다(문구만 보여 준다).
+      const sat = await service.plan({ region: 'jeju', ...MAIN, startDow: 6 });
+      expect(stopOf(sat, '성산일출봉')).toMatchObject({ day: 3, closedThatDay: false });
+      // 화요일에 떠나면 2일차는 수요일 — 그대로.
+      expect(names(await service.plan({ region: 'jeju', ...MAIN, startDow: 2 }))).toEqual(names(bare));
+
+      // 꼭 갈 곳이면 열려 있는 날로 옮겨 놓는다(가운데 날이 화요일이라 첫날·마지막 날 중에서).
+      const must = await service.plan({ region: 'jeju', ...MAIN, startDow: 1, must: [{ name: '한림공원' }] });
+      expect(must.itinerary!.unplaced).toEqual([]);
+      const moved = stopOf(must, '한림공원')!;
+      expect(moved).toMatchObject({ pinned: true, closedThatDay: false });
+      expect(moved.day).not.toBe(2);
+      // 옮길 날이 없으면(당일, 화요일) 그래도 넣고 표시한다.
+      const day = await service.plan({ region: 'jeju', ...MAIN, nights: 0, startDow: 2, must: [{ name: '한림공원' }] });
+      expect(day.itinerary!.days).toHaveLength(1);
+      expect(stopOf(day, '한림공원')).toMatchObject({ pinned: true, closedThatDay: true });
+      expect(scanKeys(day)).toEqual([]);
+    } finally {
+      await p.tourPlaceKto.deleteMany();
+      await p.tourKtoIntro.deleteMany();
+      await p.lifeMasterSync.deleteMany();
+      service.invalidate();
+    }
+  });
+
   it('입력 선택지 키 — 계약(zod enum)과 utils 상수가 같다(순서 포함)', () => {
     expect(TourPlanPace.options).toEqual([...TOUR_PLAN_PACE_KEYS]);
     expect(TourPlanFocus.options).toEqual([...TOUR_PLAN_FOCUS_KEYS]);
@@ -558,6 +632,11 @@ describe('tour plan (격리 DB)', () => {
     expect(ok({ variant: TOUR_PLAN_VARIANT_MAX })).toBe(true);
     expect(ok({ variant: TOUR_PLAN_VARIANT_MAX + 1 })).toBe(false);
     expect(ok({ fame: 'unknown' })).toBe(false);
+    // 15차 — 출발 요일은 0(일)~6(토).
+    expect(ok({ startDow: 0 })).toBe(true);
+    expect(ok({ startDow: 6 })).toBe(true);
+    expect(ok({ startDow: 7 })).toBe(false);
+    expect(ok({ startDow: 1.5 })).toBe(false);
   });
 
   it('라우트 — POST plan 200(식별자·좌표 키 없음), 잘못된 입력 400', async () => {
@@ -582,5 +661,11 @@ describe('tour plan (격리 DB)', () => {
     expect((await post({ wetDays: [0] })).statusCode).toBe(400);
     expect((await post({ wetDays: [6] })).statusCode).toBe(400);
     expect(((await post({ nights: 2, wetDays: [1] })).json() as TourPlanResultType).itinerary!.days[0]!.wet).toBe(true);
+    // 15차 — 출발 요일. 응답에는 운영 정보 자리(info·closedThatDay·infoNote)가 늘 있다.
+    expect((await post({ startDow: 7 })).statusCode).toBe(400);
+    const dow = (await post({ nights: 2, startDow: 3 })).json() as TourPlanResultType;
+    expect(dow.infoNote).toBeNull();
+    expect(dow.places[0]).toHaveProperty('info', null);
+    expect(dow.itinerary!.days[0]!.stops[0]).toMatchObject({ info: null, closedThatDay: false });
   });
 });

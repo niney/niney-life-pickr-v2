@@ -19,7 +19,7 @@ import {
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { TourFilterBar } from '~/components/tour/TourFilterBar';
-import { TourItinerary, TourMapLink } from '~/components/tour/TourItinerary';
+import { TourItinerary, TourMapLink, TourPlaceInfo } from '~/components/tour/TourItinerary';
 import { TourPlanOptions } from '~/components/tour/TourPlanOptions';
 import { TourSourceNote } from '~/components/tour/TourSourceNote';
 import { KindDot, Section, SeqChips } from '~/components/tour/charts';
@@ -37,6 +37,7 @@ import {
   tourRegionLabel,
   tripLengthLabel,
   won,
+  ymdDow,
   type TourDayWeather,
   type TourPlanOptionsValue,
 } from '~/components/tour/tourFormat';
@@ -59,6 +60,9 @@ import { cn } from '~/lib/utils';
 //
 // 14차 다양화 — 목적·장소(유명도) 옵션은 폼에서, "다른 코스 보기" 는 결과에서. 변형 번호(variant)를 하나 올려 같은 조건으로 다시
 // 짠다(같은 번호는 같은 코스). 폼으로 다시 찾으면 처음 코스(0)로 돌아가고, 일정 편집은 보던 코스 번호를 유지한다.
+//
+// 15차 운영 정보 — 한국관광공사 관광정보와 맞춘 곳은 이용 시간·쉬는 날(info)이 같이 온다(목록·일정). 출발일을 넣으면 첫날의
+// 요일(startDow)도 보내, 그 요일에 매주 쉬는 곳을 그날 일정에서 빼게 한다. 출처·주의 한 줄(infoNote)은 결과 아래에 붙인다.
 
 const LADDER_LABEL: Record<string, string> = { month: '월', gender: '성별', nights: '박수', ageGrp: '연령' };
 
@@ -152,6 +156,9 @@ export const TravelPlanPage = () => {
     // 비 오는 일차 — 박수를 안 골랐으면 서버가 일수를 정하므로 최대 일수까지 보고 보낸다(일정 밖 번호는 서버가 무시).
     const wetDays = startDate ? Array.from({ length: TOUR_ITINERARY_MAX_DAYS }, (_, i) => i).filter((i) => dayWeather(startDate, i).wet).map((i) => i + 1) : [];
     if (wetDays.length > 0) body.wetDays = wetDays;
+    // 첫날의 요일 — 쉬는 요일인 곳을 그날 일정에서 뺀다.
+    const startDow = startDate ? ymdDow(startDate) : null;
+    if (startDow !== null) body.startDow = startDow;
     plan.mutate(body, { onSuccess: (data) => setShown({ r: data, asked: body, startDate }) });
   };
 
@@ -336,6 +343,10 @@ export const TravelPlanPage = () => {
                         후보가 모자라 {wantedDays}일 중 {r.itinerary.days.length}일만 채웠습니다.
                       </p>
                     )}
+                    {/* 쉬는 요일(15차) — 출발일을 줬고 이 서버에 운영 정보가 있을 때만 말한다. */}
+                    {asked?.startDow !== undefined && r.infoNote && (
+                      <p className="text-[11px] text-muted-foreground">출발일의 요일에 맞춰, 매주 그 요일에 쉬는 것으로 나와 있는 곳은 그날 일정에서 뺐습니다.</p>
+                    )}
                     <TourItinerary itinerary={r.itinerary} weather={shownWeather} onAvoid={avoidStop} busy={busy} skipIslands={TOUR_ITINERARY_REGIONS[askedRegion]?.skipIslands ?? false} />
                   </>
                 ) : (
@@ -398,6 +409,7 @@ export const TravelPlanPage = () => {
                               {p.kind} · {[p.sigungu, p.emd].filter(Boolean).join(' ')} · {p.n}팀 · 만족 {p.mean !== null ? p.mean.toFixed(1) : '–'}
                             </div>
                             {facts.length > 0 && <div className="text-[11px] text-muted-foreground">{facts.join(' · ')}</div>}
+                            {p.info && <TourPlaceInfo info={p.info} />}
                             {p.purposeFit && <div className="text-[11px] font-medium text-violet-700 dark:text-violet-300">고른 목적의 여행이 많이 간 곳</div>}
                             {p.similarN !== null && (
                               <div className="text-[11px] font-medium text-teal-700 dark:text-teal-300">
@@ -447,7 +459,10 @@ export const TravelPlanPage = () => {
               </Section>
             )}
 
-            <TourSourceNote note={r.sourceNote} className="border-t pt-3" />
+            <div className="space-y-1.5 border-t pt-3">
+              {r.infoNote && <p className="text-[11px] leading-relaxed text-muted-foreground">{r.infoNote}</p>}
+              <TourSourceNote note={r.sourceNote} />
+            </div>
           </>
         )}
       </div>

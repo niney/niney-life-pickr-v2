@@ -11,12 +11,14 @@
 //     몇 초라도 메모하면 그만큼 제거 뒤에도 옛 집계가 나간다.
 //   · 이력 행을 남기지 않는 변경은 버전이 그대로라 TTL 로만 따라간다 — 표를 직접 고친 경우(테스트 픽스처는 늘 버전 0),
 //     맛집 매칭(match:restaurant-tour)·사업자 상태(check:tour-biz) 갱신.
+//   · 관광정보 동기화(sync:tour-kto — 코스 프로필이 읽는 운영 정보)도 바뀐 것이 있으면 제 layer 로 이력을 남긴다(15차).
 
 import type { PrismaClient } from '@prisma/client';
 import { TOUR_DATASET_KEYS, tourSyncLayer } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
+import { TOUR_KTO_SYNC_LAYER } from './tour-kto-info.js';
 
-const TOUR_SYNC_LAYERS = TOUR_DATASET_KEYS.map((key) => tourSyncLayer(key));
+const TOUR_SYNC_LAYERS = [...TOUR_DATASET_KEYS.map((key) => tourSyncLayer(key)), TOUR_KTO_SYNC_LAYER];
 
 // 어느 데이터셋이든 적재·제거가 한 번 일어나면 값이 오른다(id 는 AUTOINCREMENT 라 다시 쓰이지 않는다). 이력이 없으면 0.
 export const tourDataVersion = async (prisma: PrismaClient): Promise<number> => {

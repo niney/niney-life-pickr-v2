@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { BedDouble, CloudRain, MapPin, Pin, X } from 'lucide-react';
-import type { TourPlanDayType, TourPlanItineraryType, TourPlanStopType } from '@repo/api-contract';
+import { BedDouble, Clock, CloudRain, MapPin, Pin, X } from 'lucide-react';
+import type { TourPlanDayType, TourPlanItineraryType, TourPlanPlaceInfoType, TourPlanStopType } from '@repo/api-contract';
 import { cn } from '~/lib/utils';
 import { KindDot, SeqChips } from './charts';
 import { formatYmdWithWeekday } from '@repo/utils';
@@ -12,6 +12,8 @@ import { clockLabel, durationLabel, naverMapSearchUrl, won, type TourDayWeather 
 // 12차 — 출발일을 줬으면 일차마다 날짜와 예보(weather), 비 오는 날로 짠 일차(day.wet)는 표시한다.
 // 13차 — 제주 밖은 식당마다 표본이 얇아 식사 자리를 볼거리로 채운 날이 있다. 식당이 하나도 없는 날은 그렇게 알린다.
 // 14차 — 고른 여행 목적에 맞는 곳(stop.purposeFit)에 "목적" 표시.
+// 15차 — 운영 정보(stop.info — 한국관광공사 관광정보와 맞춘 곳의 이용 시간·쉬는 날·요금·주차). 한 줄로 접어 두고 누르면 편다.
+// 출발일을 줬으면 쉬는 요일인 곳은 서버가 그날에서 빼는데, 꼭 갈 곳은 쉬는 날이어도 남는다 — 그때 한 줄로 알린다.
 
 const BASIS_LABEL: Record<TourPlanDayType['patternBasis'], string> = {
   similar: '비슷한 여행에서 흔한 하루 순서',
@@ -33,6 +35,37 @@ export const TourMapLink = ({ name, sigungu, className }: { name: string; sigung
     <MapPin className="size-3.5" />
   </a>
 );
+
+// 운영 정보 — 접힌 한 줄(이용 시간 · 쉬는 날)을 누르면 네 항목을 다 편다. 문구는 관광정보 원문이라 길이·형식이 제각각이다.
+const INFO_ROWS: ReadonlyArray<[label: string, key: keyof TourPlanPlaceInfoType]> = [
+  ['이용', 'hours'],
+  ['쉬는 날', 'closed'],
+  ['요금', 'fee'],
+  ['주차', 'parking'],
+];
+export const TourPlaceInfo = ({ info, className }: { info: TourPlanPlaceInfoType; className?: string }) => {
+  const rows = INFO_ROWS.map(([label, key]) => [label, info[key]] as const).filter((r): r is readonly [string, string] => r[1] !== null);
+  if (rows.length === 0) return null;
+  const head = rows.filter(([label]) => label === '이용' || label === '쉬는 날');
+  const summary = (head.length > 0 ? head : rows.slice(0, 1)).map(([label, text]) => `${label} ${text}`).join(' · ');
+  return (
+    <details className={cn('group/info text-[11px] text-muted-foreground', className)}>
+      <summary className="flex cursor-pointer list-none items-center gap-1 hover:text-foreground [&::-webkit-details-marker]:hidden" title="운영 정보 펼치기">
+        <Clock className="size-3 flex-none" aria-hidden />
+        <span className="min-w-0 truncate group-open/info:hidden">{summary}</span>
+        <span className="hidden group-open/info:inline">운영 정보 접기</span>
+      </summary>
+      <dl className="mt-0.5 space-y-0.5 pl-4">
+        {rows.map(([label, text]) => (
+          <div key={label} className="flex gap-1.5">
+            <dt className="w-9 flex-none text-foreground/70">{label}</dt>
+            <dd className="min-w-0 break-words">{text}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+};
 
 const StayLine = ({ children }: { children: React.ReactNode }) => (
   <p className="flex items-center gap-1.5 py-1 pl-[3.25rem] text-[11px] text-muted-foreground">
@@ -92,6 +125,9 @@ const StopRow = ({ stop, prev, onAvoid, busy }: { stop: TourPlanStopType; prev: 
             {stop.kind} · 여행 {stop.n}건 · 만족 {stop.mean !== null ? stop.mean.toFixed(1) : '–'} · {durationLabel(stop.stayMin)} 머묾
             {stop.spendPp !== null && ` · 1인 ${won(stop.spendPp)}`}
           </div>
+          {stop.info && <TourPlaceInfo info={stop.info} className="mt-0.5" />}
+          {/* 이름 줄의 표시는 좁은 화면에서 이름을 밀어낸다 — 따로 한 줄로 알린다(설명을 숨긴 말풍선은 손가락으로 볼 수 없다). */}
+          {stop.closedThatDay && <p className="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">이날은 쉬는 요일로 나와 있습니다 — 꼭 갈 곳이라 넣었습니다.</p>}
           {stop.alternatives.length > 0 && (
             <div className="mt-0.5 text-[11px] text-muted-foreground">
               대신 갈 만한 곳:{' '}

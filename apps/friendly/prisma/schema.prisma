@@ -3172,3 +3172,51 @@ model HikingSync {
 
   @@map("hiking_syncs")
 }
+
+// 한국관광공사 관광정보 카탈로그(TourAPI areaBasedList2, data.go.kr 15101578) — 여행로그 장소(2023년 표본)에 지금의 운영 정보를
+// 붙이기 위한 원본(15차, docs/PLAN-tour-log.md). 유형(관광지 12 · 문화시설 14 · 레포츠 28 · 쇼핑 38 · 음식점 39)별로 통째로
+// 갈아 끼운다(sync:tour-kto). 사진은 저작권 유형이 콘텐츠마다 달라 받지 않는다.
+model TourKtoContent {
+  contentId     String   @id
+  contentTypeId String
+  title         String
+  addr          String?
+  lat           Float?
+  lng           Float?
+  // 'YYYYMMDDHHmmss' — 콘텐츠 수정 시각. 소개 정보를 다시 받을지 가르는 기준.
+  modifiedTime  String?
+  syncedAt      DateTime
+
+  @@index([contentTypeId])
+  @@map("tour_kto_contents")
+}
+
+// 관광정보 소개 정보(detailIntro2) — 이용 시간·쉬는 날·주차·요금. 콘텐츠마다 한 콜이라(개발계정 일 1,000건) 여행로그 장소와
+// 맞은 콘텐츠만 받는다. 문구는 태그만 지운 원문 — 쉬는 요일은 읽을 때 뽑는다(tour-kto-info.ts parseKtoClosedDays).
+model TourKtoIntro {
+  contentId     String   @id
+  contentTypeId String
+  hours         String?
+  closed        String?
+  parking       String?
+  fee           String?
+  // 받을 때의 카탈로그 modifiedTime — 카탈로그 쪽이 달라지면 다시 받는다.
+  modifiedTime  String?
+  fetchedAt     DateTime
+
+  @@map("tour_kto_intros")
+}
+
+// 여행로그 장소 ↔ 관광정보 콘텐츠 — 이름 + 거리로 맞춘 결과(장소당 1행, 한 콘텐츠가 여러 장소에 붙을 수 있다 — 데이터셋마다
+// 따로 잡힌 같은 곳). 맞출 때마다 통째로 갈아 끼운다. title = 맞춘 때의 공식 명칭(검수용).
+model TourPlaceKto {
+  placeId   String   @id
+  contentId String
+  title     String
+  distM     Int
+  nameScore Float
+  matchedAt DateTime
+
+  @@index([contentId])
+  @@map("tour_place_ktos")
+}
