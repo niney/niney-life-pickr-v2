@@ -9,6 +9,8 @@ import {
   type FoodAdminCreateInputType,
   type FoodAdminListQueryType,
   type FoodAdminListResultType,
+  type FoodAdminMealNutritionEstimateResultType,
+  type FoodAdminMealNutritionGapsResultType,
   type FoodAdminStatsType,
   type FoodAdminUpdateInputType,
   type FoodImportConfigInputType,
@@ -140,6 +142,14 @@ export const foodApi = {
     }),
   menuLexiconDelete: (id: string) =>
     apiFetch<null>(Routes.Food.adminMenuLexiconEntry(id), { method: 'DELETE' }),
+
+  // ── 열량 빈 식단 이름 ──
+  mealNutritionGaps: () => apiFetch<FoodAdminMealNutritionGapsResultType>(Routes.Food.adminMealNutritionGaps),
+  estimateMealNutritionGaps: (names: string[]) =>
+    apiFetch<FoodAdminMealNutritionEstimateResultType>(Routes.Food.adminMealNutritionGapsEstimate, {
+      method: 'POST',
+      body: JSON.stringify({ names }),
+    }),
 
   adminMergeConflicts: (input: FoodMergeConflictListInput = {}) => {
     const qs = buildFoodMergeConflictListQuery(input);

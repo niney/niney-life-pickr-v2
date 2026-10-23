@@ -311,6 +311,65 @@ describe('meal routes (격리 DB)', () => {
     }
   });
 
+  it('카탈로그로 못 채운 이름은 이름 추정(캐시)으로 채우고, 그래도 빈 이름만 커밋 뒤 백그라운드에 넘긴다', async () => {
+    const estimator = {
+      lookup: vi.fn(async (name: string) =>
+        name === '처음보는탕'
+          ? {
+              estimate: {
+                kcal: 200,
+                proteinG: 10,
+                sodiumMg: 900,
+                nutritionFrom: '해장국',
+                basis: 'donor_estimate' as const,
+              },
+              askable: false,
+            }
+          : { estimate: null, askable: true },
+      ),
+      schedule: vi.fn(() => 1),
+    };
+    const meals = new MealService(app.prisma, { photos: app.mealPhotos, estimator });
+    let entryIdToDelete: string | null = null;
+    try {
+      const created = await meals.create('meal-user', {
+        eatenAt: '2026-10-01T10:00:00.000Z',
+        eatenDate: '2026-10-01',
+        slot: 'dinner',
+        source: 'manual',
+        photoTokens: [],
+        items: [
+          { name: '처음보는탕', isMain: true, portion: 'large', source: 'manual' },
+          { name: '정말모르는음식', isMain: true, source: 'manual' },
+          // 카탈로그로 채워지는 음식은 추정을 묻지 않는다.
+          { name: '영양덮밥', isMain: true, source: 'manual' },
+        ],
+      });
+      entryIdToDelete = created.id;
+      expect(created.items[0]).toMatchObject({
+        foodId: null,
+        kcal: 300,
+        proteinG: 15,
+        sodiumMg: 1350,
+        nutritionBasis: 'donor_estimate',
+        nutritionFrom: '해장국',
+      });
+      expect(created.items[1]).toMatchObject({ kcal: null, nutritionBasis: 'missing' });
+      expect(created.items[2]).toMatchObject({ kcal: 500, nutritionBasis: 'direct' });
+      expect(estimator.lookup.mock.calls.map(([name]) => name)).toEqual(['처음보는탕', '정말모르는음식']);
+      expect(estimator.schedule).toHaveBeenCalledWith(['정말모르는음식']);
+
+      // 수정 저장도 같은 규칙.
+      estimator.schedule.mockClear();
+      await meals.update('meal-user', created.id, {
+        items: [{ name: '정말모르는음식', isMain: false, source: 'manual' }],
+      });
+      expect(estimator.schedule).toHaveBeenCalledWith(['정말모르는음식']);
+    } finally {
+      if (entryIdToDelete) await app.prisma.mealEntry.delete({ where: { id: entryIdToDelete } });
+    }
+  });
+
   it('불완전·범위 초과·임의 필드가 있는 인식 snapshot POST를 400으로 거절한다', async () => {
     const basePayload = {
       eatenAt: '2026-08-21T11:00:00.000Z',

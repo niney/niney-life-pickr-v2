@@ -76,15 +76,29 @@ export interface MenuKcalPortion {
   unit?: 'g' | 'ml';
 }
 
-/** 카탈로그 행의 통상 1인분 중량표 키. 조리음식은 dishType, 생재료는 육류/수산물. */
+// 원재료 DB(mfds-raw) 식품군 → 통상 1인분 중량표 키. 원재료 행은 100g당 값만 있어 이 키가 없으면 한 번 먹은 양의
+// 열량을 낼 수 없다(식단의 바나나·사과가 비었다). 해조류는 마른 것(김 2g)과 생것(미역 30g)이 한 군에 섞여 뺀다.
+const RAW_CATEGORY_PORTION_KEY: Readonly<Record<string, string>> = {
+  [RAW_MEAT_CATEGORY]: 'raw_meat',
+  '어패류 및 기타 수산물': 'raw_seafood',
+  과일류: 'raw_fruit',
+  채소류: 'raw_vegetable',
+  버섯류: 'raw_mushroom',
+  '감자 및 전분류': 'raw_potato',
+  곡류: 'raw_grain',
+  '견과 및 종실류': 'raw_nut',
+  두류: 'raw_legume',
+  난류: 'raw_egg',
+};
+
+/** 카탈로그 행의 통상 1인분 중량표 키. 조리음식은 dishType, 생재료는 식품군(육류·수산물·과일…). */
 export const portionKeyFor = (row: Pick<CatalogRow, 'source' | 'sourceCategory' | 'dishType'>): string | null => {
-  if (row.source === RAW_SOURCE) {
-    if (row.sourceCategory === RAW_MEAT_CATEGORY) return 'raw_meat';
-    if (row.sourceCategory === '어패류 및 기타 수산물') return 'raw_seafood';
-    return null;
-  }
+  if (row.source === RAW_SOURCE) return (row.sourceCategory && RAW_CATEGORY_PORTION_KEY[row.sourceCategory]) || null;
   return row.dishType ?? null;
 };
+
+/** 원재료 행인지 — 주식·반찬 구분 없이 그 자체로 한 번 먹는 양(과일 하나)을 쓴다. */
+export const isRawCatalogRow = (row: Pick<CatalogRow, 'source'>): boolean => row.source === RAW_SOURCE;
 
 /**
  * 운영자가 어휘(portion, 말=카탈로그 음식명)로 정한 이 음식의 1인분 중량. 없으면 null.

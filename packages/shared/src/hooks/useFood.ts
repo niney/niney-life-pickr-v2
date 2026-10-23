@@ -74,6 +74,21 @@ export const useMenuLexiconDelete = () => {
   });
 };
 
+// 열량 빈 식단 이름 — 다시 돌리면 캐시로 채운 항목이 바로 빠지고, 백그라운드로 보낸 이름은 끝난 뒤 다시 조회하면 빠진다.
+export const useMealNutritionGaps = () =>
+  useQuery({
+    queryKey: ['food', 'admin', 'meal-nutrition-gaps'],
+    queryFn: foodApi.mealNutritionGaps,
+  });
+
+export const useEstimateMealNutritionGaps = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (names: string[]) => foodApi.estimateMealNutritionGaps(names),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['food', 'admin', 'meal-nutrition-gaps'] }),
+  });
+};
+
 export const useFoodAdminList = (query: FoodAdminListInput = {}) =>
   useQuery({
     queryKey: ['food', 'admin', 'list', query],

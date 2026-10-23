@@ -48,6 +48,7 @@ import {
 import { normalizeTerm } from '../../lib/text.js';
 import { FoodService } from '../food/food.service.js';
 import { mealServingNutrition, type ServingCatalogRow } from '../food/food-serving.js';
+import type { MealNutritionEstimator } from './meal-nutrition-estimate.js';
 import {
   findMealRecommendationCandidate,
   parseMealRecommendationFeedback,
@@ -256,6 +257,8 @@ export const toMealEntry = (
 export interface MealServiceDeps {
   photos: MealPhotoService;
   food?: FoodService;
+  /** 없으면 카탈로그로 못 채운 열량은 빈 채로 둔다. */
+  estimator?: Pick<MealNutritionEstimator, 'lookup' | 'schedule'>;
 }
 
 export class MealService {
@@ -487,7 +490,13 @@ export class MealService {
         }
       }
       // 한 끼 1인분 — 카탈로그 1인분이 식약처 시료·급식 중량(≤100g)이면 주식은 통상 1인분으로 환산한다.
-      const nutrition = mealServingNutrition(catalogRow, { isMain: item.isMain }, lexicon);
+      let nutrition = mealServingNutrition(catalogRow, { isMain: item.isMain }, lexicon);
+      // 카탈로그로 못 채운 이름은 메뉴 칼로리와 같은 규칙·LLM·웹 캐시로 "○○ 기준 추정"을 붙인다(캐시만 — 빠르게).
+      // 아직 안 물어본 이름은 커밋 뒤 백그라운드가 묻고 채운다(scheduleEstimates).
+      if (nutrition.basis === 'missing' && this.deps.estimator) {
+        const { estimate } = await this.deps.estimator.lookup(name, item.isMain);
+        if (estimate) nutrition = estimate;
+      }
       // 사용자가 직접 인분 수를 넣었으면 그 값이 우선이다. 없을 때만 서수(small/normal/large)
       // 배수를 쓴다. 사진에서 g/인분을 자동으로 만들어 내지는 않는다.
       const f = item.servings ?? mealPortionFactor(item.portion);
@@ -662,7 +671,14 @@ export class MealService {
       }
       return created;
     });
+    this.scheduleEstimates(itemData);
     return this.get(userId, entry.id);
+  }
+
+  // 커밋 뒤 — 열량이 빈 항목 이름을 백그라운드로 추정해 채운다(LLM·웹). 저장 응답은 기다리지 않는다.
+  private scheduleEstimates(itemData: { name: string; nutritionBasis?: string | null }[]): void {
+    const missing = itemData.filter((d) => d.nutritionBasis === 'missing').map((d) => d.name);
+    if (missing.length > 0) this.deps.estimator?.schedule(missing);
   }
 
   async get(userId: string, id: string): Promise<MealEntryType> {
@@ -731,6 +747,7 @@ export class MealService {
     });
     // 파일 삭제는 롤백할 수 없으므로 DB 커밋 뒤에만 실행한다.
     await this.deps.photos.removeFiles(detachedFiles);
+    if (itemData !== null) this.scheduleEstimates(itemData);
     return this.get(userId, id);
   }
 

@@ -41,6 +41,7 @@ const CONFLICTS_URL = '/api/v1/admin/food/merge-conflicts';
 const QUALITY_URL = '/api/v1/admin/food/recognition-quality';
 const ITEMS_URL = '/api/v1/admin/food/items';
 const LEXICON_URL = '/api/v1/admin/food/menu-lexicon';
+const GAPS_URL = '/api/v1/admin/food/meal-nutrition-gaps';
 
 const importConfig = (over: Partial<FoodImportConfigType> = {}): FoodImportConfigType => ({
   enabled: false,
@@ -198,6 +199,7 @@ const useBaseHandlers = ({
     http.get(CONFLICTS_URL, () => HttpResponse.json({ items: [], total: 0 })),
     http.get(QUALITY_URL, () => HttpResponse.json(recognitionQuality)),
     http.get(LEXICON_URL, () => HttpResponse.json({ items: [], defaults: { alias: 4 } })),
+    http.get(GAPS_URL, () => HttpResponse.json({ items: [], missingNames: 0, estimatedNames: 0 })),
     http.get(ITEMS_URL, ({ request }) => {
       itemRequests.push(request.url);
       return HttpResponse.json({ items, total: items.length });

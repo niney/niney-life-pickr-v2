@@ -282,6 +282,41 @@ export const FoodAdminStats = z.object({
 });
 export type FoodAdminStatsType = z.infer<typeof FoodAdminStats>;
 
+// 식단 항목 중 열량이 빈 것(missing)과 카탈로그 밖 이름을 규칙·LLM·웹으로 추정한 것(estimated)을 이름별로 모은다.
+// 운영자가 자주 기록되는데 비었거나 추정이 틀린 이름을 골라 메뉴 어휘(별칭·1인분 중량)로 바로잡는다.
+// 사용자는 드러내지 않고 기록 수·사용자 수만 준다.
+export const FoodAdminMealNutritionGap = z.object({
+  name: z.string(),
+  itemCount: z.number().int().nonnegative(),
+  userCount: z.number().int().nonnegative(),
+  lastEatenDate: z.string().nullable(),
+  // 아직 빈 항목이 하나라도 있으면 missing.
+  state: z.enum(['missing', 'estimated']),
+  // 추정이면 근거("해장국", "우거지탕(fatsecret.kr 1건) · 국·탕 통상 1인분 500g").
+  nutritionFrom: z.string().nullable(),
+});
+export type FoodAdminMealNutritionGapType = z.infer<typeof FoodAdminMealNutritionGap>;
+
+export const FoodAdminMealNutritionGapsResult = z.object({
+  items: z.array(FoodAdminMealNutritionGap),
+  missingNames: z.number().int().nonnegative(),
+  estimatedNames: z.number().int().nonnegative(),
+});
+export type FoodAdminMealNutritionGapsResultType = z.infer<typeof FoodAdminMealNutritionGapsResult>;
+
+export const FoodAdminMealNutritionEstimateInput = z.object({
+  names: z.array(z.string().trim().min(1).max(60)).min(1).max(50),
+});
+export type FoodAdminMealNutritionEstimateInputType = z.infer<typeof FoodAdminMealNutritionEstimateInput>;
+
+export const FoodAdminMealNutritionEstimateResult = z.object({
+  // 캐시로 바로 채운 항목 수.
+  filled: z.number().int().nonnegative(),
+  // LLM·웹에 물으러 백그라운드로 보낸 이름 수(끝나면 그 이름의 빈 항목을 채운다).
+  scheduled: z.number().int().nonnegative(),
+});
+export type FoodAdminMealNutritionEstimateResultType = z.infer<typeof FoodAdminMealNutritionEstimateResult>;
+
 // ── 어드민: 출처 관측·병합 충돌 검토 큐 ──
 // 외부 소스가 보낸 값을 FoodItem 대표값과 별개로 남긴다. 단순 누적 필드
 // (aliases/popularity)는 관측만 남기고, 단일 대표값 필드만 충돌 검토 대상이다.

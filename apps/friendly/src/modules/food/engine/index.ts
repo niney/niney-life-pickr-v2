@@ -13,6 +13,7 @@ export {
   computePortion,
   decideMenuKcal,
   foodPortionGrams,
+  isRawCatalogRow,
   matchNorm,
   portionKeyFor,
   resolveMenuName,

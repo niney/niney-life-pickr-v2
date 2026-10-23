@@ -91,8 +91,36 @@ describe('mealServingNutrition', () => {
     // 100g당 단백질·나트륨은 근거가 없어 지어내지 않는다.
     expect(r.proteinG).toBeNull();
     expect(r.sodiumMg).toBeNull();
-    // 반찬이면 근거 있는 1인분이 없으니 비운다.
-    expect(mealServingNutrition(raw, { isMain: false }, lex).basis).toBe('missing');
+    // 원재료는 주식·반찬 구분 없이 식품군 1회 분량을 쓴다(반찬으로 적어도 같은 양).
+    expect(mealServingNutrition(raw, { isMain: false }, lex).kcal).toBeCloseTo(496.5);
+  });
+
+  // 회귀: 원재료 DB 의 과일은 100g당 값만 있어 반찬으로 적은 바나나·사과가 열량 없이 남았다.
+  it('원재료 과일·달걀은 식품군 1회 분량(과일 100g·달걀 60g)으로, 해조류처럼 양을 모르는 군은 비운다', () => {
+    const fruit: ServingCatalogRow = {
+      name: '바나나',
+      source: 'mfds-raw',
+      sourceCategory: '과일류',
+      dishType: null,
+      servingG: null,
+      kcal: null,
+      kcalPer100g: 77,
+      proteinG: null,
+      sodiumMg: null,
+      nutritionFrom: null,
+    };
+    const banana = mealServingNutrition(fruit, { isMain: false }, lex);
+    expect(banana).toMatchObject({ basis: 'typical_portion', nutritionFrom: '과일 통상 1인분 100g' });
+    expect(banana.kcal).toBeCloseTo(77);
+    expect(mealServingNutrition({ ...fruit, name: '달걀', sourceCategory: '난류', kcalPer100g: 136 }, { isMain: false }, lex).kcal).toBeCloseTo(81.6);
+    // 마른 김(2g)과 생미역(30g)이 한 군이라 정하지 않는다 — 어드민 음식명 지정으로만.
+    expect(mealServingNutrition({ ...fruit, name: '김', sourceCategory: '해조류' }, { isMain: false }, lex).basis).toBe('missing');
+    // 음식명 지정(어휘 portion)이 군 기본값보다 먼저다.
+    const withApple = { ...lex, portionGrams: { ...lex.portionGrams, 사과: 200 } };
+    expect(mealServingNutrition({ ...fruit, name: '사과', kcalPer100g: 52 }, { isMain: false }, withApple)).toMatchObject({
+      kcal: 104,
+      basis: 'direct',
+    });
   });
 
   it('1인분 중량 없이 1인분 값만 있는 행(레시피·수기)은 그대로 쓴다', () => {

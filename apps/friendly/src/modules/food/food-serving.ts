@@ -5,13 +5,14 @@
 //   1. 운영자가 이 음식의 1인분 중량을 어휘(portion, 말=음식명)로 정했으면 그것 — 직접값으로 본다.
 //   2. 카탈로그 1인분 중량이 기준량(100g)보다 크면 카탈로그 값 그대로.
 //   3. 주식이면 종류별 통상 1인분 중량(볶음 250g …) × 100g당 값 — `typical_portion`(추정)으로 밝힌다.
+//      원재료 행(과일·채소·생고기 …)은 100g당 값만 있어 주식·반찬 구분 없이 식품군 1회 분량(바나나 100g)을 쓴다.
 //   4. 그 밖(반찬·통상 중량을 모름) — 카탈로그 값 그대로. 반찬은 원래 적은 양이 맞다(감자조림 50g).
 // 같은 계열에서 빌려 온 영양(nutritionFrom)은 중량 근거가 없어 손대지 않는다.
 // 메뉴 칼로리 표시(engine/resolve computePortion)와 같은 기준량·같은 어휘를 쓴다.
 
 import type { FoodDishTypeType, MealNutritionBasisType } from '@repo/api-contract';
 import { FOOD_DISH_TYPE_LABEL } from '@repo/utils';
-import { BASE_SERVING_G, foodPortionGrams, portionKeyFor, type Lexicon } from './engine/index.js';
+import { BASE_SERVING_G, foodPortionGrams, isRawCatalogRow, portionKeyFor, type Lexicon } from './engine/index.js';
 
 export interface ServingCatalogRow {
   name: string;
@@ -35,7 +36,18 @@ export interface MealServingNutrition {
   basis: MealNutritionBasisType;
 }
 
-const RAW_PORTION_LABEL: Record<string, string> = { raw_meat: '고기', raw_seafood: '수산물' };
+const RAW_PORTION_LABEL: Record<string, string> = {
+  raw_meat: '고기',
+  raw_seafood: '수산물',
+  raw_fruit: '과일',
+  raw_vegetable: '채소',
+  raw_mushroom: '버섯',
+  raw_potato: '감자·고구마',
+  raw_grain: '곡류',
+  raw_nut: '견과',
+  raw_legume: '콩',
+  raw_egg: '달걀',
+};
 
 const MISSING: MealServingNutrition = {
   kcal: null,
@@ -93,7 +105,7 @@ export const mealServingNutrition = (
     return catalog();
   }
 
-  const key = opts.isMain ? portionKeyFor(row) : null;
+  const key = opts.isMain || isRawCatalogRow(row) ? portionKeyFor(row) : null;
   const typicalG = key ? lex.portionGrams[key] : undefined;
   if (key && typicalG && kcal100 !== null) {
     return {

@@ -106,6 +106,16 @@ export const DEFAULT_LEXICON_SOURCE: LexiconSource = {
   portionGrams: {
     raw_meat: 150,
     raw_seafood: 150,
+    // 원재료 식품군 — 2020 한국인 영양소 섭취기준의 식품군별 1인 1회 분량(사과·바나나 100g, 콩나물·시금치 70g,
+    // 버섯 30g, 감자 140g, 쌀 90g, 견과 10g, 콩 20g, 달걀 60g). 고기·수산물은 위 고기집 관행 값 그대로.
+    raw_fruit: 100,
+    raw_vegetable: 70,
+    raw_mushroom: 30,
+    raw_potato: 140,
+    raw_grain: 90,
+    raw_nut: 10,
+    raw_legume: 20,
+    raw_egg: 60,
     rice: 350,
     noodle: 500,
     soup: 500,

@@ -301,6 +301,9 @@ export const Food = {
   // 메뉴 칼로리 판정 엔진 어휘(어드민 편집).
   adminMenuLexicon: `${API_PREFIX}/admin/food/menu-lexicon`,
   adminMenuLexiconEntry: (id: string) => `${API_PREFIX}/admin/food/menu-lexicon/${id}`,
+  // 열량이 비었거나 이름으로 추정한 식단 항목 이름 목록(기록 수 순) / 추정 다시 돌리기(POST).
+  adminMealNutritionGaps: `${API_PREFIX}/admin/food/meal-nutrition-gaps`,
+  adminMealNutritionGapsEstimate: `${API_PREFIX}/admin/food/meal-nutrition-gaps/estimate`,
   // 적재 잡 설정 조회/변경 — GET/PUT.
   importConfig: `${API_PREFIX}/admin/food/import`,
   // 지금 실행(manual) — body 로 이번 회차 소스/분류 여부 오버라이드 가능.
