@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
-import { useMealPhotoUrl } from '@repo/shared';
+import { useMealPhotoUrl, useMealPhotoUrls } from '@repo/shared';
 import { server } from '~/test/msw';
 
 // 식단 사진 URL(@repo/shared) — 인증 fetch 로 받은 blob 을 objectURL 로 바꿔 쿼리 캐시에 두는 계약: 같은 사진은
@@ -152,5 +152,37 @@ describe('useMealPhotoUrl', () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(result.current).toEqual({ url: null, error: null });
     expect(created).toEqual([]);
+  });
+});
+
+describe('useMealPhotoUrls', () => {
+  it('장마다 enabled 를 줘 고른 장만 받고, 같은 캐시라 한 장씩 받은 URL 을 함께 쓴다', async () => {
+    const asked: string[] = [];
+    server.use(
+      http.get('/api/v1/meals/photos/:token', ({ params }) => {
+        asked.push(`full:${String(params.token)}`);
+        return imageResponse();
+      }),
+      http.get(THUMB_URL, ({ params }) => {
+        asked.push(`thumb:${String(params.token)}`);
+        return imageResponse();
+      }),
+    );
+    const wrapper = makeWrapper(new QueryClient());
+    const tokens = ['a'.repeat(8), 'b'.repeat(8), 'c'.repeat(8)];
+    // 썸네일 칸이 첫 장 썸네일만 받아 둔 상태.
+    const cell = renderHook(() => useMealPhotoUrl(tokens[0]), { wrapper });
+    await waitFor(() => expect(cell.result.current.url).toBe('blob:test/1'));
+
+    const { result } = renderHook(
+      () => ({
+        full: useMealPhotoUrls(tokens, { variant: 'full', enabled: [true, true, false] }),
+        thumbs: useMealPhotoUrls(tokens, { variant: 'thumb', enabled: false }),
+      }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.full.map((s) => s.url !== null)).toEqual([true, true, false]));
+    expect(result.current.thumbs.map((s) => s.url)).toEqual(['blob:test/1', null, null]);
+    expect(asked.sort()).toEqual(['full:aaaaaaaa', 'full:bbbbbbbb', 'thumb:aaaaaaaa']);
   });
 });

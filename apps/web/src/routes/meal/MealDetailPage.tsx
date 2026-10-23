@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ConfirmDialog } from '~/components/ui/confirm-dialog';
 import { MEAL_MAIN_CLASS, MEAL_PAGE_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
 import { MealPhotoImg } from './MealPhotoImg';
+import { MealPhotoLightbox } from './MealPhotoLightbox';
 import { useMealDraftReady } from './useMealDraftReady';
 
 // 식단 상세(웹) — 한 끼의 음식·영양·사진을 보고 수정·다시 기록·삭제로 넘어간다.
@@ -198,13 +199,7 @@ export const MealDetailPage = () => {
                 <CardTitle className="text-base">사진</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                {data.photos.map((photo) => (
-                  <MealPhotoImg
-                    key={photo.token}
-                    token={photo.token}
-                    className="aspect-square w-full"
-                  />
-                ))}
+                <PhotoGrid tokens={data.photos.map((photo) => photo.token)} />
               </CardContent>
             </Card>
           ) : data.photoPurgedAt ? (
@@ -291,6 +286,34 @@ export const MealDetailPage = () => {
         onClose={() => setConfirmOpen(false)}
       />
     </PageFrame>
+  );
+};
+
+// 사진 칸 — 누르면 그 장부터 크게 보고 좌우로 넘긴다.
+const PhotoGrid = ({ tokens }: { tokens: string[] }) => {
+  const [viewing, setViewing] = useState<number | null>(null);
+  return (
+    <>
+      {tokens.map((token, i) => (
+        <button
+          key={token}
+          type="button"
+          onClick={() => setViewing(i)}
+          aria-label={`사진 ${i + 1} 크게 보기`}
+          className="block cursor-zoom-in rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <MealPhotoImg token={token} className="aspect-square w-full" />
+        </button>
+      ))}
+      {viewing !== null ? (
+        <MealPhotoLightbox
+          tokens={tokens}
+          index={viewing}
+          onChangeIndex={setViewing}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
+    </>
   );
 };
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, type MouseEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 
 interface Props {
@@ -189,16 +189,20 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
             // 고정해 max-w-full 이 실효력을 갖도록.
             className="flex h-full w-full shrink-0 snap-center items-center justify-center p-4"
           >
-            {/* 창(SLIDE_WINDOW) 밖 슬라이드는 자리만 지킨다 — 스와이프로 가까워지면 그때 그려진다. */}
-            {Math.abs(i - safeIdx) <= SLIDE_WINDOW && (
-              <ImgWithFallback
-                src={u}
-                loading={Math.abs(i - safeIdx) <= 1 ? 'eager' : 'lazy'}
-                // max-h 는 dvh — dialog 와 동일 기준이라 모바일 주소창 상태가
-                // 바뀌어도 잘리지 않는다.
-                className="max-h-[88dvh] max-w-full rounded object-contain"
-              />
-            )}
+            {/* 창(SLIDE_WINDOW) 밖 슬라이드는 자리만 지킨다 — 스와이프로 가까워지면 그때 그려진다.
+                빈 주소는 아직 받는 중(인증이 필요한 식단 사진)이라 실패 표시 대신 도는 표시를 둔다. */}
+            {Math.abs(i - safeIdx) <= SLIDE_WINDOW &&
+              (u ? (
+                <ImgWithFallback
+                  src={u}
+                  loading={Math.abs(i - safeIdx) <= 1 ? 'eager' : 'lazy'}
+                  // max-h 는 dvh — dialog 와 동일 기준이라 모바일 주소창 상태가
+                  // 바뀌어도 잘리지 않는다.
+                  className="max-h-[88dvh] max-w-full rounded object-contain"
+                />
+              ) : (
+                <Loader2 aria-label="사진 불러오는 중" className="size-6 animate-spin text-white/70" />
+              ))}
           </div>
         ))}
       </div>

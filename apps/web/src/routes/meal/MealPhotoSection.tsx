@@ -5,10 +5,11 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { MealPhotoImg } from './MealPhotoImg';
+import { MealPhotoLightbox } from './MealPhotoLightbox';
 import type { MealPhotoIntake } from './useMealPhotoIntake';
 
 // 식단 입력의 사진 칸(웹) — 고르기(휴대전화 브라우저는 카메라도 고를 수 있다)·끌어다 놓기·붙여넣기(Ctrl+V).
-// 넣는 일은 useMealPhotoIntake 가 하고, 이 칸은 사진 줄·진행 상태·안내만 그린다.
+// 넣는 일은 useMealPhotoIntake 가 하고, 이 칸은 사진 줄·진행 상태·안내와 크게 보기만 그린다.
 
 const takenAtLabel = (d: Date): string =>
   `${d.getMonth() + 1}월 ${d.getDate()}일 ${`${d.getHours()}`.padStart(2, '0')}:${`${d.getMinutes()}`.padStart(2, '0')}`;
@@ -18,6 +19,7 @@ const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer.types).incl
 export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
   const photos = useMealDraftStore((s) => s.photos);
   const [dragging, setDragging] = useState(false);
+  const [viewing, setViewing] = useState<number | null>(null);
   const { addFiles } = intake;
   const canAdd = photos.length < MEAL_DRAFT_MAX_PHOTOS && !intake.busy;
 
@@ -62,9 +64,17 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2">
-          {photos.map((photo) => (
+          {photos.map((photo, i) => (
             <div key={photo.token} className="relative">
-              <MealPhotoImg token={photo.token} className="size-20" />
+              {/* 사진을 누르면 크게(인식이 맞는지 확인), 모서리 X 는 빼기 — 둘은 따로 눌린다. */}
+              <button
+                type="button"
+                onClick={() => setViewing(i)}
+                aria-label={`사진 ${i + 1} 크게 보기`}
+                className="block cursor-zoom-in rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <MealPhotoImg token={photo.token} className="size-20" />
+              </button>
               <button
                 type="button"
                 onClick={() => intake.removePhoto(photo.token)}
@@ -130,6 +140,14 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
           <p role="alert" className="text-sm text-destructive">
             {intake.error}
           </p>
+        ) : null}
+        {viewing !== null && viewing < photos.length ? (
+          <MealPhotoLightbox
+            tokens={photos.map((photo) => photo.token)}
+            index={viewing}
+            onChangeIndex={setViewing}
+            onClose={() => setViewing(null)}
+          />
         ) : null}
       </CardContent>
     </Card>

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -650,6 +650,27 @@ describe('MealEntryFormPage', () => {
     expect(await screen.findByText('목록 화면')).toBeInTheDocument();
     releaseUpload!();
     await waitFor(() => expect(deleted).toEqual(['tok-late']));
+    expect(useMealDraftStore.getState().photos).toEqual([]);
+  });
+
+  it('사진 칸 — 사진을 누르면 크게 보고, 모서리 X 는 크게 보지 않고 사진만 뺀다', async () => {
+    photoHandlers();
+    server.use(
+      http.get(`${ENTRIES_URL}/e1`, () => HttpResponse.json(savedEntry())),
+      http.get(`${PHOTOS_URL}/:token`, () =>
+        HttpResponse.arrayBuffer(new ArrayBuffer(16), { headers: { 'Content-Type': 'image/jpeg' } }),
+      ),
+    );
+    renderAt('/me/meals/e1/edit');
+
+    fireEvent.click(await screen.findByRole('button', { name: '사진 1 크게 보기' }));
+    const dialog = await screen.findByRole('dialog', { name: '사진 보기' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: '사진 빼기' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '사진 1 크게 보기' })).not.toBeInTheDocument();
     expect(useMealDraftStore.getState().photos).toEqual([]);
   });
 

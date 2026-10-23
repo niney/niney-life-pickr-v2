@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -180,5 +180,51 @@ describe('MealDetailPage', () => {
     );
     renderDetail();
     expect(await screen.findByText('기록을 찾을 수 없어요.')).toBeInTheDocument();
+  });
+
+  it('사진을 누르면 그 장부터 크게 보고, 원본을 받아 바꿔 그리며 Esc 로 닫는다', async () => {
+    // jsdom 에는 objectURL 이 없다 — 받은 바이트 수로 썸네일(8)과 원본(16)을 구분하는 스텁.
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+    let made = 0;
+    URL.createObjectURL = vi.fn((blob: Blob) => `blob:test/${blob.size}-${(made += 1)}`);
+    URL.revokeObjectURL = vi.fn();
+    const fullAsked: string[] = [];
+    try {
+      const tokens = ['a'.repeat(8), 'b'.repeat(8)];
+      server.use(
+        http.get(ENTRY_URL, () =>
+          HttpResponse.json({
+            ...entry,
+            photos: tokens.map((token, i) => ({ token, width: 40, height: 30, byteSize: 100, sortOrder: i })),
+          }),
+        ),
+        http.get('/api/v1/meals/photos/:token/thumb', () =>
+          HttpResponse.arrayBuffer(new ArrayBuffer(8), { headers: { 'Content-Type': 'image/jpeg' } }),
+        ),
+        http.get('/api/v1/meals/photos/:token', ({ params }) => {
+          fullAsked.push(String(params.token));
+          return HttpResponse.arrayBuffer(new ArrayBuffer(16), { headers: { 'Content-Type': 'image/jpeg' } });
+        }),
+      );
+      renderDetail();
+
+      fireEvent.click(await screen.findByRole('button', { name: '사진 2 크게 보기' }));
+      const dialog = await screen.findByRole('dialog', { name: '사진 보기' });
+      expect(within(dialog).getByText('2 / 2')).toBeInTheDocument();
+      // 보고 있는 장과 옆 장의 원본을 받아 그린다.
+      await waitFor(() => expect([...fullAsked].sort()).toEqual(tokens));
+      await waitFor(() =>
+        expect([...dialog.querySelectorAll('img')].map((img) => img.getAttribute('src'))).toEqual([
+          expect.stringMatching(/^blob:test\/16-/),
+          expect.stringMatching(/^blob:test\/16-/),
+        ]),
+      );
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    } finally {
+      URL.createObjectURL = original.create;
+      URL.revokeObjectURL = original.revoke;
+    }
   });
 });

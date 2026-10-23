@@ -1,7 +1,9 @@
 import {
   keepPreviousData,
+  queryOptions,
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -308,15 +310,13 @@ const loadMealPhotoUrl = async (token: string, variant: 'full' | 'thumb'): Promi
   });
 };
 
-// enabled=false 면 새로 받지 않는다(보일 때만 받는 화면용). 이미 받아 둔 URL 이 있으면 그대로 돌려준다.
-export const useMealPhotoUrl = (
+const mealPhotoUrlQuery = (
+  qc: QueryClient,
   token: string | null | undefined,
-  opts: { variant?: 'full' | 'thumb'; enabled?: boolean } = {},
-): { url: string | null; error: string | null } => {
-  const variant = opts.variant ?? 'thumb';
-  const enabled = opts.enabled ?? true;
-  const qc = useQueryClient();
-  const query = useQuery({
+  variant: 'full' | 'thumb',
+  enabled: boolean,
+) =>
+  queryOptions({
     queryKey: photoUrlKey(token, variant),
     queryFn: async () => {
       bindPhotoUrlCleanup(qc);
@@ -339,14 +339,46 @@ export const useMealPhotoUrl = (
     retry: false,
   });
 
-  return {
-    url: token ? (query.data ?? null) : null,
-    error: query.error
-      ? query.error instanceof Error
-        ? query.error.message
-        : '사진을 불러오지 못했습니다'
-      : null,
-  };
+type MealPhotoUrlState = { url: string | null; error: string | null };
+
+const toPhotoUrlState = (
+  token: string | null | undefined,
+  query: { data?: string; error: unknown },
+): MealPhotoUrlState => ({
+  url: token ? (query.data ?? null) : null,
+  error: query.error
+    ? query.error instanceof Error
+      ? query.error.message
+      : '사진을 불러오지 못했습니다'
+    : null,
+});
+
+// enabled=false 면 새로 받지 않는다(보일 때만 받는 화면용). 이미 받아 둔 URL 이 있으면 그대로 돌려준다.
+export const useMealPhotoUrl = (
+  token: string | null | undefined,
+  opts: { variant?: 'full' | 'thumb'; enabled?: boolean } = {},
+): MealPhotoUrlState => {
+  const qc = useQueryClient();
+  const query = useQuery(mealPhotoUrlQuery(qc, token, opts.variant ?? 'thumb', opts.enabled ?? true));
+  return toPhotoUrlState(token, query);
+};
+
+/**
+ * 여러 장을 한 번에 — 크게 보기처럼 장 수가 바뀌는 화면용(훅을 반복문에서 부를 수 없어서). 같은 캐시를 쓰므로
+ * 썸네일 칸이 받아 둔 URL 을 그대로 돌려준다. enabled 는 장마다(보고 있는 장 근처만 받기) 줄 수 있다.
+ */
+export const useMealPhotoUrls = (
+  tokens: readonly string[],
+  opts: { variant?: 'full' | 'thumb'; enabled?: boolean | readonly boolean[] } = {},
+): MealPhotoUrlState[] => {
+  const qc = useQueryClient();
+  const variant = opts.variant ?? 'thumb';
+  const { enabled = true } = opts;
+  const enabledAt = (i: number): boolean => (typeof enabled === 'boolean' ? enabled : (enabled[i] ?? false));
+  const queries = useQueries({
+    queries: tokens.map((token, i) => mealPhotoUrlQuery(qc, token, variant, enabledAt(i))),
+  });
+  return tokens.map((token, i) => toPhotoUrlState(token, queries[i] ?? { error: null }));
 };
 
 // ── 추천 ────────────────────────────────────────────────────────────────────
