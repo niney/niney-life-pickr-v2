@@ -5,10 +5,10 @@ import { FOOD_DISH_TYPE_LABEL, MEAL_PORTIONS, MEAL_PORTION_LABEL } from '@repo/u
 import { useDebounced } from '~/lib/useDebounced';
 import { cn } from '~/lib/utils';
 
-// 식단 항목 한 줄(웹) — 이름(카탈로그 자동완성) + 주식/반찬 + 양 + 인분 + 삭제.
+// 식단 항목 한 줄(웹) — 이름(카탈로그 자동완성) + 사진 인식의 다른 후보 + 주식/반찬 + 양 + 인분 + 삭제.
 // 앱 MealItemRow 와 같은 규칙이다: 카탈로그 항목을 고르면 foodId·분류를 함께 채워 통계가 바로
 // 분류를 얻고, 이름을 손으로 고치면 그 매칭을 푼다. 목록에 없는 이름도 그대로 저장된다.
-// 사진 인식 후보·"지난번대로"(사진 복제)는 앱에서만 한다.
+// "지난번대로"(사진 복제)는 앱에서만 한다.
 
 // 자동완성 검색어 — 입력칸은 바로 바뀌고 요청만 타이핑이 잠잠해진 뒤에 보낸다(키 입력마다 요청하면 "김치찌개"
 // 하나에 여섯 번 나갔다). 끝에 붙은 낱자모는 한글 조합 중간 상태("김ㅊ")라 뗀다 — 카탈로그 이름에는 낱자모가
@@ -39,6 +39,8 @@ export const MealItemInputRow = ({
   const search = useFoodSearch(searchTerm, { limit: 6, enabled: open && searchable });
   const suggestions = open && searchable ? (search.data?.items ?? []) : [];
   const lowConfidence = item.confidence !== null && item.confidence < 0.4;
+  // 인식이 준 대안 — 첫 후보가 지금 이름과 같으면 다시 보여 주지 않는다(앱과 같이 둘까지).
+  const altCandidates = item.candidates.filter((c) => c.name !== item.name).slice(0, 2);
 
   const pick = (food: (typeof suggestions)[number]) => {
     onChange({
@@ -141,6 +143,32 @@ export const MealItemInputRow = ({
           </ul>
         ) : null}
       </div>
+
+      {altCandidates.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">다른 후보</span>
+          {altCandidates.map((candidate) => (
+            <button
+              key={candidate.name}
+              type="button"
+              onClick={() =>
+                onChange({
+                  name: candidate.name,
+                  foodId: null,
+                  source: 'recognized',
+                  // 품질 집계가 몇 번째 후보를 골랐는지 본다.
+                  selectedCandidateRank: item.candidates.findIndex((c) => c.name === candidate.name),
+                  catalogMatchedBy: 'none',
+                  catalogMatchScore: null,
+                })
+              }
+              className="rounded-full border border-dashed px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent"
+            >
+              {candidate.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-1.5">
         <Chip label="주식" selected={item.isMain} onClick={() => onChange({ isMain: true })} />

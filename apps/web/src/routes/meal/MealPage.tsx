@@ -43,8 +43,8 @@ import { MealPhotoImg } from './MealPhotoImg';
 import { MealPreferenceTab } from './MealPreferenceTab';
 import { MealRecommendTab } from './MealRecommendTab';
 
-// 내 식단 — 기록/달력/통계/추천/영양/설정. 사진 기록(촬영·인식)은 앱에서만 하고, 웹은 손으로 적는
-// 기록(/me/meals/new)과 상세·수정·삭제까지 한다. 탭은 주소(?tab=)에 둬 상세에서 뒤로 오면 보던
+// 내 식단 — 기록/달력/통계/추천/영양/설정. 입력(/me/meals/new — 사진 인식 또는 직접 입력)과 상세·수정·삭제까지
+// 웹에서 한다. 탭은 주소(?tab=)에 둬 상세에서 뒤로 오면 보던
 // 탭으로 돌아온다. 차트 라이브러리를 쓰지 않는 리포 관례대로 막대는 div 폭으로 그린다.
 //
 // 데스크톱(lg, 1024px 이상)은 상세·입력과 같은 틀(mealLayout — max-w-6xl, 왼쪽 본문 + 오른쪽 패널)로 펼친다.
@@ -83,7 +83,7 @@ export const MealPage = () => {
           <div>
             <h1 className="text-xl font-semibold">내 식단</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              여기서는 직접 적어 남기고, 사진 기록은 앱에서 해요.
+              사진을 넣거나 직접 적어 먹은 것을 남겨요.
             </p>
           </div>
           <Button asChild className="shrink-0">

@@ -34,10 +34,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { MealItemInputRow } from './MealItemInputRow';
 import { MEAL_MAIN_CLASS, MEAL_PAGE_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
-import { MealPhotoImg } from './MealPhotoImg';
+import { MealPhotoSection } from './MealPhotoSection';
 import { useMealDraftReady } from './useMealDraftReady';
+import { useMealPhotoIntake } from './useMealPhotoIntake';
 
-// 식단 입력(웹) — 손으로 적는 새 기록 / 기존 기록 수정. 사진 촬영·인식은 앱에서만 한다.
+// 식단 입력(웹) — 새 기록 / 기존 기록 수정. 사진을 넣으면 음식을 인식해 채우고(useMealPhotoIntake), 손으로
+// 적어도 된다. 사진·인식 규칙은 앱과 같다.
 //
 // 앱과 같은 mealDraftStore 를 쓴다(웹은 sessionStorage, 탭 수명). 그래서 새로고침해도 쓰던
 // 기록이 남고, 추천 탭의 "먹은 메뉴 기록"·상세의 "수정"·"다시 기록"이 draft 를 채운 뒤 이 화면으로
@@ -162,12 +164,14 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
   const timePresets = useMealTimePresets();
   const create = useCreateMealEntry();
   const update = useUpdateMealEntry();
+  const photoIntake = useMealPhotoIntake();
   const [error, setError] = useState<string | null>(null);
   // "음식 추가"로 막 만든 줄에만 포커스를 준다(처음 열 때는 자동 포커스하지 않는다).
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
 
   const saving = create.isPending || update.isPending;
-  const canSave = draft.items.some((item) => item.name.trim().length > 0) && !saving;
+  // 사진을 올리거나 인식하는 동안은 저장을 막는다(앱과 같이) — 끝나야 사진·인식 결과가 함께 저장된다.
+  const canSave = draft.items.some((item) => item.name.trim().length > 0) && !saving && !photoIntake.busy;
   const fallbackPath = entryId ? `/me/meals/${entryId}` : '/me/meals';
   const today = toLocalDateKey(new Date());
 
@@ -223,11 +227,12 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
         placeName: current.placeName,
         memo: current.memo.trim() ? current.memo.trim() : null,
         items: items.map(draftItemToInput),
+        // 수정도 사진 전체를 보낸다 — 서버는 받은 목록으로 갈아끼우고 빠진 사진을 지운다(draft 가 기존 사진을 들고 연다).
+        photoTokens: current.photos.map((photo) => photo.token),
       };
       try {
         let createdId: string | null = null;
         if (entryId) {
-          // 사진은 앱에서만 바꾼다 — photoTokens 를 보내지 않아야 서버가 기존 사진 연결을 그대로 둔다.
           await update.mutateAsync({
             id: entryId,
             input: payload,
@@ -237,9 +242,13 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
           const created = await create.mutateAsync({
             input: {
               ...payload,
-              source: current.originRecommendationId ? 'recommendation' : 'manual',
+              source: current.originRecommendationId
+                ? 'recommendation'
+                : current.recognition || current.photos.length > 0
+                  ? 'photo'
+                  : 'manual',
               originRecommendationId: current.originRecommendationId,
-              photoTokens: [],
+              recognition: current.recognition,
             },
             expectedPrincipalId: identity.principalId,
           });
@@ -266,8 +275,8 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
         <h1 className="text-xl font-semibold">{entryId ? '식단 수정' : '식단 기록'}</h1>
         <p className="text-sm text-muted-foreground">
           {entryId
-            ? '음식·시각·메모를 고칠 수 있어요. 사진은 앱에서 바꿔요.'
-            : '먹은 음식을 직접 적어 남겨요. 사진으로 남기려면 앱을 써 주세요.'}
+            ? '음식·시각·메모·사진을 고칠 수 있어요.'
+            : '사진을 넣으면 음식을 찾아 채워요. 직접 적어도 돼요.'}
         </p>
       </header>
 
@@ -278,6 +287,8 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
               추천에서 고른 메뉴예요. 저장하면 그 추천을 실제로 먹은 것으로 이어요.
             </p>
           ) : null}
+
+          <MealPhotoSection intake={photoIntake} />
 
           <Card>
             <CardHeader className="space-y-1">
@@ -309,22 +320,6 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
               ) : null}
             </CardContent>
           </Card>
-
-          {draft.photos.length > 0 ? (
-            <Card>
-              <CardHeader className="space-y-1">
-                <CardTitle className="text-base">사진</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  사진은 앱에서 추가·삭제해요. 여기서 저장해도 사진은 그대로 남아요.
-                </p>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {draft.photos.map((photo) => (
-                  <MealPhotoImg key={photo.token} token={photo.token} className="size-20" />
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
         </div>
 
         {/* 데스크톱은 언제·어떻게를 오른쪽 패널에 붙여 두고 저장 줄은 화면 아래에 둔다 — 한 단일 땐 저장 버튼이
