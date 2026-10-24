@@ -27,7 +27,7 @@ import { MealSection, MealSectionTitle } from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
 
 // expo-document-picker 는 **네이티브 모듈**이라 JS 번들만 갱신된 dev client 에서는 없을 수 있다.
-// 최상위에서 import 하면 모듈 로드 자체가 터져 설정 탭은 물론 식단 화면 전체가 빈 화면이 된다
+// 최상위에서 import 하면 모듈 로드 자체가 터져 식단 설정 화면이 빈 화면이 된다
 // (시뮬레이터 실측). 그래서 실제로 파일을 고를 때만 지연 로드하고, 없으면 안내로 끝낸다.
 const loadDocumentPicker = (): typeof DocumentPickerModule | null => {
   try {

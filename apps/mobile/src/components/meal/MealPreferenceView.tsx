@@ -28,11 +28,22 @@ import {
 import { Note, StateBlock } from '~/components/common/Cards';
 import { MealDataManagementCard } from './MealDataManagementCard';
 import { MealReminderSettingsCard } from './MealReminderSettingsCard';
-import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
+import {
+  Chip,
+  ChipRow,
+  FieldLabel,
+  MealLevelBar,
+  MealSection,
+  MealSectionTitle,
+  MealStepper,
+} from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
 
-// 추천 중요도(0~5) + 절대 제외/소프트 비선호. 앱에는 슬라이더 라이브러리가 없어 0~5 칩 스테퍼로 만든다
-// (새 네이티브 의존성을 들이지 않는다 — 리포 관례).
+// 추천 중요도(0~5) + 절대 제외/소프트 비선호. 앱에는 슬라이더 라이브러리가 없어 − 숫자 + 스테퍼와 칸 막대로
+// 만든다(새 네이티브 의존성을 들이지 않는다 — 리포 관례). 예전 0~5 버튼 6개 × 7줄(주황 블록 42개)을 걷었다.
+//
+// 이 화면은 /meal/settings 다(식단 화면 헤더 톱니). 저장 버튼은 추천 설정(중요도·먹는 것·영양 기준) 바로 아래에
+// 둔다 — 식사 알림·내 데이터 카드는 각자 저장·실행 버튼이 따로 있다.
 
 const WEIGHT_FIELDS: ReadonlyArray<{ key: keyof MealWeightsType; label: string; desc: string }> = [
   { key: 'variety', label: '겹침 피하기', desc: '최근 먹은 음식·분류를 피해요' },
@@ -44,7 +55,7 @@ const WEIGHT_FIELDS: ReadonlyArray<{ key: keyof MealWeightsType; label: string; 
   { key: 'convenience', label: '간편함', desc: '집밥은 손 덜 가는 쪽, 외식은 흔한 메뉴' },
 ];
 
-const LEVELS = [0, 1, 2, 3, 4, 5];
+const WEIGHT_MAX = 5;
 
 export const MealPreferenceView = () => {
   const theme = useTheme();
@@ -146,44 +157,23 @@ export const MealPreferenceView = () => {
             />
           ))}
         </ChipRow>
-        <View style={styles.weightList}>
-          {WEIGHT_FIELDS.map((f) => (
-            <View key={f.key} style={styles.weightRow}>
-              <View style={styles.weightHead}>
+        <View>
+          {WEIGHT_FIELDS.map((f, index) => (
+            <View key={f.key} style={[styles.weightRow, index > 0 ? styles.weightDivider : null]}>
+              <View style={styles.weightText}>
                 <Text style={styles.weightLabel}>{f.label}</Text>
-                <Text style={styles.weightValue}>{weights[f.key]}</Text>
+                <Text style={styles.weightDesc}>{f.desc}</Text>
+                <MealLevelBar value={weights[f.key]} max={WEIGHT_MAX} />
               </View>
-              <Text style={styles.weightDesc}>{f.desc}</Text>
-              <View style={styles.levels}>
-                {LEVELS.map((v) => (
-                  <Pressable
-                    key={v}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${f.label} ${v}`}
-                    accessibilityState={{ selected: weights[f.key] === v }}
-                    onPress={() => {
-                      setWeights({ ...weights, [f.key]: v });
-                      setDirty(true);
-                    }}
-                    style={[
-                      styles.level,
-                      {
-                        borderColor: weights[f.key] >= v && v > 0 ? theme.colors.primary : theme.colors.border,
-                        backgroundColor: weights[f.key] >= v && v > 0 ? theme.colors.primary : 'transparent',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontSize: mealFont.caption,
-                        color: weights[f.key] >= v && v > 0 ? theme.colors.primaryText : theme.colors.textMuted,
-                      }}
-                    >
-                      {v}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <MealStepper
+                value={weights[f.key]}
+                max={WEIGHT_MAX}
+                accessibilityLabel={`${f.label} 중요도`}
+                onChange={(v) => {
+                  setWeights({ ...weights, [f.key]: v });
+                  setDirty(true);
+                }}
+              />
             </View>
           ))}
         </View>
@@ -293,7 +283,7 @@ export const MealPreferenceView = () => {
       <MealSection>
         <MealSectionTitle
           title="영양소 점검 기준"
-          sub="영양 탭이 성별·나이에 맞는 섭취기준으로 봐요. 비워 두면 30-49세 성인 기준(남녀 중 낮은 값)으로 봐요."
+          sub="분석 탭의 영양소 점검이 성별·나이에 맞는 섭취기준으로 봐요. 비워 두면 30-49세 성인 기준(남녀 중 낮은 값)으로 봐요."
         />
         <FieldLabel>성별</FieldLabel>
         <ChipRow>
@@ -326,10 +316,6 @@ export const MealPreferenceView = () => {
         <Text style={styles.hint}>나이 구간을 고르는 데만 쓰고 공개되지 않아요.</Text>
       </MealSection>
 
-      <MealReminderSettingsCard slots={slots} />
-
-      <MealDataManagementCard />
-
       {error ? <Note tone="warn">{error}</Note> : null}
 
       <Pressable
@@ -342,10 +328,13 @@ export const MealPreferenceView = () => {
         ]}
       >
         <Text style={{ color: theme.colors.primaryText, fontWeight: '700', fontSize: mealFont.body }}>
-          {save.isPending ? '저장 중…' : '저장'}
+          {save.isPending ? '저장 중…' : save.isSuccess && !dirty ? '저장했어요' : '추천 설정 저장'}
         </Text>
       </Pressable>
-      {save.isSuccess && !dirty ? <Text style={styles.hint}>저장했어요.</Text> : null}
+
+      <MealReminderSettingsCard slots={slots} />
+
+      <MealDataManagementCard />
     </ScrollView>
   );
 };
@@ -353,21 +342,11 @@ export const MealPreferenceView = () => {
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     content: { padding: 16, gap: 12, paddingBottom: 48 },
-    weightList: { gap: 14 },
-    weightRow: { gap: 4 },
-    weightHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    weightLabel: { fontSize: mealFont.callout, fontWeight: '600', color: theme.colors.text },
-    weightValue: { fontSize: mealFont.footnote, color: theme.colors.textMuted },
-    weightDesc: { fontSize: mealFont.caption, color: theme.colors.textMuted },
-    levels: { flexDirection: 'row', gap: 6, marginTop: 2 },
-    level: {
-      width: 36,
-      height: 28,
-      borderRadius: mealRadius.small,
-      borderWidth: StyleSheet.hairlineWidth,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
+    weightRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+    weightDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+    weightText: { flex: 1, minWidth: 0, gap: 3 },
+    weightLabel: { fontSize: mealFont.body, fontWeight: '600', color: theme.colors.text },
+    weightDesc: { fontSize: mealFont.caption, color: theme.colors.textMuted, marginBottom: 3 },
     input: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
@@ -379,5 +358,5 @@ const createStyles = (theme: Theme) =>
     },
     hint: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     yearInput: { width: 120 },
-    saveBtn:{ borderRadius: mealRadius.control, paddingVertical: 14, alignItems: 'center' },
+    saveBtn: { borderRadius: mealRadius.control, paddingVertical: 14, alignItems: 'center' },
   });

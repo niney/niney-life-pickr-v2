@@ -167,15 +167,17 @@ export const StatTile = ({
   label,
   value,
   sub,
+  style,
 }: {
   icon: MealIconName;
   label: string;
   value: string;
   sub?: string | null;
+  style?: StyleProp<ViewStyle>;
 }) => {
   const theme = useTheme();
   return (
-    <View style={[styles.tile, { backgroundColor: theme.colors.surfaceAlt }]}>
+    <View style={[styles.tile, { backgroundColor: theme.colors.surfaceAlt }, style]}>
       <View style={styles.tileLabelRow}>
         <MaterialCommunityIcons name={icon} size={14} color={theme.colors.textMuted} />
         <Text style={[styles.tileLabel, { color: theme.colors.textMuted }]}>{label}</Text>
@@ -188,6 +190,71 @@ export const StatTile = ({
           {sub}
         </Text>
       ) : null}
+    </View>
+  );
+};
+
+// 0~max 스텝퍼 — − 숫자 + 와 그 아래 칸 막대. 스크린리더에는 조절 가능한 값(adjustable)으로 읽힌다.
+export const MealStepper = ({
+  value,
+  min = 0,
+  max,
+  onChange,
+  accessibilityLabel,
+}: {
+  value: number;
+  min?: number;
+  max: number;
+  onChange: (value: number) => void;
+  accessibilityLabel: string;
+}) => {
+  const theme = useTheme();
+  const set = (next: number) => onChange(Math.min(max, Math.max(min, next)));
+  const stepButton = (delta: -1 | 1) => {
+    const disabled = delta < 0 ? value <= min : value >= max;
+    return (
+      <Pressable
+        accessible={false}
+        onPress={() => set(value + delta)}
+        disabled={disabled}
+        hitSlop={4}
+        style={({ pressed }) => [styles.stepButton, { opacity: disabled ? 0.3 : pressed ? 0.5 : 1 }]}
+      >
+        <MaterialCommunityIcons name={delta < 0 ? 'minus' : 'plus'} size={18} color={theme.colors.text} />
+      </Pressable>
+    );
+  };
+  return (
+    <View
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityValue={{ min, max, now: value }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={(e) => set(value + (e.nativeEvent.actionName === 'increment' ? 1 : -1))}
+      style={[styles.stepper, { backgroundColor: theme.colors.surfaceAlt }]}
+    >
+      {stepButton(-1)}
+      <Text style={[styles.stepValue, { color: theme.colors.text }]}>{value}</Text>
+      {stepButton(1)}
+    </View>
+  );
+};
+
+// 칸 막대 — value 칸까지 채운다(스텝퍼 값을 눈으로 비교하기 쉽게).
+export const MealLevelBar = ({ value, max }: { value: number; max: number }) => {
+  const theme = useTheme();
+  return (
+    <View style={styles.levelBar}>
+      {Array.from({ length: max }, (_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.levelCell,
+            { backgroundColor: i < value ? theme.colors.primary : theme.colors.surfaceAlt },
+          ]}
+        />
+      ))}
     </View>
   );
 };
@@ -258,6 +325,17 @@ const styles = StyleSheet.create({
   tileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   tileLabel: { fontSize: mealFont.caption },
   tileValue: { fontSize: mealFont.number, lineHeight: 30, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: mealRadius.pill, padding: 2 },
+  stepButton: { width: 36, height: 32, alignItems: 'center', justifyContent: 'center' },
+  stepValue: {
+    minWidth: 20,
+    textAlign: 'center',
+    fontSize: mealFont.body,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  levelBar: { flexDirection: 'row', gap: 3 },
+  levelCell: { flex: 1, height: 4, borderRadius: 2 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   barLabel: { width: 84, fontSize: mealFont.caption },
   barTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },

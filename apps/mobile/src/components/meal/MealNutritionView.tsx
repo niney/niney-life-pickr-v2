@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type {
   MealNutrientResultType,
   MealNutritionAdviceType,
   MealNutritionAnalysisType,
 } from '@repo/api-contract';
 import {
+  SegmentedControl,
   useCreateMealNutritionAdvice,
   useLatestMealNutritionAdvice,
   useMealNutrition,
@@ -24,15 +26,15 @@ import {
   toLocalDateKey,
 } from '@repo/utils';
 import { Note, StateBlock } from '~/components/common/Cards';
-import { Chip, ChipRow, MealSection, MealSectionTitle } from './mealUi';
-import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
+import { Chip, MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 
 // 영양 — 웹 MealNutritionTab 과 같은 구성. 최근 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 견주고(서버 계산),
 // 모자란 영양소를 음식·영양제(성분·형태, 제품명 없음)로 채우는 조언을 받는다. 조언은 LLM 이라 누를 때만 만들고,
 // 같은 날·같은 기록이면 서버가 저장본을 준다("다시 쓰기"만 새로). 막대는 View 폭 계산으로 그린다.
 
-const PERIODS = [7, 14, 28] as const;
-type Period = (typeof PERIODS)[number];
+const MEAL_NUTRITION_PERIODS = [7, 14, 28] as const;
+export type MealNutritionPeriod = (typeof MEAL_NUTRITION_PERIODS)[number];
 
 const STATUS_COLOR: Record<MealNutrientResultType['status'], string> = {
   low: '#ef4444',
@@ -53,57 +55,66 @@ const adviceSourceLabel = (advice: MealNutritionAdviceType): string =>
         ? 'AI 조언'
         : '계산 결과';
 
-export const MealNutritionView = () => {
+// 영양소 점검 — 분석 탭(MealAnalysisView)의 섹션. 기간(7/14/28일)은 분석 탭이 들고 있고
+// 아래쪽 영양제 조언(MealNutritionAdvice)이 같은 기간을 본다(같은 쿼리 키라 요청은 한 번).
+export const MealNutritionCheck = ({
+  days,
+  onChangeDays,
+}: {
+  days: MealNutritionPeriod;
+  onChangeDays: (days: MealNutritionPeriod) => void;
+}) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { contentBottom } = useMealFabInsets();
-  const [days, setDays] = useState<Period>(14);
   const analysis = useMealNutrition(days);
 
   return (
-    <ScrollView
-      contentContainerStyle={[styles.content, { paddingBottom: contentBottom }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <ChipRow>
-        {PERIODS.map((d) => (
-          <Chip key={d} label={`${d}일`} selected={days === d} onPress={() => setDays(d)} />
-        ))}
-      </ChipRow>
-
-      <MealSection>
-        <MealSectionTitle
-          title="영양소 점검"
-          sub="두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요."
+    <MealSection>
+      <MealSectionTitle
+        title="영양소 점검"
+        sub="두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요."
+      />
+      <SegmentedControl
+        value={String(days)}
+        onChange={(v) => onChangeDays(Number(v) as MealNutritionPeriod)}
+        options={MEAL_NUTRITION_PERIODS.map((d) => ({ value: String(d), label: `최근 ${d}일` }))}
+      />
+      {analysis.isLoading ? (
+        <StateBlock kind="loading" />
+      ) : analysis.error || !analysis.data ? (
+        <StateBlock
+          kind="error"
+          message="영양소 점검을 불러오지 못했어요."
+          onRetry={() => void analysis.refetch()}
+          retrying={analysis.isFetching}
         />
-        {analysis.isLoading ? (
-          <StateBlock kind="loading" />
-        ) : analysis.error || !analysis.data ? (
-          <StateBlock
-            kind="error"
-            message="영양소 점검을 불러오지 못했어요."
-            onRetry={() => void analysis.refetch()}
-            retrying={analysis.isFetching}
-          />
-        ) : (
-          <AnalysisBody data={analysis.data} styles={styles} />
-        )}
-      </MealSection>
-
-      <AdviceCard days={days} ready={analysis.data?.status === 'ok'} styles={styles} />
-    </ScrollView>
+      ) : (
+        <AnalysisBody data={analysis.data} styles={styles} />
+      )}
+    </MealSection>
   );
+};
+
+export const MealNutritionAdvice = ({ days }: { days: MealNutritionPeriod }) => {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const analysis = useMealNutrition(days);
+  return <AdviceCard days={days} ready={analysis.data?.status === 'ok'} styles={styles} />;
 };
 
 type Styles = ReturnType<typeof createStyles>;
 
 const AnalysisBody = ({ data, styles }: { data: MealNutritionAnalysisType; styles: Styles }) => {
+  const theme = useTheme();
+  const [showUnknown, setShowUnknown] = useState(false);
   if (data.status === 'insufficient') {
     return <Note tone="muted">{data.insufficientReason ?? '기록이 더 쌓이면 볼 수 있어요.'}</Note>;
   }
   const sorted = [...data.nutrients].sort(
     (a, b) => MEAL_NUTRIENT_STATUS_ORDER[a.status] - MEAL_NUTRIENT_STATUS_ORDER[b.status],
   );
+  const measured = sorted.filter((n) => n.status !== 'unknown');
+  const unknown = sorted.filter((n) => n.status === 'unknown');
   return (
     <View style={styles.body}>
       <Text style={styles.meta}>
@@ -118,9 +129,28 @@ const AnalysisBody = ({ data, styles }: { data: MealNutritionAnalysisType; style
           {note}
         </Note>
       ))}
-      {sorted.map((n) => (
+      {measured.map((n) => (
         <NutrientRow key={n.key} n={n} styles={styles} />
       ))}
+      {/* 판단 보류(값이 없는 영양소)는 빈 막대만 늘어놓아 화면 절반을 차지했다 — 접어 두고 눌러야 편다. */}
+      {unknown.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showUnknown }}
+          onPress={() => setShowUnknown((v) => !v)}
+          style={styles.moreRow}
+        >
+          <Text style={styles.moreText}>
+            판단 보류 {unknown.length}개 {showUnknown ? '접기' : '보기'}
+          </Text>
+          <MaterialCommunityIcons
+            name={showUnknown ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={theme.colors.textMuted}
+          />
+        </Pressable>
+      ) : null}
+      {showUnknown ? unknown.map((n) => <NutrientRow key={n.key} n={n} styles={styles} />) : null}
       <Text style={styles.small}>식단 데이터에 값이 없어 판단하지 않는 영양소: {data.notMeasured.join(', ')}</Text>
     </View>
   );
@@ -159,7 +189,7 @@ const NutrientRow = ({ n, styles }: { n: MealNutrientResultType; styles: Styles 
   );
 };
 
-const AdviceCard = ({ days, ready, styles }: { days: Period; ready: boolean; styles: Styles }) => {
+const AdviceCard = ({ days, ready, styles }: { days: MealNutritionPeriod; ready: boolean; styles: Styles }) => {
   const theme = useTheme();
   const latest = useLatestMealNutritionAdvice();
   const create = useCreateMealNutritionAdvice();
@@ -252,8 +282,9 @@ const AdviceLine = ({ label, text, styles }: { label: string; text: string; styl
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    content: { padding: 16, gap: 12 },
     body: { gap: 12 },
+    moreRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
+    moreText: { fontSize: mealFont.footnote, fontWeight: '600', color: theme.colors.textMuted },
     meta: { fontSize: mealFont.callout, lineHeight: 20, color: theme.colors.text },
     small: { fontSize: mealFont.caption, lineHeight: 17, color: theme.colors.textMuted },
     row: { gap: 5 },

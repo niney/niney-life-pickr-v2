@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,12 +20,10 @@ import {
   toLocalDateKey,
 } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
+import { MealAnalysisView } from '~/components/meal/MealAnalysisView';
 import { MealCalendarView } from '~/components/meal/MealCalendarView';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
-import { MealNutritionView } from '~/components/meal/MealNutritionView';
-import { MealPreferenceView } from '~/components/meal/MealPreferenceView';
 import { MealRecommendView } from '~/components/meal/MealRecommendView';
-import { MealStatsView } from '~/components/meal/MealStatsView';
 import { Chip, ChipRow, FieldLabel, MealIconButton, MealSection } from '~/components/meal/mealUi';
 import {
   MEAL_FAB_SIZE,
@@ -34,21 +32,44 @@ import {
   useMealFabInsets,
 } from '~/components/meal/mealTokens';
 
-// 식단 — 기록 / 달력 / 통계 / 추천 / 영양 / 설정. 입력(사진)은 앱에서만 하므로 여기 FAB 가 진입점이다.
+// 식단 — 기록 / 분석 / 추천 세 탭. 입력(사진)은 앱에서만 하므로 여기 FAB 가 진입점이다.
 // 게스트는 진입점을 볼 수 없지만(프로필에서 숨김) 딥링크로 올 수 있어 화면에서도 안내한다.
+//
+// 예전 여섯 탭(기록·달력·통계·추천·영양·설정)을 줄였다 — 달력은 기록 탭의 보기 전환(헤더 아이콘),
+// 통계·영양은 '분석' 한 화면의 섹션, 설정은 헤더 톱니 아이콘으로 여는 /meal/settings 화면이다.
+// 옛 ?tab= 값(calendar·stats·nutrition·preference)도 새 자리로 연다.
 //
 // 기록 목록은 검색창 + 필터 버튼만 위에 두고, 필터는 버튼을 눌러야 펼친다(접혀 있으면 걸린 조건만 칩으로 보인다).
 // 필터 패널이 첫 화면을 다 차지해 기록이 아래로 밀리던 것을 고쳤다.
 
-type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'nutrition' | 'preference';
+type Tab = 'records' | 'analysis' | 'recommend';
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
-  { value: 'list', label: '기록' },
-  { value: 'calendar', label: '달력' },
-  { value: 'stats', label: '통계' },
+  { value: 'records', label: '기록' },
+  { value: 'analysis', label: '분석' },
   { value: 'recommend', label: '추천' },
-  { value: 'nutrition', label: '영양' },
-  { value: 'preference', label: '설정' },
 ];
+type RecordsView = 'list' | 'calendar';
+
+// ?tab= → 처음 열 탭·기록 보기. 옛 탭 이름도 받는다(알림·홈 카드 링크는 recommend 만 쓴다).
+const initialFromParam = (
+  tab: string | undefined,
+): { tab: Tab; recordsView: RecordsView; openSettings: boolean } => {
+  switch (tab) {
+    case 'analysis':
+    case 'stats':
+    case 'nutrition':
+      return { tab: 'analysis', recordsView: 'list', openSettings: false };
+    case 'recommend':
+      return { tab: 'recommend', recordsView: 'list', openSettings: false };
+    case 'calendar':
+      return { tab: 'records', recordsView: 'calendar', openSettings: false };
+    case 'preference':
+    case 'settings':
+      return { tab: 'records', recordsView: 'list', openSettings: true };
+    default:
+      return { tab: 'records', recordsView: 'list', openSettings: false };
+  }
+};
 
 type PeriodDays = 7 | 30 | 90 | null;
 const PERIOD_OPTIONS: ReadonlyArray<{ value: PeriodDays; label: string }> = [
@@ -91,10 +112,9 @@ export default function MealScreen() {
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const requestedSlot = Array.isArray(params.slot) ? params.slot[0] : params.slot;
   const initialSlot = isMealSlot(requestedSlot) ? requestedSlot : undefined;
-  const initialTab = TABS.some((candidate) => candidate.value === requestedTab)
-    ? (requestedTab as Tab)
-    : 'list';
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const initial = useMemo(() => initialFromParam(requestedTab), [requestedTab]);
+  const [tab, setTab] = useState<Tab>(initial.tab);
+  const [recordsView, setRecordsView] = useState<RecordsView>(initial.recordsView);
   const [searchText, setSearchText] = useState('');
   const [appliedQ, setAppliedQ] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -105,6 +125,14 @@ export default function MealScreen() {
   const token = useAuthStore((s) => s.token);
   const isGuest = useAuthStore((s) => s.isGuest);
   const loggedIn = !!token && !isGuest;
+
+  // 옛 ?tab=preference 링크 — 설정은 이제 따로 연 화면이다. 한 번만 민다.
+  const settingsOpened = useRef(false);
+  useEffect(() => {
+    if (!initial.openSettings || !loggedIn || settingsOpened.current) return;
+    settingsOpened.current = true;
+    router.push('/meal/settings' as never);
+  }, [initial.openSettings, loggedIn, router]);
 
   const today = toLocalDateKey(new Date());
   const periodRange = useMemo(() => dateRangeForPeriod(periodDays, today), [periodDays, today]);
@@ -157,7 +185,42 @@ export default function MealScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: '식단' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: '식단',
+          headerRight: loggedIn
+            ? () => (
+                <View style={styles.headerActions}>
+                  {tab === 'records' ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={recordsView === 'list' ? '달력으로 보기' : '목록으로 보기'}
+                      onPress={() => setRecordsView(recordsView === 'list' ? 'calendar' : 'list')}
+                      hitSlop={6}
+                      style={({ pressed }) => [styles.headerButton, { opacity: pressed ? 0.5 : 1 }]}
+                    >
+                      <MaterialCommunityIcons
+                        name={recordsView === 'list' ? 'calendar-month-outline' : 'format-list-bulleted'}
+                        size={23}
+                        color={theme.colors.text}
+                      />
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="식단 설정"
+                    onPress={() => router.push('/meal/settings' as never)}
+                    hitSlop={6}
+                    style={({ pressed }) => [styles.headerButton, { opacity: pressed ? 0.5 : 1 }]}
+                  >
+                    <MaterialCommunityIcons name="cog-outline" size={23} color={theme.colors.text} />
+                  </Pressable>
+                </View>
+              )
+            : undefined,
+        }}
+      />
 
       {!loggedIn ? (
         <View style={styles.center}>
@@ -178,7 +241,7 @@ export default function MealScreen() {
             />
           </View>
 
-          {tab === 'list' ? (
+          {tab === 'records' && recordsView === 'list' ? (
             <FlatList
               data={items}
               keyExtractor={(e) => e.id}
@@ -393,31 +456,25 @@ export default function MealScreen() {
                 );
               }}
             />
-          ) : tab === 'calendar' ? (
+          ) : tab === 'records' ? (
             <MealCalendarView onOpenEntry={(id) => router.push(`/meal/${id}` as never)} />
-          ) : tab === 'stats' ? (
-            <MealStatsView />
-          ) : tab === 'recommend' ? (
-            <MealRecommendView key={initialSlot ?? 'auto'} initialSlot={initialSlot} />
-          ) : tab === 'nutrition' ? (
-            <MealNutritionView />
+          ) : tab === 'analysis' ? (
+            <MealAnalysisView />
           ) : (
-            <MealPreferenceView />
+            <MealRecommendView key={initialSlot ?? 'auto'} initialSlot={initialSlot} />
           )}
 
-          {tab === 'preference' ? null : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="식단 기록하기"
-              onPress={() => router.push('/meal/new' as never)}
-              style={({ pressed }) => [
-                styles.fab,
-                { bottom: fabBottom, backgroundColor: theme.colors.primary, opacity: pressed ? 0.85 : 1 },
-              ]}
-            >
-              <MaterialCommunityIcons name="plus" size={30} color={theme.colors.primaryText} />
-            </Pressable>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="식단 기록하기"
+            onPress={() => router.push('/meal/new' as never)}
+            style={({ pressed }) => [
+              styles.fab,
+              { bottom: fabBottom, backgroundColor: theme.colors.primary, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <MaterialCommunityIcons name="plus" size={30} color={theme.colors.primaryText} />
+          </Pressable>
         </>
       )}
     </View>
@@ -427,6 +484,8 @@ export default function MealScreen() {
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bgGrouped },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    headerButton: { padding: 6 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
     loginBtn: {
       backgroundColor: theme.colors.primary,

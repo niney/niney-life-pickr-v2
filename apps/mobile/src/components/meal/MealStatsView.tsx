@@ -1,19 +1,22 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useMealStats, useTheme, type Theme } from '@repo/shared';
+import { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { SegmentedControl, useMealStats, useTheme, type Theme } from '@repo/shared';
 import { mealDateLabel, mealDateTitle, toLocalDateKey } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
-import { BarRow, Chip, ChipRow, MealSection, MealSectionTitle, StatTile } from './mealUi';
-import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
+import { BarRow, MealSection, MealSectionTitle, StatTile } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 
-// 통계 — 기간(1주/1달/3달) 전환 + 분포 막대 + 많이 먹은 음식 + 날짜별 끼니 수.
+// 통계 — 분석 탭(MealAnalysisView)의 섹션들. 기간(1주/1달/3달)은 분석 탭이 들고 있고,
+// 위쪽(한눈에·주간 인사이트)과 아래쪽(분포·자주 먹은 음식·날짜별·추천 반응)이 같은 기간을 본다.
+// 두 조각이 같은 쿼리 키로 useMealStats 를 불러 요청은 한 번이다.
 // 차트 라이브러리를 쓰지 않는 리포 관례대로 View 폭 계산 막대로만 그린다.
 
-const RANGES = [
-  { key: '7', label: '1주', days: 7 },
-  { key: '30', label: '1달', days: 30 },
-  { key: '90', label: '3달', days: 90 },
+const MEAL_STATS_RANGES = [
+  { value: '7', label: '1주', days: 7 },
+  { value: '30', label: '1달', days: 30 },
+  { value: '90', label: '3달', days: 90 },
 ] as const;
+export type MealStatsRangeKey = (typeof MEAL_STATS_RANGES)[number]['value'];
 
 const shift = (days: number): { from: string; to: string } => {
   const to = new Date();
@@ -22,116 +25,141 @@ const shift = (days: number): { from: string; to: string } => {
   return { from: toLocalDateKey(from), to: toLocalDateKey(to) };
 };
 
-export const MealStatsView = () => {
+const useRangeStats = (rangeKey: MealStatsRangeKey) => {
+  const range = MEAL_STATS_RANGES.find((r) => r.value === rangeKey) ?? MEAL_STATS_RANGES[1];
+  const { from, to } = useMemo(() => shift(range.days), [range.days]);
+  return { range, query: useMealStats(from, to) };
+};
+
+// 한눈에(기간 전환 포함) + 주간 인사이트.
+export const MealStatsOverview = ({
+  rangeKey,
+  onChangeRange,
+}: {
+  rangeKey: MealStatsRangeKey;
+  onChangeRange: (key: MealStatsRangeKey) => void;
+}) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { contentBottom } = useMealFabInsets();
   const today = toLocalDateKey(new Date());
-  const [rangeKey, setRangeKey] = useState<(typeof RANGES)[number]['key']>('30');
-  const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[1];
-  const { from, to } = useMemo(() => shift(range.days), [range.days]);
-  const { data, isLoading, error, refetch, isFetching } = useMealStats(from, to);
+  const { query } = useRangeStats(rangeKey);
+  const { data, isLoading, error, refetch, isFetching } = query;
 
-  if (isLoading) return <StateBlock kind="loading" />;
-  if (error) return <StateBlock kind="error" message="통계를 불러오지 못했습니다." onRetry={() => void refetch()} retrying={isFetching} />;
-  if (!data) return <StateBlock kind="empty" />;
+  return (
+    <>
+      <MealSection>
+        <MealSectionTitle
+          title="한눈에"
+          sub={
+            data
+              ? `${mealDateTitle(data.from, today, { weekday: false })} ~ ${mealDateTitle(data.to, today, { weekday: false })}`
+              : null
+          }
+        />
+        <SegmentedControl
+          value={rangeKey}
+          onChange={onChangeRange}
+          options={MEAL_STATS_RANGES.map((r) => ({ value: r.value, label: r.label }))}
+        />
+        {isLoading ? (
+          <StateBlock kind="loading" />
+        ) : error ? (
+          <StateBlock
+            kind="error"
+            message="통계를 불러오지 못했습니다."
+            onRetry={() => void refetch()}
+            retrying={isFetching}
+          />
+        ) : !data ? (
+          <StateBlock kind="empty" />
+        ) : (
+          <>
+            <View style={styles.tiles}>
+              <StatTile
+                icon="silverware-fork-knife"
+                label="기록"
+                value={`${data.entryCount}끼`}
+                sub={`${data.recordedDays}/${data.totalDays}일`}
+              />
+              <StatTile icon="fire" label="연속" value={`${data.streakDays}일`} sub="기록한 날" />
+              <StatTile
+                icon="repeat"
+                label="겹침"
+                value={`${Math.round(data.repeatRate * 100)}%`}
+                sub="7일 내 재등장"
+              />
+              {data.nutrition.avgKcalPerDay !== null ? (
+                <StatTile
+                  icon="fire-circle"
+                  label="하루 평균"
+                  value={`${Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')}kcal`}
+                  sub={`주식 ${Math.round(data.nutrition.mainItemCoverage * 100)}% · 직접 ${Math.round(data.nutrition.directCoverage * 100)}%`}
+                />
+              ) : null}
+            </View>
+            {!data.nutrition.averageReliable && data.entryCount > 0 ? (
+              <Text style={styles.coverageNote}>
+                주식 영양 근거가 {Math.round(data.nutrition.mainItemCoverage * 100)}%뿐이라 하루 평균은 숨겼어요.
+              </Text>
+            ) : null}
+            {data.nutrition.avgKcalPerDay !== null && data.nutrition.coverage < 1 ? (
+              <Text style={styles.coverageNote}>
+                직접값 {data.nutrition.itemsDirect}개, 추정값(유사 음식·통상 1인분) {data.nutrition.itemsEstimated}개만
+                반영한 값이라 실제와 다를 수 있어요.
+              </Text>
+            ) : null}
+          </>
+        )}
+      </MealSection>
 
+      {data && data.insights.length > 0 ? (
+        <MealSection>
+          <MealSectionTitle title="주간 인사이트" sub="최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요" />
+          <View style={styles.insightList}>
+            {data.insights.map((insight) => (
+              <View
+                key={insight.key}
+                style={[
+                  styles.insight,
+                  {
+                    backgroundColor:
+                      insight.tone === 'positive'
+                        ? 'rgba(34,197,94,0.10)'
+                        : insight.tone === 'attention'
+                          ? 'rgba(245,158,11,0.12)'
+                          : theme.colors.surfaceAlt,
+                  },
+                ]}
+              >
+                <Text style={[styles.insightTitle, { color: theme.colors.text }]}>{insight.title}</Text>
+                <Text style={[styles.insightDetail, { color: theme.colors.textMuted }]}>{insight.detail}</Text>
+              </View>
+            ))}
+          </View>
+        </MealSection>
+      ) : null}
+    </>
+  );
+};
+
+// 분포·자주 먹은 음식·날짜별 끼니 수·추천 반응. 기간은 위 '한눈에'와 같다.
+export const MealStatsDetails = ({ rangeKey }: { rangeKey: MealStatsRangeKey }) => {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const today = toLocalDateKey(new Date());
+  const { range, query } = useRangeStats(rangeKey);
+  const { data } = query;
+  // 로딩·오류는 '한눈에'가 보여 준다 — 여기서 또 그리지 않는다.
+  if (!data) return null;
+
+  const periodSub = `최근 ${range.label}`;
   const maxDish = Math.max(1, ...data.byDishType.map((b) => b.count));
   const maxIngredient = Math.max(1, ...data.byMainIngredient.map((b) => b.count));
   const maxCuisine = Math.max(1, ...data.byCuisine.map((b) => b.count));
   const maxDay = Math.max(1, ...data.byDate.map((d) => d.count));
 
   return (
-    <ScrollView
-      contentContainerStyle={[styles.content, { paddingBottom: contentBottom }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <ChipRow>
-        {RANGES.map((r) => (
-          <Chip key={r.key} label={r.label} selected={rangeKey === r.key} onPress={() => setRangeKey(r.key)} />
-        ))}
-      </ChipRow>
-
-      <MealSection>
-        <MealSectionTitle
-          title="한눈에"
-          sub={`${mealDateTitle(data.from, today, { weekday: false })} ~ ${mealDateTitle(data.to, today, { weekday: false })}`}
-        />
-        <View style={styles.tiles}>
-          <StatTile icon="silverware-fork-knife" label="기록" value={`${data.entryCount}끼`} sub={`${data.recordedDays}/${data.totalDays}일`} />
-          <StatTile icon="fire" label="연속" value={`${data.streakDays}일`} sub="기록한 날" />
-          <StatTile icon="repeat" label="겹침" value={`${Math.round(data.repeatRate * 100)}%`} sub="7일 내 재등장" />
-          {data.nutrition.avgKcalPerDay !== null ? (
-            <StatTile
-              icon="fire-circle"
-              label="하루 평균"
-              value={`${Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')}kcal`}
-              sub={`주식 ${Math.round(data.nutrition.mainItemCoverage * 100)}% · 직접 ${Math.round(data.nutrition.directCoverage * 100)}%`}
-            />
-          ) : null}
-        </View>
-        {!data.nutrition.averageReliable && data.entryCount > 0 ? (
-          <Text style={styles.coverageNote}>
-            주식 영양 근거가 {Math.round(data.nutrition.mainItemCoverage * 100)}%뿐이라 하루 평균은 숨겼어요.
-          </Text>
-        ) : null}
-        {data.nutrition.avgKcalPerDay !== null && data.nutrition.coverage < 1 ? (
-          <Text style={styles.coverageNote}>
-            직접값 {data.nutrition.itemsDirect}개, 추정값(유사 음식·통상 1인분) {data.nutrition.itemsEstimated}개만 반영한 값이라 실제와 다를 수 있어요.
-          </Text>
-        ) : null}
-      </MealSection>
-
-      <MealSection>
-        <MealSectionTitle title="주간 인사이트" sub="최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요" />
-        <View style={styles.insightList}>
-          {data.insights.map((insight) => (
-            <View
-              key={insight.key}
-              style={[
-                styles.insight,
-                {
-                  backgroundColor:
-                    insight.tone === 'positive'
-                      ? 'rgba(34,197,94,0.10)'
-                      : insight.tone === 'attention'
-                        ? 'rgba(245,158,11,0.12)'
-                        : theme.colors.surfaceAlt,
-                },
-              ]}
-            >
-              <Text style={[styles.insightTitle, { color: theme.colors.text }]}>{insight.title}</Text>
-              <Text style={[styles.insightDetail, { color: theme.colors.textMuted }]}>{insight.detail}</Text>
-            </View>
-          ))}
-        </View>
-      </MealSection>
-
-      <MealSection>
-        <MealSectionTitle title="추천 반응" sub="선택한 추천이 실제 기록으로 이어졌는지 보여 줘요" />
-        <View style={styles.tiles}>
-          <StatTile
-            icon="cursor-pointer"
-            label="선택"
-            value={`${data.recommendation.chosenCount}건`}
-            sub={`노출 ${data.recommendation.shownCount}건 · ${Math.round(data.recommendation.pickRate * 100)}%`}
-          />
-          <StatTile icon="check-circle" label="기록 완료" value={`${data.recommendation.loggedCount}건`} />
-          <StatTile
-            icon="thumb-up"
-            label="평가"
-            value={`${data.recommendation.ratedCount}건`}
-            sub={`후보별 ${data.recommendation.candidateRatedCount}건`}
-          />
-          <StatTile
-            icon="chart-line"
-            label="추천 수락률"
-            value={`${Math.round(data.recommendation.acceptanceRate * 100)}%`}
-            sub="선택 대비 기록"
-          />
-        </View>
-      </MealSection>
-
+    <>
       {data.entryCount === 0 ? (
         <MealSection>
           <StateBlock kind="empty" message="이 기간에는 기록이 없어요." />
@@ -139,28 +167,28 @@ export const MealStatsView = () => {
       ) : (
         <>
           <MealSection>
-            <MealSectionTitle title="무엇을 먹었나" sub="조리 형태 (주식 기준)" />
+            <MealSectionTitle title="무엇을 먹었나" sub={`조리 형태 · 주식 기준 · ${periodSub}`} />
             {data.byDishType.slice(0, 8).map((b) => (
               <BarRow key={b.key} label={b.label} value={b.count} max={maxDish} />
             ))}
           </MealSection>
 
           <MealSection>
-            <MealSectionTitle title="주재료" />
+            <MealSectionTitle title="주재료" sub={periodSub} />
             {data.byMainIngredient.slice(0, 8).map((b) => (
               <BarRow key={b.key} label={b.label} value={b.count} max={maxIngredient} />
             ))}
           </MealSection>
 
           <MealSection>
-            <MealSectionTitle title="요리 계통" />
+            <MealSectionTitle title="요리 계통" sub={periodSub} />
             {data.byCuisine.slice(0, 6).map((b) => (
               <BarRow key={b.key} label={b.label} value={b.count} max={maxCuisine} />
             ))}
           </MealSection>
 
           <MealSection>
-            <MealSectionTitle title="자주 먹은 음식" sub="같은 이름끼리 묶었어요" />
+            <MealSectionTitle title="자주 먹은 음식" sub={`같은 이름끼리 묶었어요 · ${periodSub}`} />
             {data.topFoods.length === 0 ? (
               <Text style={styles.muted}>아직 반복된 음식이 없어요.</Text>
             ) : (
@@ -178,7 +206,7 @@ export const MealStatsView = () => {
           </MealSection>
 
           <MealSection>
-            <MealSectionTitle title="날짜별 끼니 수" />
+            <MealSectionTitle title="날짜별 끼니 수" sub={periodSub} />
             <View style={styles.dayBars}>
               {data.byDate.map((d) => (
                 <View key={d.date} style={styles.dayBarCol}>
@@ -207,15 +235,39 @@ export const MealStatsView = () => {
           </MealSection>
         </>
       )}
-    </ScrollView>
+
+      <MealSection>
+        <MealSectionTitle title="추천 반응" sub={`선택한 추천이 실제 기록으로 이어졌는지 · ${periodSub}`} />
+        <View style={styles.tiles}>
+          <StatTile
+            icon="cursor-pointer"
+            label="선택"
+            value={`${data.recommendation.chosenCount}건`}
+            sub={`노출 ${data.recommendation.shownCount}건 · ${Math.round(data.recommendation.pickRate * 100)}%`}
+          />
+          <StatTile icon="check-circle" label="기록 완료" value={`${data.recommendation.loggedCount}건`} />
+          <StatTile
+            icon="thumb-up"
+            label="평가"
+            value={`${data.recommendation.ratedCount}건`}
+            sub={`후보별 ${data.recommendation.candidateRatedCount}건`}
+          />
+          <StatTile
+            icon="chart-line"
+            label="추천 수락률"
+            value={`${Math.round(data.recommendation.acceptanceRate * 100)}%`}
+            sub="선택 대비 기록"
+          />
+        </View>
+      </MealSection>
+    </>
   );
 };
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    content: { padding: 16, gap: 12 },
     tiles: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-    coverageNote: { marginTop: 4, fontSize: mealFont.caption, color: theme.colors.textMuted, lineHeight: 17 },
+    coverageNote: { fontSize: mealFont.caption, color: theme.colors.textMuted, lineHeight: 17 },
     insightList: { gap: 8 },
     insight: { borderRadius: mealRadius.control, paddingHorizontal: 12, paddingVertical: 10, gap: 3 },
     insightTitle: { fontSize: mealFont.callout, fontWeight: '700' },

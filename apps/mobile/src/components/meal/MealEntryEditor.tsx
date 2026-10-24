@@ -57,6 +57,7 @@ import { Note } from '~/components/common/Cards';
 import { MealItemRow } from './MealItemRow';
 import { MealPhotoThumb } from './MealPhotoThumb';
 import { MealPendingPhotoThumb } from './MealPendingPhotoThumb';
+import { MealTimeSheet } from './MealTimeSheet';
 import { RestaurantPickerSheet } from '~/components/settlement/RestaurantPickerSheet';
 import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
@@ -116,7 +117,7 @@ export const MealEntryEditor = ({
     eatenDayDiff !== null && eatenDayDiff >= 0 && eatenDayDiff <= 6
       ? `${mealDateLabel(draft.eatenDate, today)} · ${mealDateTitle(draft.eatenDate, today)}`
       : mealDateTitle(draft.eatenDate, today);
-  const [editingTime, setEditingTime] = useState<string | null>(null);
+  const [timeSheetOpen, setTimeSheetOpen] = useState(false);
   const upload = useUploadMealPhoto();
   const deletePhoto = useDeleteMealPhoto();
   const recognize = useRecognizeMeal();
@@ -559,8 +560,6 @@ export const MealEntryEditor = ({
   // 날짜는 그대로 두고 시:분만 바꾼다 — '하루' 앞뒤 버튼으로 옮겨 둔 날짜가 되돌아가면 안 된다.
   // (시각은 기기 로컬 기준으로 적용한다. 서버 프리셋은 Asia/Seoul 기준이라 국내 사용에선 같다.)
   const setTimeOfDay = (minutesOfDay: number) => {
-    // 편집 중이었다면 닫는다 — 안 닫으면 입력칸이 그대로 떠 있어 바뀐 시각이 가려진다(시뮬레이터 실측).
-    setEditingTime(null);
     const d = new Date(draft.eatenAt);
     d.setHours(Math.floor(minutesOfDay / 60), minutesOfDay % 60, 0, 0);
     draft.setField('eatenAt', d.toISOString());
@@ -575,14 +574,8 @@ export const MealEntryEditor = ({
   };
 
   // 시각 직접 입력 — '12:40' 도 '1240' 도 받는다. 형식이 틀리면 조용히 되돌린다.
-  const commitTime = () => {
-    const minutes = editingTime === null ? null : parseTimeOfDay(editingTime);
-    if (minutes !== null) setTimeOfDay(minutes);
-    setEditingTime(null);
-  };
 
   const shiftTime = (minutes: number) => {
-    setEditingTime(null);
     const d = new Date(draft.eatenAt);
     d.setMinutes(d.getMinutes() + minutes);
     draft.setField('eatenAt', d.toISOString());
@@ -590,11 +583,16 @@ export const MealEntryEditor = ({
   };
 
   const shiftDay = (days: number) => {
-    setEditingTime(null);
     const d = new Date(draft.eatenAt);
     d.setDate(d.getDate() + days);
     draft.setField('eatenAt', d.toISOString());
     draft.setField('eatenDate', toLocalDateKey(d));
+  };
+  const setNow = () => {
+    const now = new Date();
+    draft.setField('eatenAt', now.toISOString());
+    draft.setField('eatenDate', toLocalDateKey(now));
+    draft.setField('slot', guessMealSlot(now));
   };
 
   const items = draft.items.filter((it) => it.name.trim().length > 0);
@@ -835,72 +833,26 @@ export const MealEntryEditor = ({
         {/* 언제·어떻게 */}
         <MealSection>
           <MealSectionTitle title="언제 먹었나요" />
-          <View style={styles.whenRow}>
-            <Chip label="하루" icon="chevron-left" accessibilityLabel="하루 전" onPress={() => shiftDay(-1)} />
-            {editingTime === null ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="시각 직접 입력"
-                // 빈 칸으로 열고 지금 시각을 placeholder 로 보여 준다. 값을 채워 두면 maxLength(5)에
-                // 걸려 한 글자도 못 치고 백스페이스를 다섯 번 눌러야 한다(시뮬레이터 실측).
-                onPress={() => setEditingTime('')}
-                style={styles.whenPress}
-              >
-                <Text style={styles.whenText}>{timeLabel(draft.eatenAt)}</Text>
-                <Text style={styles.whenDate} numberOfLines={1}>
-                  {eatenDayText}
-                </Text>
-              </Pressable>
-            ) : (
-              <TextInput
-                value={editingTime}
-                onChangeText={setEditingTime}
-                onBlur={commitTime}
-                onSubmitEditing={commitTime}
-                keyboardType="number-pad"
-                maxLength={5}
-                autoFocus
-                selectTextOnFocus
-                placeholder={timeLabel(draft.eatenAt)}
-                placeholderTextColor={theme.colors.textMuted}
-                style={styles.timeInput}
-                accessibilityLabel="시각 입력"
-              />
-            )}
-            <Chip
-              label="하루"
-              trailingIcon="chevron-right"
-              accessibilityLabel="하루 뒤"
-              onPress={() => shiftDay(1)}
-            />
-          </View>
-
-          {/* 끼니별 '내가 보통 먹는 시각' — 한 번에 시각+끼니를 정한다. 기록이 적으면 일반값. */}
-          <ChipRow>
-            {(timePresets.data?.presets ?? []).map((p) => (
-              <Chip
-                key={p.slot}
-                label={`${MEAL_SLOT_LABEL[p.slot]} ${p.time}`}
-                onPress={() => applyPreset(p.slot, p.time)}
-              />
-            ))}
-          </ChipRow>
-
-          <ChipRow>
-            <Chip label="30분" icon="minus" accessibilityLabel="30분 앞으로" onPress={() => shiftTime(-30)} />
-            <Chip label="30분" icon="plus" accessibilityLabel="30분 뒤로" onPress={() => shiftTime(30)} />
-            <Chip
-              label="지금"
-              icon="clock-outline"
-              onPress={() => {
-                setEditingTime(null);
-                const now = new Date();
-                draft.setField('eatenAt', now.toISOString());
-                draft.setField('eatenDate', toLocalDateKey(now));
-                draft.setField('slot', guessMealSlot(now));
-              }}
-            />
-          </ChipRow>
+          {/* 시각은 한 줄로 보이고, 누르면 시트에서 날짜·시각·끼니별 보통 시각·±30분을 고른다. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`먹은 시각 ${timeLabel(draft.eatenAt)}, ${eatenDayText}. 눌러서 바꾸기`}
+            onPress={() => setTimeSheetOpen(true)}
+            style={({ pressed }) => [
+              styles.whenButton,
+              { backgroundColor: theme.colors.surfaceAlt, opacity: pressed ? 0.75 : 1 },
+            ]}
+          >
+            <MaterialCommunityIcons name="clock-outline" size={22} color={theme.colors.primary} />
+            <View style={styles.whenBody}>
+              <Text style={styles.whenText}>{timeLabel(draft.eatenAt)}</Text>
+              <Text style={styles.whenDate} numberOfLines={1}>
+                {eatenDayText}
+              </Text>
+            </View>
+            <Text style={styles.whenChange}>바꾸기</Text>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textMuted} />
+          </Pressable>
 
           <FieldLabel>끼니</FieldLabel>
           <ChipRow>
@@ -1024,6 +976,19 @@ export const MealEntryEditor = ({
         </Pressable>
       </View>
 
+      <MealTimeSheet
+        open={timeSheetOpen}
+        onClose={() => setTimeSheetOpen(false)}
+        eatenAt={draft.eatenAt}
+        eatenDate={draft.eatenDate}
+        presets={timePresets.data?.presets ?? []}
+        onShiftDay={shiftDay}
+        onShiftTime={shiftTime}
+        onSetTime={setTimeOfDay}
+        onPreset={applyPreset}
+        onNow={setNow}
+      />
+
       <RestaurantPickerSheet
         open={placePickerOpen}
         onClose={() => setPlacePickerOpen(false)}
@@ -1097,12 +1062,15 @@ const createStyles = (theme: Theme) =>
     itemList: { gap: 8 },
     emptyText: { fontSize: mealFont.footnote, color: theme.colors.textMuted },
     addItemBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8 },
-    whenRow: {
+    whenButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 8,
+      gap: 12,
+      borderRadius: mealRadius.control,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
     },
+    whenBody: { flex: 1, minWidth: 0 },
     whenText: {
       fontSize: mealFont.title,
       fontWeight: '700',
@@ -1110,17 +1078,7 @@ const createStyles = (theme: Theme) =>
       fontVariant: ['tabular-nums'],
     },
     whenDate: { fontSize: mealFont.caption, color: theme.colors.textMuted, marginTop: 1 },
-    whenPress: { flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 2 },
-    timeInput: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: mealFont.title,
-      fontVariant: ['tabular-nums'],
-      color: theme.colors.text,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.primary,
-      paddingVertical: 2,
-    },
+    whenChange: { fontSize: mealFont.footnote, color: theme.colors.textMuted },
     memo: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,

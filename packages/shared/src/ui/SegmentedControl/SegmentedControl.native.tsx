@@ -39,10 +39,12 @@ export const SegmentedControl = <T extends string>({
   });
 
   return (
-    <View style={wrapperStyle}>
+    <View accessibilityRole="tablist" style={wrapperStyle}>
       {options.map((opt) => (
         <Pressable
           key={opt.value}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: opt.value === value }}
           onPress={() => onChange(opt.value)}
           style={itemStyle(opt.value === value)}
         >

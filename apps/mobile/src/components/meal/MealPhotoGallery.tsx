@@ -5,13 +5,17 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { useAuthStore } from '@repo/shared';
+import { useAuthStore, useTheme } from '@repo/shared';
 import { Lightbox } from '~/components/Lightbox';
 import { useCachedMealPhoto } from '~/hooks/useCachedMealPhoto';
 import { ensureMealPhotoFile } from '~/lib/mealPhotoCache';
@@ -41,13 +45,74 @@ const FullPhotoResolver = ({ token, enabled, onResolved }: ResolverProps) => {
   return null;
 };
 
+// 상세 맨 위 큰 사진 한 장 — 썸네일(320px)을 먼저 보이고, 지금 보이는 장(loadFull)만 원본을 받아 바꾼다.
+// 상세에 들어온 것만으로 모든 장의 원본을 받지 않는다는 위 원칙을 그대로 지킨다.
+const HeroPhoto = ({
+  token,
+  width,
+  height,
+  loadFull,
+  onPress,
+  onThumbUri,
+  onFullUri,
+}: {
+  token: string;
+  width: number;
+  height: number;
+  loadFull: boolean;
+  onPress: () => void;
+  onThumbUri: (token: string, uri: string | null) => void;
+  onFullUri: (token: string, uri: string) => void;
+}) => {
+  const theme = useTheme();
+  const thumb = useCachedMealPhoto(token, { variant: 'thumb' });
+  const full = useCachedMealPhoto(token, { variant: 'full', enabled: loadFull });
+  useEffect(() => {
+    onThumbUri(token, thumb.uri);
+    return () => onThumbUri(token, null);
+  }, [onThumbUri, thumb.uri, token]);
+  useEffect(() => {
+    if (full.uri) onFullUri(token, full.uri);
+  }, [full.uri, onFullUri, token]);
+  const uri = full.uri ?? thumb.uri;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={thumb.error ? '식단 사진 다시 불러오기' : '식단 사진 크게 보기'}
+      onPress={uri ? onPress : thumb.error ? thumb.retry : undefined}
+      disabled={!uri && !thumb.error}
+      style={[styles.hero, { width, height, backgroundColor: theme.colors.surfaceAlt }]}
+    >
+      {uri ? (
+        <Image
+          source={uri}
+          style={{ width, height }}
+          contentFit="cover"
+          recyclingKey={`${token}:${uri}`}
+          transition={150}
+          cachePolicy="memory"
+        />
+      ) : thumb.error ? (
+        <MaterialCommunityIcons name="image-off-outline" size={32} color={theme.colors.textMuted} />
+      ) : (
+        <ActivityIndicator color={theme.colors.textMuted} />
+      )}
+    </Pressable>
+  );
+};
+
 export const MealPhotoGallery = ({
   tokens,
   size = 96,
+  variant = 'thumbs',
 }: {
   tokens: readonly string[];
   size?: number;
+  // 'hero' — 화면 폭 4:3 큰 사진을 옆으로 넘긴다(상세 맨 위). 'thumbs' — 썸네일 줄.
+  variant?: 'thumbs' | 'hero';
 }) => {
+  const { width: windowWidth } = useWindowDimensions();
+  const [heroPage, setHeroPage] = useState(0);
   const authToken = useAuthStore((state) => state.token);
   const tokenKey = tokens.join(':');
   // 사진 토큰은 UUID라 ':'를 포함하지 않는다. 값 기반 key로 배열 identity를
@@ -210,19 +275,54 @@ export const MealPhotoGallery = ({
 
   if (tokenList.length === 0) return null;
 
+  const heroHeight = Math.round((windowWidth * 3) / 4);
+
   return (
     <>
-      <View style={styles.photos}>
-        {tokenList.map((token, index) => (
-          <MealPhotoThumb
-            key={token}
-            token={token}
-            size={size}
-            onPress={() => setRequestedIndex(index)}
-            onUriResolved={handleThumbUri}
-          />
-        ))}
-      </View>
+      {variant === 'hero' ? (
+        <View>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) =>
+              setHeroPage(Math.round(e.nativeEvent.contentOffset.x / Math.max(1, windowWidth)))
+            }
+          >
+            {tokenList.map((token, index) => (
+              <HeroPhoto
+                key={token}
+                token={token}
+                width={windowWidth}
+                height={heroHeight}
+                loadFull={index === heroPage}
+                onPress={() => setRequestedIndex(index)}
+                onThumbUri={handleThumbUri}
+                onFullUri={handleFullUri}
+              />
+            ))}
+          </ScrollView>
+          {tokenList.length > 1 ? (
+            <View style={styles.heroCount} pointerEvents="none">
+              <Text style={styles.heroCountText}>
+                {Math.min(heroPage, tokenList.length - 1) + 1} / {tokenList.length}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.photos}>
+          {tokenList.map((token, index) => (
+            <MealPhotoThumb
+              key={token}
+              token={token}
+              size={size}
+              onPress={() => setRequestedIndex(index)}
+              onUriResolved={handleThumbUri}
+            />
+          ))}
+        </View>
+      )}
 
       {activeIndex !== null
         ? tokenList.map((token) => (
@@ -271,6 +371,17 @@ export const MealPhotoGallery = ({
 
 const styles = StyleSheet.create({
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  hero: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  heroCount: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    borderRadius: mealRadius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  heroCountText: { color: '#fff', fontSize: mealFont.caption, fontWeight: '700', fontVariant: ['tabular-nums'] },
   preparing: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.94)',
