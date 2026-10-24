@@ -16,6 +16,7 @@ import { Lightbox } from '~/components/Lightbox';
 import { useCachedMealPhoto } from '~/hooks/useCachedMealPhoto';
 import { ensureMealPhotoFile } from '~/lib/mealPhotoCache';
 import { MealPhotoThumb } from './MealPhotoThumb';
+import { mealFont, mealRadius } from './mealTokens';
 
 interface ResolverProps {
   token: string;
@@ -277,13 +278,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
   },
-  preparingText: { color: '#fff', fontSize: 14 },
+  preparingText: { color: '#fff', fontSize: mealFont.callout },
   cancelButton: {
     marginTop: 8,
     paddingHorizontal: 18,
     paddingVertical: 9,
-    borderRadius: 999,
+    borderRadius: mealRadius.pill,
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
-  cancelText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  cancelText: { color: '#fff', fontSize: mealFont.footnote, fontWeight: '600' },
 });

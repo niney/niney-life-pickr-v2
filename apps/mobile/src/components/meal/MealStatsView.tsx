@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useMealStats, useTheme, type Theme } from '@repo/shared';
-import { toLocalDateKey } from '@repo/utils';
-import { Card, CardTitle, StateBlock, Tile } from '~/components/common/Cards';
-import { BarRow, Chip, ChipRow } from './mealUi';
+import { mealDateLabel, mealDateTitle, toLocalDateKey } from '@repo/utils';
+import { StateBlock } from '~/components/common/Cards';
+import { BarRow, Chip, ChipRow, MealSection, MealSectionTitle, StatTile } from './mealUi';
+import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
 
 // 통계 — 기간(1주/1달/3달) 전환 + 분포 막대 + 많이 먹은 음식 + 날짜별 끼니 수.
 // 차트 라이브러리를 쓰지 않는 리포 관례대로 View 폭 계산 막대로만 그린다.
@@ -24,6 +25,8 @@ const shift = (days: number): { from: string; to: string } => {
 export const MealStatsView = () => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { contentBottom } = useMealFabInsets();
+  const today = toLocalDateKey(new Date());
   const [rangeKey, setRangeKey] = useState<(typeof RANGES)[number]['key']>('30');
   const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[1];
   const { from, to } = useMemo(() => shift(range.days), [range.days]);
@@ -39,21 +42,27 @@ export const MealStatsView = () => {
   const maxDay = Math.max(1, ...data.byDate.map((d) => d.count));
 
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={[styles.content, { paddingBottom: contentBottom }]}
+      showsVerticalScrollIndicator={false}
+    >
       <ChipRow>
         {RANGES.map((r) => (
           <Chip key={r.key} label={r.label} selected={rangeKey === r.key} onPress={() => setRangeKey(r.key)} />
         ))}
       </ChipRow>
 
-      <Card>
-        <CardTitle title="한눈에" sub={`${data.from} ~ ${data.to}`} />
+      <MealSection>
+        <MealSectionTitle
+          title="한눈에"
+          sub={`${mealDateTitle(data.from, today, { weekday: false })} ~ ${mealDateTitle(data.to, today, { weekday: false })}`}
+        />
         <View style={styles.tiles}>
-          <Tile icon="silverware-fork-knife" label="기록" value={`${data.entryCount}끼`} sub={`${data.recordedDays}/${data.totalDays}일`} />
-          <Tile icon="fire" label="연속" value={`${data.streakDays}일`} sub="기록한 날" />
-          <Tile icon="repeat" label="겹침" value={`${Math.round(data.repeatRate * 100)}%`} sub="7일 내 재등장" />
+          <StatTile icon="silverware-fork-knife" label="기록" value={`${data.entryCount}끼`} sub={`${data.recordedDays}/${data.totalDays}일`} />
+          <StatTile icon="fire" label="연속" value={`${data.streakDays}일`} sub="기록한 날" />
+          <StatTile icon="repeat" label="겹침" value={`${Math.round(data.repeatRate * 100)}%`} sub="7일 내 재등장" />
           {data.nutrition.avgKcalPerDay !== null ? (
-            <Tile
+            <StatTile
               icon="fire-circle"
               label="하루 평균"
               value={`${Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')}kcal`}
@@ -71,10 +80,10 @@ export const MealStatsView = () => {
             직접값 {data.nutrition.itemsDirect}개, 추정값(유사 음식·통상 1인분) {data.nutrition.itemsEstimated}개만 반영한 값이라 실제와 다를 수 있어요.
           </Text>
         ) : null}
-      </Card>
+      </MealSection>
 
-      <Card>
-        <CardTitle title="주간 인사이트" sub="최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요" />
+      <MealSection>
+        <MealSectionTitle title="주간 인사이트" sub="최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요" />
         <View style={styles.insightList}>
           {data.insights.map((insight) => (
             <View
@@ -96,62 +105,62 @@ export const MealStatsView = () => {
             </View>
           ))}
         </View>
-      </Card>
+      </MealSection>
 
-      <Card>
-        <CardTitle title="추천 반응" sub="선택한 추천이 실제 기록으로 이어졌는지 보여 줘요" />
+      <MealSection>
+        <MealSectionTitle title="추천 반응" sub="선택한 추천이 실제 기록으로 이어졌는지 보여 줘요" />
         <View style={styles.tiles}>
-          <Tile
+          <StatTile
             icon="cursor-pointer"
             label="선택"
             value={`${data.recommendation.chosenCount}건`}
             sub={`노출 ${data.recommendation.shownCount}건 · ${Math.round(data.recommendation.pickRate * 100)}%`}
           />
-          <Tile icon="check-circle" label="기록 완료" value={`${data.recommendation.loggedCount}건`} />
-          <Tile
+          <StatTile icon="check-circle" label="기록 완료" value={`${data.recommendation.loggedCount}건`} />
+          <StatTile
             icon="thumb-up"
             label="평가"
             value={`${data.recommendation.ratedCount}건`}
             sub={`후보별 ${data.recommendation.candidateRatedCount}건`}
           />
-          <Tile
+          <StatTile
             icon="chart-line"
             label="추천 수락률"
             value={`${Math.round(data.recommendation.acceptanceRate * 100)}%`}
             sub="선택 대비 기록"
           />
         </View>
-      </Card>
+      </MealSection>
 
       {data.entryCount === 0 ? (
-        <Card>
+        <MealSection>
           <StateBlock kind="empty" message="이 기간에는 기록이 없어요." />
-        </Card>
+        </MealSection>
       ) : (
         <>
-          <Card>
-            <CardTitle title="무엇을 먹었나" sub="조리 형태 (주식 기준)" />
+          <MealSection>
+            <MealSectionTitle title="무엇을 먹었나" sub="조리 형태 (주식 기준)" />
             {data.byDishType.slice(0, 8).map((b) => (
               <BarRow key={b.key} label={b.label} value={b.count} max={maxDish} />
             ))}
-          </Card>
+          </MealSection>
 
-          <Card>
-            <CardTitle title="주재료" />
+          <MealSection>
+            <MealSectionTitle title="주재료" />
             {data.byMainIngredient.slice(0, 8).map((b) => (
               <BarRow key={b.key} label={b.label} value={b.count} max={maxIngredient} />
             ))}
-          </Card>
+          </MealSection>
 
-          <Card>
-            <CardTitle title="요리 계통" />
+          <MealSection>
+            <MealSectionTitle title="요리 계통" />
             {data.byCuisine.slice(0, 6).map((b) => (
               <BarRow key={b.key} label={b.label} value={b.count} max={maxCuisine} />
             ))}
-          </Card>
+          </MealSection>
 
-          <Card>
-            <CardTitle title="자주 먹은 음식" sub="같은 이름끼리 묶었어요" />
+          <MealSection>
+            <MealSectionTitle title="자주 먹은 음식" sub="같은 이름끼리 묶었어요" />
             {data.topFoods.length === 0 ? (
               <Text style={styles.muted}>아직 반복된 음식이 없어요.</Text>
             ) : (
@@ -161,15 +170,15 @@ export const MealStatsView = () => {
                     {f.name}
                   </Text>
                   <Text style={styles.topMeta}>
-                    {f.count}회 · 마지막 {f.lastEatenDate.slice(5)}
+                    {f.count}회 · 마지막 {mealDateLabel(f.lastEatenDate, today)}
                   </Text>
                 </View>
               ))
             )}
-          </Card>
+          </MealSection>
 
-          <Card>
-            <CardTitle title="날짜별 끼니 수" />
+          <MealSection>
+            <MealSectionTitle title="날짜별 끼니 수" />
             <View style={styles.dayBars}>
               {data.byDate.map((d) => (
                 <View key={d.date} style={styles.dayBarCol}>
@@ -186,10 +195,16 @@ export const MealStatsView = () => {
               ))}
             </View>
             <View style={styles.dayAxis}>
-              <Text style={styles.muted}>{data.byDate[0]?.date.slice(5)}</Text>
-              <Text style={styles.muted}>{data.byDate[data.byDate.length - 1]?.date.slice(5)}</Text>
+              <Text style={styles.muted}>
+                {data.byDate[0] ? mealDateTitle(data.byDate[0].date, today, { weekday: false }) : ''}
+              </Text>
+              <Text style={styles.muted}>
+                {data.byDate.length > 0
+                  ? mealDateTitle(data.byDate[data.byDate.length - 1]!.date, today, { weekday: false })
+                  : ''}
+              </Text>
             </View>
-          </Card>
+          </MealSection>
         </>
       )}
     </ScrollView>
@@ -200,15 +215,15 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     content: { padding: 16, gap: 12 },
     tiles: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-    coverageNote: { marginTop: 8, fontSize: 11, color: theme.colors.textMuted, lineHeight: 16 },
+    coverageNote: { marginTop: 4, fontSize: mealFont.caption, color: theme.colors.textMuted, lineHeight: 17 },
     insightList: { gap: 8 },
-    insight: { borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, gap: 3 },
-    insightTitle: { fontSize: 13, fontWeight: '600' },
-    insightDetail: { fontSize: 12, lineHeight: 17 },
-    muted: { fontSize: 12, color: theme.colors.textMuted },
-    topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
-    topName: { flex: 1, fontSize: 14, color: theme.colors.text },
-    topMeta: { fontSize: 11, color: theme.colors.textMuted },
+    insight: { borderRadius: mealRadius.control, paddingHorizontal: 12, paddingVertical: 10, gap: 3 },
+    insightTitle: { fontSize: mealFont.callout, fontWeight: '700' },
+    insightDetail: { fontSize: mealFont.footnote, lineHeight: 18 },
+    muted: { fontSize: mealFont.caption, color: theme.colors.textMuted },
+    topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+    topName: { flex: 1, fontSize: mealFont.body, color: theme.colors.text },
+    topMeta: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     dayBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 52 },
     dayBarCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
     dayBar: { width: '100%', borderRadius: 2 },

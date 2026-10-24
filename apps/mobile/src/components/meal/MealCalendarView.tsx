@@ -1,12 +1,21 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useMealCalendar, useMealEntries, useTheme, type Theme } from '@repo/shared';
-import { MEAL_SLOT_LABEL, MEAL_SLOT_ORDER, monthRange, toLocalMonthKey } from '@repo/utils';
-import { Card, CardTitle, StateBlock } from '~/components/common/Cards';
-import { Chip } from './mealUi';
+import {
+  MEAL_SLOT_LABEL,
+  MEAL_SLOT_ORDER,
+  mealDateTitle,
+  monthRange,
+  toLocalDateKey,
+  toLocalMonthKey,
+} from '@repo/utils';
+import { StateBlock } from '~/components/common/Cards';
 import { MealEntryCard } from './MealEntryCard';
+import { MealIconButton, MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
 
 // 달력 — 월 그리드(끼니 점) + 날짜 선택 시 그날 기록. 라이브러리 없이 7열 그리드를 직접 그린다.
+// 오늘은 숫자를 주황 원으로, 고른 날은 회색 칸으로 표시한다. 그날 기록은 섹션 안의 줄로 보인다(카드 안 카드 X).
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -19,6 +28,8 @@ const shiftMonth = (month: string, delta: number): string => {
 export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) => void }) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { contentBottom } = useMealFabInsets();
+  const today = toLocalDateKey(new Date());
   const [month, setMonth] = useState(() => toLocalMonthKey(new Date()));
   const [selected, setSelected] = useState<string | null>(null);
   const { data, isLoading, error, refetch, isFetching } = useMealCalendar(month);
@@ -50,12 +61,15 @@ export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) =>
   const byDate = useMemo(() => new Map((data?.days ?? []).map((d) => [d.date, d])), [data]);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <Card>
+    <ScrollView
+      contentContainerStyle={[styles.content, { paddingBottom: contentBottom }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <MealSection>
         <View style={styles.monthRow}>
-          <Chip label="◀" onPress={() => shift(-1)} />
-          <Text style={styles.monthText}>{month.replace('-', '년 ')}월</Text>
-          <Chip label="▶" onPress={() => shift(1)} />
+          <MealIconButton icon="chevron-left" accessibilityLabel="이전 달" onSurface onPress={() => shift(-1)} />
+          <Text style={styles.monthText}>{`${Number(month.slice(0, 4))}년 ${Number(month.slice(5))}월`}</Text>
+          <MealIconButton icon="chevron-right" accessibilityLabel="다음 달" onSurface onPress={() => shift(1)} />
         </View>
 
         {isLoading ? (
@@ -75,23 +89,36 @@ export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) =>
               {cells.map((date, i) => {
                 const info = date ? byDate.get(date) : undefined;
                 const isSelected = date !== null && date === selected;
+                const isToday = date === today;
                 return (
                   <Pressable
                     key={date ?? `pad-${i}`}
                     accessibilityRole="button"
-                    accessibilityLabel={date ?? undefined}
+                    accessibilityLabel={date ? `${mealDateTitle(date, today)}${info ? `, ${info.count}끼` : ''}` : undefined}
+                    accessibilityState={{ selected: isSelected }}
                     disabled={!date}
                     onPress={() => setSelected(isSelected ? null : date)}
-                    style={[
-                      styles.cell,
-                      isSelected && { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary },
-                    ]}
+                    style={[styles.cell, isSelected && { backgroundColor: theme.colors.surfaceAlt }]}
                   >
                     {date ? (
                       <>
-                        <Text style={[styles.dayNum, { color: info ? theme.colors.text : theme.colors.textMuted }]}>
-                          {Number(date.slice(-2))}
-                        </Text>
+                        <View style={[styles.dayCircle, isToday && { backgroundColor: theme.colors.primary }]}>
+                          <Text
+                            style={[
+                              styles.dayNum,
+                              {
+                                color: isToday
+                                  ? theme.colors.primaryText
+                                  : info
+                                    ? theme.colors.text
+                                    : theme.colors.textMuted,
+                                fontWeight: isToday || info ? '600' : '400',
+                              },
+                            ]}
+                          >
+                            {Number(date.slice(-2))}
+                          </Text>
+                        </View>
                         <View style={styles.dots}>
                           {(info?.slots ?? [])
                             .slice()
@@ -109,12 +136,12 @@ export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) =>
             </View>
           </>
         )}
-      </Card>
+      </MealSection>
 
       {selected ? (
-        <Card>
-          <CardTitle
-            title={`${selected} 기록`}
+        <MealSection>
+          <MealSectionTitle
+            title={mealDateTitle(selected, today)}
             sub={
               byDate.get(selected)
                 ? `${byDate.get(selected)!.count}끼 · ${byDate
@@ -129,13 +156,15 @@ export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) =>
           ) : (dayEntries.data?.items.length ?? 0) === 0 ? (
             <StateBlock kind="empty" message="이 날은 기록이 없어요." />
           ) : (
-            <View style={styles.dayList}>
-              {dayEntries.data!.items.map((e) => (
-                <MealEntryCard key={e.id} entry={e} onPress={() => onOpenEntry(e.id)} />
+            <View>
+              {dayEntries.data!.items.map((e, i) => (
+                <View key={e.id} style={i > 0 ? styles.divider : null}>
+                  <MealEntryCard entry={e} variant="row" onPress={() => onOpenEntry(e.id)} />
+                </View>
               ))}
             </View>
           )}
-        </Card>
+        </MealSection>
       ) : null}
     </ScrollView>
   );
@@ -145,22 +174,22 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     content: { padding: 16, gap: 12 },
     monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    monthText: { fontSize: 16, fontWeight: '600', color: theme.colors.text },
+    monthText: { fontSize: mealFont.title, fontWeight: '700', color: theme.colors.text },
     weekRow: { flexDirection: 'row' },
-    weekday: { flex: 1, textAlign: 'center', fontSize: 11, color: theme.colors.textMuted },
+    weekday: { flex: 1, textAlign: 'center', fontSize: mealFont.caption, color: theme.colors.textMuted },
     grid: { flexDirection: 'row', flexWrap: 'wrap' },
+    // 칸 높이는 고정 — 퍼센트 폭 + aspectRatio 는 Yoga 가 그리드 높이를 칸보다 크게 잡아 아래에 빈 줄이 남았다.
     cell: {
       width: `${100 / 7}%`,
-      aspectRatio: 1,
+      height: 46,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 3,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'transparent',
-      borderRadius: 8,
+      gap: 2,
+      borderRadius: mealRadius.small,
     },
-    dayNum: { fontSize: 13 },
+    dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+    dayNum: { fontSize: mealFont.body, fontVariant: ['tabular-nums'] },
     dots: { flexDirection: 'row', gap: 2, height: 5 },
     dot: { width: 4, height: 4, borderRadius: 2 },
-    dayList: { gap: 8 },
+    divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   });

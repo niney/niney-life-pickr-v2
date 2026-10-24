@@ -17,6 +17,8 @@ export const palette = {
 
 export const lightColors = {
   bg: palette.white,
+  // 묶음 배경 — 흰 카드를 올려 칸을 나누는 화면(앱 식단 등)의 바탕. iOS 그룹 배경처럼 카드보다 한 톤 어둡다.
+  bgGrouped: palette.zinc100,
   surface: palette.white,
   surfaceAlt: palette.zinc100,
   text: palette.zinc900,
@@ -33,6 +35,8 @@ export type ColorTokens = { -readonly [K in keyof typeof lightColors]: string };
 
 export const darkColors: ColorTokens = {
   bg: palette.zinc950,
+  // 다크는 bg(zinc950)와 surface(zinc900)가 이미 갈려 바탕을 따로 두지 않는다.
+  bgGrouped: palette.zinc950,
   surface: palette.zinc900,
   surfaceAlt: palette.zinc800,
   text: palette.zinc50,

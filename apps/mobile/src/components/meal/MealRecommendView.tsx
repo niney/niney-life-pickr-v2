@@ -40,11 +40,13 @@ import {
   MEAL_TYPES,
   MEAL_TYPE_LABEL,
   guessMealSlot,
+  mealDateLabel,
   toLocalDateKey,
 } from '@repo/utils';
-import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
+import { Note, StateBlock } from '~/components/common/Cards';
 import { FoodRestaurantMatches } from './FoodRestaurantMatches';
-import { Chip, ChipRow, FieldLabel } from './mealUi';
+import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
 
 // 다음 끼니 추천 — 끼니·상황을 고르고 받는다. 서버가 같은 날·끼니·프로필이면 캐시를 돌려주므로
 // "추천받기"는 싸고, "다시 추천"만 LLM 을 새로 부른다(일일 한도도 그때만 센다).
@@ -55,6 +57,7 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
+  const { contentBottom } = useMealFabInsets();
 
   const [slot, setSlot] = useState<MealSlotType>(() => initialSlot ?? guessMealSlot(new Date()));
   const [mealType, setMealType] = useState<MealTypeType | null | undefined>(undefined);
@@ -265,11 +268,11 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   return (
     <ScrollView
       ref={scrollRef}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: contentBottom }]}
       keyboardShouldPersistTaps="handled"
     >
-      <Card>
-        <CardTitle title="다음 끼니 추천" sub="기록을 보고 겹치지 않게 골라 드려요" />
+      <MealSection>
+        <MealSectionTitle title="다음 끼니 추천" sub="기록을 보고 겹치지 않게 골라 드려요" />
 
         <FieldLabel>끼니</FieldLabel>
         <ChipRow>
@@ -324,12 +327,19 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
             {create.isPending ? (
               <ActivityIndicator size="small" color={theme.colors.primaryText} />
             ) : (
-              <Text style={{ color: theme.colors.primaryText, fontWeight: '700' }}>추천받기</Text>
+              <Text style={{ color: theme.colors.primaryText, fontSize: mealFont.body, fontWeight: '700' }}>
+                추천받기
+              </Text>
             )}
           </Pressable>
           {/* 지난 추천을 보는 중엔 숨긴다 — 그 추천을 다시 만드는 게 아니라 위에서 고른 끼니로 새로 받기 때문. */}
           {shown && !viewingPast ? (
-            <Chip label="다시 추천" onPress={() => request(true)} disabled={create.isPending} />
+            <Chip
+              label="다시 추천"
+              icon="refresh"
+              onPress={() => request(true)}
+              disabled={create.isPending}
+            />
           ) : null}
         </View>
 
@@ -337,11 +347,11 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
         {ctx.data && ctx.data.entryCount === 0 ? (
           <Note tone="muted">기록이 아직 없어요. 몇 끼만 남기면 추천이 훨씬 정확해져요.</Note>
         ) : null}
-      </Card>
+      </MealSection>
 
       {shown ? (
         <View onLayout={(e) => (cardY.current = e.nativeEvent.layout.y)}>
-          <Card>
+          <MealSection>
             {viewingPast ? (
               <View style={[styles.pastBanner, { backgroundColor: theme.colors.surfaceAlt }]}>
                 <Text style={styles.pastBannerText} numberOfLines={1}>
@@ -351,8 +361,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
                 <Chip label="최신 추천으로" onPress={backToLatest} />
               </View>
             ) : null}
-            <CardTitle
-              title={`${shown.targetDate} ${MEAL_SLOT_LABEL[shown.targetSlot]} 추천`}
+            <MealSectionTitle
+              title={`${mealDateLabel(shown.targetDate, today)} ${MEAL_SLOT_LABEL[shown.targetSlot]} 추천`}
               sub={shown.summary || null}
             />
             {shown.notice ? <Note tone="warn">{shown.notice}</Note> : null}
@@ -378,7 +388,7 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
                         <Text style={styles.itemMeta}>{FOOD_DISH_TYPE_LABEL[item.dishType]}</Text>
                       ) : null}
                       <Text style={styles.itemMeta}>
-                        {item.lastEatenDate ? `마지막 ${item.lastEatenDate.slice(5)}` : '안 먹어봄'}
+                        {item.lastEatenDate ? `마지막 ${mealDateLabel(item.lastEatenDate, today)}` : '안 먹어봄'}
                       </Text>
                     </View>
                     <Text style={styles.itemReason}>{item.reason}</Text>
@@ -570,7 +580,7 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
                 }
               />
             </View>
-          </Card>
+          </MealSection>
         </View>
       ) : ctx.isLoading ? (
         <StateBlock kind="loading" />
@@ -579,8 +589,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
       {/* 목록은 늘 최신순 그대로 — 보고 있는 추천을 목록에서 빼면 누를 때마다 줄이 빠지고 끼어들어 헷갈렸다
           (2026-10-04). 보고 있는 줄만 강조한다. 지우기가 생겨 한 개여도 보인다(마지막 추천도 지울 수 있게). */}
       {historyItems.length > 0 ? (
-        <Card>
-          <CardTitle
+        <MealSection>
+          <MealSectionTitle
             title="최근 추천"
             sub="눌러서 다시 열면 그 추천으로 기록을 이어갈 수 있어요"
             right={
@@ -641,7 +651,7 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
               );
             })}
           </View>
-        </Card>
+        </MealSection>
       ) : null}
     </ScrollView>
   );
@@ -653,16 +663,16 @@ const createStyles = (theme: Theme) =>
     note: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 10,
       paddingVertical: 8,
       color: theme.colors.text,
-      fontSize: 14,
+      fontSize: mealFont.callout,
     },
-    locationHint: { fontSize: 11, color: theme.colors.textMuted, lineHeight: 16 },
+    locationHint: { fontSize: mealFont.caption, color: theme.colors.textMuted, lineHeight: 16 },
     actionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     primaryBtn: {
-      borderRadius: 10,
+      borderRadius: mealRadius.control,
       paddingHorizontal: 20,
       paddingVertical: 12,
       alignItems: 'center',
@@ -672,15 +682,15 @@ const createStyles = (theme: Theme) =>
     itemCard: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 10,
+      borderRadius: mealRadius.control,
       padding: 12,
       gap: 6,
     },
     itemHead: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-    itemName: { fontSize: 16, fontWeight: '700', color: theme.colors.text },
-    itemMeta: { fontSize: 11, color: theme.colors.textMuted },
-    itemReason: { fontSize: 13, color: theme.colors.textMuted, lineHeight: 19 },
-    itemIngredients: { marginTop: 4, fontSize: 11, color: theme.colors.textMuted },
+    itemName: { fontSize: mealFont.headline, fontWeight: '700', color: theme.colors.text },
+    itemMeta: { fontSize: mealFont.caption, color: theme.colors.textMuted },
+    itemReason: { fontSize: mealFont.footnote, color: theme.colors.textMuted, lineHeight: 19 },
+    itemIngredients: { marginTop: 4, fontSize: mealFont.caption, color: theme.colors.textMuted },
     decisionActions: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
     choiceButton: {
       flex: 1,
@@ -690,13 +700,13 @@ const createStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
-      borderRadius: 10,
+      borderRadius: mealRadius.control,
       paddingHorizontal: 10,
       paddingVertical: 8,
     },
     choiceButtonText: {
       flexShrink: 1,
-      fontSize: 13,
+      fontSize: mealFont.footnote,
       lineHeight: 18,
       fontWeight: '700',
       textAlign: 'center',
@@ -710,21 +720,21 @@ const createStyles = (theme: Theme) =>
       justifyContent: 'center',
       gap: 6,
       borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: 10,
+      borderRadius: mealRadius.control,
       paddingHorizontal: 10,
       paddingVertical: 8,
     },
     recordButtonText: {
       flexShrink: 1,
-      fontSize: 13,
+      fontSize: mealFont.footnote,
       lineHeight: 18,
       fontWeight: '600',
       textAlign: 'center',
     },
     candidateFeedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 2 },
-    candidateFeedbackLabel: { flex: 1, fontSize: 12, lineHeight: 17 },
+    candidateFeedbackLabel: { flex: 1, fontSize: mealFont.caption, lineHeight: 17 },
     feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
-    feedbackLabel: { fontSize: 12, color: theme.colors.textMuted, flex: 1 },
+    feedbackLabel: { fontSize: mealFont.caption, color: theme.colors.textMuted, flex: 1 },
     historyLine: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     historyRow: {
       flex: 1,
@@ -734,19 +744,19 @@ const createStyles = (theme: Theme) =>
       gap: 8,
       paddingVertical: 7,
       paddingHorizontal: 8,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
     },
-    historyText: { flex: 1, color: theme.colors.text, fontSize: 13 },
+    historyText: { flex: 1, color: theme.colors.text, fontSize: mealFont.footnote },
     historyDelete: { padding: 6 },
-    deleteAllText: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '600' },
+    deleteAllText: { fontSize: mealFont.caption, color: theme.colors.textMuted, fontWeight: '600' },
     pastBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 10,
       paddingVertical: 6,
       marginBottom: 4,
     },
-    pastBannerText: { flex: 1, fontSize: 12, color: theme.colors.text },
+    pastBannerText: { flex: 1, fontSize: mealFont.caption, color: theme.colors.text },
   });

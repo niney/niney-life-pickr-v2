@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ApiError,
@@ -43,18 +44,22 @@ import {
   MEAL_SLOT_LABEL,
   MEAL_TYPES,
   MEAL_TYPE_LABEL,
+  daysBetween,
   guessMealSlot,
+  mealDateLabel,
+  mealDateTitle,
   parseTimeOfDay,
   toLocalDateKey,
   type MealSlot,
   type MealType,
 } from '@repo/utils';
-import { Card, CardTitle, Note } from '~/components/common/Cards';
+import { Note } from '~/components/common/Cards';
 import { MealItemRow } from './MealItemRow';
 import { MealPhotoThumb } from './MealPhotoThumb';
 import { MealPendingPhotoThumb } from './MealPendingPhotoThumb';
 import { RestaurantPickerSheet } from '~/components/settlement/RestaurantPickerSheet';
-import { Chip, ChipRow, FieldLabel } from './mealUi';
+import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 import {
   createUnmanagedPendingMealDraftPhoto,
   deleteMealDraftPhotoFiles,
@@ -104,6 +109,13 @@ export const MealEntryEditor = ({
   const frequent = useFrequentMealItems(draft.slot);
   const quickItems = frequent.data?.items ?? [];
   const chosenNames = new Set(draft.items.map((item) => mealItemNameKey(item.name)));
+  const today = toLocalDateKey(new Date());
+  // 시각을 크게, 날짜는 그 아래 '오늘 · 10월 25일 (일)' 처럼 작게 — 일주일 밖이면 날짜만.
+  const eatenDayDiff = daysBetween(draft.eatenDate, today);
+  const eatenDayText =
+    eatenDayDiff !== null && eatenDayDiff >= 0 && eatenDayDiff <= 6
+      ? `${mealDateLabel(draft.eatenDate, today)} · ${mealDateTitle(draft.eatenDate, today)}`
+      : mealDateTitle(draft.eatenDate, today);
   const [editingTime, setEditingTime] = useState<string | null>(null);
   const upload = useUploadMealPhoto();
   const deletePhoto = useDeleteMealPhoto();
@@ -544,7 +556,7 @@ export const MealEntryEditor = ({
     return running;
   };
 
-  // 날짜는 그대로 두고 시:분만 바꾼다 — '◀ 하루'로 옮겨 둔 날짜가 되돌아가면 안 된다.
+  // 날짜는 그대로 두고 시:분만 바꾼다 — '하루' 앞뒤 버튼으로 옮겨 둔 날짜가 되돌아가면 안 된다.
   // (시각은 기기 로컬 기준으로 적용한다. 서버 프리셋은 Asia/Seoul 기준이라 국내 사용에선 같다.)
   const setTimeOfDay = (minutesOfDay: number) => {
     // 편집 중이었다면 닫는다 — 안 닫으면 입력칸이 그대로 떠 있어 바뀐 시각이 가려진다(시뮬레이터 실측).
@@ -670,16 +682,13 @@ export const MealEntryEditor = ({
       keyboardVerticalOffset={90}
     >
       <ScrollView
-        style={{ flex: 1, backgroundColor: theme.colors.bg }}
+        style={{ flex: 1, backgroundColor: theme.colors.bgGrouped }}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
         keyboardShouldPersistTaps="handled"
       >
         {/* 사진 */}
-        <Card>
-          <CardTitle
-            title="사진"
-            sub={`최대 ${MEAL_DRAFT_MAX_PHOTOS}장 · 찍으면 음식을 자동으로 찾아 줘요`}
-          />
+        <MealSection>
+          <MealSectionTitle title="사진" sub={`최대 ${MEAL_DRAFT_MAX_PHOTOS}장`} />
           <View style={styles.photoRow}>
             {draft.photos.map((p) => (
               <MealPhotoThumb
@@ -710,10 +719,25 @@ export const MealEntryEditor = ({
                 disabled={busy}
                 style={[
                   styles.addPhoto,
-                  { borderColor: theme.colors.border, opacity: busy ? 0.5 : 1 },
+                  totalPhotoCount === 0 ? styles.addPhotoEmpty : null,
+                  {
+                    backgroundColor: `${theme.colors.primary}14`,
+                    borderColor: `${theme.colors.primary}66`,
+                    opacity: busy ? 0.5 : 1,
+                  },
                 ]}
               >
-                <Text style={{ color: theme.colors.textMuted, fontSize: 22 }}>＋</Text>
+                <MaterialCommunityIcons
+                  name="camera-plus-outline"
+                  size={totalPhotoCount === 0 ? 28 : 24}
+                  color={theme.colors.primary}
+                />
+                {totalPhotoCount === 0 ? (
+                  <View style={styles.addPhotoText}>
+                    <Text style={[styles.addPhotoTitle, { color: theme.colors.text }]}>사진 찍기 · 앨범에서 고르기</Text>
+                    <Text style={styles.busyText}>음식을 자동으로 찾아 채워 줘요</Text>
+                  </View>
+                ) : null}
               </Pressable>
             ) : null}
           </View>
@@ -740,7 +764,7 @@ export const MealEntryEditor = ({
                 onPress={() => void runRecognize(undefined, 'replace-recognized')}
                 style={styles.linkBtn}
               >
-                <Text style={{ color: theme.colors.primary, fontSize: 13 }}>업로드 재시도</Text>
+                <Text style={{ color: theme.colors.primary, fontSize: mealFont.footnote }}>업로드 재시도</Text>
               </Pressable>
               {draft.pendingPhotos.some((photo) => photo.status === 'missing') ? (
                 <Text style={[styles.pendingError, { color: theme.colors.danger }]}>
@@ -759,15 +783,15 @@ export const MealEntryEditor = ({
               onPress={() => void runRecognize(undefined, 'replace-recognized')}
               style={styles.linkBtn}
             >
-              <Text style={{ color: theme.colors.primary, fontSize: 13 }}>다시 인식하기</Text>
+              <Text style={{ color: theme.colors.primary, fontSize: mealFont.footnote }}>다시 인식하기</Text>
             </Pressable>
           ) : null}
           {notice ? <Note tone="warn">{notice}</Note> : null}
-        </Card>
+        </MealSection>
 
         {/* 음식 */}
-        <Card>
-          <CardTitle title="먹은 음식" sub="이름을 고치거나 추가할 수 있어요" />
+        <MealSection>
+          <MealSectionTitle title="먹은 음식" sub="이름을 고치거나 추가할 수 있어요" />
           {/* 빠른 추가 — 자주 먹는 음식(고른 끼니 우선)과 기본 목록. 누르면 넣고, 이미 있으면 뺀다.
               반찬은 반찬으로 들어간다(주식이면 통상 1인분으로 커진다). */}
           {quickItems.length > 0 ? (
@@ -801,17 +825,18 @@ export const MealEntryEditor = ({
             onPress={() => draft.addItem(newItem())}
             style={styles.addItemBtn}
           >
-            <Text style={{ color: theme.colors.primary, fontSize: 14, fontWeight: '600' }}>
-              ＋ 음식 추가
+            <MaterialCommunityIcons name="plus" size={18} color={theme.colors.primary} />
+            <Text style={{ color: theme.colors.primary, fontSize: mealFont.callout, fontWeight: '600' }}>
+              음식 추가
             </Text>
           </Pressable>
-        </Card>
+        </MealSection>
 
         {/* 언제·어떻게 */}
-        <Card>
-          <CardTitle title="언제 먹었나요" />
+        <MealSection>
+          <MealSectionTitle title="언제 먹었나요" />
           <View style={styles.whenRow}>
-            <Chip label="◀ 하루" onPress={() => shiftDay(-1)} />
+            <Chip label="하루" icon="chevron-left" accessibilityLabel="하루 전" onPress={() => shiftDay(-1)} />
             {editingTime === null ? (
               <Pressable
                 accessibilityRole="button"
@@ -821,8 +846,9 @@ export const MealEntryEditor = ({
                 onPress={() => setEditingTime('')}
                 style={styles.whenPress}
               >
-                <Text style={styles.whenText}>
-                  {draft.eatenDate} {timeLabel(draft.eatenAt)}
+                <Text style={styles.whenText}>{timeLabel(draft.eatenAt)}</Text>
+                <Text style={styles.whenDate} numberOfLines={1}>
+                  {eatenDayText}
                 </Text>
               </Pressable>
             ) : (
@@ -841,7 +867,12 @@ export const MealEntryEditor = ({
                 accessibilityLabel="시각 입력"
               />
             )}
-            <Chip label="하루 ▶" onPress={() => shiftDay(1)} />
+            <Chip
+              label="하루"
+              trailingIcon="chevron-right"
+              accessibilityLabel="하루 뒤"
+              onPress={() => shiftDay(1)}
+            />
           </View>
 
           {/* 끼니별 '내가 보통 먹는 시각' — 한 번에 시각+끼니를 정한다. 기록이 적으면 일반값. */}
@@ -856,10 +887,11 @@ export const MealEntryEditor = ({
           </ChipRow>
 
           <ChipRow>
-            <Chip label="-30분" onPress={() => shiftTime(-30)} />
-            <Chip label="+30분" onPress={() => shiftTime(30)} />
+            <Chip label="30분" icon="minus" accessibilityLabel="30분 앞으로" onPress={() => shiftTime(-30)} />
+            <Chip label="30분" icon="plus" accessibilityLabel="30분 뒤로" onPress={() => shiftTime(30)} />
             <Chip
               label="지금"
+              icon="clock-outline"
               onPress={() => {
                 setEditingTime(null);
                 const now = new Date();
@@ -911,7 +943,7 @@ export const MealEntryEditor = ({
               <Text
                 style={{
                   color: draft.placeName ? theme.colors.text : theme.colors.textMuted,
-                  fontSize: 14,
+                  fontSize: mealFont.callout,
                 }}
                 numberOfLines={1}
               >
@@ -944,7 +976,7 @@ export const MealEntryEditor = ({
             style={styles.memo}
             multiline
           />
-        </Card>
+        </MealSection>
 
         {error ? <Note tone="warn">{error}</Note> : null}
       </ScrollView>
@@ -971,7 +1003,7 @@ export const MealEntryEditor = ({
             { borderColor: theme.colors.border, opacity: actionBusy ? 0.5 : 1 },
           ]}
         >
-          <Text style={{ color: theme.colors.text, fontSize: 15 }}>취소</Text>
+          <Text style={{ color: theme.colors.text, fontSize: mealFont.body }}>취소</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -986,7 +1018,7 @@ export const MealEntryEditor = ({
             },
           ]}
         >
-          <Text style={{ color: theme.colors.primaryText, fontSize: 15, fontWeight: '600' }}>
+          <Text style={{ color: theme.colors.primaryText, fontSize: mealFont.body, fontWeight: '600' }}>
             {create.isPending || update.isPending ? '저장 중…' : '저장'}
           </Text>
         </Pressable>
@@ -1038,33 +1070,51 @@ const createStyles = (theme: Theme) =>
     addPhoto: {
       width: 72,
       height: 72,
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: mealRadius.control,
+      borderWidth: 1,
       borderStyle: 'dashed',
       alignItems: 'center',
       justifyContent: 'center',
     },
+    // 사진이 없을 땐 줄 전체를 차지하는 큰 버튼 — 이 화면의 주 흐름(사진 → 인식)이 먼저 눈에 띄게.
+    addPhotoEmpty: {
+      width: '100%',
+      height: 'auto',
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 18,
+    },
+    addPhotoText: { flex: 1, gap: 2 },
+    addPhotoTitle: { fontSize: mealFont.body, fontWeight: '700' },
     busyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    busyText: { fontSize: 13, color: theme.colors.textMuted },
+    busyText: { fontSize: mealFont.footnote, color: theme.colors.textMuted },
     linkBtn: { paddingVertical: 4 },
     pendingActions: { gap: 4 },
-    pendingError: { fontSize: 12, lineHeight: 17 },
+    pendingError: { fontSize: mealFont.caption, lineHeight: 17 },
     quickRow: { marginBottom: 10 },
     itemList: { gap: 8 },
-    emptyText: { fontSize: 13, color: theme.colors.textMuted },
-    addItemBtn: { paddingVertical: 8 },
+    emptyText: { fontSize: mealFont.footnote, color: theme.colors.textMuted },
+    addItemBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8 },
     whenRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 8,
     },
-    whenText: { fontSize: 15, fontWeight: '600', color: theme.colors.text },
-    whenPress: { flex: 1, alignItems: 'center', paddingVertical: 4 },
+    whenText: {
+      fontSize: mealFont.title,
+      fontWeight: '700',
+      color: theme.colors.text,
+      fontVariant: ['tabular-nums'],
+    },
+    whenDate: { fontSize: mealFont.caption, color: theme.colors.textMuted, marginTop: 1 },
+    whenPress: { flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 2 },
     timeInput: {
       flex: 1,
       textAlign: 'center',
-      fontSize: 14,
+      fontSize: mealFont.title,
       fontVariant: ['tabular-nums'],
       color: theme.colors.text,
       borderBottomWidth: 1,
@@ -1074,11 +1124,11 @@ const createStyles = (theme: Theme) =>
     memo: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       padding: 10,
       minHeight: 56,
       color: theme.colors.text,
-      fontSize: 14,
+      fontSize: mealFont.callout,
       textAlignVertical: 'top',
     },
     placeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1086,11 +1136,11 @@ const createStyles = (theme: Theme) =>
       flex: 1,
       minWidth: 0,
       borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 10,
       paddingVertical: 10,
     },
-    placeHint: { fontSize: 11, color: theme.colors.textMuted },
+    placeHint: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     footer: {
       flexDirection: 'row',
       gap: 10,
@@ -1101,7 +1151,7 @@ const createStyles = (theme: Theme) =>
     footerBtn: {
       flex: 1,
       borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: 10,
+      borderRadius: mealRadius.control,
       paddingVertical: 12,
       alignItems: 'center',
     },

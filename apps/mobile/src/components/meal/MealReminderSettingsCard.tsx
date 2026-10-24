@@ -3,13 +3,14 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { useMealTimePresets, useTheme, type Theme } from '@repo/shared';
 import type { MealSlotType } from '@repo/api-contract';
 import { MEAL_SLOT_LABEL, MEAL_SLOTS } from '@repo/utils';
-import { Card, CardTitle, Note } from '~/components/common/Cards';
+import { Note } from '~/components/common/Cards';
 import {
   loadMealReminderSettings,
   MEAL_REMINDER_DEFAULT_TIMES,
   syncMealReminders,
 } from '~/lib/mealReminders';
-import { Chip, ChipRow, FieldLabel } from './mealUi';
+import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 
 interface MealReminderSettingsCardProps {
   slots: readonly MealSlotType[];
@@ -69,10 +70,10 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
 
   if (Platform.OS === 'web') {
     return (
-      <Card>
-        <CardTitle title="식사 알림" />
+      <MealSection>
+        <MealSectionTitle title="식사 알림" />
         <Text style={styles.hint}>식사 알림은 iOS·Android 앱에서 설정할 수 있어요.</Text>
-      </Card>
+      </MealSection>
     );
   }
 
@@ -101,8 +102,8 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
   };
 
   return (
-    <Card>
-      <CardTitle
+    <MealSection>
+      <MealSectionTitle
         title="식사 알림"
         sub="내 최근 기록 시각을 기본으로 알려드려요. 권한은 켤 때만 요청해요."
       />
@@ -181,7 +182,7 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
           <Text style={styles.hint}>알림 시각과 권한은 이 기기에만 저장돼요.</Text>
         </>
       )}
-    </Card>
+    </MealSection>
   );
 };
 
@@ -190,20 +191,20 @@ const createStyles = (theme: Theme) =>
     timeList: { gap: 8 },
     timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     slotText: { gap: 1 },
-    slotLabel: { color: theme.colors.text, fontSize: 14, fontWeight: '600' },
-    presetLabel: { color: theme.colors.textMuted, fontSize: 10 },
+    slotLabel: { color: theme.colors.text, fontSize: mealFont.callout, fontWeight: '600' },
+    presetLabel: { color: theme.colors.textMuted, fontSize: mealFont.caption },
     timeInput: {
       width: 92,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 10,
       paddingVertical: 8,
       color: theme.colors.text,
-      fontSize: 14,
+      fontSize: mealFont.callout,
       textAlign: 'center',
     },
-    saveBtn: { borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
-    saveText: { color: theme.colors.primaryText, fontWeight: '700', fontSize: 14 },
-    hint: { fontSize: 11, color: theme.colors.textMuted },
+    saveBtn: { borderRadius: mealRadius.control, paddingVertical: 11, alignItems: 'center' },
+    saveText: { color: theme.colors.primaryText, fontWeight: '700', fontSize: mealFont.callout },
+    hint: { fontSize: mealFont.caption, color: theme.colors.textMuted },
   });

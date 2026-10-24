@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatTimeOfDay, mealPortionFactor, parseTimeOfDay } from './mealSlot.js';
+import {
+  formatTimeOfDay,
+  mealDateLabel,
+  mealDateTitle,
+  mealPortionFactor,
+  parseTimeOfDay,
+} from './mealSlot.js';
 
 // 시각 직접 입력 파서 — 사용자가 치는 값이라 관대하되, 말이 안 되는 값은 거절한다.
 describe('parseTimeOfDay', () => {
@@ -36,5 +42,30 @@ describe('mealPortionFactor', () => {
     expect(mealPortionFactor(null)).toBe(1);
     expect(mealPortionFactor('small')).toBe(0.6);
     expect(mealPortionFactor('large')).toBe(1.5);
+  });
+});
+
+// 화면 날짜 — 상대 라벨(목록 머리)과 날짜 제목(달력·통계·입력)이 같은 규칙을 쓴다.
+describe('mealDateLabel', () => {
+  it('일주일 안은 상대 라벨, 그 밖은 월·일', () => {
+    expect(mealDateLabel('2026-10-25', '2026-10-25')).toBe('오늘');
+    expect(mealDateLabel('2026-10-24', '2026-10-25')).toBe('어제');
+    expect(mealDateLabel('2026-10-22', '2026-10-25')).toBe('3일 전');
+    expect(mealDateLabel('2026-10-16', '2026-10-25')).toBe('10월 16일');
+  });
+});
+
+describe('mealDateTitle', () => {
+  it('월·일과 요일을 붙인다', () => {
+    expect(mealDateTitle('2026-10-25', '2026-10-25')).toBe('10월 25일 (일)');
+    expect(mealDateTitle('2026-09-26', '2026-10-25', { weekday: false })).toBe('9월 26일');
+  });
+
+  it('올해가 아니면 연도를 붙인다', () => {
+    expect(mealDateTitle('2025-12-03', '2026-10-25')).toBe('2025년 12월 3일 (수)');
+  });
+
+  it('형식이 틀리면 받은 값을 그대로 돌려준다', () => {
+    expect(mealDateTitle('어제', '2026-10-25')).toBe('어제');
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   useCopyMealPhoto,
   useFoodSearch,
@@ -10,9 +11,16 @@ import {
   type Theme,
 } from '@repo/shared';
 import { MEAL_MAX_PHOTOS_PER_ENTRY } from '@repo/api-contract';
-import { FOOD_DISH_TYPE_LABEL, MEAL_PORTIONS, MEAL_PORTION_LABEL } from '@repo/utils';
+import {
+  FOOD_DISH_TYPE_LABEL,
+  MEAL_PORTIONS,
+  MEAL_PORTION_LABEL,
+  mealDateTitle,
+  toLocalDateKey,
+} from '@repo/utils';
 import { MealPhotoThumb } from './MealPhotoThumb';
 import { Chip, ChipRow } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 
 // 식단 항목 한 줄 — 이름(자동완성) + 인식 후보 전환 + 주식/반찬 + 양 + 삭제.
 // 정산 Step3Edit 의 편집 리스트와 같은 결: 인식 결과를 확정하지 않고 사용자가 고쳐서 저장한다.
@@ -90,8 +98,14 @@ export const MealItemRow = ({
           style={styles.nameInput}
           accessibilityLabel="음식 이름"
         />
-        <Pressable accessibilityRole="button" accessibilityLabel="항목 삭제" onPress={onRemove} style={styles.removeBtn}>
-          <Text style={{ color: theme.colors.danger, fontSize: 16 }}>✕</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="항목 삭제"
+          onPress={onRemove}
+          hitSlop={6}
+          style={styles.removeBtn}
+        >
+          <MaterialCommunityIcons name="trash-can-outline" size={20} color={theme.colors.textMuted} />
         </Pressable>
       </View>
 
@@ -99,7 +113,7 @@ export const MealItemRow = ({
         <View style={styles.pastRow}>
           {past.photoToken ? <MealPhotoThumb token={past.photoToken} size={36} /> : null}
           <Text style={styles.pastText} numberOfLines={1}>
-            지난 {past.lastEatenDate?.slice(5).replace('-', '/')}
+            지난번 {past.lastEatenDate ? mealDateTitle(past.lastEatenDate, toLocalDateKey(new Date()), { weekday: false }) : ''}
             {past.portion ? ` · ${MEAL_PORTION_LABEL[past.portion]}` : ''}
             {past.servings ? ` · ${past.servings}인분` : ''}
           </Text>
@@ -223,7 +237,7 @@ const createStyles = (theme: Theme) =>
     row: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 10,
+      borderRadius: mealRadius.control,
       padding: 10,
       gap: 8,
       backgroundColor: theme.colors.surface,
@@ -231,7 +245,7 @@ const createStyles = (theme: Theme) =>
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     nameInput: {
       flex: 1,
-      fontSize: 15,
+      fontSize: mealFont.body,
       color: theme.colors.text,
       paddingVertical: 6,
     },
@@ -239,13 +253,13 @@ const createStyles = (theme: Theme) =>
     suggestBox: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       backgroundColor: theme.colors.surfaceAlt,
       overflow: 'hidden',
     },
     suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8 },
-    suggestName: { flex: 1, fontSize: 14, color: theme.colors.text },
-    suggestMeta: { fontSize: 11, color: theme.colors.textMuted },
+    suggestName: { flex: 1, fontSize: mealFont.callout, color: theme.colors.text },
+    suggestMeta: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     pastRow: {
       marginTop: 6,
       flexDirection: 'row',
@@ -253,28 +267,28 @@ const createStyles = (theme: Theme) =>
       gap: 8,
       paddingVertical: 4,
       paddingHorizontal: 6,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       backgroundColor: theme.colors.surfaceAlt,
     },
-    pastText: { flex: 1, fontSize: 11, color: theme.colors.textMuted },
-    pastBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: theme.colors.surface },
-    pastBtnText: { fontSize: 11, color: theme.colors.text, fontWeight: '600' },
-    pastDone: { fontSize: 11, color: theme.colors.textMuted },
+    pastText: { flex: 1, fontSize: mealFont.caption, color: theme.colors.textMuted },
+    pastBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: mealRadius.small, backgroundColor: theme.colors.surface },
+    pastBtnText: { fontSize: mealFont.caption, color: theme.colors.text, fontWeight: '600' },
+    pastDone: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     altRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
-    altLabel: { fontSize: 11, color: theme.colors.textMuted, marginRight: 2 },
+    altLabel: { fontSize: mealFont.caption, color: theme.colors.textMuted, marginRight: 2 },
     metaRow: { alignItems: 'center' },
-    badge: { fontSize: 11, color: theme.colors.textMuted },
-    warn: { fontSize: 11, color: theme.colors.danger },
+    badge: { fontSize: mealFont.caption, color: theme.colors.textMuted },
+    warn: { fontSize: mealFont.caption, color: theme.colors.danger },
     servingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    servingLabel: { fontSize: 11, color: theme.colors.textMuted },
+    servingLabel: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     servingInput: {
       flex: 1,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 7,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 9,
       paddingVertical: 6,
       color: theme.colors.text,
-      fontSize: 12,
+      fontSize: mealFont.caption,
     },
   });

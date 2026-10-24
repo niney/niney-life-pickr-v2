@@ -1,66 +1,118 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { MealEntryType } from '@repo/api-contract';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { MealEntryType, MealSlotType } from '@repo/api-contract';
 import { useTheme, type Theme } from '@repo/shared';
 import { MEAL_SLOT_LABEL, MEAL_TYPE_LABEL, mealNutritionLabel, summarizeMealNutrition } from '@repo/utils';
 import { MealPhotoThumb } from './MealPhotoThumb';
+import { type MealIconName } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 
-// 기록 한 줄 — 끼니 배지·시각·음식 칩·사진 썸네일. 목록(FlatList)과 상세 상단에서 함께 쓴다.
+// 기록 한 줄 — 왼쪽 사진(없으면 끼니 아이콘), 가운데 음식·곁들임·끼니 메타, 오른쪽 열량.
+// variant 'card' 는 회색 바탕 위 흰 카드(목록·상세), 'row' 는 섹션 카드 안의 줄(달력 그날 기록)이다.
+
+const THUMB = 56;
+
+const SLOT_ICON: Record<MealSlotType, MealIconName> = {
+  breakfast: 'weather-sunset-up',
+  lunch: 'white-balance-sunny',
+  dinner: 'weather-night',
+  snack: 'cookie-outline',
+  late_night: 'moon-waning-crescent',
+};
 
 const timeText = (iso: string): string => {
   const d = new Date(iso);
   return `${`${d.getHours()}`.padStart(2, '0')}:${`${d.getMinutes()}`.padStart(2, '0')}`;
 };
 
-export const MealEntryCard = ({ entry, onPress }: { entry: MealEntryType; onPress?: () => void }) => {
+export const MealEntryCard = ({
+  entry,
+  onPress,
+  variant = 'card',
+}: {
+  entry: MealEntryType;
+  onPress?: () => void;
+  variant?: 'card' | 'row';
+}) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const mains = entry.items.filter((i) => i.isMain);
   const sides = entry.items.filter((i) => !i.isMain);
-  // 카탈로그에 영양이 없는 음식이 많아(외식 브랜드 메뉴 등) 값이 하나도 없으면 줄을 그리지 않는다.
-  const kcalText = mealNutritionLabel(summarizeMealNutrition(entry.items));
+  // 주식이 없으면 곁들임을 제목으로 올린다(음료만 기록한 끼니 등).
+  const titleItems = mains.length > 0 ? mains : sides;
+  const subItems = mains.length > 0 ? sides : [];
+  // 카탈로그에 영양이 없는 음식이 많아(외식 브랜드 메뉴 등) 값이 없거나 믿기 어려우면 열량 칸을 그리지 않는다.
+  // 숨기는 기준은 mealNutritionLabel 과 같다(주식이 있는데 곁들임만 반영된 합계 등).
+  const nutrition = summarizeMealNutrition(entry.items);
+  const kcalLabel = mealNutritionLabel(nutrition);
+  const kcal = kcalLabel !== null ? nutrition.kcal : null;
+  const kcalNote =
+    nutrition.counted < nutrition.total ? '일부 반영' : nutrition.hasEstimate ? '추정' : null;
+  const meta = [
+    timeText(entry.eatenAt),
+    entry.mealType ? MEAL_TYPE_LABEL[entry.mealType] : null,
+    entry.placeName,
+  ].filter(Boolean);
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={[
+        MEAL_SLOT_LABEL[entry.slot],
+        ...meta,
+        titleItems.map((i) => i.name).join(', '),
+        kcalLabel,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       onPress={onPress}
       disabled={!onPress}
-      style={({ pressed }) => [styles.card, { opacity: pressed && onPress ? 0.8 : 1 }]}
+      style={({ pressed }) => [
+        variant === 'card' ? styles.card : styles.row,
+        { opacity: pressed && onPress ? 0.75 : 1 },
+      ]}
     >
-      <View style={styles.headRow}>
-        <View style={[styles.slotBadge, { backgroundColor: theme.colors.surfaceAlt }]}>
-          <Text style={styles.slotText}>{MEAL_SLOT_LABEL[entry.slot]}</Text>
+      {entry.photos.length > 0 ? (
+        <View>
+          <MealPhotoThumb token={entry.photos[0]!.token} size={THUMB} />
+          {entry.photos.length > 1 ? (
+            <View style={styles.photoCount}>
+              <Text style={styles.photoCountText}>{entry.photos.length}</Text>
+            </View>
+          ) : null}
         </View>
-        <Text style={styles.time}>{timeText(entry.eatenAt)}</Text>
-        {entry.mealType ? <Text style={styles.meta}>{MEAL_TYPE_LABEL[entry.mealType]}</Text> : null}
-        {entry.placeName ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            · {entry.placeName}
+      ) : (
+        <View style={[styles.slotIcon, { backgroundColor: `${theme.colors.primary}1f` }]}>
+          <MaterialCommunityIcons name={SLOT_ICON[entry.slot]} size={26} color={theme.colors.primary} />
+        </View>
+      )}
+
+      <View style={styles.body}>
+        <Text style={styles.title} numberOfLines={1}>
+          {titleItems.map((i) => i.name).join(', ') || '(음식 없음)'}
+        </Text>
+        {subItems.length > 0 ? (
+          <Text style={styles.sub} numberOfLines={1}>
+            + {subItems.map((i) => i.name).join(', ')}
+          </Text>
+        ) : null}
+        <Text style={styles.meta} numberOfLines={1}>
+          <Text style={styles.slot}>{MEAL_SLOT_LABEL[entry.slot]}</Text>
+          {meta.length > 0 ? ` · ${meta.join(' · ')}` : ''}
+        </Text>
+        {entry.memo ? (
+          <Text style={styles.memo} numberOfLines={1}>
+            {entry.memo}
           </Text>
         ) : null}
       </View>
 
-      <Text style={styles.mains} numberOfLines={2}>
-        {mains.map((i) => i.name).join(', ') || '(음식 없음)'}
-      </Text>
-      {sides.length > 0 ? (
-        <Text style={styles.sides} numberOfLines={1}>
-          곁들임 {sides.map((i) => i.name).join(', ')}
-        </Text>
-      ) : null}
-      {kcalText ? <Text style={styles.kcal}>{kcalText}</Text> : null}
-      {entry.memo ? (
-        <Text style={styles.memo} numberOfLines={1}>
-          {entry.memo}
-        </Text>
-      ) : null}
-
-      {entry.photos.length > 0 ? (
-        <View style={styles.photos}>
-          {entry.photos.slice(0, 3).map((p) => (
-            <MealPhotoThumb key={p.token} token={p.token} size={56} />
-          ))}
-          {entry.photos.length > 3 ? <Text style={styles.more}>+{entry.photos.length - 3}</Text> : null}
+      {kcal !== null ? (
+        <View style={styles.kcalCol}>
+          <Text style={styles.kcal}>{Math.round(kcal).toLocaleString('ko-KR')}</Text>
+          <Text style={styles.kcalUnit}>kcal</Text>
+          {kcalNote ? <Text style={styles.kcalUnit}>{kcalNote}</Text> : null}
         </View>
       ) : null}
     </Pressable>
@@ -70,22 +122,45 @@ export const MealEntryCard = ({ entry, onPress }: { entry: MealEntryType; onPres
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     card: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
       backgroundColor: theme.colors.surface,
-      borderRadius: 12,
+      borderRadius: mealRadius.card,
       padding: 12,
-      gap: 6,
     },
-    headRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    slotBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-    slotText: { fontSize: 11, color: theme.colors.text, fontWeight: '600' },
-    kcal: { marginTop: 4, fontSize: 12, color: theme.colors.textMuted },
-    time: { fontSize: 12, color: theme.colors.textMuted },
-    meta: { fontSize: 12, color: theme.colors.textMuted, flexShrink: 1 },
-    mains: { fontSize: 15, color: theme.colors.text, fontWeight: '600' },
-    sides: { fontSize: 12, color: theme.colors.textMuted },
-    memo: { fontSize: 12, color: theme.colors.textMuted, fontStyle: 'italic' },
-    photos: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-    more: { fontSize: 12, color: theme.colors.textMuted },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+    slotIcon: {
+      width: THUMB,
+      height: THUMB,
+      borderRadius: mealRadius.control,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    photoCount: {
+      position: 'absolute',
+      right: 4,
+      bottom: 4,
+      minWidth: 20,
+      borderRadius: mealRadius.pill,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      alignItems: 'center',
+    },
+    photoCountText: { color: '#fff', fontSize: mealFont.caption, fontWeight: '700' },
+    body: { flex: 1, minWidth: 0, gap: 2 },
+    title: { fontSize: mealFont.body, lineHeight: 20, fontWeight: '700', color: theme.colors.text },
+    sub: { fontSize: mealFont.footnote, color: theme.colors.textMuted },
+    meta: { fontSize: mealFont.caption, color: theme.colors.textMuted, marginTop: 1 },
+    slot: { color: theme.colors.text, fontWeight: '600' },
+    memo: { fontSize: mealFont.caption, color: theme.colors.textMuted },
+    kcalCol: { alignItems: 'flex-end', minWidth: 52 },
+    kcal: {
+      fontSize: mealFont.headline,
+      fontWeight: '700',
+      color: theme.colors.text,
+      fontVariant: ['tabular-nums'],
+    },
+    kcalUnit: { fontSize: mealFont.caption, color: theme.colors.textMuted },
   });

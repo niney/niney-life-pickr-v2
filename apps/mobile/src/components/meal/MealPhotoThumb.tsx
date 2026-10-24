@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@repo/shared';
 import { useCachedMealPhoto } from '~/hooks/useCachedMealPhoto';
+import { mealRadius } from './mealTokens';
 
 // 식단 사진 썸네일 — 서버가 JWT 를 요구해 <Image source={{uri}}> 로 직접 못 부른다.
 // 앱은 인증 응답을 계정별 file:// 캐시에 받아 base64 재변환 없이 표시한다.
@@ -59,7 +61,7 @@ export const MealPhotoThumb = ({
             cachePolicy="memory"
           />
         ) : error ? (
-          <Text style={[styles.err, { color: theme.colors.textMuted }]}>!</Text>
+          <MaterialCommunityIcons name="image-off-outline" size={Math.min(24, Math.round(size * 0.4))} color={theme.colors.textMuted} />
         ) : (
           <ActivityIndicator size="small" color={theme.colors.textMuted} />
         )}
@@ -69,9 +71,10 @@ export const MealPhotoThumb = ({
           accessibilityRole="button"
           accessibilityLabel="사진 삭제"
           onPress={onRemove}
-          style={[styles.remove, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+          hitSlop={6}
+          style={styles.remove}
         >
-          <Text style={{ color: theme.colors.danger, fontSize: 12, lineHeight: 14 }}>✕</Text>
+          <MaterialCommunityIcons name="close" size={14} color="#fff" />
         </Pressable>
       ) : null}
     </View>
@@ -81,20 +84,19 @@ export const MealPhotoThumb = ({
 const styles = StyleSheet.create({
   box: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: mealRadius.control,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  err: { fontSize: 16, fontWeight: '700' },
   remove: {
     position: 'absolute',
     top: -6,
     right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -19,10 +19,13 @@ import {
   NUTRIENT_BAR_MAX_PERCENT,
   formatNutrientAmount,
   mealNutrientProfileLabel,
+  mealDateTitle,
   nutrientBarWidth,
+  toLocalDateKey,
 } from '@repo/utils';
-import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
-import { Chip, ChipRow } from './mealUi';
+import { Note, StateBlock } from '~/components/common/Cards';
+import { Chip, ChipRow, MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
 
 // 영양 — 웹 MealNutritionTab 과 같은 구성. 최근 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 견주고(서버 계산),
 // 모자란 영양소를 음식·영양제(성분·형태, 제품명 없음)로 채우는 조언을 받는다. 조언은 LLM 이라 누를 때만 만들고,
@@ -53,19 +56,23 @@ const adviceSourceLabel = (advice: MealNutritionAdviceType): string =>
 export const MealNutritionView = () => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { contentBottom } = useMealFabInsets();
   const [days, setDays] = useState<Period>(14);
   const analysis = useMealNutrition(days);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={[styles.content, { paddingBottom: contentBottom }]}
+      showsVerticalScrollIndicator={false}
+    >
       <ChipRow>
         {PERIODS.map((d) => (
           <Chip key={d} label={`${d}일`} selected={days === d} onPress={() => setDays(d)} />
         ))}
       </ChipRow>
 
-      <Card>
-        <CardTitle
+      <MealSection>
+        <MealSectionTitle
           title="영양소 점검"
           sub="두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요."
         />
@@ -81,7 +88,7 @@ export const MealNutritionView = () => {
         ) : (
           <AnalysisBody data={analysis.data} styles={styles} />
         )}
-      </Card>
+      </MealSection>
 
       <AdviceCard days={days} ready={analysis.data?.status === 'ok'} styles={styles} />
     </ScrollView>
@@ -160,8 +167,8 @@ const AdviceCard = ({ days, ready, styles }: { days: Period; ready: boolean; sty
   const request = (force: boolean) => create.mutate({ days, force });
 
   return (
-    <Card>
-      <CardTitle
+    <MealSection>
+      <MealSectionTitle
         title="나에게 맞는 영양제"
         sub="모자란 영양소를 음식으로 먼저 채우는 법과, 영양제를 고른다면 어떤 성분·형태가 좋은지 알려 드려요. 제품은 추천하지 않아요."
       />
@@ -195,7 +202,7 @@ const AdviceCard = ({ days, ready, styles }: { days: Period; ready: boolean; sty
         <Note tone="warn">{create.error instanceof Error ? create.error.message : '조언을 받지 못했어요.'}</Note>
       ) : null}
       {latest.isLoading ? <StateBlock kind="loading" /> : advice ? <AdviceBody advice={advice} styles={styles} /> : null}
-    </Card>
+    </MealSection>
   );
 };
 
@@ -204,7 +211,7 @@ const AdviceBody = ({ advice, styles }: { advice: MealNutritionAdviceType; style
   return (
     <View style={styles.body}>
       <Text style={styles.small}>
-        {advice.targetDate} · 최근 {advice.analysis.days}일 기록 기준 · {adviceSourceLabel(advice)}
+        {mealDateTitle(advice.targetDate, toLocalDateKey(new Date()))} · 최근 {advice.analysis.days}일 기록 기준 · {adviceSourceLabel(advice)}
       </Text>
       <Text style={styles.summary}>{advice.summary}</Text>
       {picks.length > 0 ? (
@@ -245,43 +252,59 @@ const AdviceLine = ({ label, text, styles }: { label: string; text: string; styl
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    // 아래 '＋ 기록' 버튼이 마지막 카드를 가리지 않게 여백을 둔다.
-    content: { padding: 16, gap: 12, paddingBottom: 96 },
-    body: { gap: 10 },
-    meta: { fontSize: 13, lineHeight: 19, color: theme.colors.text },
-    small: { fontSize: 11, lineHeight: 16, color: theme.colors.textMuted },
-    row: { gap: 4 },
+    content: { padding: 16, gap: 12 },
+    body: { gap: 12 },
+    meta: { fontSize: mealFont.callout, lineHeight: 20, color: theme.colors.text },
+    small: { fontSize: mealFont.caption, lineHeight: 17, color: theme.colors.textMuted },
+    row: { gap: 5 },
     rowHead: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
-    rowLabel: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
-    rowValue: { marginLeft: 'auto', fontSize: 11, color: theme.colors.textMuted, fontVariant: ['tabular-nums'] },
-    badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-    badgeText: { fontSize: 11, fontWeight: '600' },
+    rowLabel: { fontSize: mealFont.body, fontWeight: '600', color: theme.colors.text },
+    rowValue: {
+      marginLeft: 'auto',
+      fontSize: mealFont.caption,
+      color: theme.colors.textMuted,
+      fontVariant: ['tabular-nums'],
+    },
+    badge: { borderRadius: mealRadius.pill, paddingHorizontal: 8, paddingVertical: 2 },
+    badgeText: { fontSize: mealFont.caption, fontWeight: '600' },
     track: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt },
     fill: { height: 8, borderRadius: 4 },
     refLine: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: theme.colors.textMuted },
     actionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-    primaryBtn: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 11, minWidth: 150, alignItems: 'center' },
-    primaryBtnText: { fontWeight: '700' },
-    summary: { fontSize: 14, lineHeight: 21, color: theme.colors.text },
+    primaryBtn: {
+      borderRadius: mealRadius.control,
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      minWidth: 150,
+      alignItems: 'center',
+    },
+    primaryBtnText: { fontSize: mealFont.body, fontWeight: '700' },
+    summary: { fontSize: mealFont.body, lineHeight: 22, color: theme.colors.text },
     pickRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
     pick: {
-      borderRadius: 999,
+      borderRadius: mealRadius.pill,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.primary,
       paddingHorizontal: 10,
       paddingVertical: 3,
     },
-    pickText: { fontSize: 12, fontWeight: '600', color: theme.colors.text },
+    pickText: { fontSize: mealFont.caption, fontWeight: '600', color: theme.colors.text },
     item: {
       gap: 6,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 10,
+      borderRadius: mealRadius.control,
       padding: 12,
     },
-    itemTitle: { fontSize: 14, fontWeight: '700', color: theme.colors.text, flex: 1 },
-    itemText: { fontSize: 13, lineHeight: 19, color: theme.colors.text },
+    itemTitle: { fontSize: mealFont.body, fontWeight: '700', color: theme.colors.text, flex: 1 },
+    itemText: { fontSize: mealFont.callout, lineHeight: 20, color: theme.colors.text },
     adviceLine: { flexDirection: 'row', gap: 8 },
-    adviceLabel: { fontSize: 11, fontWeight: '700', color: theme.colors.primary, paddingTop: 2, width: 48 },
-    adviceText: { flex: 1, fontSize: 13, lineHeight: 19, color: theme.colors.textMuted },
+    adviceLabel: {
+      fontSize: mealFont.caption,
+      fontWeight: '700',
+      color: theme.colors.primary,
+      paddingTop: 2,
+      width: 52,
+    },
+    adviceText: { flex: 1, fontSize: mealFont.callout, lineHeight: 20, color: theme.colors.textMuted },
   });

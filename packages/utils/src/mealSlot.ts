@@ -165,3 +165,19 @@ export const mealDateLabel = (dateKey: string, today: string): string => {
   if (!d) return dateKey;
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 };
+
+const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+// 화면에 보이는 날짜 — '10월 25일 (일)'. 올해가 아니면 연도를 앞에 붙인다('2025년 12월 3일 (수)').
+// 'YYYY-MM-DD' 를 그대로 보이던 자리(달력 선택일·통계 기간·입력 시각 등)에 쓴다.
+export const mealDateTitle = (
+  dateKey: string,
+  today: string,
+  { weekday = true }: { weekday?: boolean } = {},
+): string => {
+  const d = parseLocalDateKey(dateKey);
+  if (!d) return dateKey;
+  const year = today.slice(0, 4) === dateKey.slice(0, 4) ? '' : `${d.getFullYear()}년 `;
+  const day = `${year}${d.getMonth() + 1}월 ${d.getDate()}일`;
+  return weekday ? `${day} (${WEEKDAY_KO[d.getDay()]})` : day;
+};

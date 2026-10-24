@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type { MealEntryType } from '@repo/api-contract';
 import {
@@ -18,12 +19,16 @@ import {
   FOOD_DISH_TYPE_LABEL,
   FOOD_MAIN_INGREDIENT_LABEL,
   MEAL_PORTION_LABEL,
+  mealDateTitle,
   summarizeMealNutrition,
+  toLocalDateKey,
 } from '@repo/utils';
-import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
+import { Note, StateBlock } from '~/components/common/Cards';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
 import { MealEntryEditor } from '~/components/meal/MealEntryEditor';
 import { MealPhotoGallery } from '~/components/meal/MealPhotoGallery';
+import { MealSection, MealSectionTitle } from '~/components/meal/mealUi';
+import { mealFont, mealRadius } from '~/components/meal/mealTokens';
 import { invalidateMealPhotoFiles } from '~/lib/mealPhotoCache';
 
 // 식단 상세 — 보기 / 수정 두 모드. 수정은 서버 기록을 draft 로 옮긴 뒤 같은 에디터를 쓴다.
@@ -78,7 +83,9 @@ export default function MealDetailScreen() {
   if (editing) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: '식단 수정' }} />
+        <Stack.Screen
+          options={{ headerShown: true, title: '식단 수정', headerStyle: { backgroundColor: theme.colors.bgGrouped } }}
+        />
         <MealEntryEditor entryId={id} />
       </>
     );
@@ -86,7 +93,9 @@ export default function MealDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: '식단' }} />
+      <Stack.Screen
+        options={{ headerShown: true, title: '식단', headerStyle: { backgroundColor: theme.colors.bgGrouped } }}
+      />
       {isLoading ? (
         <StateBlock kind="loading" />
       ) : error || !data ? (
@@ -99,27 +108,31 @@ export default function MealDetailScreen() {
             <Pressable
               accessibilityRole="link"
               onPress={() => router.push(`/restaurant/${data.placeId}` as never)}
-              style={[styles.placeLink, { borderColor: theme.colors.border }]}
+              style={({ pressed }) => [styles.placeLink, { opacity: pressed ? 0.75 : 1 }]}
             >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.placeLabel}>기록한 식당</Text>
                 <Text style={styles.placeName} numberOfLines={1}>{data.placeName ?? '식당 상세'}</Text>
               </View>
-              <Text style={{ color: theme.colors.primary, fontSize: 13 }}>상세 보기</Text>
+              <Text style={{ color: theme.colors.textMuted, fontSize: mealFont.footnote }}>상세 보기</Text>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textMuted} />
             </Pressable>
           ) : null}
 
           {data.photos.length > 0 ? (
-            <Card>
-              <CardTitle title="사진" />
+            <MealSection>
+              <MealSectionTitle title="사진" />
               <MealPhotoGallery tokens={data.photos.map((photo) => photo.token)} />
-            </Card>
+            </MealSection>
           ) : data.photoPurgedAt ? (
-            <Note tone="muted">보존 설정에 따라 사진은 {data.photoPurgedAt.slice(0, 10)}에 정리됐어요.</Note>
+            <Note tone="muted">
+              보존 설정에 따라 사진은 {mealDateTitle(toLocalDateKey(new Date(data.photoPurgedAt)), toLocalDateKey(new Date()))}에
+              정리됐어요.
+            </Note>
           ) : null}
 
-          <Card>
-            <CardTitle title="음식" sub={`${data.items.length}개`} />
+          <MealSection>
+            <MealSectionTitle title="음식" sub={`${data.items.length}개`} />
             {data.items.map((it) => (
               <View key={it.id} style={styles.itemRow}>
                 <Text style={styles.itemName}>
@@ -160,7 +173,7 @@ export default function MealDetailScreen() {
                 ) : null}
               </View>
             ) : null}
-          </Card>
+          </MealSection>
 
           {data.recognition?.model ? (
             <Note tone="muted">사진 인식: {data.recognition.model}</Note>
@@ -177,7 +190,7 @@ export default function MealDetailScreen() {
                 { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
               ]}
             >
-              <Text style={{ color: theme.colors.primaryText, fontSize: 15, fontWeight: '700' }}>수정</Text>
+              <Text style={{ color: theme.colors.primaryText, fontSize: mealFont.body, fontWeight: '700' }}>수정</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -185,7 +198,7 @@ export default function MealDetailScreen() {
               disabled={remove.isPending}
               style={[styles.actionBtn, { borderColor: theme.colors.danger, opacity: remove.isPending ? 0.6 : 1 }]}
             >
-              <Text style={{ color: theme.colors.danger, fontSize: 15 }}>{remove.isPending ? '삭제 중…' : '삭제'}</Text>
+              <Text style={{ color: theme.colors.danger, fontSize: mealFont.body }}>{remove.isPending ? '삭제 중…' : '삭제'}</Text>
             </Pressable>
           </View>
 
@@ -193,12 +206,12 @@ export default function MealDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="같은 메뉴로 새 기록 만들기"
             onPress={() => repeatEntry(data)}
-            style={[styles.repeatBtn, { borderColor: theme.colors.border }]}
+            style={({ pressed }) => [styles.repeatBtn, { opacity: pressed ? 0.75 : 1 }]}
           >
-            <Text style={{ color: theme.colors.text, fontSize: 15, fontWeight: '600' }}>
+            <Text style={{ color: theme.colors.text, fontSize: mealFont.body, fontWeight: '600' }}>
               같은 메뉴로 새 기록
             </Text>
-            <Text style={{ color: theme.colors.textMuted, fontSize: 10 }}>
+            <Text style={{ color: theme.colors.textMuted, fontSize: mealFont.caption }}>
               음식·양·장소만 지금 시각의 새 기록으로 복사해요(사진·메모 제외)
             </Text>
           </Pressable>
@@ -210,38 +223,42 @@ export default function MealDetailScreen() {
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg },
+    container: { flex: 1, backgroundColor: theme.colors.bgGrouped },
     content: { padding: 16, gap: 12 },
     itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
-    itemName: { flex: 1, fontSize: 14, color: theme.colors.text },
-    itemMeta: { fontSize: 11, color: theme.colors.textMuted },
-    itemEstimate: { fontSize: 10, color: theme.colors.textMuted, fontStyle: 'italic' },
+    itemName: { flex: 1, fontSize: mealFont.body, color: theme.colors.text },
+    itemMeta: { fontSize: mealFont.caption, color: theme.colors.textMuted },
+    itemEstimate: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     nutritionRow: { marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
-    nutritionMain: { fontSize: 13, color: theme.colors.text, fontWeight: '600' },
-    nutritionNote: { marginTop: 3, fontSize: 11, color: theme.colors.textMuted },
+    nutritionMain: { fontSize: mealFont.callout, color: theme.colors.text, fontWeight: '700' },
+    nutritionNote: { marginTop: 3, fontSize: mealFont.caption, color: theme.colors.textMuted },
     actions: { flexDirection: 'row', gap: 10 },
     repeatBtn: {
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      paddingVertical: 11,
+      borderRadius: mealRadius.control,
+      backgroundColor: theme.colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
       alignItems: 'center',
       gap: 2,
     },
     placeLink: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: 10,
-      padding: 12,
+      gap: 6,
+      backgroundColor: theme.colors.surface,
+      borderRadius: mealRadius.card,
+      paddingVertical: 12,
+      paddingLeft: 16,
+      paddingRight: 10,
     },
-    placeLabel: { color: theme.colors.textMuted, fontSize: 10 },
-    placeName: { color: theme.colors.text, fontSize: 14, fontWeight: '600', marginTop: 2 },
+    placeLabel: { color: theme.colors.textMuted, fontSize: mealFont.caption },
+    placeName: { color: theme.colors.text, fontSize: mealFont.callout, fontWeight: '600', marginTop: 2 },
     actionBtn: {
       flex: 1,
       borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: 10,
-      paddingVertical: 12,
+      borderRadius: mealRadius.control,
+      backgroundColor: theme.colors.surface,
+      paddingVertical: 13,
       alignItems: 'center',
     },
   });

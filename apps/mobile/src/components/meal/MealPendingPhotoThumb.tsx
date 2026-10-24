@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { type MealDraftPendingPhoto, useTheme } from '@repo/shared';
 import { isMealDraftPhotoAvailable } from '~/lib/mealDraftPhotos';
+import { mealFont, mealRadius } from './mealTokens';
 
 export const MealPendingPhotoThumb = ({
   photo,
@@ -70,7 +72,7 @@ export const MealPendingPhotoThumb = ({
             { backgroundColor: missing ? theme.colors.danger : 'rgba(0,0,0,0.68)' },
           ]}
         >
-          <Text style={styles.badgeText}>
+          <Text style={styles.badgeText} numberOfLines={1} adjustsFontSizeToFit>
             {missing ? '확인 필요' : temporary ? '임시 원본' : '업로드 대기'}
           </Text>
         </View>
@@ -80,12 +82,10 @@ export const MealPendingPhotoThumb = ({
           accessibilityRole="button"
           accessibilityLabel="대기 사진 삭제"
           onPress={onRemove}
-          style={[
-            styles.remove,
-            { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-          ]}
+          hitSlop={6}
+          style={styles.remove}
         >
-          <Text style={{ color: theme.colors.danger, fontSize: 12, lineHeight: 14 }}>✕</Text>
+          <MaterialCommunityIcons name="close" size={14} color="#fff" />
         </Pressable>
       ) : null}
     </View>
@@ -95,12 +95,12 @@ export const MealPendingPhotoThumb = ({
 const styles = StyleSheet.create({
   box: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: mealRadius.control,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  missing: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  missing: { fontSize: mealFont.caption, fontWeight: '700', textAlign: 'center' },
   badge: {
     position: 'absolute',
     left: 4,
@@ -110,15 +110,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 2,
   },
-  badgeText: { color: '#fff', fontSize: 9, fontWeight: '700', textAlign: 'center' },
+  badgeText: { color: '#fff', fontSize: mealFont.caption, fontWeight: '700', textAlign: 'center' },
   remove: {
     position: 'absolute',
     top: -6,
     right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },

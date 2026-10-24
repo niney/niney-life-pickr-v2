@@ -25,10 +25,11 @@ import {
   MEAL_TYPE_LABEL,
   parseMealBirthYear,
 } from '@repo/utils';
-import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
+import { Note, StateBlock } from '~/components/common/Cards';
 import { MealDataManagementCard } from './MealDataManagementCard';
 import { MealReminderSettingsCard } from './MealReminderSettingsCard';
-import { Chip, ChipRow, FieldLabel } from './mealUi';
+import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 
 // 추천 중요도(0~5) + 절대 제외/소프트 비선호. 앱에는 슬라이더 라이브러리가 없어 0~5 칩 스테퍼로 만든다
 // (새 네이티브 의존성을 들이지 않는다 — 리포 관례).
@@ -131,8 +132,8 @@ export const MealPreferenceView = () => {
           기록이 적을 때도 이 설정을 먼저 반영해요.
         </Note>
       ) : null}
-      <Card>
-        <CardTitle title="무엇을 중요하게 볼까요" sub="추천이 이 비중대로 골라요. 0이면 아예 보지 않아요." />
+      <MealSection>
+        <MealSectionTitle title="무엇을 중요하게 볼까요" sub="추천이 이 비중대로 골라요. 0이면 아예 보지 않아요." />
         <ChipRow>
           {Object.entries(MEAL_WEIGHT_PRESETS).map(([key, preset]) => (
             <Chip
@@ -174,7 +175,7 @@ export const MealPreferenceView = () => {
                   >
                     <Text
                       style={{
-                        fontSize: 12,
+                        fontSize: mealFont.caption,
                         color: weights[f.key] >= v && v > 0 ? theme.colors.primaryText : theme.colors.textMuted,
                       }}
                     >
@@ -186,10 +187,10 @@ export const MealPreferenceView = () => {
             </View>
           ))}
         </View>
-      </Card>
+      </MealSection>
 
-      <Card>
-        <CardTitle title="먹는 것" />
+      <MealSection>
+        <MealSectionTitle title="먹는 것" />
         <FieldLabel>알레르기 주의 항목</FieldLabel>
         <ChipRow>
           {MealAllergen.options.map((allergen) => (
@@ -287,10 +288,10 @@ export const MealPreferenceView = () => {
             />
           ))}
         </ChipRow>
-      </Card>
+      </MealSection>
 
-      <Card>
-        <CardTitle
+      <MealSection>
+        <MealSectionTitle
           title="영양소 점검 기준"
           sub="영양 탭이 성별·나이에 맞는 섭취기준으로 봐요. 비워 두면 30-49세 성인 기준(남녀 중 낮은 값)으로 봐요."
         />
@@ -323,7 +324,7 @@ export const MealPreferenceView = () => {
           style={[styles.input, styles.yearInput]}
         />
         <Text style={styles.hint}>나이 구간을 고르는 데만 쓰고 공개되지 않아요.</Text>
-      </Card>
+      </MealSection>
 
       <MealReminderSettingsCard slots={slots} />
 
@@ -340,7 +341,7 @@ export const MealPreferenceView = () => {
           { backgroundColor: theme.colors.primary, opacity: !dirty || save.isPending ? 0.5 : 1 },
         ]}
       >
-        <Text style={{ color: theme.colors.primaryText, fontWeight: '700', fontSize: 15 }}>
+        <Text style={{ color: theme.colors.primaryText, fontWeight: '700', fontSize: mealFont.body }}>
           {save.isPending ? '저장 중…' : '저장'}
         </Text>
       </Pressable>
@@ -351,18 +352,18 @@ export const MealPreferenceView = () => {
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    content: { padding: 16, gap: 12, paddingBottom: 96 },
+    content: { padding: 16, gap: 12, paddingBottom: 48 },
     weightList: { gap: 14 },
     weightRow: { gap: 4 },
     weightHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    weightLabel: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
-    weightValue: { fontSize: 13, color: theme.colors.textMuted },
-    weightDesc: { fontSize: 11, color: theme.colors.textMuted },
+    weightLabel: { fontSize: mealFont.callout, fontWeight: '600', color: theme.colors.text },
+    weightValue: { fontSize: mealFont.footnote, color: theme.colors.textMuted },
+    weightDesc: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     levels: { flexDirection: 'row', gap: 6, marginTop: 2 },
     level: {
       width: 36,
       height: 28,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       borderWidth: StyleSheet.hairlineWidth,
       alignItems: 'center',
       justifyContent: 'center',
@@ -370,13 +371,13 @@ const createStyles = (theme: Theme) =>
     input: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 10,
       paddingVertical: 8,
       color: theme.colors.text,
-      fontSize: 14,
+      fontSize: mealFont.callout,
     },
-    hint: { fontSize: 11, color: theme.colors.textMuted },
+    hint: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     yearInput: { width: 120 },
-    saveBtn:{ borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+    saveBtn:{ borderRadius: mealRadius.control, paddingVertical: 14, alignItems: 'center' },
   });

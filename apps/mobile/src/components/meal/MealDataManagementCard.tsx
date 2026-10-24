@@ -20,9 +20,11 @@ import {
   useTheme,
   type Theme,
 } from '@repo/shared';
-import { Card, CardTitle, Note } from '~/components/common/Cards';
+import { Note } from '~/components/common/Cards';
 import { loadMealReminderSettings, syncMealReminders } from '~/lib/mealReminders';
 import { clearMealPhotoCache } from '~/lib/mealPhotoCache';
+import { MealSection, MealSectionTitle } from './mealUi';
+import { mealFont, mealRadius } from './mealTokens';
 
 // expo-document-picker 는 **네이티브 모듈**이라 JS 번들만 갱신된 dev client 에서는 없을 수 있다.
 // 최상위에서 import 하면 모듈 로드 자체가 터져 설정 탭은 물론 식단 화면 전체가 빈 화면이 된다
@@ -231,8 +233,8 @@ export const MealDataManagementCard = () => {
   };
 
   return (
-    <Card>
-      <CardTitle title="내 데이터" sub="식단 기록은 공개되지 않으며 언제든 내보내거나 전부 지울 수 있어요." />
+    <MealSection>
+      <MealSectionTitle title="내 데이터" sub="식단 기록은 공개되지 않으며 언제든 내보내거나 전부 지울 수 있어요." />
       <Pressable
         accessibilityRole="button"
         onPress={() => void handleExport()}
@@ -318,35 +320,35 @@ export const MealDataManagementCard = () => {
 
       {notice ? <Note tone="muted">{notice}</Note> : null}
       {error ? <Note tone="warn">{error}</Note> : null}
-    </Card>
+    </MealSection>
   );
 };
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    action: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, padding: 11, gap: 3 },
-    actionTitle: { color: theme.colors.text, fontSize: 14, fontWeight: '700' },
-    actionDescription: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16 },
+    action: { borderWidth: StyleSheet.hairlineWidth, borderRadius: mealRadius.control, padding: 11, gap: 3 },
+    actionTitle: { color: theme.colors.text, fontSize: mealFont.callout, fontWeight: '700' },
+    actionDescription: { color: theme.colors.textMuted, fontSize: mealFont.caption, lineHeight: 16 },
     deletePanel: { gap: 8, paddingTop: 2 },
-    warning: { color: theme.colors.danger, fontSize: 12, lineHeight: 17 },
+    warning: { color: theme.colors.danger, fontSize: mealFont.caption, lineHeight: 17 },
     confirmationText: {
       color: theme.colors.text,
       backgroundColor: theme.colors.surfaceAlt,
-      borderRadius: 6,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 8,
       paddingVertical: 6,
-      fontSize: 11,
+      fontSize: mealFont.caption,
       fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
     },
     input: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: mealRadius.small,
       paddingHorizontal: 10,
       paddingVertical: 9,
       color: theme.colors.text,
-      fontSize: 12,
+      fontSize: mealFont.caption,
     },
-    deleteButton: { borderRadius: 9, paddingVertical: 11, alignItems: 'center' },
-    deleteButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+    deleteButton: { borderRadius: mealRadius.control, paddingVertical: 11, alignItems: 'center' },
+    deleteButtonText: { color: '#fff', fontSize: mealFont.callout, fontWeight: '700' },
   });
