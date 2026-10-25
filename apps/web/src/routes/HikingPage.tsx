@@ -1,24 +1,34 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Crosshair, ExternalLink, Loader2, Search } from 'lucide-react';
-import { Routes } from '@repo/api-contract';
+import { Loader2 } from 'lucide-react';
 import { ApiError, useHikingCourse, useHikingMountain, useHikingMountains, useUserLocation } from '@repo/shared';
-import { HIKING_REGION_GROUPS, formatHikingEle, formatHikingLength, isHikingRegionGroup } from '@repo/utils';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
+import { isHikingRegionGroup, type HikingRegionGroup } from '@repo/utils';
+import { usePublicLayout } from '~/components/PublicLayout';
 import { CourseDetail } from '~/components/hiking/CourseDetail';
+import { HikingFooter, HikingListHeader, HikingMountainList } from '~/components/hiking/HikingList';
 import { HikingMap } from '~/components/hiking/HikingMap';
 import { MountainDetail } from '~/components/hiking/MountainDetail';
-import { decodePieces, formatHikingDistance, isHikingSort, pointAtDistance, rankMountains, type HikingSort } from '~/components/hiking/hikingFormat';
+import { decodePieces, isHikingSort, pointAtDistance, rankMountains, type HikingSort } from '~/components/hiking/hikingFormat';
+import { BottomSheet } from '~/components/sheet/BottomSheet';
+import { SHEET_PEEK_HEIGHT, sheetHalfInset, useMapSheets } from '~/components/sheet/useMapSheets';
+import { useIsDesktopXl } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
+import { usePanelSide } from '~/stores/panelPrefsStore';
 
 // 등산 — 100대 명산 607개 코스(한국등산트레킹지원센터 GPX + 산림청). 산 목록(검색·권역·정렬) → 산 상세(사진·선정 이유·
-// 코스 카드) → 코스 상세(고도 그래프·노면·지점). 상태는 URL(?m 산 · c 코스 · q 검색 · r 권역 · s 정렬) — 공유·뒤로가기.
-// 고도 그래프에서 가리킨 자리·고른 지점은 화면 상태(공유 대상 아님). docs/PLAN-hiking.md
-
-const SORT_LABEL: Record<HikingSort, string> = { name: '이름순', height: '높은순', near: '가까운순' };
+// 코스 카드) → 코스 상세(예상 시간·난이도·고도 그래프·노면·지점). 상태는 URL(?m 산 · c 코스 · q 검색 · r 권역 · s 정렬) —
+// 공유·뒤로가기. 고도 그래프에서 가리킨 자리·고른 지점은 화면 상태(공유 대상 아님). docs/PLAN-hiking.md
+//
+// 레이아웃은 맛집(RestaurantsV2Page)과 같은 틀 — useIsDesktopXl(JS)로 한 벌만 그린다.
+//   - xl+ : 헤더 아래 한 화면에 [산 목록 400 | 상세 440(산 → 코스) | 지도]. 패널 좌/우는 맛집처럼 바꿀 수 있다.
+//   - xl- : 지도는 헤더 아래 fixed 배경, 그 위에 목록 시트(peek/half/full)와 상세 시트(산을 고르면 half 로).
+//           검색·권역·정렬은 상단바 subBar 에(산을 고르면 내린다). 산·코스 범위는 half 시트에 가리지 않게 맞춘다.
 
 export const HikingPage = () => {
+  const isDesktop = useIsDesktopXl();
+  const { setSubBar, headerHeight } = usePublicLayout();
+  const [panelSide, togglePanelSide] = usePanelSide('public.hiking');
+
   const [params, setParams] = useSearchParams();
   const mountainId = params.get('m');
   const courseId = mountainId ? params.get('c') : null;
@@ -33,6 +43,9 @@ export const HikingPage = () => {
   const courseQ = useHikingCourse(courseId);
   const userLoc = useUserLocation({ auto: false });
   const me = userLoc.coords;
+
+  // 목록/상세 시트 스냅 조율(상세가 열리면 목록 peek·상세 half, 닫히면 복원) — 맛집·주차와 같은 공용 훅.
+  const sheets = useMapSheets(mountainId !== null);
 
   const update = useCallback(
     (patch: Record<string, string | null>, replace = true) => {
@@ -69,172 +82,171 @@ export const HikingPage = () => {
 
   const notLoaded = mountainsQ.error instanceof ApiError && mountainsQ.error.statusCode === 503;
 
-  const selectMountain = (id: string) => update({ m: id, c: null }, false);
-  const nearMe = () => {
-    update({ s: 'near' });
-    if (!me) userLoc.refetch();
-  };
+  const selectMountain = useCallback((id: string) => update({ m: id, c: null }, false), [update]);
+  const refetchLocation = userLoc.refetch;
+  const changeSort = useCallback(
+    (s: HikingSort) => {
+      update({ s: s === 'name' ? null : s });
+      if (s === 'near' && !me) refetchLocation();
+    },
+    [update, me, refetchLocation],
+  );
+  const changeQ = useCallback((next: string) => update({ q: next }), [update]);
+  const changeGroup = useCallback((g: HikingRegionGroup | null) => update({ r: g }), [update]);
+
+  const count = ranked.length;
+  const locating = sort === 'near' && userLoc.status === 'pending';
+  const headerProps = { q, group, sort, count, locating, onChangeQ: changeQ, onChangeGroup: changeGroup, onChangeSort: changeSort };
+
+  // 모바일 subBar — 산 목록일 때만(상세가 열리면 내려 시트가 더 넓게). 데스크톱은 목록 칸이 자기 머리를 갖는다.
+  // 상단바 상태로 올라가는 요소라 값이 같으면 같은 참조여야 한다(아니면 등록 → 다시 그리기가 돈다).
+  const showSubBar = !isDesktop && mountainId === null && !mountainsQ.isError;
+  const subBarContent = useMemo(
+    () =>
+      showSubBar ? (
+        <HikingListHeader
+          q={q}
+          group={group}
+          sort={sort}
+          count={count}
+          locating={locating}
+          onChangeQ={changeQ}
+          onChangeGroup={changeGroup}
+          onChangeSort={changeSort}
+        />
+      ) : null,
+    [showSubBar, q, group, sort, count, locating, changeQ, changeGroup, changeSort],
+  );
+  // paint 전에 상단바에 등록 — 첫 프레임부터 통합 헤더 높이로 시트가 자리 잡게(맛집과 같음).
+  useLayoutEffect(() => {
+    setSubBar(subBarContent);
+    return () => setSubBar(null);
+  }, [setSubBar, subBarContent]);
+
+  const listBody = mountainsQ.isError ? (
+    <div className="mx-3 my-4 rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+      {notLoaded ? '등산 데이터가 아직 준비되지 않았습니다.' : '산 목록을 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.'}
+    </div>
+  ) : (
+    <HikingMountainList ranked={ranked} isLoading={mountainsQ.isLoading} selectedId={mountainId} onSelect={selectMountain} />
+  );
+
+  const loading = (text: string) => (
+    <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+      <Loader2 className="size-4 animate-spin" /> {text}
+    </p>
+  );
+  const failed = (text: string) => <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>;
+  const detail = courseId
+    ? course
+      ? (
+          <CourseDetail
+            course={course}
+            selectedPoiId={selectedPoiId}
+            onSelectPoi={(poiId) => setPicked({ courseId: course.id, poiId })}
+            onHover={setHoverAtM}
+            onBack={() => update({ c: null }, false)}
+          />
+        )
+      : courseQ.isError
+        ? failed('코스를 불러오지 못했습니다.')
+        : loading('코스를 불러오는 중…')
+    : mountain
+      ? <MountainDetail mountain={mountain} onSelectCourse={(c) => update({ c }, false)} onBack={() => update({ m: null }, false)} />
+      : mountainQ.isError
+        ? failed('산 정보를 불러오지 못했습니다.')
+        : loading('산 정보를 불러오는 중…');
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-      <div className="flex flex-col gap-4">
-        <header>
-          <h1 className="text-2xl font-bold tracking-tight">등산</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            산림청 100대 명산의 코스 607개 — 코스 선과 고도 그래프, 갈림길 이정표, 험한 구간, 화장실·주차장·정류장까지 한눈에.
-          </p>
-        </header>
+    <div
+      className={cn('relative w-full', isDesktop && 'flex', isDesktop && panelSide === 'right' && 'flex-row-reverse')}
+      // 데스크톱은 헤더 아래 한 화면에 꼭 맞춘다(실측 헤더 높이 — 맛집·주차와 같은 방식).
+      style={isDesktop ? { height: `calc(100dvh - ${headerHeight}px)` } : undefined}
+    >
+      <h1 className="sr-only">등산</h1>
+      {/* 지도 — 데스크톱은 마지막 칸(order-3), 모바일은 헤더 아래 fixed 배경. 두 분기에서 같은 자리(첫 칸)라 폭이 xl 경계를
+          넘나들어도 지도 인스턴스는 그대로다. --map-bottom-inset: 좌하단 레이어 컨트롤이 peek 시트 위로. */}
+      <section
+        className={cn(isDesktop ? 'relative order-3 min-h-0 flex-1' : 'fixed inset-x-0 bottom-0 z-0')}
+        style={
+          isDesktop
+            ? undefined
+            : ({ top: `${headerHeight}px`, '--map-bottom-inset': `${SHEET_PEEK_HEIGHT}px` } as React.CSSProperties)
+        }
+      >
+        <HikingMap
+          mountains={mountainsQ.data?.items ?? []}
+          selectedMountainId={mountainId}
+          courses={mountain?.courses ?? null}
+          selectedCourseId={courseId}
+          pois={course?.pois ?? []}
+          selectedPoiId={selectedPoiId}
+          hoverPoint={hoverPoint}
+          myLocation={me}
+          onSelectMountain={selectMountain}
+          onSelectPoi={(poiId) => courseId && setPicked({ courseId, poiId })}
+          fitBottomInset={isDesktop ? 0 : sheetHalfInset(headerHeight)}
+          className="h-full w-full"
+        />
+      </section>
 
-        {mountainsQ.isError ? (
-          <div className="rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-            {notLoaded ? '등산 데이터가 아직 준비되지 않았습니다.' : '산 목록을 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.'}
-          </div>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
-            <HikingMap
-              mountains={mountainsQ.data?.items ?? []}
-              selectedMountainId={mountainId}
-              courses={mountain?.courses ?? null}
-              selectedCourseId={courseId}
-              pois={course?.pois ?? []}
-              selectedPoiId={selectedPoiId}
-              hoverPoint={hoverPoint}
-              myLocation={me}
-              onSelectMountain={selectMountain}
-              onSelectPoi={(poiId) => courseId && setPicked({ courseId, poiId })}
-              className="h-[360px] lg:h-[640px]"
-            />
-            <aside className="flex min-h-0 flex-col gap-3 lg:h-[640px] lg:overflow-y-auto lg:pr-1" aria-label="산·코스">
-              {courseId ? (
-                course ? (
-                  <CourseDetail
-                    course={course}
-                    selectedPoiId={selectedPoiId}
-                    onSelectPoi={(poiId) => setPicked({ courseId: course.id, poiId })}
-                    onHover={setHoverAtM}
-                    onBack={() => update({ c: null }, false)}
-                  />
-                ) : courseQ.isError ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">코스를 불러오지 못했습니다.</p>
-                ) : (
-                  <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> 코스를 불러오는 중…
-                  </p>
-                )
-              ) : mountainId ? (
-                mountain ? (
-                  <MountainDetail mountain={mountain} onSelectCourse={(c) => update({ c }, false)} onBack={() => update({ m: null }, false)} />
-                ) : mountainQ.isError ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">산 정보를 불러오지 못했습니다.</p>
-                ) : (
-                  <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> 산 정보를 불러오는 중…
-                  </p>
-                )
-              ) : (
-                <>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={q}
-                      onChange={(e) => update({ q: e.target.value })}
-                      placeholder="산 이름·지역 검색"
-                      aria-label="산 검색"
-                      className="pl-8"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="권역">
-                    {[{ key: null, label: '전체' }, ...HIKING_REGION_GROUPS].map((g) => (
-                      <button
-                        key={g.key ?? 'all'}
-                        type="button"
-                        aria-pressed={group === g.key}
-                        onClick={() => update({ r: g.key })}
-                        className={cn(
-                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                          group === g.key ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-                        )}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <div className="inline-flex rounded-md border p-0.5" role="group" aria-label="정렬">
-                      {(['name', 'height'] as const).map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          aria-pressed={sort === s}
-                          onClick={() => update({ s: s === 'name' ? null : s })}
-                          className={cn('rounded px-2 py-0.5 text-xs font-medium', sort === s ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
-                        >
-                          {SORT_LABEL[s]}
-                        </button>
-                      ))}
-                    </div>
-                    <Button type="button" variant={sort === 'near' ? 'default' : 'outline'} size="sm" onClick={nearMe} disabled={userLoc.status === 'pending'}>
-                      {userLoc.status === 'pending' ? <Loader2 className="animate-spin" /> : <Crosshair />}
-                      가까운순
-                    </Button>
-                    <span className="ml-auto text-xs tabular-nums text-muted-foreground">{ranked.length}개 산</span>
-                  </div>
-                  {mountainsQ.isLoading ? (
-                    <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-                      <Loader2 className="size-4 animate-spin" /> 산 목록을 불러오는 중…
-                    </p>
-                  ) : (
-                    <ol className="flex flex-col divide-y rounded-md border" data-testid="hiking-list">
-                      {ranked.map(({ mountain: m, distM }) => (
-                        <li key={m.id}>
-                          <button type="button" onClick={() => selectMountain(m.id)} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent">
-                            {m.images[0] !== undefined ? (
-                              <img src={Routes.Hiking.image(m.id, m.images[0])} alt="" loading="lazy" className="size-12 shrink-0 rounded bg-muted object-cover" />
-                            ) : (
-                              <span aria-hidden className="size-12 shrink-0 rounded bg-muted" />
-                            )}
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-baseline gap-1.5">
-                                <span className="truncate text-sm font-medium">{m.name}</span>
-                                {m.heightM !== null && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatHikingEle(m.heightM)}</span>}
-                                {distM !== null && <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{formatHikingDistance(distM)}</span>}
-                              </span>
-                              <span className="block truncate text-xs text-muted-foreground">{m.area}</span>
-                              <span className="block text-xs tabular-nums text-muted-foreground">
-                                코스 {m.courseCount}개
-                                {m.minLengthM !== null && m.maxLengthM !== null && ` · ${formatHikingLength(m.minLengthM)}~${formatHikingLength(m.maxLengthM)}`}
-                              </span>
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                      {ranked.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted-foreground">조건에 맞는 산이 없습니다.</li>}
-                    </ol>
-                  )}
-                </>
-              )}
+      {isDesktop ? (
+        /* ━━━ 데스크톱 (xl+) — [산 목록 | 상세 | 지도] ━━━ */
+        <>
+          <aside
+            className={cn('order-1 flex h-full w-[400px] shrink-0 flex-col bg-background', panelSide === 'left' ? 'border-r' : 'border-l')}
+            aria-label="산 목록"
+          >
+            <div className="border-b">
+              <HikingListHeader {...headerProps} panelSide={panelSide} onTogglePanelSide={togglePanelSide} />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {listBody}
+              <HikingFooter />
+            </div>
+          </aside>
+          {mountainId && (
+            <aside
+              className={cn('order-2 h-full w-[440px] shrink-0 overflow-y-auto bg-background p-4', panelSide === 'left' ? 'border-r' : 'border-l')}
+              aria-label="산·코스 상세"
+            >
+              {detail}
             </aside>
-          </div>
-        )}
-
-        <footer className="flex flex-col gap-1 text-[11px] leading-relaxed text-muted-foreground" data-testid="hiking-footer">
-          <div>
-            코스·지점은 2022년 1월 기준 조사 자료입니다. 입산통제·탐방로 폐쇄·공사는 반영되지 않으니 산행 전 국립공원·지자체 안내를
-            확인하세요.
-          </div>
-          <div>
-            출처{' '}
-            <a href="https://www.data.go.kr/data/15098177/fileData.do" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
-              한국등산트레킹지원센터 <ExternalLink className="size-3" />
-            </a>{' '}
-            100대명산 GPX·봉우리·갈림길·교통 정보,{' '}
-            <a href="https://www.forest.go.kr" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
-              산림청 <ExternalLink className="size-3" />
-            </a>{' '}
-            명산등산로·산정보(공공데이터포털).
-          </div>
-        </footer>
-      </div>
+          )}
+        </>
+      ) : (
+        /* ━━━ 모바일 (xl-) — 지도 배경 + 목록 시트 + 상세 시트 ━━━ */
+        <>
+          <BottomSheet
+            snap={sheets.listSnap}
+            onSnapChange={sheets.setListSnap}
+            topOffset={headerHeight}
+            peekHeight={SHEET_PEEK_HEIGHT}
+            hidden={sheets.listHidden}
+            disableScrollLock={sheets.listHidden}
+            zIndex={20}
+          >
+            <div className="pb-6" data-testid="hiking-list-sheet">
+              {listBody}
+              <HikingFooter />
+            </div>
+          </BottomSheet>
+          {mountainId && (
+            <BottomSheet
+              key={mountainId}
+              snap={sheets.detailSnap}
+              onSnapChange={sheets.setDetailSnap}
+              topOffset={headerHeight}
+              peekHeight={SHEET_PEEK_HEIGHT}
+              zIndex={30}
+            >
+              <div className="px-4 pb-6 pt-1" data-testid="hiking-detail-sheet">
+                {detail}
+              </div>
+            </BottomSheet>
+          )}
+        </>
+      )}
     </div>
   );
 };

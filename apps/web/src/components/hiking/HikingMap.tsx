@@ -45,6 +45,8 @@ interface Props {
   myLocation: LatLng | null;
   onSelectMountain: (id: string) => void;
   onSelectPoi: (id: string) => void;
+  // 산·코스 범위에 맞출 때 아래를 덮는 높이(px) — 모바일 상세 시트(half)에 코스가 가리지 않게.
+  fitBottomInset?: number;
   className?: string;
 }
 
@@ -59,6 +61,7 @@ export const HikingMap = ({
   myLocation,
   onSelectMountain,
   onSelectPoi,
+  fitBottomInset = 0,
   className,
 }: Props) => {
   const config = useMapPublicConfig();
@@ -110,7 +113,7 @@ export const HikingMap = ({
     return { key: `${selectedMountainId}|${selectedCourseId}`, corners };
   }, [courses, selectedCourseId, selectedMountainId]);
   useEffect(() => {
-    if (focus) handleRef.current?.fitToCoords(focus.corners, 48);
+    if (focus) handleRef.current?.fitToCoords(focus.corners, 48, { bottomInset: fitBottomInset });
     // 산·코스가 바뀔 때만(같은 코스의 데이터가 다시 와도 사용자가 옮긴 화면을 되돌리지 않게).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.key, apiKey]);
@@ -132,13 +135,14 @@ export const HikingMap = ({
   }
   if (keyMissing || !apiKey) {
     return (
-      <div className={cn('flex items-center justify-center rounded-md border border-dashed px-4 text-center text-sm text-muted-foreground', className)}>
+      <div className={cn('flex items-center justify-center px-4 text-center text-sm text-muted-foreground', className)}>
         지도 키(vworld)가 설정되지 않아 지도를 표시할 수 없습니다. 어드민 &gt; 설정 &gt; 지도에서 키를 등록하세요.
       </div>
     );
   }
+  // 헤더 아래 한 화면을 채우는 지도(맛집·주차와 같은 틀)라 테두리·둥근 모서리 없이.
   return (
-    <div className={cn('relative overflow-hidden rounded-md border', className)}>
+    <div className={cn('relative overflow-hidden', className)}>
       <MapCanvas
         ref={handleRef}
         apiKey={apiKey}

@@ -4,7 +4,7 @@ import { create } from 'zustand';
 // 기억한다. 페이지마다 별도 — 어드민 발견 페이지와 공개 맛집 페이지의 선호가
 // 다를 수 있어서 namespace 키로 분리.
 export type PanelSide = 'left' | 'right';
-export type PanelKey = 'admin.discover' | 'public.restaurants';
+export type PanelKey = 'admin.discover' | 'public.restaurants' | 'public.hiking';
 
 const STORAGE_KEY = 'lp:panelPrefs';
 
@@ -13,6 +13,8 @@ const DEFAULTS: Record<PanelKey, PanelSide> = {
   'admin.discover': 'right',
   // 공개 맛집은 기존 RestaurantsPage 가 좌측이었으므로 그대로.
   'public.restaurants': 'left',
+  // 등산은 맛집과 같은 3-column 이라 같은 쪽에서 시작.
+  'public.hiking': 'left',
 };
 
 const readInitial = (): Record<PanelKey, PanelSide> => {

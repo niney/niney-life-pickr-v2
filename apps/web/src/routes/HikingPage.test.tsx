@@ -1,7 +1,7 @@
-import { forwardRef, useImperativeHandle } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type {
@@ -13,6 +13,7 @@ import type {
 } from '@repo/api-contract';
 import { encodePolyline } from '@repo/utils';
 import { server } from '~/test/msw';
+import { usePanelPrefsStore } from '~/stores/panelPrefsStore';
 import { pointAtDistance, rankMountains } from '~/components/hiking/hikingFormat';
 import { HikingPage } from './HikingPage';
 
@@ -152,6 +153,17 @@ beforeEach(() => {
 });
 
 const LocationProbe = () => <div data-testid="location-search">{useLocation().search}</div>;
+// PublicLayout 흉내 — 모바일 subBar(검색·권역·정렬)를 받아 DOM 에 그린다.
+const LayoutStub = () => {
+  const [subBar, setSubBar] = useState<React.ReactNode>(null);
+  const ctx = useMemo(() => ({ setSubBar, headerHeight: 120 }), []);
+  return (
+    <>
+      <div data-testid="layout-subbar">{subBar}</div>
+      <Outlet context={ctx} />
+    </>
+  );
+};
 const renderPage = (url = '/hiking') => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
@@ -159,7 +171,9 @@ const renderPage = (url = '/hiking') => {
       <MemoryRouter initialEntries={[url]}>
         <LocationProbe />
         <Routes>
-          <Route path="/hiking" element={<HikingPage />} />
+          <Route element={<LayoutStub />}>
+            <Route path="/hiking" element={<HikingPage />} />
+          </Route>
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -178,10 +192,10 @@ describe('HikingPage', () => {
     expect(rows()[1]).toContain('관악산632m');
     expect(rows()[2]).toContain('한라산1,947m');
     expect(rows()[0]).toContain('코스 2개 · 3.0km~6.0km');
-    fireEvent.change(screen.getByRole('textbox', { name: '산 검색' }), { target: { value: '안양' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: '산 검색' }), { target: { value: '안양' } });
     await waitFor(() => expect(rows()).toHaveLength(1));
     expect(rows()[0]).toContain('관악산');
-    fireEvent.change(screen.getByRole('textbox', { name: '산 검색' }), { target: { value: '' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: '산 검색' }), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: '제주' }));
     await waitFor(() => expect(rows()).toHaveLength(1));
     expect(rows()[0]).toContain('한라산');
@@ -228,6 +242,70 @@ describe('HikingPage', () => {
     fireEvent.click(within(c).getByRole('button', { name: /가리산 코스 목록/ }));
     expect(await screen.findByTestId('hiking-mountain')).toBeInTheDocument();
     expect(requested).toEqual(['m:421100101', 'c:421100101-2']);
+  });
+
+  it('데스크톱 — [산 목록 | 상세 | 지도] 세 칸, 산을 골라도 목록은 남고 패널을 오른쪽으로 옮긴다', async () => {
+    window.localStorage.clear();
+    usePanelPrefsStore.setState({ sides: { 'admin.discover': 'right', 'public.restaurants': 'left', 'public.hiking': 'left' } });
+    renderPage('/hiking?m=421100101');
+    expect(await screen.findByTestId('hiking-mountain')).toBeInTheDocument();
+    // 목록 칸은 그대로 보이고 고른 산이 표시된다.
+    const list = screen.getByRole('complementary', { name: '산 목록' });
+    await waitFor(() => expect(within(list).getByText('가리산').closest('button')).toHaveAttribute('aria-current', 'true'));
+    expect(screen.getByRole('complementary', { name: '산·코스 상세' })).toContainElement(screen.getByTestId('hiking-mountain'));
+    // 데스크톱은 상단바 subBar 를 쓰지 않는다.
+    expect(screen.getByTestId('layout-subbar')).toBeEmptyDOMElement();
+    fireEvent.click(screen.getByRole('button', { name: '패널을 오른쪽으로' }));
+    expect(usePanelPrefsStore.getState().sides['public.hiking']).toBe('right');
+    expect(screen.getByRole('button', { name: '패널을 왼쪽으로' })).toBeInTheDocument();
+  });
+});
+
+// ── 모바일(xl 미만) — 지도 배경 + 목록 시트 + 상세 시트 ────────────────────────────────────────────
+// useIsDesktopXl 은 matchMedia 가 없으면 데스크톱으로 보므로, 모바일은 matchMedia 를 목으로 바꿔 렌더한다.
+describe('HikingPage (모바일 시트)', () => {
+  const originalMatchMedia = window.matchMedia;
+  beforeEach(() => {
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('검색·권역은 상단바 subBar, 산 목록·푸터는 목록 시트 — 산을 고르면 상세 시트가 뜨고 subBar 는 내린다', async () => {
+    renderPage();
+    const subbar = screen.getByTestId('layout-subbar');
+    expect(within(subbar).getByRole('searchbox', { name: '산 검색' })).toBeInTheDocument();
+    expect(within(subbar).getByRole('button', { name: '제주' })).toBeInTheDocument();
+    expect(document.querySelector('[data-sheet-handle]')).not.toBeNull();
+    const sheet = screen.getByTestId('hiking-list-sheet');
+    await waitFor(() => expect(within(sheet).getAllByRole('listitem')).toHaveLength(3));
+    expect(within(sheet).getByTestId('hiking-footer')).toBeInTheDocument();
+    expect(screen.queryByTestId('hiking-detail-sheet')).toBeNull();
+
+    fireEvent.click(within(sheet).getByText('가리산'));
+    const detail = await screen.findByTestId('hiking-detail-sheet');
+    expect(await within(detail).findByTestId('hiking-mountain')).toHaveTextContent('강원도에서 진달래가 가장 많이 피는 산');
+    expect(subbar).toBeEmptyDOMElement();
+
+    // 같은 시트에서 코스 상세로 바뀌고, 뒤로 가면 산 상세.
+    fireEvent.click(within(within(detail).getByTestId('hiking-courses')).getAllByRole('button')[1]!);
+    expect(await within(detail).findByTestId('hiking-course')).toHaveTextContent('왕복 예상5시간');
+    fireEvent.click(within(detail).getByRole('button', { name: /가리산 코스 목록/ }));
+    expect(await within(detail).findByTestId('hiking-mountain')).toBeInTheDocument();
+    // 산 목록으로 돌아가면 상세 시트가 닫히고 subBar 가 돌아온다.
+    fireEvent.click(within(detail).getByRole('button', { name: /산 목록/ }));
+    await waitFor(() => expect(screen.queryByTestId('hiking-detail-sheet')).toBeNull());
+    expect(within(subbar).getByRole('searchbox', { name: '산 검색' })).toBeInTheDocument();
   });
 });
 

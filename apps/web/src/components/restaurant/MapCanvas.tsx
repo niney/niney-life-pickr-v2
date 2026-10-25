@@ -205,7 +205,8 @@ export interface MapCanvasHandle {
   fitToMarkers(padding?: number): void;
   // 임의 좌표 집합의 bbox 에 맞춰 fit — 마커가 아닌 경로(길찾기 폴리라인) 전체가
   // 보이게 할 때. 마커 소스와 무관하게 넘겨받은 좌표만으로 extent 를 만든다.
-  fitToCoords(coords: { lat: number; lng: number }[], padding?: number): void;
+  // opts.bottomInset: 아래쪽을 덮는 높이(px, 모바일 바텀시트) — 그만큼 아래 여백을 더해 시트 위에 들어오게.
+  fitToCoords(coords: { lat: number; lng: number }[], padding?: number, opts?: { bottomInset?: number }): void;
 }
 
 interface Props {
@@ -1182,9 +1183,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           maxZoom: 17,
         });
       },
-      fitToCoords(coords, padding = 60) {
+      fitToCoords(coords, padding = 60, opts) {
         const map = mapRef.current;
         if (!map || coords.length === 0) return;
+        const bottom = padding + Math.max(0, opts?.bottomInset ?? 0);
         let minX = Infinity;
         let minY = Infinity;
         let maxX = -Infinity;
@@ -1199,7 +1201,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         if (!Number.isFinite(minX)) return;
         userInteractedRef.current = false;
         map.getView().fit([minX, minY, maxX, maxY], {
-          padding: [padding, padding, padding, padding],
+          padding: [padding, padding, bottom, padding],
           duration: 350,
           maxZoom: 17,
         });
