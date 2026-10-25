@@ -5508,6 +5508,39 @@
                     "isLoop": {
                       "type": "boolean"
                     },
+                    "shape": {
+                      "type": "string",
+                      "enum": [
+                        "loop",
+                        "summit",
+                        "traverse"
+                      ]
+                    },
+                    "timeMin": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "timeRevMin": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "roundTripMin": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "difficulty": {
+                      "type": "string",
+                      "enum": [
+                        "easy",
+                        "moderate",
+                        "hard"
+                      ],
+                      "nullable": true
+                    },
+                    "steepPct": {
+                      "type": "integer",
+                      "nullable": true
+                    },
                     "gapCount": {
                       "type": "integer"
                     },
@@ -5707,6 +5740,35 @@
                               "additionalProperties": false
                             }
                           },
+                          "guide": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "dest": {
+                                  "type": "string"
+                                },
+                                "dir": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "way": {
+                                  "type": "string",
+                                  "enum": [
+                                    "next",
+                                    "prev"
+                                  ],
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "dest",
+                                "dir",
+                                "way"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
                           "atM": {
                             "type": "integer"
                           }
@@ -5720,6 +5782,7 @@
                           "description",
                           "ele",
                           "signposts",
+                          "guide",
                           "atM"
                         ],
                         "additionalProperties": false
@@ -5741,6 +5804,12 @@
                     "minEle",
                     "maxEle",
                     "isLoop",
+                    "shape",
+                    "timeMin",
+                    "timeRevMin",
+                    "roundTripMin",
+                    "difficulty",
+                    "steepPct",
                     "gapCount",
                     "gapM",
                     "roughSurfaces",
@@ -6105,6 +6174,39 @@
                           "isLoop": {
                             "type": "boolean"
                           },
+                          "shape": {
+                            "type": "string",
+                            "enum": [
+                              "loop",
+                              "summit",
+                              "traverse"
+                            ]
+                          },
+                          "timeMin": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "timeRevMin": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "roundTripMin": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "difficulty": {
+                            "type": "string",
+                            "enum": [
+                              "easy",
+                              "moderate",
+                              "hard"
+                            ],
+                            "nullable": true
+                          },
+                          "steepPct": {
+                            "type": "integer",
+                            "nullable": true
+                          },
                           "gapCount": {
                             "type": "integer"
                           },
@@ -6163,6 +6265,12 @@
                           "minEle",
                           "maxEle",
                           "isLoop",
+                          "shape",
+                          "timeMin",
+                          "timeRevMin",
+                          "roundTripMin",
+                          "difficulty",
+                          "steepPct",
                           "gapCount",
                           "gapM",
                           "roughSurfaces",

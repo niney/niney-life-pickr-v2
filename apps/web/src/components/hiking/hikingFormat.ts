@@ -1,7 +1,16 @@
-import type { HikingMountainSummaryType } from '@repo/api-contract';
-import { decodePolyline, haversineM, hikingInRegionGroup, type HikingRegionGroup, type LatLng } from '@repo/utils';
+import type { HikingCourseSummaryType, HikingMountainSummaryType } from '@repo/api-contract';
+import {
+  decodePolyline,
+  formatHikingDuration,
+  haversineM,
+  hikingDifficultyReasons,
+  hikingInRegionGroup,
+  type HikingDifficulty,
+  type HikingRegionGroup,
+  type LatLng,
+} from '@repo/utils';
 
-// 등산 화면 순수 도우미 — 산 목록 거르기·정렬, 코스 선 복원, 고도 그래프 위치 ↔ 지도 좌표.
+// 등산 화면 순수 도우미 — 산 목록 거르기·정렬, 코스 선 복원, 고도 그래프 위치 ↔ 지도 좌표, 예상 시간·난이도 문구.
 
 export type HikingSort = 'name' | 'height' | 'near';
 export const isHikingSort = (v: unknown): v is HikingSort => v === 'name' || v === 'height' || v === 'near';
@@ -66,3 +75,36 @@ export const officialCourseLines = (text: string | null): string[] =>
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
+
+// ── 예상 시간·난이도 ─────────────────────────────────────────────────────────────
+
+type CourseTimes = Pick<HikingCourseSummaryType, 'shape' | 'timeMin' | 'timeRevMin' | 'roundTripMin'>;
+
+// 카드·상세 첫 줄 — 정상 왕복은 왕복, 나머지는 코스 방향 편도. 고도 없는 코스는 null.
+export const courseOutingLabel = (c: CourseTimes): string | null => {
+  const min = c.roundTripMin ?? c.timeMin;
+  return min === null ? null : `${c.roundTripMin !== null ? '왕복 ' : ''}${formatHikingDuration(min)}`;
+};
+
+// 방향별 — 오르기·내려오기 / 한 바퀴·반대로 / 이 방향·반대 방향.
+export const courseTimeBreakdown = (c: CourseTimes): string | null => {
+  if (c.timeMin === null || c.timeRevMin === null) return null;
+  const f = formatHikingDuration;
+  if (c.shape === 'summit') return `오르기 ${f(c.timeMin)} · 내려오기 ${f(c.timeRevMin)}`;
+  if (c.shape === 'loop') return `한 바퀴 ${f(c.timeMin)} · 반대로 돌면 ${f(c.timeRevMin)}`;
+  return `이 방향 ${f(c.timeMin)} · 반대 방향 ${f(c.timeRevMin)}`;
+};
+
+export const courseDifficultyReasons = (
+  c: CourseTimes & Pick<HikingCourseSummaryType, 'difficulty' | 'gainM' | 'steepPct' | 'roughSurfaces'>,
+): string[] => {
+  const outingMin = c.roundTripMin ?? c.timeMin;
+  if (outingMin === null || c.gainM === null || c.difficulty === null) return [];
+  return hikingDifficultyReasons({ outingMin, roundTrip: c.roundTripMin !== null, gainM: c.gainM, steepPct: c.steepPct, roughSurfaces: c.roughSurfaces });
+};
+
+export const DIFFICULTY_CHIP_CLASS: Record<HikingDifficulty, string> = {
+  easy: 'bg-green-500/10 text-green-700 dark:text-green-300',
+  moderate: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  hard: 'bg-red-500/10 text-red-700 dark:text-red-300',
+};

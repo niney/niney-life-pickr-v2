@@ -9,6 +9,7 @@
 import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
 import { isObject, numOrNull, strOrNull } from '../../lib/narrow.js';
 import { toServiceKeyPart } from '../bus/bus-api.adapter.js';
+import { isEmptySignDest } from './hiking-gpx.js';
 
 const FOREST_BASE = 'https://apis.data.go.kr/1400000';
 const TREKKING_BASE = 'https://apis.data.go.kr/B553662';
@@ -257,7 +258,7 @@ export const normalizeTrekkingPoi = (it: Record<string, unknown>): TrekkingPoiRo
   const signposts: TrekkingPoiRow['signposts'] = [];
   for (let i = 1; i <= 4; i++) {
     const dest = strOrNull(it[`sgnpstDstn${i}Nm`])?.trim();
-    if (!dest) continue;
+    if (!dest || isEmptySignDest(dest)) continue;
     signposts.push({ dest, dir: strOrNull(it[`orgnSgnpstDstn${i}DrcntCd`])?.trim() || null });
   }
   const ele = numOrNull(it.aslAltide);

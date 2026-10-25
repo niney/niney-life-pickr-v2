@@ -97,9 +97,8 @@ export type HikingMapPoiCategory = (typeof HIKING_MAP_POI_CATEGORIES)[number];
 export const isHikingMapPoiCategory = (v: string): v is HikingMapPoiCategory =>
   (HIKING_MAP_POI_CATEGORIES as readonly string[]).includes(v);
 
-// 이정표 방향 코드(GPX signpost "목적지;코드", API orgnSgnpstDstn*DrcntCd) — 조사 진행 방향 기준.
-export const HIKING_SIGN_DIR_LABEL: Record<string, string> = { ST: '직진', TL: '왼쪽', TR: '오른쪽', UT: '뒤쪽' };
-export const HIKING_SIGN_DIR_ARROW: Record<string, string> = { ST: '↑', TL: '←', TR: '→', UT: '↓' };
+// 이정표 방향 코드(ST·BR·TR·SR·UT·SL·TL·BL)는 조사자가 걸어온 방향 기준이라 코스 방향과 다를 수 있다 — 화면은 코드 대신
+// 서버가 코스마다 정한 가는 길·온 길(guide.way)을 쓴다.
 
 // ── 노면 ──────────────────────────────────────────────────────────────────────
 // GPX rtsc 이름 그대로. 험한 노면은 고도 그래프 아래 띠로 따로 보여 준다.
@@ -111,6 +110,117 @@ export const HIKING_SURFACE_COLOR: Record<string, string> = {
   밧줄: '#a16207',
   사다리: '#7c3aed',
   너덜길: '#78716c',
+};
+
+// ── 예상 시간 ────────────────────────────────────────────────────────────────
+// docs/PLAN-hiking.md §2차 — 서버가 적재 때 Tobler 보행 함수로 낸 이동 분(moveMin)에 보행 배율과 피로·휴식 보정을 곱한다:
+// 예상 = 1.12 × 이동 × (1 + min(이동, 360) / 600). 산림청 명산등산로 안내 시간 6구간 + 한라산국립공원 안내 시간 2구간에
+// 맞췄다(이동 103~316분, 중앙 오차 2%·가장 큰 오차 +36% 마니산). 맞춘 표본보다 긴 종주(이동 360분 넘음)는 보정 배율을
+// 더 키우지 않는다. 짧은 휴식은 들어 있고 점심·긴 휴식은 없다.
+export const HIKING_TIME_FACTOR = 1.12;
+export const HIKING_FATIGUE_MIN = 600;
+export const HIKING_FATIGUE_CAP_MIN = 360;
+export const estimateHikingMinutes = (moveMin: number): number =>
+  Math.round(HIKING_TIME_FACTOR * moveMin * (1 + Math.min(moveMin, HIKING_FATIGUE_CAP_MIN) / HIKING_FATIGUE_MIN));
+
+// loop 원점회귀 · summit 정상에서 끝나는 편도(같은 길로 내려온다) · traverse 넘어가는 편도.
+export const HIKING_COURSE_SHAPES = ['loop', 'summit', 'traverse'] as const;
+export type HikingCourseShape = (typeof HIKING_COURSE_SHAPES)[number];
+export const isHikingCourseShape = (v: unknown): v is HikingCourseShape =>
+  typeof v === 'string' && (HIKING_COURSE_SHAPES as readonly string[]).includes(v);
+// summit 은 코스의 가장 높은 곳에서 끝난다는 뜻이라(계곡 끝 사찰일 수도 있다) "정상" 대신 "왕복".
+export const HIKING_SHAPE_LABEL: Record<HikingCourseShape, string> = { loop: '원점회귀', summit: '왕복', traverse: '편도' };
+
+export interface HikingCourseTimes {
+  // 시작→끝(코스 방향) · 끝→시작.
+  timeMin: number;
+  timeRevMin: number;
+  // summit 만 — 오르고 같은 길로 내려오기(이동을 합쳐 보정하므로 두 편도 합보다 길다).
+  roundTripMin: number | null;
+}
+export const hikingCourseTimes = (shape: HikingCourseShape, moveMin: number | null, moveRevMin: number | null): HikingCourseTimes | null =>
+  moveMin === null || moveRevMin === null
+    ? null
+    : {
+        timeMin: estimateHikingMinutes(moveMin),
+        timeRevMin: estimateHikingMinutes(moveRevMin),
+        roundTripMin: shape === 'summit' ? estimateHikingMinutes(moveMin + moveRevMin) : null,
+      };
+
+// "45분" · "3시간" · "3시간 10분" — 추정치라 1시간 아래는 5분, 그 위는 10분 단위.
+export const formatHikingDuration = (min: number): string => {
+  const r = min < 60 ? Math.max(5, Math.round(min / 5) * 5) : Math.round(min / 10) * 10;
+  const h = Math.floor(r / 60);
+  const m = r % 60;
+  return h === 0 ? `${m}분` : m === 0 ? `${h}시간` : `${h}시간 ${m}분`;
+};
+
+// ── 난이도 ────────────────────────────────────────────────────────────────────
+// docs/PLAN-hiking.md §2차 — 607코스 분포(예상 p50 4시간·p90 7시간, 누적 상승 p50 700·p90 1,010m, 가장 가파른 500m
+// 평균 경사 p50 40·p90 57%)로 정했다. 정상 왕복은 왕복 시간으로 본다. 노면 범위가 거칠어(유형마다 처음·마지막 나온 곳)
+// 험한 노면은 "쉬움"을 막는 데만 쓴다 — 밧줄·릿지·사다리(암릉·너덜길은 100대 명산 대부분에 있다).
+export const HIKING_DIFFICULTIES = ['easy', 'moderate', 'hard'] as const;
+export type HikingDifficulty = (typeof HIKING_DIFFICULTIES)[number];
+export const HIKING_DIFFICULTY_LABEL: Record<HikingDifficulty, string> = { easy: '쉬움', moderate: '보통', hard: '어려움' };
+export const HIKING_DIFFICULTY_RULE = {
+  easyBelowMin: 180,
+  easyBelowGainM: 500,
+  easyBelowSteepPct: 35,
+  hardFromMin: 330,
+  hardFromGainM: 1000,
+  hardFromSteepPct: 55,
+} as const;
+const TECHNICAL_SURFACES = ['밧줄', '릿지', '사다리'];
+
+export interface HikingEffort {
+  // 나들이 전체 시간 — 정상 왕복은 왕복, 나머지는 코스 방향 편도.
+  outingMin: number;
+  roundTrip: boolean;
+  gainM: number;
+  steepPct: number | null;
+  roughSurfaces: readonly string[];
+}
+
+const effortFlags = (e: HikingEffort) => {
+  const R = HIKING_DIFFICULTY_RULE;
+  const steep = e.steepPct ?? 0;
+  return {
+    hardTime: e.outingMin >= R.hardFromMin,
+    hardGain: e.gainM >= R.hardFromGainM,
+    hardSteep: steep >= R.hardFromSteepPct,
+    notEasyTime: e.outingMin >= R.easyBelowMin,
+    notEasyGain: e.gainM >= R.easyBelowGainM,
+    notEasySteep: steep >= R.easyBelowSteepPct,
+    technical: e.roughSurfaces.filter((s) => TECHNICAL_SURFACES.includes(s)),
+  };
+};
+
+export const hikingDifficulty = (e: HikingEffort): HikingDifficulty => {
+  const f = effortFlags(e);
+  if (f.hardTime || f.hardGain || f.hardSteep) return 'hard';
+  if (f.notEasyTime || f.notEasyGain || f.notEasySteep || f.technical.length > 0) return 'moderate';
+  return 'easy';
+};
+
+// 그 난이도가 된 까닭 — 어려움은 어려움 기준을 넘은 것, 보통은 쉬움 기준을 넘은 것, 쉬움은 시간·오르막.
+export const hikingDifficultyReasons = (e: HikingEffort): string[] => {
+  const f = effortFlags(e);
+  const time = `${e.roundTrip ? '왕복 ' : ''}예상 ${formatHikingDuration(e.outingMin)}`;
+  const gain = `누적 상승 ${Math.round(e.gainM).toLocaleString('ko-KR')}m`;
+  const steep = `가파른 500m 평균 ${e.steepPct ?? 0}%`;
+  const level = hikingDifficulty(e);
+  const out: string[] = [];
+  if (level === 'hard') {
+    if (f.hardTime) out.push(time);
+    if (f.hardGain) out.push(gain);
+    if (f.hardSteep) out.push(steep);
+  } else if (level === 'moderate') {
+    if (f.notEasyTime) out.push(time);
+    if (f.notEasyGain) out.push(gain);
+    if (f.notEasySteep) out.push(steep);
+    if (f.technical.length > 0) out.push(`${f.technical.join('·')} 구간`);
+  } else out.push(time, gain);
+  return out;
 };
 
 // ── 지도 색 ──────────────────────────────────────────────────────────────────

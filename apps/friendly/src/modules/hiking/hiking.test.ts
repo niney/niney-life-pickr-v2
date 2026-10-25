@@ -119,6 +119,12 @@ describe('hiking routes (격리 DB)', () => {
     expect(m.courses.map((c) => c.id)).toEqual(['421100101-1', '421100101-2']);
     const c1 = m.courses[0]!;
     expect(c1).toMatchObject({ name: '장구목이 → 가리산 정상', isLoop: false, roughSurfaces: ['암릉'] });
+    // 정상에서 끝나는 편도 — 왕복 시간이 있고, 경사 90%(합성)라 어려움.
+    expect(c1).toMatchObject({ shape: 'summit', difficulty: 'hard', steepPct: 90 });
+    expect(c1.timeMin!).toBeGreaterThan(c1.timeRevMin!);
+    expect(c1.roundTripMin!).toBeGreaterThan(c1.timeMin! + c1.timeRevMin!);
+    // 2번은 정상에서 내려가며 기록했지만 뒤집혀 들머리 → 정상(summit).
+    expect(m.courses[1]).toMatchObject({ shape: 'summit' });
     const line = decodePolyline(c1.pieces[0]!);
     expect(line[0]!.lat).toBeCloseTo(37, 5);
     expect(line.at(-1)!.lat).toBeCloseTo(37.006, 5);
@@ -136,6 +142,9 @@ describe('hiking routes (격리 DB)', () => {
       { dest: '정상', dir: 'ST' },
       { dest: '휴양림', dir: 'UT' },
     ]);
+    // 코스 기준 안내는 이 GPX 의 이정표(기록 방향을 안다)로 — '정상'은 앞쪽(최고점)이라 가는 길.
+    expect(c.pois.find((p) => p.id === 'gpx:102')!.guide).toEqual([{ dest: '정상', dir: 'ST', way: 'next' }]);
+    expect(c.pois.find((p) => p.id === 'api:0000000999')!.guide).toEqual([]);
   });
 
   it('없는 산·코스 404, 잘못된 id 400, 없는 사진 404', async () => {

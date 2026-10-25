@@ -1,4 +1,5 @@
-// 등산 조회 — 적재본(Hiking*) 읽기만. JSON 열(pieces·profile·surfaces·signposts·images)은 여기서 풀어 계약 모양으로.
+// 등산 조회 — 적재본(Hiking*) 읽기만. JSON 열(pieces·profile·surfaces·signposts·guide·images)은 여기서 풀어 계약 모양으로.
+// 예상 시간·난이도는 저장된 이동 분·누적 상승·가파름으로 매번 계산한다(@repo/utils — 보정값을 바꿔도 다시 적재 안 함).
 // docs/PLAN-hiking.md
 
 import type { HikingCourse, HikingMountain, PrismaClient } from '@prisma/client';
@@ -10,10 +11,11 @@ import type {
   HikingMountainsResultType,
   HikingPoiType,
   HikingProfileType,
+  HikingSignGuideType,
   HikingSignpostType,
   HikingSurfaceType,
 } from '@repo/api-contract';
-import { isHikingRoughSurface } from '@repo/utils';
+import { hikingCourseTimes, hikingDifficulty, isHikingCourseShape, isHikingRoughSurface } from '@repo/utils';
 
 export class HikingNotLoadedError extends Error {
   readonly statusCode = 503;
@@ -57,6 +59,19 @@ const toMountainSummary = (m: HikingMountain): HikingMountainSummaryType => ({
 
 const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
   const surfaces = parseJson<HikingSurfaceType[]>(c.surfaces, []);
+  const roughSurfaces = [...new Set(surfaces.map((s) => s.type).filter(isHikingRoughSurface))];
+  const shape = isHikingCourseShape(c.shape) ? c.shape : c.isLoop ? 'loop' : 'traverse';
+  const times = hikingCourseTimes(shape, c.moveMin, c.moveRevMin);
+  const difficulty =
+    times && c.gainM !== null
+      ? hikingDifficulty({
+          outingMin: times.roundTripMin ?? times.timeMin,
+          roundTrip: times.roundTripMin !== null,
+          gainM: c.gainM,
+          steepPct: c.steepPct,
+          roughSurfaces,
+        })
+      : null;
   return {
     id: c.id,
     no: c.no,
@@ -72,9 +87,15 @@ const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
     minEle: c.minEle,
     maxEle: c.maxEle,
     isLoop: c.isLoop,
+    shape,
+    timeMin: times?.timeMin ?? null,
+    timeRevMin: times?.timeRevMin ?? null,
+    roundTripMin: times?.roundTripMin ?? null,
+    difficulty,
+    steepPct: c.steepPct,
     gapCount: c.gapCount,
     gapM: c.gapM,
-    roughSurfaces: [...new Set(surfaces.map((s) => s.type).filter(isHikingRoughSurface))],
+    roughSurfaces,
     bbox: bboxOf(c),
     pieces: parseJson<string[]>(c.pieces, []),
   };
@@ -115,7 +136,7 @@ export class HikingService {
       },
     });
     if (!c) return null;
-    const pois: HikingPoiType[] = c.pois.map(({ poi, atM }) => ({
+    const pois: HikingPoiType[] = c.pois.map(({ poi, atM, guide }) => ({
       id: poi.id,
       category: poi.category,
       name: poi.name,
@@ -124,6 +145,7 @@ export class HikingService {
       lng: poi.lng,
       ele: poi.ele,
       signposts: parseJson<HikingSignpostType[]>(poi.signposts, []),
+      guide: parseJson<HikingSignGuideType[]>(guide, []),
       atM,
     }));
     return {

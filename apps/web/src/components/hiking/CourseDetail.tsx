@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import type { HikingCourseDetailType } from '@repo/api-contract';
+import type { HikingCourseDetailType, HikingSignGuideType } from '@repo/api-contract';
 import {
+  HIKING_DIFFICULTY_LABEL,
   HIKING_POI_COLOR,
-  HIKING_SIGN_DIR_ARROW,
-  HIKING_SIGN_DIR_LABEL,
+  HIKING_SHAPE_LABEL,
+  formatHikingDuration,
   formatHikingEle,
   formatHikingLength,
   hikingPoiLabel,
@@ -12,10 +13,10 @@ import {
 } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { ElevationProfile } from './ElevationProfile';
-import { formatAtM } from './hikingFormat';
+import { DIFFICULTY_CHIP_CLASS, courseDifficultyReasons, courseTimeBreakdown, formatAtM } from './hikingFormat';
 
-// 코스 상세 패널 — 숫자(거리·오르막·내리막·최고 고도·형태)·고도 그래프·험한 노면·코스 지점 목록(지도와 같은 분류,
-// 갈림길은 이정표 방향). 지점을 누르면 지도에서 강조된다.
+// 코스 상세 패널 — 숫자(거리·예상 시간·난이도·오르막·내리막·최고 고도)·형태와 방향별 시간·난이도 까닭·고도 그래프·
+// 험한 노면·코스 지점 목록(지도와 같은 분류, 갈림길은 이 코스로 가는 길·온 길). 지점을 누르면 지도에서 강조된다.
 
 interface Props {
   course: HikingCourseDetailType;
@@ -32,8 +33,20 @@ const Stat = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
+const formatOuting = (c: HikingCourseDetailType): string => {
+  const min = c.roundTripMin ?? c.timeMin;
+  return min === null ? '—' : formatHikingDuration(min);
+};
+
+// 가는 길 → 다른 길 → 온 길.
+const WAY_ORDER = { next: 0, other: 1, prev: 2 } as const;
+const sortGuide = (g: readonly HikingSignGuideType[]): HikingSignGuideType[] =>
+  [...g].sort((a, b) => WAY_ORDER[a.way ?? 'other'] - WAY_ORDER[b.way ?? 'other']);
+
 export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBack }: Props) => {
   const pois = useMemo(() => course.pois.filter((p) => isHikingMapPoiCategory(p.category)), [course.pois]);
+  const breakdown = courseTimeBreakdown(course);
+  const reasons = courseDifficultyReasons(course);
   return (
     <div className="flex flex-col gap-3" data-testid="hiking-course">
       <button type="button" onClick={onBack} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
@@ -42,16 +55,33 @@ export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBa
       <h2 className="text-base font-semibold leading-snug">{course.name}</h2>
       <div className="grid grid-cols-3 gap-1.5">
         <Stat label="거리" value={formatHikingLength(course.lengthM)} />
+        <Stat label={course.roundTripMin !== null ? '왕복 예상' : '예상 시간'} value={formatOuting(course)} />
+        <Stat label="난이도" value={course.difficulty ? HIKING_DIFFICULTY_LABEL[course.difficulty] : '—'} />
         <Stat label="오르막" value={course.gainM !== null ? formatHikingEle(course.gainM) : '—'} />
         <Stat label="내리막" value={course.lossM !== null ? formatHikingEle(course.lossM) : '—'} />
         <Stat label="최고 고도" value={course.maxEle !== null ? formatHikingEle(course.maxEle) : '—'} />
-        <Stat label="출발 고도" value={course.start.ele !== null ? formatHikingEle(course.start.ele) : '—'} />
-        <Stat label="형태" value={course.isLoop ? '원점회귀' : '편도'} />
+      </div>
+      <div className="flex flex-col gap-0.5 text-xs" data-testid="hiking-course-time">
+        <p>
+          <span className="font-medium">{HIKING_SHAPE_LABEL[course.shape]}</span>
+          {breakdown && <span className="text-muted-foreground"> · {breakdown}</span>}
+        </p>
+        {course.difficulty && reasons.length > 0 && (
+          <p>
+            <span className={cn('rounded px-1 font-medium', DIFFICULTY_CHIP_CLASS[course.difficulty])}>{HIKING_DIFFICULTY_LABEL[course.difficulty]}</span>{' '}
+            <span className="text-muted-foreground">{reasons.join(' · ')}</span>
+          </p>
+        )}
+        <p className="text-[11px] text-muted-foreground">
+          {course.timeMin !== null
+            ? '예상 시간은 경사별 걷는 속도로 계산한 추정입니다(짧은 휴식 포함, 점심·긴 휴식 제외).'
+            : '고도 기록이 없어 예상 시간·난이도를 계산하지 못했습니다.'}
+        </p>
       </div>
       {course.gapCount > 0 && (
         <p className="text-xs text-muted-foreground">
-          원본 기록이 {course.gapCount}곳에서 끊겨(직선 {formatHikingLength(course.gapM)}) 선이 이어지지 않는 곳이 있습니다. 거리에는 끊긴 곳을 넣지
-          않았습니다.
+          원본 기록이 {course.gapCount}곳에서 끊겨(직선 {formatHikingLength(course.gapM)}) 선이 이어지지 않는 곳이 있습니다. 거리·예상 시간에는 끊긴
+          곳을 넣지 않았습니다.
         </p>
       )}
       <ElevationProfile profile={course.profile} lengthM={course.lengthM} surfaces={course.surfaces} pois={course.pois} onHover={onHover} />
@@ -81,12 +111,12 @@ export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBa
                       {p.ele !== null && ` · ${formatHikingEle(p.ele)}`}
                     </span>
                   </span>
-                  {p.signposts.length > 0 && (
+                  {p.guide.length > 0 && (
                     <span className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
-                      {p.signposts.map((s, i) => (
-                        <span key={i} title={s.dir ? HIKING_SIGN_DIR_LABEL[s.dir] : undefined}>
-                          {s.dir && HIKING_SIGN_DIR_ARROW[s.dir] ? `${HIKING_SIGN_DIR_ARROW[s.dir]} ` : ''}
-                          {s.dest}
+                      {sortGuide(p.guide).map((g, i) => (
+                        <span key={i} className={cn(g.way === 'next' && 'font-medium text-foreground', g.way === 'prev' && 'opacity-70')}>
+                          {g.way === 'next' ? '가는 길 ' : g.way === 'prev' ? '온 길 ' : ''}
+                          {g.dest}
                         </span>
                       ))}
                     </span>

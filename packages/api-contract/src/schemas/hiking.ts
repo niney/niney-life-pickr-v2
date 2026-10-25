@@ -50,6 +50,17 @@ export const HikingCourseSummary = z.object({
   minEle: z.number().nullable(),
   maxEle: z.number().nullable(),
   isLoop: z.boolean(),
+  // loop 원점회귀 · summit 정상에서 끝나는 편도(같은 길로 내려온다) · traverse 넘어가는 편도.
+  shape: z.enum(['loop', 'summit', 'traverse']),
+  // 예상 시간(분, 짧은 휴식 포함 추정 — @repo/utils estimateHikingMinutes). 시작→끝 / 끝→시작 / 정상 왕복(summit 만).
+  // 고도가 없는 코스는 null. 끊긴 곳은 거리처럼 넣지 않았다.
+  timeMin: z.number().int().nullable(),
+  timeRevMin: z.number().int().nullable(),
+  roundTripMin: z.number().int().nullable(),
+  // 쉬움·보통·어려움(@repo/utils hikingDifficulty — 예상 시간·누적 상승·가장 가파른 500m·밧줄/릿지/사다리). 고도 없으면 null.
+  difficulty: z.enum(['easy', 'moderate', 'hard']).nullable(),
+  // 가장 가파른 500m 의 평균 경사(%).
+  steepPct: z.number().int().nullable(),
   gapCount: z.number().int(),
   gapM: z.number().int(),
   // 코스에 나오는 험한 노면(@repo/utils HIKING_ROUGH_SURFACES 중) — 카드 칩.
@@ -75,10 +86,15 @@ export type HikingMountainDetailType = z.infer<typeof HikingMountainDetail>;
 
 export const HikingSignpost = z.object({
   dest: z.string(),
-  // ST 직진 · TL 왼쪽 · TR 오른쪽 · UT 뒤쪽(조사 진행 방향 기준). 모르면 null.
+  // ST 직진 · BR/BL 비스듬히 오른쪽/왼쪽 · TR/TL 오른쪽/왼쪽 · SR/SL 크게 꺾어 · UT 뒤쪽 — 조사자가 걸어온 방향 기준이라
+  // 코스 방향과 다를 수 있다(코스 기준은 guide). 모르면 null.
   dir: z.string().nullable(),
 });
 export type HikingSignpostType = z.infer<typeof HikingSignpost>;
+
+// 코스 기준 이정표 안내 — way: next 이 코스로 가는 길 · prev 온 길 · null 다른 길(또는 못 정함).
+export const HikingSignGuide = HikingSignpost.extend({ way: z.enum(['next', 'prev']).nullable() });
+export type HikingSignGuideType = z.infer<typeof HikingSignGuide>;
 
 // 코스 지점 — atM 은 코스 시작에서 그 지점까지 선 위 거리(고도 그래프 눈금). category 는 GPX 원문 코드
 // (PEAK·SIGN·ENTRY·TRANS·PARK·TOILET·DANGER·SHELTER·SPRING·VIEW·REST·SCENERY·CULTURAL·INFO·…).
@@ -89,6 +105,8 @@ export const HikingPoi = LatLng.extend({
   description: z.string().nullable(),
   ele: z.number().nullable(),
   signposts: z.array(HikingSignpost),
+  // 이 코스 기준 안내(이정표 없는 지점은 빈 배열).
+  guide: z.array(HikingSignGuide),
   atM: z.number().int(),
 });
 export type HikingPoiType = z.infer<typeof HikingPoi>;

@@ -3058,6 +3058,14 @@ model HikingCourse {
   endLng      Float
   endEle      Float?
   isLoop      Boolean
+  // 'loop' 원점회귀 · 'summit' 정상(고도 최고점)에서 끝나는 편도(같은 길로 내려온다) · 'traverse' 넘어가는 편도.
+  shape       String  @default("traverse")
+  // 이동 분(Tobler, 휴식·피로 보정 전 — 보정은 @repo/utils estimateHikingMinutes). 시작→끝 / 끝→시작. 끊긴 곳은
+  // 거리처럼 넣지 않는다. 고도 없으면 null.
+  moveMin     Float?
+  moveRevMin  Float?
+  // 가장 가파른 500m 의 평균 경사(%, 오르내림 무관).
+  steepPct    Int?
   pieceCount  Int
   // 30m 넘게 떨어진 조각 사이(기록 끊김) 개수와 직선거리 합.
   gapCount    Int
@@ -3077,7 +3085,7 @@ model HikingCourse {
   @@map("hiking_courses")
 }
 
-// 지점 — GPX 웨이포인트(sym) + 한국등산트레킹지원센터 POI(poiId, 같은 체계). category 는 GPX 원문 코드
+// 지점 — GPX 웨이포인트(sym) + 한국등산트레킹지원센터 POI(poiId, 다른 번호 체계라 gpx:/api: 접두). category 는 GPX 원문 코드
 // (PEAK·SIGN·TOILET·PARK·ENTRY·TRANS·DANGER…). signposts 는 [{ dest, dir }] JSON(갈림길만).
 model HikingPoi {
   id          String  @id
@@ -3104,6 +3112,8 @@ model HikingCoursePoi {
   courseId String
   poiId    String
   atM      Int
+  // 이 코스 기준 이정표 안내 JSON [{ dest, dir, way: 'next' 가는 길 | 'prev' 온 길 | null }] — 이정표 없으면 null.
+  guide    String?
 
   course HikingCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
   poi    HikingPoi    @relation(fields: [poiId], references: [id], onDelete: Cascade)

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { ArrowLeft, Route as RouteIcon } from 'lucide-react';
 import { Routes, type HikingCourseSummaryType, type HikingMountainDetailType } from '@repo/api-contract';
-import { formatHikingEle, formatHikingLength, hikingCourseColor } from '@repo/utils';
+import { HIKING_DIFFICULTY_LABEL, HIKING_SHAPE_LABEL, formatHikingEle, formatHikingLength, hikingCourseColor } from '@repo/utils';
 import { cn } from '~/lib/utils';
-import { officialCourseLines } from './hikingFormat';
+import { DIFFICULTY_CHIP_CLASS, courseOutingLabel, officialCourseLines } from './hikingFormat';
 
 // 산 상세 패널 — 사진·높이·소재지·선정 이유·개관(접기)·산림청 공식 코스 문구·코스 카드(지도 선 색과 같은 점).
 
@@ -13,18 +13,25 @@ interface Props {
   onBack: () => void;
 }
 
-export const CourseFacts = ({ course, className }: { course: HikingCourseSummaryType; className?: string }) => (
-  <span className={cn('flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground', className)}>
-    <span className="tabular-nums">{formatHikingLength(course.lengthM)}</span>
-    {course.gainM !== null && <span className="tabular-nums">오르막 {formatHikingEle(course.gainM)}</span>}
-    <span>{course.isLoop ? '원점회귀' : '편도'}</span>
-    {course.roughSurfaces.map((s) => (
-      <span key={s} className="rounded bg-red-500/10 px-1 text-red-700 dark:text-red-300">
-        {s}
-      </span>
-    ))}
-  </span>
-);
+export const CourseFacts = ({ course, className }: { course: HikingCourseSummaryType; className?: string }) => {
+  const outing = courseOutingLabel(course);
+  return (
+    <span className={cn('flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground', className)}>
+      {course.difficulty && (
+        <span className={cn('rounded px-1 font-medium', DIFFICULTY_CHIP_CLASS[course.difficulty])}>{HIKING_DIFFICULTY_LABEL[course.difficulty]}</span>
+      )}
+      <span className="tabular-nums">{formatHikingLength(course.lengthM)}</span>
+      {outing && <span className="tabular-nums">{outing}</span>}
+      {course.gainM !== null && <span className="tabular-nums">오르막 {formatHikingEle(course.gainM)}</span>}
+      <span>{HIKING_SHAPE_LABEL[course.shape]}</span>
+      {course.roughSurfaces.map((s) => (
+        <span key={s} className="rounded bg-red-500/10 px-1 text-red-700 dark:text-red-300">
+          {s}
+        </span>
+      ))}
+    </span>
+  );
+};
 
 export const MountainDetail = ({ mountain, onSelectCourse, onBack }: Props) => {
   const [expanded, setExpanded] = useState(false);

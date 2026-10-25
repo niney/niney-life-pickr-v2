@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatHikingLength, hikingInRegionGroup, hikingRegionsOf } from './hiking.js';
+import {
+  estimateHikingMinutes,
+  formatHikingDuration,
+  formatHikingLength,
+  hikingCourseTimes,
+  hikingDifficulty,
+  hikingDifficultyReasons,
+  hikingInRegionGroup,
+  hikingRegionsOf,
+} from './hiking.js';
 
 describe('hikingRegionsOf', () => {
   it('정식·줄인 시도 이름과 여러 시도에 걸친 소재지', () => {
@@ -29,5 +38,56 @@ describe('formatHikingLength', () => {
   it('1km 미만은 m, 이상은 소수 한 자리 km', () => {
     expect(formatHikingLength(358)).toBe('358m');
     expect(formatHikingLength(7644)).toBe('7.6km');
+  });
+});
+
+describe('estimateHikingMinutes / hikingCourseTimes', () => {
+  it('보행 배율 1.12 × 피로 보정(1 + 이동/600), 이동 360분 넘으면 보정 배율을 더 키우지 않는다', () => {
+    expect(estimateHikingMinutes(0)).toBe(0);
+    // 120 × 1.12 × 1.2
+    expect(estimateHikingMinutes(120)).toBe(161);
+    // 360 이후는 1.6 배 고정 — 이동이 두 배면 예상도 두 배.
+    expect(estimateHikingMinutes(800)).toBe(estimateHikingMinutes(400) * 2);
+  });
+
+  it('정상 왕복만 왕복 시간 — 이동을 합쳐 보정해 두 편도 합보다 길다', () => {
+    const t = hikingCourseTimes('summit', 120, 80)!;
+    expect(t.roundTripMin).toBe(estimateHikingMinutes(200));
+    expect(t.roundTripMin!).toBeGreaterThan(t.timeMin + t.timeRevMin);
+    expect(hikingCourseTimes('traverse', 120, 80)!.roundTripMin).toBeNull();
+    expect(hikingCourseTimes('loop', null, null)).toBeNull();
+  });
+});
+
+describe('formatHikingDuration', () => {
+  it('1시간 아래 5분, 그 위 10분 단위', () => {
+    expect(formatHikingDuration(3)).toBe('5분');
+    expect(formatHikingDuration(43)).toBe('45분');
+    expect(formatHikingDuration(64)).toBe('1시간');
+    expect(formatHikingDuration(196)).toBe('3시간 20분');
+  });
+});
+
+describe('hikingDifficulty / hikingDifficultyReasons', () => {
+  const base = { outingMin: 150, roundTrip: false, gainM: 400, steepPct: 30, roughSurfaces: [] as string[] };
+
+  it('쉬움 — 3시간·500m·35% 아래이고 밧줄·릿지·사다리가 없다', () => {
+    expect(hikingDifficulty(base)).toBe('easy');
+    expect(hikingDifficultyReasons(base)).toEqual(['예상 2시간 30분', '누적 상승 400m']);
+    // 암릉·너덜길은 쉬움을 막지 않는다(100대 명산 대부분에 있다).
+    expect(hikingDifficulty({ ...base, roughSurfaces: ['암릉', '너덜길'] })).toBe('easy');
+  });
+
+  it('보통 — 쉬움 기준 하나라도 넘으면, 까닭은 넘은 것', () => {
+    const e = { ...base, steepPct: 41, roughSurfaces: ['밧줄', '암릉'] };
+    expect(hikingDifficulty(e)).toBe('moderate');
+    expect(hikingDifficultyReasons(e)).toEqual(['가파른 500m 평균 41%', '밧줄 구간']);
+  });
+
+  it('어려움 — 5시간 30분·1,000m·55% 중 하나, 정상 왕복은 왕복 시간', () => {
+    const e = { ...base, outingMin: 400, roundTrip: true, gainM: 1315 };
+    expect(hikingDifficulty(e)).toBe('hard');
+    expect(hikingDifficultyReasons(e)).toEqual(['왕복 예상 6시간 40분', '누적 상승 1,315m']);
+    expect(hikingDifficulty({ ...base, steepPct: 55 })).toBe('hard');
   });
 });

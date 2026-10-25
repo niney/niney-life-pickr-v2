@@ -11,12 +11,17 @@ import {
   COURSE_POI_M,
   LINE_TOLERANCE_M,
   buildCourse,
+  cleanPlaceName,
   distM,
+  guideSignposts,
+  isGenericPlaceName,
   nameCourse,
   parseGpx,
   projectOnCourse,
   simplifyLine,
+  turnAt,
   type GpxWaypoint,
+  type NamedPoint,
 } from './hiking-gpx.js';
 
 // ── GPX zip ───────────────────────────────────────────────────────────────────
@@ -81,6 +86,8 @@ export interface HikingBuildReport {
   gpxSameSpot: number;
   coursePoiLinks: number;
   summitFromPeak: number;
+  // 이정표 안내 — 이정표 있는 코스 지점 수, 그중 이 GPX 의 이정표(기록 방향 앎)·가는 길/온 길을 정한 수.
+  guide: { signs: number; ownFrame: number; withNext: number; withPrev: number };
 }
 
 export interface HikingRows {
@@ -140,6 +147,7 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
     gpxSameSpot: 0,
     coursePoiLinks: 0,
     summitFromPeak: 0,
+    guide: { signs: 0, ownFrame: 0, withNext: 0, withPrev: 0 },
   };
   const folders = new Set(input.files.map((f) => f.mountain));
   const gdByFolder = new Map<string, GdTrailRow & { id: string }>();
@@ -258,7 +266,24 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
     const lengths: number[] = [];
     for (const { file, parsed, course } of built) {
       const id = `${gd.id}-${file.no}`;
-      const names = nameCourse(course, parsed.waypoints, mountainName, file.no);
+      // 코스 지점 — 이 GPX 의 지점(선에서 COURSE_POI_M 안) + API 에만 있는 지점(API_POI_LINK_M 안).
+      const links = new Map<string, { atM: number; draft: PoiDraft; own: GpxWaypoint | null }>();
+      const link = (poiId: string, p: { lat: number; lng: number }, maxOff: number, own: GpxWaypoint | null) => {
+        const draft = drafts.get(poiId);
+        if (!draft || links.has(poiId)) return;
+        const pr = projectOnCourse(course, p);
+        if (pr.offM > maxOff) return;
+        links.set(poiId, { atM: pr.atM, draft, own });
+      };
+      for (const w of parsed.waypoints) link(gpxIdOf(w.sym), w, COURSE_POI_M, w);
+      for (const a of apiOnly) link(a.id, a, API_POI_LINK_M, null);
+
+      // 이름 후보 — 이 GPX 의 지점(이름이 비면 병합된 API 이름) + 코스에 붙은 API 지점("계방산정상"처럼 GPX 에 없는 이름).
+      const namePoints: NamedPoint[] = [
+        ...parsed.waypoints.map((w) => ({ ...w, name: w.name ?? drafts.get(gpxIdOf(w.sym))?.name ?? null })),
+        ...[...links.values()].filter((l) => l.draft.source === 'api').map((l) => l.draft),
+      ];
+      const names = nameCourse(course, namePoints, mountainName, file.no);
       report.courses += 1;
       if (course.reversed) report.reversed += 1;
       if (course.isLoop) report.loops += 1;
@@ -292,6 +317,10 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
         endLng: course.end.lng,
         endEle: course.end.ele,
         isLoop: course.isLoop,
+        shape: course.shape,
+        moveMin: course.moveMin,
+        moveRevMin: course.moveRevMin,
+        steepPct: course.steepPct,
         pieceCount: course.pieces.length,
         gapCount: course.gaps.length,
         gapM: course.gaps.reduce((s, g) => s + g, 0),
@@ -300,18 +329,35 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
         profile: JSON.stringify(course.profile),
         surfaces: JSON.stringify(course.surfaces),
       });
-      // 코스 지점 — 이 GPX 의 지점(선에서 COURSE_POI_M 안) + API 에만 있는 지점(API_POI_LINK_M 안).
-      const linked = new Set<string>();
-      const link = (poiId: string, p: { lat: number; lng: number }, maxOff: number) => {
-        if (linked.has(poiId)) return;
-        const pr = projectOnCourse(course, p);
-        if (pr.offM > maxOff) return;
-        linked.add(poiId);
-        coursePois.push({ courseId: id, poiId, atM: pr.atM });
-      };
-      for (const w of parsed.waypoints) link(gpxIdOf(w.sym), w, COURSE_POI_M);
-      for (const a of apiOnly) link(a.id, a, API_POI_LINK_M);
-      report.coursePoiLinks += linked.size;
+
+      // 이정표 안내 — 이 GPX 의 이정표가 있으면 그것(기록 방향을 안다), 없으면 병합된 지점의 이정표(API, 방향 모름).
+      const named = [...links.values()]
+        .filter((l) => l.draft.name && !isGenericPlaceName(cleanPlaceName(l.draft.name)))
+        .map((l) => ({ name: l.draft.name!, atM: l.atM }));
+      for (const [poiId, l] of links) {
+        const own = l.own && l.own.signposts.length > 0 ? l.own.signposts : null;
+        const signs = own ?? l.draft.signposts;
+        const guide =
+          signs.length > 0
+            ? guideSignposts({
+                signposts: signs,
+                atM: l.atM,
+                named,
+                mountainName,
+                topAtM: course.top?.atM ?? null,
+                sameFrame: own ? !course.reversed : null,
+                turnDeg: turnAt(course, l.atM),
+              })
+            : [];
+        if (guide.length > 0) {
+          report.guide.signs += 1;
+          if (own) report.guide.ownFrame += 1;
+          if (guide.some((g) => g.way === 'next')) report.guide.withNext += 1;
+          if (guide.some((g) => g.way === 'prev')) report.guide.withPrev += 1;
+        }
+        coursePois.push({ courseId: id, poiId, atM: l.atM, guide: guide.length > 0 ? JSON.stringify(guide) : null });
+      }
+      report.coursePoiLinks += links.size;
     }
 
     mountains.push({

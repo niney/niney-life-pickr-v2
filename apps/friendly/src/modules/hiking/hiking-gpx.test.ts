@@ -4,11 +4,19 @@ import {
   cleanElevations,
   cleanPlaceName,
   gainLoss,
+  guideSignposts,
+  isGenericPlaceName,
+  isJunkPlaceName,
   nameCourse,
   parseGpx,
   projectOnCourse,
+  signDestNames,
   simplifyLine,
   stitchPieces,
+  toblerMinutes,
+  turnAt,
+  type NamedPoint,
+  type SignGuide,
 } from './hiking-gpx.js';
 
 // 합성 GPX — 경도 127 위를 북쪽으로 0.0002°(≈22m)씩. Tranggle 1.1 원본과 같은 태그 모양(CDATA·extensions).
@@ -42,7 +50,7 @@ describe('parseGpx', () => {
     const p = parseGpx(
       gpx(
         [
-          wpt({ sym: '0000000218', lat: 37.001, name: '갈림길', cat: 'SIGN', signs: ['정상,가삽고개;UT', '휴양림;TR', 'null;null'] }),
+          wpt({ sym: '0000000218', lat: 37.001, name: '갈림길', cat: 'SIGN', signs: ['정상,가삽고개;UT', '휴양림;TR', 'null;null', 'NA;BL'] }),
           wpt({ sym: '0000002041', lat: 37, ele: 341.627, name: '가리산자연휴양림  매표소', cat: 'ENTRY' }),
         ],
         [line(0, 3, () => 100), line(3, 2, () => 0)],
@@ -183,5 +191,173 @@ describe('cleanPlaceName', () => {
     expect(cleanPlaceName('성당리 지방도(오늘산행 날머리)')).toBe('성당리 지방도');
     expect(cleanPlaceName('능강교코스 들머리')).toBe('능강교코스');
     expect(cleanPlaceName('들머리 장구목이')).toBe('장구목이');
+  });
+});
+
+describe('예상 이동 분·가파름·형태', () => {
+  it('Tobler — 평지 1km ≈ 11.9분, 완만한 내리막(−5%)이 가장 빠르고 경사는 ±0.5 에서 자른다', () => {
+    expect(toblerMinutes(1000, 0)).toBeCloseTo(11.9, 1);
+    expect(toblerMinutes(1000, -50)).toBeCloseTo(10, 5);
+    expect(toblerMinutes(1000, 2000)).toBeCloseTo(toblerMinutes(1000, 500), 5);
+    expect(toblerMinutes(0, 10)).toBe(0);
+  });
+
+  it('오르막 편도 — 정상에서 끝나면 summit, 반대(내려오기)가 더 빠르다', () => {
+    const c = buildCourse(parseGpx(gpx([], [line(0, 31, (i) => 300 + i * 10)])))!;
+    expect(c.shape).toBe('summit');
+    expect(c.moveMin!).toBeGreaterThan(c.moveRevMin!);
+    expect(c.moveMin!).toBeGreaterThan(30);
+    expect(c.steepPct).toBe(45);
+  });
+
+  it('정상을 지나 내려가면 traverse', () => {
+    const c = buildCourse(parseGpx(gpx([], [line(0, 31, (i) => 300 + (i <= 15 ? i : 30 - i) * 10)])))!;
+    expect(c.shape).toBe('traverse');
+  });
+
+  it('끊긴 곳은 거리처럼 이동 분에도 넣지 않는다', () => {
+    const one = buildCourse(parseGpx(gpx([], [line(0, 11, () => 100)])))!;
+    const two = buildCourse(parseGpx(gpx([], [line(0, 11, () => 100), line(40, 11, () => 100)])))!;
+    expect(two.gaps).toHaveLength(1);
+    expect(two.moveMin!).toBeCloseTo(one.moveMin! * 2, 0);
+  });
+
+  it('가장 가파른 500m 는 조각 안에서만 잰다 — 끊김 건너 고도차(100 → 400m)는 경사가 아니다', () => {
+    const c = buildCourse(parseGpx(gpx([], [line(0, 28, () => 100), line(60, 28, () => 400)])))!;
+    expect(c.gaps).toHaveLength(1);
+    expect(c.steepPct).toBe(0);
+  });
+
+  it('고도가 없으면 이동 분·가파름도 null', () => {
+    const c = buildCourse(parseGpx(gpx([], [line(0, 5, () => 0)])))!;
+    expect(c).toMatchObject({ moveMin: null, moveRevMin: null, steepPct: null });
+  });
+});
+
+describe('nameCourse — 병합 이름·보조 분류', () => {
+  const parsed = parseGpx(gpx([], [line(0, 21, (i) => 400 + i * 10)]));
+  const course = buildCourse(parsed)!;
+  const pt = (category: string, name: string, lat: number, source?: 'api'): NamedPoint => ({ category, name, lat, lng: 127, ele: null, source });
+
+  it('GPX 에 없는 API 봉우리 이름, 들머리가 없으면 쉼터·안내 이름 중 자리 이름 꼴("허덕교")', () => {
+    const names = nameCourse(
+      course,
+      [pt('SIGN', '갈림길 10', 37), pt('REST', '나무의자', 37.0001), pt('TOILET', '허덕교 화장실', 37.0002), pt('PEAK', '계방산정상', 37.004, 'api')],
+      '계방산',
+      1,
+    );
+    expect(names).toMatchObject({ name: '허덕교 → 계방산 정상', startName: '허덕교', peakName: '계방산 정상' });
+  });
+
+  it('같은 자리 봉우리 표기가 둘이면 API 쪽을 100m 멀리 친다', () => {
+    const names = nameCourse(course, [pt('PEAK', '장블재', 37.004, 'api'), pt('PEAK', '장불재', 37.0036)], '무등산', 1);
+    expect(names.peakName).toBe('장불재');
+  });
+
+  it('깨진 이름·"정상석"뿐인 봉우리', () => {
+    expect(nameCourse(course, [pt('PEAK', '정3', 37.004)], '무등산', 2)).toMatchObject({ name: '코스 2', source: 'number' });
+    expect(nameCourse(course, [pt('PEAK', '정상석', 37.004)], '희양산', 3).peakName).toBe('희양산 정상');
+  });
+});
+
+describe('cleanPlaceName · isGenericPlaceName · isJunkPlaceName', () => {
+  it('높이·날짜·한자·정상석·대시 자모·끝 마침표', () => {
+    expect(cleanPlaceName('등선봉 해발632m')).toBe('등선봉');
+    expect(cleanPlaceName('삼악산 용화봉(654m)')).toBe('삼악산 용화봉');
+    expect(cleanPlaceName('방태산주억봉 1,444m')).toBe('방태산주억봉');
+    expect(cleanPlaceName('월출산 천황봉 20200921')).toBe('월출산 천황봉');
+    expect(cleanPlaceName('비봉(碑峰)')).toBe('비봉');
+    expect(cleanPlaceName('공작산 정상(과거 정상표지석 위치)')).toBe('공작산 정상');
+    expect(cleanPlaceName('신선봉 정상석')).toBe('신선봉');
+    expect(cleanPlaceName('신불산정상')).toBe('신불산 정상');
+    expect(cleanPlaceName('서대산정상(904m)')).toBe('서대산 정상');
+    expect(cleanPlaceName('소요산 ㅡ 의상대')).toBe('소요산 의상대');
+    expect(cleanPlaceName('석골폭포.')).toBe('석골폭포');
+  });
+
+  it('일반 이름·깨진 이름', () => {
+    expect(isGenericPlaceName('갈림길 10')).toBe(true);
+    expect(isGenericPlaceName('위치번호 내장06-02')).toBe(true);
+    expect(isGenericPlaceName('북한산국립공원')).toBe(true);
+    expect(isGenericPlaceName('북한산국립공원 정릉')).toBe(false);
+    expect(isJunkPlaceName('승강ㅈ1ㆍㅇ')).toBe(true);
+    expect(isJunkPlaceName('정3')).toBe(true);
+    expect(isJunkPlaceName('가평운수')).toBe(true);
+    expect(isJunkPlaceName('656봉')).toBe(false);
+  });
+});
+
+describe('이정표 안내', () => {
+  const base = { atM: 1000, named: [] as { name: string; atM: number }[], mountainName: '가야산', topAtM: null, sameFrame: null, turnDeg: null };
+  const ways = (g: SignGuide[]) => g.map((x) => x.way);
+
+  it('목적지 문구에서 비교할 이름만', () => {
+    expect(signDestNames('상왕봉 .진행방향')).toEqual(['상왕봉']);
+    expect(signDestNames('칠불봉(200m)')).toEqual(['칠불봉']);
+    expect(signDestNames('상왕봉.칠불봉')).toEqual(['상왕봉', '칠불봉']);
+    expect(signDestNames('도봉산역, 도봉탐방지원센터')).toEqual(['도봉산역', '도봉탐방지원센터']);
+  });
+
+  it('이름 — 앞쪽 지점이면 가는 길, 뒤쪽이면 온 길(방향 코드와 상관없이)', () => {
+    const g = guideSignposts({
+      ...base,
+      signposts: [
+        { dest: '토신골(하산방향)', dir: 'ST' },
+        { dest: '상왕봉 0.2km', dir: 'UT' },
+        { dest: '금강굴', dir: 'BL' },
+      ],
+      named: [
+        { name: '토신골탐방로입구', atM: 100 },
+        { name: '가야산 상왕봉', atM: 2000 },
+      ],
+    });
+    expect(ways(g)).toEqual(['prev', 'next', null]);
+  });
+
+  it("'정상'·산 이름 목적지는 고도 최고점 자리", () => {
+    expect(ways(guideSignposts({ ...base, signposts: [{ dest: '정상', dir: 'TR' }], topAtM: 3000 }))).toEqual(['next']);
+    expect(ways(guideSignposts({ ...base, signposts: [{ dest: '가야산', dir: 'TR' }], topAtM: 300 }))).toEqual(['prev']);
+  });
+
+  it('방향 코드 — 기록 방향 그대로면 UT=온 길, 꺾인 쪽=가는 길 / 뒤집힌 코스면 반대', () => {
+    const signposts = [
+      { dest: '가마을', dir: 'UT' },
+      { dest: '나봉', dir: 'TR' },
+      { dest: '다사', dir: 'TL' },
+    ];
+    expect(ways(guideSignposts({ ...base, signposts, sameFrame: true, turnDeg: 80 }))).toEqual(['prev', 'next', null]);
+    // 기록한 사람은 반대로 걸었다 — 그 사람의 뒤(UT)가 우리 앞, 그 사람이 꺾은 쪽(−80° → TL)이 우리 뒤.
+    expect(ways(guideSignposts({ ...base, signposts, sameFrame: false, turnDeg: 80 }))).toEqual(['next', null, 'prev']);
+    // 다른 출처(방향 모름)면 코드는 쓰지 않는다.
+    expect(ways(guideSignposts({ ...base, signposts, sameFrame: null, turnDeg: 80 }))).toEqual([null, null, null]);
+  });
+
+  it('이름이 앞쪽인 목적지는 방향 코드로 온 길이 되지 않는다', () => {
+    const g = guideSignposts({
+      ...base,
+      signposts: [
+        { dest: '상왕봉', dir: 'UT' },
+        { dest: '칠불봉', dir: 'ST' },
+      ],
+      named: [
+        { name: '칠불봉', atM: 1100 },
+        { name: '상왕봉', atM: 1300 },
+      ],
+      sameFrame: true,
+    });
+    expect(ways(g)).toEqual([null, 'next']);
+  });
+
+  it("목적지 없는 칸('NA')은 빼고, 꺾인 각도는 오른쪽 +", () => {
+    expect(guideSignposts({ ...base, signposts: [{ dest: 'NA', dir: 'UT' }] })).toEqual([]);
+    // 북쪽으로 10칸 간 뒤 동쪽으로 10칸 — 오른쪽으로 90°.
+    const north = Array.from({ length: 11 }, (_, i) => ({ lat: 37 + i * STEP, lng: 127 }));
+    const east = Array.from({ length: 10 }, (_, i) => ({ lat: 37 + 10 * STEP, lng: 127 + (i + 1) * STEP * 1.25 }));
+    const pts = [...north, ...east].map((p) => `<trkpt lat="${p.lat.toFixed(6)}" lon="${p.lng.toFixed(6)}"><ele>100</ele></trkpt>`);
+    const c = buildCourse(parseGpx(gpx([], [pts])))!;
+    const corner = c.pieces[0]![10]!.atM;
+    expect(turnAt(c, corner)).toBeGreaterThan(70);
+    expect(turnAt(c, corner)).toBeLessThan(110);
+    expect(turnAt(c, 5)).toBeNull();
   });
 });
