@@ -15,6 +15,9 @@ const sameMarkerLook = (a: MapMarker, b: MapMarker): boolean =>
   a.variant === b.variant &&
   a.categoryKey === b.categoryKey &&
   a.fixedScale === b.fixedScale &&
+  a.labelZoom === b.labelZoom &&
+  a.compactScale === b.compactScale &&
+  a.zIndex === b.zIndex &&
   a.icon?.src === b.icon?.src &&
   a.icon?.selectedSrc === b.icon?.selectedSrc;
 

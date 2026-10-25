@@ -53,6 +53,12 @@ export interface MapMarker {
   // 줌에 따른 축소(SMALL_ICON_SCALE)·라벨 숨김을 건너뛰고 아이콘을 원본 크기로 그린다 — 크기
   // 자체가 의미인 작은 점(12px)·숫자를 새긴 집계 버블용(일상지도). 선택 시 핀 전환은 동일.
   fixedScale?: boolean;
+  // 줌 축소·라벨 기준을 마커마다 — 점이 드문 지도(등산 산)는 덜 줄이고 이름을 일찍 보인다. labelZoom 줌부터
+  // 원본 크기 + 라벨(기본 LABEL_VISIBLE_ZOOM), 그 아래는 compactScale 배율(기본 SMALL_ICON_SCALE)·라벨 없음.
+  labelZoom?: number;
+  compactScale?: number;
+  // 같은 레이어 안에서 그리는 순서 — 클수록 위(선택 마커는 1000). 기본 0.
+  zIndex?: number;
 }
 
 // 실시간 차량 마커 — 정류장 마커(MapMarker)와 분리된 전용 레이어. 선택·라벨
@@ -676,16 +682,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       const m = feature.get(MARKER_PROP) as MapMarker | undefined;
       if (!m) return undefined;
       const zoom = mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
-      return makeMarkerStyle(
-        m.label,
-        selectable && selectedIdRef.current === m.id,
-        m.variant ?? 'primary',
-        m.categoryKey ?? null,
-        zoom,
-        isDarkBaseRef.current,
-        m.icon,
-        m.fixedScale ?? false,
-      );
+      return makeMarkerStyle(m, selectable && selectedIdRef.current === m.id, zoom, isDarkBaseRef.current);
     };
 
     const areaLayer = new VectorLayer({ source: areaSource });
@@ -1269,24 +1266,21 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 //   - selected : 항상 풀사이즈 핀 + 라벨 (선택 마커는 줌과 무관하게 식별 가능)
 //   - zoom >= LABEL_VISIBLE_ZOOM : 풀사이즈 핀 + 라벨
 //   - zoom <  LABEL_VISIBLE_ZOOM : SMALL_ICON_SCALE 배율 축소 핀, 라벨 없음
-const makeMarkerStyle = (
-  label: string | undefined,
-  selected: boolean,
-  variant: NonNullable<MapMarker['variant']>,
-  categoryKey: RestaurantCategoryKey | null,
-  zoom: number,
-  darkBg: boolean,
-  icon?: MapMarker['icon'],
-  fixedScale = false,
-): Style => {
-  const compact = !selected && zoom < LABEL_VISIBLE_ZOOM && !fixedScale;
+//   (마커가 labelZoom·compactScale 을 들고 오면 그 값으로)
+const makeMarkerStyle = (m: MapMarker, selected: boolean, zoom: number, darkBg: boolean): Style => {
+  const { label, icon } = m;
+  const variant = m.variant ?? 'primary';
+  const categoryKey = m.categoryKey ?? null;
+  const compact = !selected && zoom < (m.labelZoom ?? LABEL_VISIBLE_ZOOM) && !m.fixedScale;
+  const scale = compact ? (m.compactScale ?? SMALL_ICON_SCALE) : 1;
+  const zIndex = selected ? 1000 : (m.zIndex ?? 0);
   // 스타일 캐시 — OL 은 매 프레임 style function 을 부르므로 feature 가 수천 개(일상지도 CCTV
   // 점)면 프레임마다 Style/Icon 을 수천 개 새로 만들어 메인 스레드가 수 초 멈춘다. 입력이 같으면
   // 같은 Style 인스턴스를 돌려준다(OL 권장 패턴 — Style 은 feature 간 공유해도 안전). 라벨
   // 문자열까지 키에 넣으므로 항목 수만큼만 불어나고, 상한을 넘으면 통째로 비운다.
   const showLabel = !!label && !compact;
   // 아이콘은 data URL 대신 번호(iconSrcId)로 — 긴 문자열을 호출마다 이어 붙이지 않는다.
-  const cacheKey = `${iconSrcId(icon?.src)}|${iconSrcId(icon?.selectedSrc)}|${categoryKey ?? ''}|${variant}|${selected ? 1 : 0}|${compact ? 1 : 0}|${showLabel ? label : ''}|${darkBg ? 1 : 0}`;
+  const cacheKey = `${iconSrcId(icon?.src)}|${iconSrcId(icon?.selectedSrc)}|${categoryKey ?? ''}|${variant}|${selected ? 1 : 0}|${scale}|${zIndex}|${showLabel ? label : ''}|${darkBg ? 1 : 0}`;
   const cached = markerStyleCache.get(cacheKey);
   if (cached) return cached;
   // 어두운 베이스맵(야간/위성) 위에서는 글자/외곽선을 반전 — 흰 글자 + 어두운
@@ -1298,12 +1292,11 @@ const makeMarkerStyle = (
       ? icon.selectedSrc
       : icon.src
     : buildRestaurantMarkerDataUrl(categoryKey, selected, variant);
-  const scale = compact ? SMALL_ICON_SCALE : 1;
   const anchor = selected ? PIN_ANCHOR : CENTER_ANCHOR;
   const style = new Style({
     // 선택 마커는 다른 마커 위로 — feature 들이 겹칠 때 강조 핀이 가려지지 않게
     // 렌더 순서를 끌어올린다 (OL 은 zIndex 큰 Style 을 나중에=위에 그린다).
-    zIndex: selected ? 1000 : 0,
+    zIndex,
     // 여러 마커가 같이 쓰는 아이콘은 한 번 구운 canvas 로 그린다(mapIconRaster). 그림이 아직 로드 전이면
     // 예전과 같은 src 아이콘이 오고, 구울 수 있게 됐을 때 이 Style 을 버려 다음 평가에서 다시 만들게 한다.
     image: icon?.perMarker

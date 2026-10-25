@@ -82,6 +82,19 @@ describe('syncMarkerFeatures', () => {
     expect((byId.get('1')!.get(MARKER_PROP) as MapMarker).label).toBe('하나');
   });
 
+  it('크기·이름 기준(labelZoom·compactScale)·그리는 순서(zIndex)가 바뀌어도 다시 칠한다', () => {
+    const { src, byId } = setup([marker('1'), marker('2'), marker('3')]);
+    const changed = ['1', '2', '3'].map((id) => {
+      const fn = vi.fn();
+      byId.get(id)!.on('change', fn);
+      return fn;
+    });
+
+    syncMarkerFeatures(src, byId, [marker('1', { labelZoom: 9 }), marker('2', { compactScale: 0.8 }), marker('3', { zIndex: 2 })]);
+
+    for (const fn of changed) expect(fn).toHaveBeenCalledTimes(1);
+  });
+
   it('좌표가 바뀌면 같은 feature 의 위치만 옮긴다', () => {
     const { src, byId } = setup([marker('1')]);
     const f = byId.get('1')!;

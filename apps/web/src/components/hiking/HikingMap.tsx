@@ -27,6 +27,12 @@ import { decodePieces } from './hikingFormat';
 
 const MOUNTAIN_ICON = { src: buildHikingMountainMarkerDataUrl(false), selectedSrc: buildHikingMountainMarkerDataUrl(true) };
 const PEAK_ICON = { src: buildHikingPeakMarkerDataUrl(false), selectedSrc: buildHikingPeakMarkerDataUrl(true) };
+// 산 마커 크기·이름 — 맛집 지도 기준(줌 14 아래 14px 점·이름 없음)이면 봉우리 묶음 버블에 묻힌다. 산은 맛집보다 훨씬
+// 드물어 100대 명산은 줌 9부터 원래 크기(26px)와 이름(그 아래 전국 화면은 백 개가 몰려 20px), 봉우리는 21px 로 두고
+// 줌 12부터 이름. 그리는 순서는 봉우리 → 버블 → 100대 명산(맨 위).
+const TOP100_LOOK = { labelZoom: 9, compactScale: 0.75, zIndex: 2 } as const;
+const PEAK_LOOK = { labelZoom: 12, compactScale: 0.8 } as const;
+const CELL_Z = 1;
 const CELL_PREFIX = 'cell:';
 const cellIconCache = new Map<number, string>();
 const cellIcon = (count: number): string => {
@@ -106,7 +112,10 @@ export const HikingMap = ({
   // 코스를 고르면 그 산 마커는 뺀다 — 정상 지점(PEAK)과 같은 자리라 겹친다. 고른 산은 줌과 상관없이 마커로.
   const { markers, cells } = useMemo(() => {
     const visible = mountains.filter((m) => !(selectedCourseId && m.id === selectedMountainId));
-    const toMarker = (m: HikingMountainSummaryType): MapMarker => ({ id: m.id, lat: m.lat, lng: m.lng, label: m.name, icon: m.kind === 'peak' ? PEAK_ICON : MOUNTAIN_ICON });
+    const toMarker = (m: HikingMountainSummaryType): MapMarker =>
+      m.kind === 'peak'
+        ? { id: m.id, lat: m.lat, lng: m.lng, label: m.name, icon: PEAK_ICON, ...PEAK_LOOK }
+        : { id: m.id, lat: m.lat, lng: m.lng, label: m.name, icon: MOUNTAIN_ICON, ...TOP100_LOOK };
     if (!lowZoom) {
       const padLat = box ? (box.maxLat - box.minLat) * 0.2 : 0;
       const padLng = box ? (box.maxLng - box.minLng) * 0.2 : 0;
@@ -137,7 +146,7 @@ export const HikingMap = ({
       const c = { lat: g.reduce((s, m) => s + m.lat, 0) / g.length, lng: g.reduce((s, m) => s + m.lng, 0) / g.length };
       const src = cellIcon(g.length);
       // 개수를 새긴 버블이라 셀마다 그림이 다르다 — 사전 래스터화에서 뺀다(perMarker), 줌 축소 없이(fixedScale).
-      out.push({ id: `${CELL_PREFIX}${centers.length}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src, perMarker: true }, fixedScale: true });
+      out.push({ id: `${CELL_PREFIX}${centers.length}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src, perMarker: true }, fixedScale: true, zIndex: CELL_Z });
       centers.push(c);
     }
     return { markers: out, cells: centers };
