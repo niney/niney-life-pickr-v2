@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   ApiError,
   useMealPreference,
@@ -32,6 +32,7 @@ import {
   Chip,
   ChipRow,
   FieldLabel,
+  MealButton,
   MealLevelBar,
   MealSection,
   MealSectionTitle,
@@ -318,19 +319,12 @@ export const MealPreferenceView = () => {
 
       {error ? <Note tone="warn">{error}</Note> : null}
 
-      <Pressable
-        accessibilityRole="button"
+      <MealButton
+        label={save.isSuccess && !dirty ? '저장했어요' : '추천 설정 저장'}
         onPress={onSave}
-        disabled={!dirty || save.isPending}
-        style={[
-          styles.saveBtn,
-          { backgroundColor: theme.colors.primary, opacity: !dirty || save.isPending ? 0.5 : 1 },
-        ]}
-      >
-        <Text style={{ color: theme.colors.primaryText, fontWeight: '700', fontSize: mealFont.body }}>
-          {save.isPending ? '저장 중…' : save.isSuccess && !dirty ? '저장했어요' : '추천 설정 저장'}
-        </Text>
-      </Pressable>
+        loading={save.isPending}
+        disabled={!dirty}
+      />
 
       <MealReminderSettingsCard slots={slots} />
 
@@ -358,5 +352,4 @@ const createStyles = (theme: Theme) =>
     },
     hint: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     yearInput: { width: 120 },
-    saveBtn: { borderRadius: mealRadius.control, paddingVertical: 14, alignItems: 'center' },
   });

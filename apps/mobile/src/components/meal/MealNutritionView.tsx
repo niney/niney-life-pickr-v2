@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type {
   MealNutrientResultType,
@@ -26,7 +26,7 @@ import {
   toLocalDateKey,
 } from '@repo/utils';
 import { Note, StateBlock } from '~/components/common/Cards';
-import { Chip, MealSection, MealSectionTitle } from './mealUi';
+import { MealButton, MealSection, MealSectionTitle } from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
 
 // 영양 — 웹 MealNutritionTab 과 같은 구성. 최근 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 견주고(서버 계산),
@@ -190,7 +190,6 @@ const NutrientRow = ({ n, styles }: { n: MealNutrientResultType; styles: Styles 
 };
 
 const AdviceCard = ({ days, ready, styles }: { days: MealNutritionPeriod; ready: boolean; styles: Styles }) => {
-  const theme = useTheme();
   const latest = useLatestMealNutritionAdvice();
   const create = useCreateMealNutritionAdvice();
   const advice = latest.data?.advice ?? null;
@@ -203,25 +202,23 @@ const AdviceCard = ({ days, ready, styles }: { days: MealNutritionPeriod; ready:
         sub="모자란 영양소를 음식으로 먼저 채우는 법과, 영양제를 고른다면 어떤 성분·형태가 좋은지 알려 드려요. 제품은 추천하지 않아요."
       />
       <View style={styles.actionRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: create.isPending || !ready }}
+        <MealButton
+          label={`최근 ${days}일로 조언 받기`}
           onPress={() => request(false)}
-          disabled={create.isPending || !ready}
-          style={[
-            styles.primaryBtn,
-            { backgroundColor: theme.colors.primary, opacity: create.isPending || !ready ? 0.5 : 1 },
-          ]}
-        >
-          {create.isPending ? (
-            <ActivityIndicator size="small" color={theme.colors.primaryText} />
-          ) : (
-            <Text style={[styles.primaryBtnText, { color: theme.colors.primaryText }]}>
-              최근 {days}일로 조언 받기
-            </Text>
-          )}
-        </Pressable>
-        {advice ? <Chip label="다시 쓰기" onPress={() => request(true)} disabled={create.isPending || !ready} /> : null}
+          loading={create.isPending}
+          disabled={!ready}
+          style={styles.actionButton}
+        />
+        {advice ? (
+          <MealButton
+            label="다시 쓰기"
+            variant="secondary"
+            icon="refresh"
+            onPress={() => request(true)}
+            disabled={create.isPending || !ready}
+            style={styles.actionButton}
+          />
+        ) : null}
       </View>
       {!ready ? (
         <Text style={styles.small}>기록이 더 쌓이면 조언을 받을 수 있어요.</Text>
@@ -301,15 +298,8 @@ const createStyles = (theme: Theme) =>
     track: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt },
     fill: { height: 8, borderRadius: 4 },
     refLine: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: theme.colors.textMuted },
-    actionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-    primaryBtn: {
-      borderRadius: mealRadius.control,
-      paddingHorizontal: 18,
-      paddingVertical: 12,
-      minWidth: 150,
-      alignItems: 'center',
-    },
-    primaryBtnText: { fontSize: mealFont.body, fontWeight: '700' },
+    actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    actionButton: { flex: 1 },
     summary: { fontSize: mealFont.body, lineHeight: 22, color: theme.colors.text },
     pickRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
     pick: {

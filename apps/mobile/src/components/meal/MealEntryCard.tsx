@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { MealEntryType, MealSlotType } from '@repo/api-contract';
 import { useTheme, type Theme } from '@repo/shared';
 import { MEAL_SLOT_LABEL, MEAL_TYPE_LABEL, mealNutritionLabel, summarizeMealNutrition } from '@repo/utils';
 import { MealPhotoThumb } from './MealPhotoThumb';
-import { type MealIconName } from './mealUi';
+import { MealScalePressable, type MealIconName } from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
 
 // 기록 한 줄 — 왼쪽 사진(없으면 끼니 아이콘), 가운데 음식·곁들임·끼니 메타, 오른쪽 열량.
@@ -56,7 +56,7 @@ export const MealEntryCard = ({
   ].filter(Boolean);
 
   return (
-    <Pressable
+    <MealScalePressable
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={[
         MEAL_SLOT_LABEL[entry.slot],
@@ -70,7 +70,7 @@ export const MealEntryCard = ({
       disabled={!onPress}
       style={({ pressed }) => [
         variant === 'card' ? styles.card : styles.row,
-        { opacity: pressed && onPress ? 0.75 : 1 },
+        { opacity: pressed && onPress ? 0.85 : 1 },
       ]}
     >
       {entry.photos.length > 0 ? (
@@ -115,7 +115,7 @@ export const MealEntryCard = ({
           {kcalNote ? <Text style={styles.kcalUnit}>{kcalNote}</Text> : null}
         </View>
       ) : null}
-    </Pressable>
+    </MealScalePressable>
   );
 };
 

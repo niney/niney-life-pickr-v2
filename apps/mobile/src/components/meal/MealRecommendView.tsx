@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -45,7 +44,7 @@ import {
 } from '@repo/utils';
 import { Note, StateBlock } from '~/components/common/Cards';
 import { FoodRestaurantMatches } from './FoodRestaurantMatches';
-import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
+import { Chip, ChipRow, FieldLabel, MealButton, MealSection, MealSectionTitle } from './mealUi';
 import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
 
 // 다음 끼니 추천 — 끼니·상황을 고르고 받는다. 서버가 같은 날·끼니·프로필이면 캐시를 돌려주므로
@@ -87,6 +86,12 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   const historyItems = (history.data?.items ?? []).filter((r) => !removedIds.has(r.id));
   const shown = notRemoved(current) ?? notRemoved(ctx.data?.latest);
   const today = toLocalDateKey(new Date());
+  const warnings = [
+    shown?.notice ?? null,
+    (ctx.data?.preference.allergens.length ?? 0) > 0
+      ? '알레르기 필터는 알려진 정보만 확인해요. 추천 결과와 무관하게 원재료·교차접촉을 다시 확인해 주세요.'
+      : null,
+  ].filter((w): w is string => !!w);
   // 최근 추천(최신순)의 맨 앞 = 가장 최근에 받은 추천.
   const newest = historyItems[0] ?? null;
   const viewingPast = browsing && shown !== null && newest !== null && shown.id !== newest.id;
@@ -315,30 +320,21 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
         />
 
         <View style={styles.actionRow}>
-          <Pressable
-            accessibilityRole="button"
+          <MealButton
+            label="추천받기"
             onPress={() => request(false)}
-            disabled={create.isPending}
-            style={[
-              styles.primaryBtn,
-              { backgroundColor: theme.colors.primary, opacity: create.isPending ? 0.6 : 1 },
-            ]}
-          >
-            {create.isPending ? (
-              <ActivityIndicator size="small" color={theme.colors.primaryText} />
-            ) : (
-              <Text style={{ color: theme.colors.primaryText, fontSize: mealFont.body, fontWeight: '700' }}>
-                추천받기
-              </Text>
-            )}
-          </Pressable>
+            loading={create.isPending}
+            style={styles.actionButton}
+          />
           {/* 지난 추천을 보는 중엔 숨긴다 — 그 추천을 다시 만드는 게 아니라 위에서 고른 끼니로 새로 받기 때문. */}
           {shown && !viewingPast ? (
-            <Chip
+            <MealButton
               label="다시 추천"
+              variant="secondary"
               icon="refresh"
               onPress={() => request(true)}
               disabled={create.isPending}
+              style={styles.actionButton}
             />
           ) : null}
         </View>
@@ -365,11 +361,10 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
               title={`${mealDateLabel(shown.targetDate, today)} ${MEAL_SLOT_LABEL[shown.targetSlot]} 추천`}
               sub={shown.summary || null}
             />
-            {shown.notice ? <Note tone="warn">{shown.notice}</Note> : null}
-            {(ctx.data?.preference.allergens.length ?? 0) > 0 ? (
+            {/* 서버 안내와 알레르기 주의를 한 띠에 — 주황 띠 두 개가 위아래로 겹쳐 있었다. */}
+            {warnings.length > 0 ? (
               <Note tone="warn">
-                알레르기 필터는 알려진 정보만 확인해요. 추천 결과와 무관하게 원재료·교차접촉을 다시
-                확인해 주세요.
+                {warnings.length === 1 ? warnings[0] : warnings.map((w) => `· ${w}`).join('\n')}
               </Note>
             ) : null}
             {shown.status === 'fallback' ? (
@@ -379,9 +374,9 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
             {shown.items.length === 0 ? (
               <StateBlock kind="empty" message="추천할 음식을 찾지 못했어요." />
             ) : (
-              <View style={styles.itemList}>
+              <View>
                 {shown.items.map((item, rank) => (
-                  <View key={item.name} style={styles.itemCard}>
+                  <View key={item.name} style={[styles.candidate, rank > 0 ? styles.candidateDivider : null]}>
                     <View style={styles.itemHead}>
                       <Text style={styles.itemName}>{item.name}</Text>
                       {item.dishType ? (
@@ -425,69 +420,22 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
                       </ChipRow>
                     ) : null}
                     <View style={styles.decisionActions}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: shown.feedback?.pickedName === item.name }}
+                      <MealButton
+                        label={shown.feedback?.pickedName === item.name ? '선택했어요' : '이 메뉴 선택'}
+                        variant={shown.feedback?.pickedName === item.name ? 'secondary' : 'primary'}
+                        icon={shown.feedback?.pickedName === item.name ? 'check-circle' : 'check-circle-outline'}
+                        selected={shown.feedback?.pickedName === item.name}
                         onPress={() => chooseCandidate(shown, item.name, rank)}
-                        style={({ pressed }) => [
-                          styles.choiceButton,
-                          {
-                            backgroundColor:
-                              shown.feedback?.pickedName === item.name
-                                ? theme.colors.surfaceAlt
-                                : theme.colors.primary,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <MaterialCommunityIcons
-                          name={
-                            shown.feedback?.pickedName === item.name
-                              ? 'check-circle'
-                              : 'check-circle-outline'
-                          }
-                          size={18}
-                          color={
-                            shown.feedback?.pickedName === item.name
-                              ? theme.colors.primary
-                              : theme.colors.primaryText
-                          }
-                        />
-                        <Text
-                          style={[
-                            styles.choiceButtonText,
-                            {
-                              color:
-                                shown.feedback?.pickedName === item.name
-                                  ? theme.colors.primary
-                                  : theme.colors.primaryText,
-                            },
-                          ]}
-                        >
-                          {shown.feedback?.pickedName === item.name ? '선택했어요' : '이 메뉴 선택'}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
+                        style={styles.actionButton}
+                      />
+                      <MealButton
+                        label="먹은 메뉴 기록"
+                        variant="secondary"
+                        icon="notebook-plus-outline"
                         accessibilityLabel={`${item.name} 먹은 메뉴로 기록`}
                         onPress={() => eatThis(shown, item.name)}
-                        style={({ pressed }) => [
-                          styles.recordButton,
-                          {
-                            borderColor: theme.colors.border,
-                            backgroundColor: pressed ? theme.colors.surfaceAlt : 'transparent',
-                          },
-                        ]}
-                      >
-                        <MaterialCommunityIcons
-                          name="notebook-plus-outline"
-                          size={18}
-                          color={theme.colors.text}
-                        />
-                        <Text style={[styles.recordButtonText, { color: theme.colors.text }]}>
-                          먹은 메뉴 기록
-                        </Text>
-                      </Pressable>
+                        style={styles.actionButton}
+                      />
                     </View>
 
                     <FoodRestaurantMatches
@@ -516,7 +464,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
                         이 메뉴 추천
                       </Text>
                       <Chip
-                        label="👍"
+                        icon="thumb-up-outline"
+                        accessibilityLabel={`${item.name} 추천 좋아요`}
                         selected={
                           shown.candidateRatings.find((candidate) => candidate.name === item.name)
                             ?.rating === 1
@@ -524,7 +473,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
                         onPress={() => rateCandidate(shown, item.name, rank, 1)}
                       />
                       <Chip
-                        label="👎"
+                        icon="thumb-down-outline"
+                        accessibilityLabel={`${item.name} 추천 별로예요`}
                         selected={
                           shown.candidateRatings.find((candidate) => candidate.name === item.name)
                             ?.rating === -1
@@ -540,7 +490,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
             <View style={styles.feedbackRow}>
               <Text style={styles.feedbackLabel}>추천 조합 전체는 어땠나요?</Text>
               <Chip
-                label="👍"
+                icon="thumb-up-outline"
+                accessibilityLabel="추천 조합 좋아요"
                 selected={shown.feedback?.rating === 1}
                 onPress={() =>
                   recommendationEvent.mutate(
@@ -560,7 +511,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
                 }
               />
               <Chip
-                label="👎"
+                icon="thumb-down-outline"
+                accessibilityLabel="추천 조합 별로예요"
                 selected={shown.feedback?.rating === -1}
                 onPress={() =>
                   recommendationEvent.mutate(
@@ -604,7 +556,7 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
               </Pressable>
             }
           />
-          <View style={styles.itemList}>
+          <View style={styles.historyList}>
             {historyItems.map((item) => {
               const active = item.id === shown?.id;
               const when = recommendationWhenLabel(item, today);
@@ -659,7 +611,7 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    content: { padding: 16, gap: 12, paddingBottom: 96 },
+    content: { padding: 16, gap: 12 },
     note: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,
@@ -670,71 +622,22 @@ const createStyles = (theme: Theme) =>
       fontSize: mealFont.callout,
     },
     locationHint: { fontSize: mealFont.caption, color: theme.colors.textMuted, lineHeight: 16 },
-    actionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    primaryBtn: {
-      borderRadius: mealRadius.control,
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      alignItems: 'center',
-      minWidth: 110,
-    },
-    itemList: { gap: 10 },
-    itemCard: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.border,
-      borderRadius: mealRadius.control,
-      padding: 12,
-      gap: 6,
-    },
+    actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    actionButton: { flex: 1 },
+    // 후보는 테두리 상자 대신 구분선으로 나눈다(흰 섹션 안의 상자 안 상자를 걷었다).
+    candidate: { gap: 8, paddingVertical: 14 },
+    candidateDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
     itemHead: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
     itemName: { fontSize: mealFont.headline, fontWeight: '700', color: theme.colors.text },
     itemMeta: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     itemReason: { fontSize: mealFont.footnote, color: theme.colors.textMuted, lineHeight: 19 },
     itemIngredients: { marginTop: 4, fontSize: mealFont.caption, color: theme.colors.textMuted },
     decisionActions: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
-    choiceButton: {
-      flex: 1,
-      minWidth: 0,
-      minHeight: 44,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      borderRadius: mealRadius.control,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-    },
-    choiceButtonText: {
-      flexShrink: 1,
-      fontSize: mealFont.footnote,
-      lineHeight: 18,
-      fontWeight: '700',
-      textAlign: 'center',
-    },
-    recordButton: {
-      flex: 1,
-      minWidth: 0,
-      minHeight: 44,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: mealRadius.control,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-    },
-    recordButtonText: {
-      flexShrink: 1,
-      fontSize: mealFont.footnote,
-      lineHeight: 18,
-      fontWeight: '600',
-      textAlign: 'center',
-    },
     candidateFeedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 2 },
     candidateFeedbackLabel: { flex: 1, fontSize: mealFont.caption, lineHeight: 17 },
     feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
     feedbackLabel: { fontSize: mealFont.caption, color: theme.colors.textMuted, flex: 1 },
+    historyList: { gap: 4 },
     historyLine: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     historyRow: {
       flex: 1,

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type {
   MealEntrySourceType,
+  MealEntryType,
   MealSlotType,
   MealTypeType,
 } from '@repo/api-contract';
@@ -17,6 +18,8 @@ import {
   isMealSlot,
   mealDateLabel,
   mealDateTitle,
+  mealNutritionLabel,
+  summarizeMealNutrition,
   toLocalDateKey,
 } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
@@ -24,7 +27,14 @@ import { MealAnalysisView } from '~/components/meal/MealAnalysisView';
 import { MealCalendarView } from '~/components/meal/MealCalendarView';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
 import { MealRecommendView } from '~/components/meal/MealRecommendView';
-import { Chip, ChipRow, FieldLabel, MealIconButton, MealSection } from '~/components/meal/mealUi';
+import {
+  Chip,
+  ChipRow,
+  FieldLabel,
+  MealIconButton,
+  MealScalePressable,
+  MealSection,
+} from '~/components/meal/mealUi';
 import {
   MEAL_FAB_SIZE,
   mealFont,
@@ -149,6 +159,25 @@ export default function MealScreen() {
   );
   const list = useInfiniteMealEntries(listQuery, loggedIn);
   const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
+  // 날짜별 묶음 — 머리글은 스크롤해도 위에 붙어 있고 그날 끼니 수·열량 합계를 단다. 합계는 목록 카드가
+  // 열량을 보이는 기록(mealNutritionLabel 기준)만 더하고, 빠진 끼니가 있으면 '+'를 붙여 '이상'임을 밝힌다.
+  const sections = useMemo(() => {
+    const out: { date: string; data: MealEntryType[]; kcal: number; kcalCount: number }[] = [];
+    for (const entry of items) {
+      let section = out[out.length - 1];
+      if (!section || section.date !== entry.eatenDate) {
+        section = { date: entry.eatenDate, data: [], kcal: 0, kcalCount: 0 };
+        out.push(section);
+      }
+      section.data.push(entry);
+      const nutrition = summarizeMealNutrition(entry.items);
+      if (mealNutritionLabel(nutrition) !== null && nutrition.kcal !== null) {
+        section.kcal += nutrition.kcal;
+        section.kcalCount += 1;
+      }
+    }
+    return out;
+  }, [items]);
 
   // 접힌 상태에서 보여 줄 '걸린 조건' 칩 — 누르면 그 조건만 푼다.
   const activeFilters: ReadonlyArray<{ key: string; label: string; clear: () => void }> = [
@@ -242,9 +271,10 @@ export default function MealScreen() {
           </View>
 
           {tab === 'records' && recordsView === 'list' ? (
-            <FlatList
-              data={items}
+            <SectionList
+              sections={sections}
               keyExtractor={(e) => e.id}
+              stickySectionHeadersEnabled
               contentContainerStyle={[styles.listContent, { paddingBottom: contentBottom }]}
               keyboardDismissMode="on-drag"
               keyboardShouldPersistTaps="handled"
@@ -435,26 +465,34 @@ export default function MealScreen() {
                   />
                 )
               }
-              renderItem={({ item, index }) => {
-                const prev = items[index - 1];
-                const showDate = !prev || prev.eatenDate !== item.eatenDate;
-                // 일주일 안은 '오늘'·'어제'·'3일 전'을 크게, 날짜는 오른쪽에 작게 둔다. 그 밖은 날짜만.
-                const diff = daysBetween(item.eatenDate, today);
+              renderSectionHeader={({ section }) => {
+                // 일주일 안은 '오늘'·'어제'·'3일 전'을 크게, 날짜는 옆에 작게 둔다. 그 밖은 날짜만.
+                const diff = daysBetween(section.date, today);
                 const relative = diff !== null && diff >= 0 && diff <= 6;
+                // 마지막 날은 다음 페이지에 같은 날 기록이 더 있을 수 있다 — 끼니 수에 '+'를 붙인다.
+                const partialDay = list.hasNextPage && section === sections[sections.length - 1];
                 return (
-                  <View style={styles.itemWrap}>
-                    {showDate ? (
-                      <View style={[styles.dateRow, index === 0 ? null : styles.dateRowGap]}>
-                        <Text style={styles.dateHeader}>
-                          {relative ? mealDateLabel(item.eatenDate, today) : mealDateTitle(item.eatenDate, today)}
-                        </Text>
-                        {relative ? <Text style={styles.dateSub}>{mealDateTitle(item.eatenDate, today)}</Text> : null}
-                      </View>
-                    ) : null}
-                    <MealEntryCard entry={item} onPress={() => router.push(`/meal/${item.id}` as never)} />
+                  <View style={styles.dateRow}>
+                    <View style={styles.dateLeft}>
+                      <Text style={styles.dateHeader}>
+                        {relative ? mealDateLabel(section.date, today) : mealDateTitle(section.date, today)}
+                      </Text>
+                      {relative ? <Text style={styles.dateSub}>{mealDateTitle(section.date, today)}</Text> : null}
+                    </View>
+                    <Text style={styles.dateMeta}>
+                      {section.data.length}끼{partialDay ? '+' : ''}
+                      {section.kcalCount > 0
+                        ? ` · ${Math.round(section.kcal).toLocaleString('ko-KR')}kcal${section.kcalCount < section.data.length ? '+' : ''}`
+                        : ''}
+                    </Text>
                   </View>
                 );
               }}
+              renderItem={({ item }) => (
+                <View style={styles.itemWrap}>
+                  <MealEntryCard entry={item} onPress={() => router.push(`/meal/${item.id}` as never)} />
+                </View>
+              )}
             />
           ) : tab === 'records' ? (
             <MealCalendarView onOpenEntry={(id) => router.push(`/meal/${id}` as never)} />
@@ -464,17 +502,19 @@ export default function MealScreen() {
             <MealRecommendView key={initialSlot ?? 'auto'} initialSlot={initialSlot} />
           )}
 
-          <Pressable
+          <MealScalePressable
             accessibilityRole="button"
             accessibilityLabel="식단 기록하기"
             onPress={() => router.push('/meal/new' as never)}
+            scaleTo={0.92}
+            containerStyle={[styles.fabWrap, { bottom: fabBottom }]}
             style={({ pressed }) => [
               styles.fab,
-              { bottom: fabBottom, backgroundColor: theme.colors.primary, opacity: pressed ? 0.85 : 1 },
+              { backgroundColor: theme.colors.primary, opacity: pressed ? 0.9 : 1 },
             ]}
           >
             <MaterialCommunityIcons name="plus" size={30} color={theme.colors.primaryText} />
-          </Pressable>
+          </MealScalePressable>
         </>
       )}
     </View>
@@ -502,7 +542,7 @@ const createStyles = (theme: Theme) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.border,
     },
-    listContent: { padding: 16, gap: 8 },
+    listContent: { paddingHorizontal: 16, paddingTop: 16 },
     listHeader: { gap: 10, marginBottom: 4 },
     searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     searchField: {
@@ -533,20 +573,35 @@ const createStyles = (theme: Theme) =>
     doneText: { color: theme.colors.primaryText, fontSize: mealFont.callout, fontWeight: '700' },
     activeRow: { gap: 8, paddingRight: 16 },
     resultMeta: { color: theme.colors.textMuted, fontSize: mealFont.caption },
-    itemWrap: { gap: 8 },
-    dateRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 4 },
-    dateRowGap: { marginTop: 12 },
+    itemWrap: { paddingBottom: 8 },
+    // 고정 머리글 — 회색 바탕을 화면 끝까지 넓혀(좌우 -16) 아래로 지나가는 카드가 옆으로 비치지 않게 한다.
+    dateRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 8,
+      marginHorizontal: -16,
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 8,
+      backgroundColor: theme.colors.bgGrouped,
+    },
+    dateLeft: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 8, minWidth: 0 },
     dateHeader: { fontSize: mealFont.body, fontWeight: '700', color: theme.colors.text },
     dateSub: { fontSize: mealFont.caption, color: theme.colors.textMuted },
+    dateMeta: {
+      fontSize: mealFont.caption,
+      fontWeight: '600',
+      color: theme.colors.textMuted,
+      fontVariant: ['tabular-nums'],
+    },
     loadingMore: {
       paddingVertical: 16,
       textAlign: 'center',
       fontSize: mealFont.caption,
       color: theme.colors.textMuted,
     },
+    fabWrap: { position: 'absolute', right: 20 },
     fab: {
-      position: 'absolute',
-      right: 20,
       width: MEAL_FAB_SIZE,
       height: MEAL_FAB_SIZE,
       borderRadius: MEAL_FAB_SIZE / 2,

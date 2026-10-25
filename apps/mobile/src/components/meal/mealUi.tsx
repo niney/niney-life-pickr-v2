@@ -1,10 +1,20 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type PressableProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@repo/shared';
 import { mealFont, mealRadius } from './mealTokens';
 
-// 식단 화면 공용 조각 — 섹션 카드, 선택 칩, 아이콘 버튼, 값 타일, 가로 막대.
+// 식단 화면 공용 조각 — 섹션 카드, 누름 피드백·버튼, 선택 칩, 아이콘 버튼, 값 타일, 가로 막대.
 // 테마 토큰만 쓰고 라이브러리는 들이지 않는다. 차트 라이브러리를 쓰지 않는 리포 관례상
 // 분포 표시는 View 폭 계산 막대로 그린다.
 //
@@ -17,6 +27,101 @@ export type MealIconName = ComponentProps<typeof MaterialCommunityIcons>['name']
 export const MealSection = ({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) => {
   const theme = useTheme();
   return <View style={[styles.section, { backgroundColor: theme.colors.surface }, style]}>{children}</View>;
+};
+
+// 누름 피드백 — 누르는 동안 살짝(0.97) 줄었다가 놓으면 돌아온다. 투명도만 바뀌던 카드·버튼에 쓴다.
+// 바깥 Animated.View 가 크기 변화만, 안쪽 Pressable 이 모양(배경·여백·모서리·함수 style)을 맡는다 —
+// 애니메이티드 Pressable 은 함수 style 을 받지 못한다. 자리 잡기(flex·position·margin)는 containerStyle 로.
+// 값은 .set()/.get() 으로만 다룬다(.value 대입은 React Compiler 가 컴포넌트 컴파일을 포기한다).
+export const MealScalePressable = ({
+  containerStyle,
+  scaleTo = 0.97,
+  onPressIn,
+  onPressOut,
+  ...rest
+}: PressableProps & { containerStyle?: StyleProp<ViewStyle>; scaleTo?: number }) => {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+  return (
+    <Animated.View style={[containerStyle, animatedStyle]}>
+      <Pressable
+        {...rest}
+        onPressIn={(e) => {
+          scale.set(withTiming(scaleTo, { duration: 90 }));
+          onPressIn?.(e);
+        }}
+        onPressOut={(e) => {
+          scale.set(withTiming(1, { duration: 160 }));
+          onPressOut?.(e);
+        }}
+      />
+    </Animated.View>
+  );
+};
+
+// 버튼 — 주 동작은 primary(주황 채움), 나머지는 secondary(테두리). 높이·모서리·글자를 한 벌로 맞춘다.
+// 예전엔 같은 줄에 채운 사각 버튼과 알약 칩이 섞여 있었다(추천받기 · 다시 추천).
+export const MealButton = ({
+  label,
+  onPress,
+  variant = 'primary',
+  icon,
+  loading,
+  disabled,
+  selected,
+  accessibilityLabel,
+  style,
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: 'primary' | 'secondary' | 'danger';
+  icon?: MealIconName;
+  loading?: boolean;
+  disabled?: boolean;
+  // 고르는 버튼(추천 후보 '이 메뉴 선택' 등)의 선택 상태 — 스크린리더에 알린다.
+  selected?: boolean;
+  accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
+}) => {
+  const theme = useTheme();
+  const primary = variant === 'primary';
+  const color = primary
+    ? theme.colors.primaryText
+    : variant === 'danger'
+      ? theme.colors.danger
+      : theme.colors.text;
+  const inactive = !!disabled || !!loading;
+  return (
+    <MealScalePressable
+      containerStyle={style}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: inactive, busy: !!loading, selected }}
+      onPress={onPress}
+      disabled={inactive}
+      style={({ pressed }) => [
+        styles.button,
+        primary
+          ? { backgroundColor: theme.colors.primary }
+          : {
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: variant === 'danger' ? theme.colors.danger : theme.colors.border,
+            },
+        { opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={color} />
+      ) : (
+        <>
+          {icon ? <MaterialCommunityIcons name={icon} size={18} color={color} /> : null}
+          <Text style={[styles.buttonText, { color }]} numberOfLines={1}>
+            {label}
+          </Text>
+        </>
+      )}
+    </MealScalePressable>
+  );
 };
 
 export const MealSectionTitle = ({
@@ -54,7 +159,7 @@ export const Chip = ({
   trailingIcon,
   accessibilityLabel,
 }: {
-  label: string;
+  label?: string;
   selected?: boolean;
   onPress?: () => void;
   tone?: 'default' | 'danger';
@@ -83,7 +188,7 @@ export const Chip = ({
       ]}
     >
       {icon ? <MaterialCommunityIcons name={icon} size={15} color={color} /> : null}
-      <Text style={[styles.chipText, { color }]}>{label}</Text>
+      {label ? <Text style={[styles.chipText, { color }]}>{label}</Text> : null}
       {trailingIcon ? <MaterialCommunityIcons name={trailingIcon} size={15} color={color} /> : null}
     </Pressable>
   );
@@ -305,6 +410,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipText: { fontSize: mealFont.footnote, fontWeight: '500' },
+  button: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: mealRadius.control,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  buttonText: { fontSize: mealFont.body, fontWeight: '700' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fieldLabel: { fontSize: mealFont.footnote, fontWeight: '600' },
   iconButton: { borderRadius: mealRadius.pill, alignItems: 'center', justifyContent: 'center' },
