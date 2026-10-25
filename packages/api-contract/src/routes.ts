@@ -638,6 +638,18 @@ export const Parking = {
   restaurantReviews: (placeId: string) => `${API_PREFIX}/restaurants/public/${encodeURIComponent(placeId)}/parking-reviews`,
 } as const;
 
+// 등산 — 100대 명산 코스(GPX 적재본 + 산림청·등산트레킹지원센터). 공개, 로컬 SQLite 조회뿐. docs/PLAN-hiking.md
+export const Hiking = {
+  // 산 100개 전부(지도 마커·목록 — 검색·권역 필터는 클라이언트).
+  mountains: `${API_PREFIX}/hiking/mountains`,
+  // 산 상세 + 코스 요약(선 포함).
+  mountain: (id: string) => `${API_PREFIX}/hiking/mountains/${encodeURIComponent(id)}`,
+  // 코스 상세 — 고도 프로필·노면·지점.
+  course: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}`,
+  // 산 사진(JPEG, 적재 때 받아 둔 사본) — no 는 산 상세 images 의 순번.
+  image: (id: string, no: number | string) => `${API_PREFIX}/hiking/mountains/${encodeURIComponent(id)}/images/${no}`,
+} as const;
+
 export const LifeMap = {
   // 레이어별 적재 상태(건수·기준일·적재시각·화장실/병의원 좌표 확보 건수).
   status: `${API_PREFIX}/life-map/status`,

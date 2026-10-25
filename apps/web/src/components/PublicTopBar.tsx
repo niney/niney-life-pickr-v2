@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { to: '/bus', label: '대중교통', match: ['/bus', '/subway'] },
   { to: '/parking', label: '주차' },
   { to: '/life-map', label: '일상지도' },
+  { to: '/hiking', label: '등산' },
   { to: '/housing', label: '집값' },
   { to: '/travel/jeju', label: '여행', match: ['/travel'] },
   { to: '/weather', label: '날씨' },

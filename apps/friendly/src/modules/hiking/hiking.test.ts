@@ -1,0 +1,156 @@
+import type { FastifyInstance } from 'fastify';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { HikingCourseDetailType, HikingMountainDetailType, HikingMountainsResultType } from '@repo/api-contract';
+import { decodePolyline } from '@repo/utils';
+import { buildApp } from '../../app.js';
+import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import type { GdTrailRow, TrekkingPoiRow } from './hiking-api.adapter.js';
+import { buildHikingRows, matchGpxFolder, replaceHiking } from './hiking-master.service.js';
+
+// 등산 라우트 — 격리 DB(빈 테이블)에 합성 GPX 2코스 + 명산등산로 1행 + 등산트레킹 POI 를 buildHikingRows → replaceHiking
+// 으로 넣고 ① 미적재 503 ② 산 목록(정상 좌표·권역·사진) ③ 산 상세(코스 선 복원·험한 노면) ④ 코스 상세(프로필·지점 병합·
+// API 지점 연결) ⑤ 404·400 을 본다.
+
+const STEP = 0.0002; // ≈22m
+const trkpt = (lat: number, ele: number) => `<trkpt lat="${lat.toFixed(6)}" lon="127.000000"><ele>${ele}</ele></trkpt>`;
+const wpt = (sym: string, lat: number, ele: number, name: string, cat: string, signs: string[] = []) =>
+  `<wpt lat="${lat.toFixed(6)}" lon="127.000000"><ele>${ele}</ele><sym><![CDATA[${sym}]]></sym><name><![CDATA[${name}]]></name>` +
+  `<extensions><category><![CDATA[${cat}]]></category>${signs.map((s, i) => `<signpost${i + 1}><![CDATA[${s}]]></signpost${i + 1}>`).join('')}</extensions></wpt>`;
+const gpx = (wpts: string[], pts: string[], rtsc = '') =>
+  `<?xml version="1.0"?><gpx>${wpts.join('')}<trk><trkseg>${pts.join('')}</trkseg></trk>${rtsc ? `<extensions>${rtsc}</extensions>` : ''}</gpx>`;
+
+// 37.000(들머리 300m) → 37.006(정상 900m) 편도 31점 ≈ 667m, 오르며 기록. 끝 근처 암릉.
+const COURSE1 = gpx(
+  [
+    wpt('101', 37.0, 300, '들머리 장구목이', 'ENTRY'),
+    wpt('102', 37.003, 600, '갈림길', 'SIGN', ['정상;ST']),
+    wpt('103', 37.006, 900, '정상', 'PEAK'),
+  ],
+  Array.from({ length: 31 }, (_, i) => trkpt(37 + i * STEP, 300 + i * 20)),
+  '<rtsc ept="31" fin="1" rtcd="5" scid="1" spt="25"><name><![CDATA[암릉]]></name></rtsc>',
+);
+// 같은 길을 내려가며 기록한 코스 — 뒤집혀 들머리에서 시작해야 한다.
+// 정상(201)은 1번 코스의 103 과 분류·이름·좌표가 같은 다른 번호 — 하나로 접혀야 한다(원본 ~500건).
+const COURSE2 = gpx(
+  [wpt('201', 37.006, 900, '정상', 'PEAK'), wpt('202', 37.0, 300, '주차장', 'PARK')],
+  Array.from({ length: 31 }, (_, i) => trkpt(37.006 - i * STEP, 900 - i * 20)),
+);
+
+const GD: GdTrailRow = {
+  id: '421100101',
+  name: '가리산',
+  heightM: 905,
+  area: '강원도 춘천시 북산면ㆍ동면, 홍천군 두촌면ㆍ화촌면',
+  subtitle: '진달래 많은 산',
+  overview: '개관',
+  details: '상세',
+  reason: '강원도에서 진달래가 가장 많이 피는 산',
+  officialCourses: '가리산자연휴양림-삼거리-정상 (총 4시간)',
+};
+const api = (p: Partial<TrekkingPoiRow> & { poiId: string; lat: number }): TrekkingPoiRow => ({
+  mountainName: '가리산',
+  category: 'SIGN',
+  name: '갈림길',
+  description: null,
+  lng: 127,
+  ele: null,
+  signposts: [],
+  ...p,
+});
+
+describe('hiking routes (격리 DB)', () => {
+  let app: FastifyInstance;
+  let isolated: IsolatedDatabase;
+
+  beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
+    app = await buildApp({ logger: false });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    isolated.restore();
+  });
+
+  it('미적재 — 산 목록 503', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json<{ message: string }>().message).toContain('load:hiking');
+  });
+
+  it('적재 후 목록·산 상세·코스 상세', async () => {
+    const rows = buildHikingRows({
+      files: [
+        { mountain: '가리산', no: 1, xml: COURSE1 },
+        { mountain: '가리산', no: 2, xml: COURSE2 },
+      ],
+      gdTrails: [GD],
+      pois: [
+        // GPX 갈림길(102)과 같은 곳 → 합쳐지고 이정표가 더 많은 쪽(API)을 쓴다. 번호가 GPX sym 과 같아도 다른 체계.
+        api({ poiId: '0000000102', lat: 37.003, signposts: [{ dest: '정상', dir: 'ST' }, { dest: '휴양림', dir: 'UT' }] }),
+        // GPX 에 없는 갈림길 — 코스 선에서 ≈9m(30m 안)이라 코스에 붙는다.
+        api({ poiId: '0000000999', lat: 37.0045, lng: 127.0001 }),
+        // 코스에서 먼 API 봉우리 — 산 지점엔 들어가지만 코스엔 안 붙는다.
+        api({ poiId: '0000000500', category: 'PEAK', name: '가리산 2봉', lat: 37.01, lng: 127.01, ele: 880 }),
+      ],
+      images: new Map([['421100101', [1, 2]]]),
+      loadedAt: new Date('2026-10-25T00:00:00Z'),
+    });
+    expect(rows.report).toMatchObject({ courses: 2, reversed: 1, gpxSameSpot: 1, pois: { gpx: 3, api: 2, both: 1 } });
+    // 2번 코스의 정상도 대표 id(gpx:103)로 연결된다(같은 길이라 API 갈림길 999 도 붙는다).
+    expect(rows.coursePois.filter((cp) => cp.courseId === '421100101-2').map((cp) => cp.poiId).sort()).toEqual([
+      'api:0000000999',
+      'gpx:103',
+      'gpx:202',
+    ]);
+    await replaceHiking(app.prisma, rows);
+
+    const list = await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains' });
+    expect(list.statusCode).toBe(200);
+    expect(list.headers['cache-control']).toContain('max-age=3600');
+    const l = list.json<HikingMountainsResultType>();
+    expect(l.items).toHaveLength(1);
+    // 정상은 '정상' 이름 + 공식 높이(905)에 가까운 GPX 봉우리(900m).
+    expect(l.items[0]).toMatchObject({ id: '421100101', regions: ['gangwon'], courseCount: 2, images: [1, 2], lat: 37.006 });
+
+    const m = (await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/421100101' })).json<HikingMountainDetailType>();
+    expect(m.summitName).toBe('정상');
+    expect(m.courses.map((c) => c.id)).toEqual(['421100101-1', '421100101-2']);
+    const c1 = m.courses[0]!;
+    expect(c1).toMatchObject({ name: '장구목이 → 가리산 정상', isLoop: false, roughSurfaces: ['암릉'] });
+    const line = decodePolyline(c1.pieces[0]!);
+    expect(line[0]!.lat).toBeCloseTo(37, 5);
+    expect(line.at(-1)!.lat).toBeCloseTo(37.006, 5);
+    // 내려가며 기록한 2번도 들머리(낮은 끝)에서 시작한다.
+    expect(decodePolyline(m.courses[1]!.pieces[0]!)[0]!.lat).toBeCloseTo(37, 5);
+
+    const c = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-1' })).json<HikingCourseDetailType>();
+    expect(c.mountain).toEqual({ id: '421100101', name: '가리산', heightM: 905 });
+    expect(c.profile.d[0]).toBe(0);
+    expect(c.profile.d.at(-1)).toBe(c.lengthM);
+    expect(c.surfaces).toEqual([expect.objectContaining({ type: '암릉' })]);
+    expect(c.pois.map((p) => p.id)).toEqual(['gpx:101', 'gpx:102', 'api:0000000999', 'gpx:103']);
+    expect(c.pois.map((p) => p.atM)).toEqual([...c.pois.map((p) => p.atM)].sort((a, b) => a - b));
+    expect(c.pois.find((p) => p.id === 'gpx:102')!.signposts).toEqual([
+      { dest: '정상', dir: 'ST' },
+      { dest: '휴양림', dir: 'UT' },
+    ]);
+  });
+
+  it('없는 산·코스 404, 잘못된 id 400, 없는 사진 404', async () => {
+    expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/999999999' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-9' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/abc' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/999999999/images/1' })).statusCode).toBe(404);
+  });
+});
+
+describe('matchGpxFolder', () => {
+  it('괄호 뒤 봉우리·별칭을 떼고 맞추되, 지역 괄호(백운산(포천))는 그대로', () => {
+    const folders = new Set(['덕유산', '백운산(포천)', '백운산(광양)']);
+    expect(matchGpxFolder('덕유산(향적봉)', folders)).toBe('덕유산');
+    expect(matchGpxFolder('백운산(포천)', folders)).toBe('백운산(포천)');
+    expect(matchGpxFolder('없는산', folders)).toBeNull();
+  });
+});

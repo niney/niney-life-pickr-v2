@@ -1,0 +1,103 @@
+import { useState } from 'react';
+import { ArrowLeft, Route as RouteIcon } from 'lucide-react';
+import { Routes, type HikingCourseSummaryType, type HikingMountainDetailType } from '@repo/api-contract';
+import { formatHikingEle, formatHikingLength, hikingCourseColor } from '@repo/utils';
+import { cn } from '~/lib/utils';
+import { officialCourseLines } from './hikingFormat';
+
+// 산 상세 패널 — 사진·높이·소재지·선정 이유·개관(접기)·산림청 공식 코스 문구·코스 카드(지도 선 색과 같은 점).
+
+interface Props {
+  mountain: HikingMountainDetailType;
+  onSelectCourse: (id: string) => void;
+  onBack: () => void;
+}
+
+export const CourseFacts = ({ course, className }: { course: HikingCourseSummaryType; className?: string }) => (
+  <span className={cn('flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground', className)}>
+    <span className="tabular-nums">{formatHikingLength(course.lengthM)}</span>
+    {course.gainM !== null && <span className="tabular-nums">오르막 {formatHikingEle(course.gainM)}</span>}
+    <span>{course.isLoop ? '원점회귀' : '편도'}</span>
+    {course.roughSurfaces.map((s) => (
+      <span key={s} className="rounded bg-red-500/10 px-1 text-red-700 dark:text-red-300">
+        {s}
+      </span>
+    ))}
+  </span>
+);
+
+export const MountainDetail = ({ mountain, onSelectCourse, onBack }: Props) => {
+  const [expanded, setExpanded] = useState(false);
+  const official = officialCourseLines(mountain.officialCourses);
+  return (
+    <div className="flex flex-col gap-3" data-testid="hiking-mountain">
+      <button type="button" onClick={onBack} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-3.5" /> 산 목록
+      </button>
+      {mountain.images.length > 0 && (
+        <div className="flex snap-x gap-2 overflow-x-auto">
+          {mountain.images.map((no) => (
+            <img
+              key={no}
+              src={Routes.Hiking.image(mountain.id, no)}
+              alt={`${mountain.name} 사진 ${no}`}
+              loading="lazy"
+              className="aspect-[4/3] w-56 shrink-0 snap-start rounded-md bg-muted object-cover"
+            />
+          ))}
+        </div>
+      )}
+      <div>
+        <h2 className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold">
+          {mountain.name}
+          {mountain.heightM !== null && <span className="text-sm font-normal tabular-nums text-muted-foreground">{formatHikingEle(mountain.heightM)}</span>}
+        </h2>
+        {mountain.subtitle && <p className="text-sm text-muted-foreground">{mountain.subtitle}</p>}
+        {mountain.area && <p className="mt-0.5 text-xs text-muted-foreground">{mountain.area}</p>}
+      </div>
+      {mountain.reason && (
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground">100대 명산 선정 이유</h3>
+          <p className="mt-0.5 text-sm leading-relaxed">{mountain.reason}</p>
+        </section>
+      )}
+      {mountain.overview && (
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground">개관</h3>
+          <p className={cn('mt-0.5 whitespace-pre-line text-sm leading-relaxed', !expanded && 'line-clamp-4')}>{mountain.overview}</p>
+          <button type="button" onClick={() => setExpanded((v) => !v)} className="text-xs text-primary hover:underline">
+            {expanded ? '접기' : '더 보기'}
+          </button>
+        </section>
+      )}
+      {official.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground">산림청 안내 코스</h3>
+          <ul className="mt-0.5 flex flex-col gap-0.5 text-xs leading-relaxed">
+            {official.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <section className="flex flex-col gap-1.5">
+        <h3 className="flex items-center gap-1 text-sm font-semibold">
+          <RouteIcon className="size-4" /> 코스 {mountain.courses.length}개
+        </h3>
+        <ol className="flex flex-col divide-y rounded-md border" data-testid="hiking-courses">
+          {mountain.courses.map((c, i) => (
+            <li key={c.id}>
+              <button type="button" onClick={() => onSelectCourse(c.id)} className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-accent">
+                <span aria-hidden className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: hikingCourseColor(i) }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">{c.name}</span>
+                  <CourseFacts course={c} />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
+  );
+};

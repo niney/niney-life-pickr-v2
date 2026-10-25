@@ -2990,3 +2990,138 @@ model TourPlaceBizStatus {
   @@index([brno])
   @@map("tour_place_biz_statuses")
 }
+
+// ── 등산(/hiking) — 100대 명산 코스. docs/PLAN-hiking.md ─────────────────────────────────────────
+// load:hiking 이 전량 교체한다(원천이 1회성 GPX 파일 + 정적 API 라 증분 없음). JSON 열은 문자열(SQLite).
+
+// 산 — id 는 산림청 산 코드(명산등산로 mntncd = 산정보 mntilistno, 9자리).
+model HikingMountain {
+  id          String  @id
+  name        String
+  // GPX 폴더 이름(명산등산로 이름과 다를 수 있다 — 덕유산(향적봉)↔덕유산).
+  gpxName     String
+  subtitle    String?
+  heightM     Float?
+  area        String?
+  // 시도 키 콤마 목록(@repo/utils HIKING_REGIONS) — 소재지 문구에서 뽑는다. 두 시도에 걸치면 둘 다.
+  regions     String
+  overview    String?
+  details     String?
+  // 100대 명산 선정 이유.
+  reason      String?
+  // 명산등산로 공식 코스 문구 원문(줄바꿈 정리만).
+  officialCourses String?
+  summitName  String?
+  summitLat   Float?
+  summitLng   Float?
+  summitEle   Float?
+  minLat      Float
+  minLng      Float
+  maxLat      Float
+  maxLng      Float
+  courseCount Int
+  minLengthM  Int?
+  maxLengthM  Int?
+  // 저장한 사진 순번 JSON 배열(data/hiking-images/<id>_<no>.jpg) — 없으면 "[]".
+  images      String   @default("[]")
+  loadedAt    DateTime
+
+  courses HikingCourse[]
+  pois    HikingPoi[]
+
+  @@map("hiking_mountains")
+}
+
+// 코스 — id = `<산 id>-<GPX 번호>`. 선은 조각별 encoded polyline(정밀도 1e5) JSON 배열, 고도 프로필은
+// 20m 간격 표본 JSON { d: 거리 m[], e: 고도 m[] }. 노면은 [{ type, fromM, toM }] JSON.
+model HikingCourse {
+  id          String  @id
+  mountainId  String
+  no          Int
+  name        String
+  // 'points'(지점 이름으로 만듦) | 'number'(이름을 못 만들어 번호).
+  nameSource  String
+  startName   String?
+  endName     String?
+  peakName    String?
+  lengthM     Int
+  // 고도가 없는 코스(대암산)는 false — gain/loss/ele 와 profile 이 비어 있다.
+  hasElevation Boolean
+  gainM       Int?
+  lossM       Int?
+  minEle      Float?
+  maxEle      Float?
+  startLat    Float
+  startLng    Float
+  startEle    Float?
+  endLat      Float
+  endLng      Float
+  endEle      Float?
+  isLoop      Boolean
+  pieceCount  Int
+  // 30m 넘게 떨어진 조각 사이(기록 끊김) 개수와 직선거리 합.
+  gapCount    Int
+  gapM        Int
+  minLat      Float
+  minLng      Float
+  maxLat      Float
+  maxLng      Float
+  pieces      String
+  profile     String
+  surfaces    String
+
+  mountain HikingMountain    @relation(fields: [mountainId], references: [id], onDelete: Cascade)
+  pois     HikingCoursePoi[]
+
+  @@index([mountainId])
+  @@map("hiking_courses")
+}
+
+// 지점 — GPX 웨이포인트(sym) + 한국등산트레킹지원센터 POI(poiId, 같은 체계). category 는 GPX 원문 코드
+// (PEAK·SIGN·TOILET·PARK·ENTRY·TRANS·DANGER…). signposts 는 [{ dest, dir }] JSON(갈림길만).
+model HikingPoi {
+  id          String  @id
+  mountainId  String
+  category    String
+  name        String?
+  description String?
+  lat         Float
+  lng         Float
+  ele         Float?
+  signposts   String?
+  // 'gpx' | 'api' | 'both'
+  source      String
+
+  mountain HikingMountain    @relation(fields: [mountainId], references: [id], onDelete: Cascade)
+  courses  HikingCoursePoi[]
+
+  @@index([mountainId])
+  @@map("hiking_pois")
+}
+
+// 코스 ↔ 지점 — atM 은 코스 시작에서 그 지점에 가장 가까운 선 위 점까지 거리(고도 그래프 눈금용).
+model HikingCoursePoi {
+  courseId String
+  poiId    String
+  atM      Int
+
+  course HikingCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  poi    HikingPoi    @relation(fields: [poiId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, poiId])
+  @@index([poiId])
+  @@map("hiking_course_pois")
+}
+
+model HikingSync {
+  id        Int      @id @default(autoincrement())
+  mountains Int
+  courses   Int
+  pois      Int
+  images    Int
+  // 적재 리포트 JSON(정리 통계·이름 매칭 실패 등).
+  detail    String?
+  loadedAt  DateTime @default(now())
+
+  @@map("hiking_syncs")
+}

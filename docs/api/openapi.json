@@ -5424,6 +5424,851 @@
         }
       }
     },
+    "/api/v1/hiking/courses/{id}": {
+      "get": {
+        "summary": "코스 상세 — 고도 프로필(20m 간격)·노면 범위·코스 지점(정상·갈림길 이정표·화장실·위험 …), 없으면 404",
+        "tags": [
+          "hiking"
+        ],
+        "description": "id 는 `<산 코드>-<코스 번호>`. pois 는 코스 시작에서의 거리(atM) 순.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6,12}-\\d{1,4}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "no": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "nameSource": {
+                      "type": "string",
+                      "enum": [
+                        "points",
+                        "number"
+                      ]
+                    },
+                    "startName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "endName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "peakName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lengthM": {
+                      "type": "integer"
+                    },
+                    "hasElevation": {
+                      "type": "boolean"
+                    },
+                    "gainM": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "lossM": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "minEle": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "maxEle": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "isLoop": {
+                      "type": "boolean"
+                    },
+                    "gapCount": {
+                      "type": "integer"
+                    },
+                    "gapM": {
+                      "type": "integer"
+                    },
+                    "roughSurfaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "bbox": {
+                      "type": "object",
+                      "properties": {
+                        "minLat": {
+                          "type": "number"
+                        },
+                        "minLng": {
+                          "type": "number"
+                        },
+                        "maxLat": {
+                          "type": "number"
+                        },
+                        "maxLng": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "minLat",
+                        "minLng",
+                        "maxLat",
+                        "maxLng"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "pieces": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "mountain": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "heightM": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "heightM"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "start": {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "ele": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lng",
+                        "ele"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "end": {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "ele": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lng",
+                        "ele"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "d": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "e": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": [
+                        "d",
+                        "e"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "surfaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "fromM": {
+                            "type": "integer"
+                          },
+                          "toM": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "fromM",
+                          "toM"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "pois": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "ele": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "signposts": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "dest": {
+                                  "type": "string"
+                                },
+                                "dir": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "dest",
+                                "dir"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "atM": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "lat",
+                          "lng",
+                          "id",
+                          "category",
+                          "name",
+                          "description",
+                          "ele",
+                          "signposts",
+                          "atM"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "no",
+                    "name",
+                    "nameSource",
+                    "startName",
+                    "endName",
+                    "peakName",
+                    "lengthM",
+                    "hasElevation",
+                    "gainM",
+                    "lossM",
+                    "minEle",
+                    "maxEle",
+                    "isLoop",
+                    "gapCount",
+                    "gapM",
+                    "roughSurfaces",
+                    "bbox",
+                    "pieces",
+                    "mountain",
+                    "start",
+                    "end",
+                    "profile",
+                    "surfaces",
+                    "pois"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hiking/mountains": {
+      "get": {
+        "summary": "100대 명산 목록 — 정상 좌표·높이·소재지 권역·코스 수·사진 순번(적재본, 미적재면 503)",
+        "tags": [
+          "hiking"
+        ],
+        "description": "산 100개를 한 번에 준다(검색·권역 필터는 클라이언트). regions 는 시도 키(seoul·gyeonggi·gangwon …).",
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "subtitle": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "heightM": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "area": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "regions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "courseCount": {
+                            "type": "integer"
+                          },
+                          "minLengthM": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxLengthM": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "images": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "required": [
+                          "lat",
+                          "lng",
+                          "id",
+                          "name",
+                          "subtitle",
+                          "heightM",
+                          "area",
+                          "regions",
+                          "courseCount",
+                          "minLengthM",
+                          "maxLengthM",
+                          "images"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "loadedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "loadedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hiking/mountains/{id}": {
+      "get": {
+        "summary": "명산 상세 — 소개·선정 이유·공식 코스 문구 + 코스 요약(선은 encoded polyline 조각), 없으면 404",
+        "tags": [
+          "hiking"
+        ],
+        "description": "id 는 산림청 산 코드(9자리). 코스 pieces 는 조각별 encoded polyline(정밀도 1e5) — 조각 사이는 원본 기록이 끊긴 곳이다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6,12}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lat": {
+                      "type": "number"
+                    },
+                    "lng": {
+                      "type": "number"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "subtitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "heightM": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "area": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "regions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "courseCount": {
+                      "type": "integer"
+                    },
+                    "minLengthM": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxLengthM": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "images": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    },
+                    "overview": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "officialCourses": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "summitName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "summitEle": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "bbox": {
+                      "type": "object",
+                      "properties": {
+                        "minLat": {
+                          "type": "number"
+                        },
+                        "minLng": {
+                          "type": "number"
+                        },
+                        "maxLat": {
+                          "type": "number"
+                        },
+                        "maxLng": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "minLat",
+                        "minLng",
+                        "maxLat",
+                        "maxLng"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "courses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "no": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "nameSource": {
+                            "type": "string",
+                            "enum": [
+                              "points",
+                              "number"
+                            ]
+                          },
+                          "startName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "endName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "peakName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lengthM": {
+                            "type": "integer"
+                          },
+                          "hasElevation": {
+                            "type": "boolean"
+                          },
+                          "gainM": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "lossM": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "minEle": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "maxEle": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "isLoop": {
+                            "type": "boolean"
+                          },
+                          "gapCount": {
+                            "type": "integer"
+                          },
+                          "gapM": {
+                            "type": "integer"
+                          },
+                          "roughSurfaces": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "bbox": {
+                            "type": "object",
+                            "properties": {
+                              "minLat": {
+                                "type": "number"
+                              },
+                              "minLng": {
+                                "type": "number"
+                              },
+                              "maxLat": {
+                                "type": "number"
+                              },
+                              "maxLng": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "minLat",
+                              "minLng",
+                              "maxLat",
+                              "maxLng"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "pieces": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "no",
+                          "name",
+                          "nameSource",
+                          "startName",
+                          "endName",
+                          "peakName",
+                          "lengthM",
+                          "hasElevation",
+                          "gainM",
+                          "lossM",
+                          "minEle",
+                          "maxEle",
+                          "isLoop",
+                          "gapCount",
+                          "gapM",
+                          "roughSurfaces",
+                          "bbox",
+                          "pieces"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "lat",
+                    "lng",
+                    "id",
+                    "name",
+                    "subtitle",
+                    "heightM",
+                    "area",
+                    "regions",
+                    "courseCount",
+                    "minLengthM",
+                    "maxLengthM",
+                    "images",
+                    "overview",
+                    "details",
+                    "reason",
+                    "officialCourses",
+                    "summitName",
+                    "summitEle",
+                    "bbox",
+                    "courses"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hiking/mountains/{id}/images/{no}": {
+      "get": {
+        "summary": "명산 사진(JPEG, 긴 변 960px) — 산림청 산정보 사진을 적재 때 받아 둔 사본, 없으면 404",
+        "tags": [
+          "hiking"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6,12}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
+            "in": "path",
+            "name": "no",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/v1/housing/complexes/{id}": {
       "get": {
         "summary": "단지 상세(유형·면적별 거래 통계·공시가격·생활 인프라·침수 흔적) — 로컬 DB",

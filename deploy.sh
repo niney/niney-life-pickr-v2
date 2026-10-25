@@ -268,6 +268,32 @@ parking_data() {
   echo "  적재 후: $(parking_status)"
 }
 
+# ── 등산(100대 명산) ────────────────────────────────────────
+# status:hiking 은 "ok mountains=N courses=C pois=P images=I" 한 줄(테이블 없으면 "missing").
+hiking_status() { pnpm --filter friendly status:hiking 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
+
+# 비어 있으면 첫 적재, force=1(10번)이면 다시. 원천 GPX zip(data.go.kr 15098177)은 data/open/hiking/ 에 손으로 올린다
+# (docs/data-sources.md). 적재는 명산등산로 1콜 + 등산트레킹 POI ~10콜 + 산 사진(산마다 1콜 + 최대 3장, 받아 둔 사진은
+# 다시 받지 않음)이라 처음 2~3분, 다시 돌리면 수십 초. Prisma 로 DB 에 직접 쓰므로 서버를 내리지 않아도 된다.
+hiking_data() {
+  local force="${1:-0}"
+  local st; st="$(hiking_status)"
+  if [[ "$st" != ok* ]]; then
+    echo "  (등산 테이블 없음 — 마이그레이션(케이스 2/4) 뒤에 적재됩니다)"; return 0
+  fi
+  local mountains; mountains="$(stat_val mountains "$st")"
+  echo "  등산 현재: 산 ${mountains:-0} · 코스 $(stat_val courses "$st") · 사진 $(stat_val images "$st")"
+  if [[ "$force" == 1 || "${mountains:-0}" == 0 ]]; then
+    if ! compgen -G "$ROOT/data/open/hiking/*.zip" >/dev/null; then
+      echo "  (data/open/hiking/ 에 100대명산 GPX zip(data.go.kr 15098177)이 없어 건너뜁니다 — 올린 뒤 ./deploy.sh 10)"; return 0
+    fi
+    step "등산 적재(100대명산 GPX + 산림청 명산등산로·사진 + 등산트레킹 POI)"
+    pnpm --filter friendly load:hiking \
+      || echo "  (등산 적재 실패 — DATA_GO_KR_API_KEY 활용신청(명산등산로 15158915·산정보 15058662·등산트레킹 봉우리·갈림길·교통) 확인 뒤 ./deploy.sh 10)"
+  fi
+  echo "  적재 후: $(hiking_status)"
+}
+
 ask_stop() {
   # 마이그레이션 전 서버 중단 여부 (기본 N = 무중단)
   read -rp $'\n파괴적 마이그레이션인가요? 서버를 중단하고 진행할까요? [y/N] ' a
@@ -312,15 +338,15 @@ food_catalog_data() {
 }
 
 case_1() {  # API만, DB 변경 없음
-  pull; build_api; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; pm_reload
+  pull; build_api; life_map_data; food_catalog_data; housing_data; parking_data; hiking_data; analyze_db; pm_reload
 }
 
 case_2() {  # API + DB 마이그레이션
   pull
   if ask_stop; then
-    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; pm_start
+    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; hiking_data; analyze_db; build_api; pm_start
   else
-    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; pm_reload
+    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; hiking_data; analyze_db; build_api; pm_reload
   fi
 }
 
@@ -332,9 +358,9 @@ case_3() {  # 웹만
 case_4() {  # 웹 + API + DB (풀)
   pull
   if ask_stop; then
-    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; build_web; pm_start
+    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; hiking_data; analyze_db; build_api; build_web; pm_start
   else
-    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; analyze_db; build_api; build_web; pm_reload
+    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; hiking_data; analyze_db; build_api; build_web; pm_reload
   fi
 }
 
@@ -358,6 +384,10 @@ case_9() {  # 주차 데이터 적재/갱신 — 표준데이터·서울 공영�
   pull; gen; parking_data 1; analyze_db
 }
 
+case_10() {  # 등산 데이터 적재/갱신 — data/open/hiking/ 의 100대명산 GPX zip + 산림청·등산트레킹 API(코드 배포·재기동 없음)
+  pull; gen; hiking_data 1; analyze_db
+}
+
 # ── 메뉴 ────────────────────────────────────────────────
 choice="${1:-}"
 if [[ -z "$choice" ]]; then
@@ -373,8 +403,9 @@ if [[ -z "$choice" ]]; then
   7) 음식 카탈로그 적재/갱신   — data/open/food/ 의 배포본 + 레시피 API
   8) 집값 데이터 적재/갱신     — data/open/housing/ 의 단지 CSV + 실거래 API (HOUSING_MONTHS=N 으로 백필)
   9) 주차 데이터 적재/갱신     — 전국주차장 표준데이터·서울 공영주차장·교통안전공단·전기차 충전소 API
+ 10) 등산 데이터 적재/갱신     — data/open/hiking/ 의 100대명산 GPX zip + 산림청·등산트레킹 API
 MENU
-  read -rp "번호 [1-9]: " choice
+  read -rp "번호 [1-10]: " choice
 fi
 
 case "$choice" in
@@ -387,7 +418,8 @@ case "$choice" in
   7) case_7 ;;
   8) case_8 ;;
   9) case_9 ;;
-  *) echo "잘못된 선택: '$choice' (1-9)"; exit 1 ;;
+  10) case_10 ;;
+  *) echo "잘못된 선택: '$choice' (1-10)"; exit 1 ;;
 esac
 
 step "완료"

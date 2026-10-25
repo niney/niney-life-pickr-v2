@@ -67,6 +67,8 @@
     "load:parking-lots": "tsx --env-file=.env scripts/load-parking-lots.ts",
     "load:ev-chargers": "tsx --env-file=.env scripts/load-ev-chargers.ts",
     "status:parking": "tsx --env-file=.env scripts/parking-status.ts",
+    "load:hiking": "tsx --env-file=.env scripts/load-hiking.ts",
+    "status:hiking": "tsx --env-file=.env scripts/hiking-status.ts",
     "rebuild:housing-derived": "tsx --env-file=.env scripts/rebuild-housing-derived.ts",
     "load:housing-prices": "tsx --env-file=.env scripts/load-housing-prices.ts",
     "probe:rtms": "tsx --env-file=.env scripts/probe-rtms-api.ts",
