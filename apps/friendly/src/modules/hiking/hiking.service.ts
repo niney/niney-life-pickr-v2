@@ -57,21 +57,22 @@ const toMountainSummary = (m: HikingMountain): HikingMountainSummaryType => ({
   images: parseJson<number[]>(m.images, []),
 });
 
-const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
+// 형태·예상 시간·난이도·험한 노면 — 코스 요약과 추천(hiking-recommend)이 같이 쓴다. 나들이 시간 = 왕복 또는 코스 방향 편도.
+export const courseEffort = (c: Pick<HikingCourse, 'surfaces' | 'shape' | 'isLoop' | 'moveMin' | 'moveRevMin' | 'gainM' | 'steepPct'>) => {
   const surfaces = parseJson<HikingSurfaceType[]>(c.surfaces, []);
   const roughSurfaces = [...new Set(surfaces.map((s) => s.type).filter(isHikingRoughSurface))];
   const shape = isHikingCourseShape(c.shape) ? c.shape : c.isLoop ? 'loop' : 'traverse';
   const times = hikingCourseTimes(shape, c.moveMin, c.moveRevMin);
+  const outingMin = times ? (times.roundTripMin ?? times.timeMin) : null;
   const difficulty =
-    times && c.gainM !== null
-      ? hikingDifficulty({
-          outingMin: times.roundTripMin ?? times.timeMin,
-          roundTrip: times.roundTripMin !== null,
-          gainM: c.gainM,
-          steepPct: c.steepPct,
-          roughSurfaces,
-        })
+    times && outingMin !== null && c.gainM !== null
+      ? hikingDifficulty({ outingMin, roundTrip: times.roundTripMin !== null, gainM: c.gainM, steepPct: c.steepPct, roughSurfaces })
       : null;
+  return { surfaces, roughSurfaces, shape, times, outingMin, difficulty };
+};
+
+const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
+  const { roughSurfaces, shape, times, difficulty } = courseEffort(c);
   return {
     id: c.id,
     no: c.no,

@@ -233,6 +233,117 @@ export const HikingConditions = z.object({
 });
 export type HikingConditionsType = z.infer<typeof HikingConditions>;
 
+// ── 코스 주변(4차) — GET /v1/hiking/courses/:id/around ─────────────────────────────
+// 들머리(편도면 날머리도) 근처 정류장·주차·화장실과 날머리 근처 하산 후 맛집. 로컬 DB 만.
+// kind: trail 등산 지점(GPX·등산트레킹) · bus 버스 정류장(수도권) · subway 지하철역 · lot 주차장 · public 공중화장실 ·
+// restaurant 맛집(공개 네이버 행, refId = placeId) · store 상가정보 음식점. refId 는 bus stId · subway 역 id · lot 주차장 id.
+export const HikingAroundPlace = LatLng.extend({
+  kind: z.enum(['trail', 'bus', 'subway', 'lot', 'public', 'restaurant', 'store']),
+  name: z.string(),
+  // 기준점(들머리·날머리)에서 직선거리.
+  distM: z.number().int(),
+  at: z.enum(['start', 'end']),
+  // 한 줄 덧붙임(요금·노선·업종·평점 등).
+  detail: z.string().nullable(),
+  refId: z.string().nullable(),
+});
+export type HikingAroundPlaceType = z.infer<typeof HikingAroundPlace>;
+
+export const HikingAround = z.object({
+  courseId: z.string(),
+  start: LatLng.extend({ name: z.string().nullable() }),
+  // 편도(traverse)만 — 원점회귀·왕복은 들머리로 돌아온다.
+  end: LatLng.extend({ name: z.string().nullable() }).nullable(),
+  transit: z.array(HikingAroundPlace),
+  parking: z.array(HikingAroundPlace),
+  toilets: z.array(HikingAroundPlace),
+  // 날머리(원점회귀·왕복은 들머리) 근처 — 크롤 맛집(5km) 먼저, 없으면 상가정보 음식점(2km).
+  food: z.object({ source: z.enum(['restaurants', 'stores']).nullable(), items: z.array(HikingAroundPlace) }),
+});
+export type HikingAroundType = z.infer<typeof HikingAround>;
+
+// ── 추천(4차) — GET /v1/hiking/recommend ────────────────────────────────────────
+// 사용자 결정(2026-10-25): 출발 위치·날짜·출발 시각·산행 시간·난이도·이동 수단. 점수·문장은 @repo/utils hikingRecommend.
+export const HikingRecommendQuery = z
+  .object({
+    // 출발 위치 — 둘 다 주거나 둘 다 빼기(빼면 거리를 보지 않는다).
+    lat: z.coerce.number().min(32).max(39).optional(),
+    lng: z.coerce.number().min(124).max(132).optional(),
+    // KST 오늘·내일·모레 중 하나(생략하면 오늘).
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    // 출발 시각 HH:MM(생략하면 08:00).
+    start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+    // short 3시간 안 · half 반나절(3~5.5시간) · day 하루(5.5~10시간).
+    duration: z.enum(['short', 'half', 'day']).default('half'),
+    level: z.enum(['any', 'easy', 'moderate', 'hard']).default('any'),
+    mode: z.enum(['car', 'transit']).default('car'),
+    limit: z.coerce.number().int().min(1).max(20).default(10),
+  })
+  .refine((q) => (q.lat === undefined) === (q.lng === undefined), { message: 'lat 과 lng 는 함께 주세요.' });
+export type HikingRecommendQueryType = z.infer<typeof HikingRecommendQuery>;
+
+export const HikingCaution = z.object({ level: z.enum(['warn', 'info']), text: z.string() });
+
+export const HikingRecommendItem = z.object({
+  rank: z.number().int(),
+  score: z.number(),
+  mountain: LatLng.extend({ id: z.string(), name: z.string(), heightM: z.number().nullable(), images: z.array(z.number().int()) }),
+  course: z.object({
+    id: z.string(),
+    no: z.number().int(),
+    name: z.string(),
+    shape: z.enum(['loop', 'summit', 'traverse']),
+    lengthM: z.number().int(),
+    // 왕복 또는 코스 방향 예상 시간(분).
+    outingMin: z.number().int().nullable(),
+    difficulty: z.enum(['easy', 'moderate', 'hard']).nullable(),
+    start: LatLng,
+  }),
+  // 출발 위치 → 들머리 직선거리와 대략 차로 시간(추정). 위치를 안 주면 null.
+  straightM: z.number().int().nullable(),
+  driveMin: z.number().int().nullable(),
+  // 들머리 근처 주차·정류장 이름, 편도 날머리 근처 정류장.
+  access: z.object({ parking: z.string().nullable(), transit: z.string().nullable(), transitEnd: z.string().nullable() }),
+  startAt: z.string(),
+  endAt: z.string().nullable(),
+  sunset: z.string().nullable(),
+  daylight: z.enum(['ok', 'tight', 'dark']).nullable(),
+  // 산행 시간대 날씨 요약(오늘의 조건을 받은 항목만).
+  weather: z
+    .object({
+      sky: z.number().int().nullable(),
+      pty: z.number().int().nullable(),
+      tmpMax: z.number().nullable(),
+      topTmpMin: z.number().nullable(),
+      popMax: z.number().nullable(),
+      windMax: z.number().nullable(),
+    })
+    .nullable(),
+  fireLevel: z.number().int().min(1).max(4).nullable(),
+  airGrade: AirGradeSchema,
+  // 오늘의 조건(날씨·산불·대기)을 받아 점수에 넣었는지 — 상위 후보만 받는다.
+  conditionsChecked: z.boolean(),
+  season: z.array(z.string()),
+  // 추천 이유 문장.
+  reason: z.string(),
+  cautions: z.array(HikingCaution),
+});
+export type HikingRecommendItemType = z.infer<typeof HikingRecommendItem>;
+
+export const HikingRecommendResult = z.object({
+  items: z.array(HikingRecommendItem),
+  query: z.object({
+    date: z.string(),
+    start: z.string(),
+    duration: z.enum(['short', 'half', 'day']),
+    level: z.enum(['any', 'easy', 'moderate', 'hard']),
+    mode: z.enum(['car', 'transit']),
+    origin: LatLng.nullable(),
+  }),
+  generatedAt: z.string(),
+});
+export type HikingRecommendResultType = z.infer<typeof HikingRecommendResult>;
+
 export const HikingMountainParams = z.object({ id: z.string().regex(/^\d{6,12}$/) });
 export const HikingCourseParams = z.object({ id: z.string().regex(/^\d{6,12}-\d{1,4}$/) });
 export const HikingImageParams = z.object({ id: z.string().regex(/^\d{6,12}$/), no: z.coerce.number().int().min(1).max(99) });

@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 205개 — 공개 88 · 선택 인증 16 · 로그인 101. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 207개 — 공개 90 · 선택 인증 16 · 로그인 101. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -78,10 +78,12 @@
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
 | GET | `/api/v1/hiking/courses/:id` | 공개 | 240/분 |  | 코스 상세 — 고도 프로필(20m 간격)·노면 범위·코스 지점(정상·갈림길 이정표·화장실·위험 …), 없으면 404 |
+| GET | `/api/v1/hiking/courses/:id/around` | 공개 | 240/분 |  | 코스 주변 — 들머리(편도면 날머리도) 정류장·주차·화장실과 하산 후 맛집, 없으면 404 |
 | GET | `/api/v1/hiking/courses/:id/conditions` | 공개 | 60/분 |  | 코스 오늘의 조건 — 오늘·내일·모레 날씨(가장 높은 곳 추정 기온)·대기·산불위험예보·해 시각, 없으면 404 |
 | GET | `/api/v1/hiking/mountains` | 공개 | 240/분 |  | 100대 명산 목록 — 정상 좌표·높이·소재지 권역·코스 수·사진 순번(적재본, 미적재면 503) |
 | GET | `/api/v1/hiking/mountains/:id` | 공개 | 240/분 |  | 명산 상세 — 소개·선정 이유·공식 코스 문구 + 코스 요약(선은 encoded polyline 조각), 없으면 404 |
 | GET | `/api/v1/hiking/mountains/:id/images/:no` | 공개 | 240/분 |  | 명산 사진(JPEG, 긴 변 960px) — 산림청 산정보 사진을 적재 때 받아 둔 사본, 없으면 404 |
+| GET | `/api/v1/hiking/recommend` | 공개 | 30/분 | `lat`, `lng`, `date`, `start`, `duration`, `level`, `mode`, `limit` | 오늘 어느 산 — 출발 위치·날짜·출발 시각·산행 시간·난이도·이동 수단으로 산·코스 추천(이유 문장·주의할 점), 미적재면 503 |
 
 ## housing
 

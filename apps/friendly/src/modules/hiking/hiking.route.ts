@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   ErrorResponseSchema,
+  HikingAround,
   HikingConditions,
   HikingCourseDetail,
   HikingCourseParams,
@@ -11,20 +12,24 @@ import {
   HikingMountainDetail,
   HikingMountainParams,
   HikingMountainsResult,
+  HikingRecommendQuery,
+  HikingRecommendResult,
   Routes,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
 import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { ForestFireService } from './forest-fire.service.js';
+import { HikingAroundService } from './hiking-around.service.js';
 import { HikingConditionsService } from './hiking-conditions.service.js';
 import { HIKING_IMAGE_DIR, hikingImageFileName } from './hiking-master.service.js';
+import { HikingRecommendError, HikingRecommendService } from './hiking-recommend.service.js';
 import { HikingService } from './hiking.service.js';
 
-// 등산 공개 라우트(비로그인) — 산·코스·사진은 적재본(load:hiking) 읽기만, 업스트림 0콜. 미적재(503)·없는 산/코스(404)는
-// 라우트가 직접 응답한다(error-handler 가 5xx 를 500 으로 뭉개므로 주차와 같은 replyUpstreamError 경로). 적재본은 배포 때만
-// 바뀌어 산·코스 응답에 1시간 공개 캐시를 단다. 사진은 적재 때 받아 둔 사본(30일 immutable — 순번이 같으면 같은 사진).
-// 오늘의 조건(conditions)만 업스트림을 캐시로 부르고(날씨·대기·산불), 항목별 실패는 200 안의 errors 로 낸다.
+// 등산 공개 라우트(비로그인) — 산·코스·주변·사진은 적재본(load:hiking)과 로컬 DB 읽기만, 업스트림 0콜. 미적재(503)·없는
+// 산/코스(404)는 라우트가 직접 응답한다(error-handler 가 5xx 를 500 으로 뭉개므로 주차와 같은 replyUpstreamError 경로). 적재본은
+// 배포 때만 바뀌어 산·코스·주변 응답에 1시간 공개 캐시를 단다. 사진은 적재 때 받아 둔 사본(30일 immutable).
+// 오늘의 조건(conditions)·추천(recommend)만 업스트림을 캐시로 부르고(날씨·대기·산불), 항목별 실패는 200 안에서 낸다.
 // docs/PLAN-hiking.md
 
 const DATA_CACHE_CONTROL = 'public, max-age=3600';
@@ -42,8 +47,36 @@ const hikingRoutes: FastifyPluginAsync = async (app) => {
     air: app.airQuality,
     fire: new ForestFireService({ serviceKey: env.DATA_GO_KR_API_KEY }),
   });
+  const around = new HikingAroundService(app.prisma);
+  const recommend = new HikingRecommendService({ prisma: app.prisma, conditions });
   const imageDir = resolve(process.cwd(), HIKING_IMAGE_DIR);
   const typed = app.withTypeProvider<ZodTypeProvider>();
+
+  typed.get(Routes.Hiking.recommend, {
+    config: { rateLimit: RATE.hikingRecommend },
+    schema: {
+      tags: ['hiking'],
+      summary: '오늘 어느 산 — 출발 위치·날짜·출발 시각·산행 시간·난이도·이동 수단으로 산·코스 추천(이유 문장·주의할 점), 미적재면 503',
+      description:
+        '607코스를 산행 시간 맞춤(short 3시간 안·half 반나절·day 하루)·난이도·거리(직선 × 1.3 도로, 대략 차로 시간)·해 지기 전 하산(일몰 − 예상 시간 − 30분)·이동 수단 접근(차는 들머리 근처 주차·원점회귀/왕복, 대중교통은 들머리·날머리 근처 정류장)·계절 키워드(산 소개)로 점수 매겨 산마다 가장 좋은 코스를 고르고, 상위 산만 오늘의 조건(날씨·산불·대기)을 받아 주의할 점까지 넣어 다시 매긴다. date 는 오늘·내일·모레(KST)만, lat/lng 를 빼면 거리를 보지 않는다.',
+      querystring: HikingRecommendQuery,
+      response: { 200: HikingRecommendResult, 400: ErrorResponseSchema, 503: ErrorResponseSchema },
+    },
+    handler: async (req, reply) => {
+      try {
+        const out = await recommend.recommend(req.query);
+        reply.header('Cache-Control', CONDITIONS_CACHE_CONTROL);
+        return out;
+      } catch (e) {
+        if (e instanceof HikingRecommendError && e.statusCode === 400) {
+          return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: e.message });
+        }
+        const sent = replyUpstreamError(req, reply, e, [503], '등산 추천 실패');
+        if (sent) return sent;
+        throw e;
+      }
+    },
+  });
 
   typed.get(Routes.Hiking.mountains, {
     config: { rateLimit: RATE.hikingRead },
@@ -115,6 +148,24 @@ const hikingRoutes: FastifyPluginAsync = async (app) => {
       const out = await conditions.get(req.params.id);
       if (!out) return reply.code(404).send(notFound('코스를 찾을 수 없습니다.'));
       reply.header('Cache-Control', CONDITIONS_CACHE_CONTROL);
+      return out;
+    },
+  });
+
+  typed.get(decodeURIComponent(Routes.Hiking.around(':id')), {
+    config: { rateLimit: RATE.hikingRead },
+    schema: {
+      tags: ['hiking'],
+      summary: '코스 주변 — 들머리(편도면 날머리도) 정류장·주차·화장실과 하산 후 맛집, 없으면 404',
+      description:
+        '등산 지점(GPX·등산트레킹의 교통·주차·화장실, 1km)을 먼저 놓고 버스 정류장(500m, 수도권)·지하철역(1.5km)·주차장(1.5km)·공중화장실(1km)을 더한다. 하산 후 맛집은 날머리(원점회귀·왕복은 들머리) 5km 안 크롤 맛집(refId = placeId)을, 없으면 2km 안 상가정보 음식점을 준다. 로컬 DB 만.',
+      params: HikingCourseParams,
+      response: { 200: HikingAround, 404: ErrorResponseSchema },
+    },
+    handler: async (req, reply) => {
+      const out = await around.get(req.params.id);
+      if (!out) return reply.code(404).send(notFound('코스를 찾을 수 없습니다.'));
+      reply.header('Cache-Control', DATA_CACHE_CONTROL);
       return out;
     },
   });

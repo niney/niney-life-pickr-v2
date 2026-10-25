@@ -648,6 +648,10 @@ export const Hiking = {
   course: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}`,
   // 코스 오늘의 조건 — 오늘·내일·모레 날씨(정상 추정 기온)·대기·산불위험·해 시각.
   conditions: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}/conditions`,
+  // 코스 주변 — 들머리 정류장·주차·화장실, 하산 후 맛집.
+  around: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}/around`,
+  // 오늘 어느 산 — 출발 위치·날짜·출발 시각·산행 시간·난이도·이동 수단으로 추천.
+  recommend: `${API_PREFIX}/hiking/recommend`,
   // 산 사진(JPEG, 적재 때 받아 둔 사본) — no 는 산 상세 images 의 순번.
   image: (id: string, no: number | string) => `${API_PREFIX}/hiking/mountains/${encodeURIComponent(id)}/images/${no}`,
 } as const;

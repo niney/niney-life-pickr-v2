@@ -55,6 +55,8 @@ export const RATE = {
   parkingRead: { max: 240, timeWindow: '1 minute' },
   // 등산 산·코스 조회 — 로컬 DB(업스트림 0콜). 산·코스를 넘겨 보는 클릭마다 1콜, 사진은 산마다 몇 장. 분당 240.
   hikingRead: { max: 240, timeWindow: '1 minute' },
+  // 등산 추천 — 607코스 점수(메모리) + 상위 12산 오늘의 조건(날씨 격자 캐시 미스면 업스트림). 입력을 바꿀 때마다 1콜. 분당 30.
+  hikingRecommend: { max: 30, timeWindow: '1 minute' },
   // 집값 단지명 검색 — 로컬 LIKE 조회, 타이핑 디바운스 뒤 호출. 분당 120.
   housingSearch: { max: 120, timeWindow: '1 minute' },
   // 음식 카탈로그 자동완성(식단 입력) — 로컬 DB 조회라 싸지만 인증 사용자 타이핑 디바운스 호출.

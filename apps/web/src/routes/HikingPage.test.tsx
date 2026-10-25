@@ -5,8 +5,10 @@ import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type {
+  HikingAroundType,
   HikingConditionsType,
   HikingCourseDetailType,
+  HikingRecommendResultType,
   HikingCourseSummaryType,
   HikingMountainDetailType,
   HikingMountainSummaryType,
@@ -191,11 +193,81 @@ const conditionsFor = (): HikingConditionsType => {
   };
 };
 
+// 코스 주변 — 들머리 정류장(등산 지점)·지하철, 주차장, 날머리 없음, 하산 후 맛집(크롤).
+const AROUND: HikingAroundType = {
+  courseId: c2Detail.id,
+  start: { lat: 37, lng: 127, name: '산림문화휴양관 주차장' },
+  end: null,
+  transit: [
+    { kind: 'trail', name: '휴양림 입구 정류장', distM: 120, at: 'start', lat: 37.001, lng: 127, detail: null, refId: null },
+    { kind: 'subway', name: '가평역', distM: 1_400, at: 'start', lat: 37.01, lng: 127, detail: '경춘선', refId: 'K1:가평' },
+  ],
+  parking: [{ kind: 'lot', name: '휴양림 주차장', distM: 80, at: 'start', lat: 37, lng: 127.001, detail: '공영 · 무료 · 40면', refId: 'std-1' }],
+  toilets: [],
+  food: { source: 'restaurants', items: [{ kind: 'restaurant', name: '산채비빔밥집', distM: 900, at: 'start', lat: 37.008, lng: 127, detail: '한식 · 평점 4.5', refId: '12345' }] },
+};
+
+// 추천 — 1위 가리산 2번 코스, 2위 관악산(경고 하나).
+const recommendFor = (mode: string): HikingRecommendResultType => ({
+  items: [
+    {
+      rank: 1,
+      score: 95,
+      mountain: { id: GARI.id, name: '가리산', heightM: 1051, lat: 37.5, lng: 127.5, images: [1] },
+      course: { id: C2.id, no: 2, name: C2.name, shape: 'summit', lengthM: 6474, outingMin: 300, difficulty: 'moderate', start: { lat: 37, lng: 127 } },
+      straightM: 70_000,
+      driveMin: 80,
+      access: { parking: '휴양림 주차장', transit: null, transitEnd: null },
+      startAt: '2026-10-26T08:00:00+09:00',
+      endAt: '2026-10-26T13:00:00+09:00',
+      sunset: '2026-10-26T17:40:00+09:00',
+      daylight: 'ok',
+      weather: null,
+      fireLevel: 1,
+      airGrade: 1,
+      conditionsChecked: true,
+      season: ['단풍'],
+      reason: `${mode === 'car' ? '차로 약 1시간 20분(직선 70km)' : '직선 70km'} 거리의 왕복 5시간·보통 코스로, 08:00에 출발하면 13:00쯤 내려옵니다(일몰 17:40).`,
+      cautions: [],
+    },
+    {
+      rank: 2,
+      score: 90,
+      mountain: { id: GWANAK.id, name: '관악산', heightM: 632, lat: 37.44, lng: 126.96, images: [] },
+      course: { id: `${GWANAK.id}-1`, no: 1, name: '사당역 → 연주대', shape: 'traverse', lengthM: 5000, outingMin: 200, difficulty: 'moderate', start: { lat: 37.47, lng: 126.98 } },
+      straightM: 10_000,
+      driveMin: 28,
+      access: { parking: null, transit: '사당역', transitEnd: null },
+      startAt: '2026-10-26T08:00:00+09:00',
+      endAt: '2026-10-26T11:20:00+09:00',
+      sunset: '2026-10-26T17:41:00+09:00',
+      daylight: 'ok',
+      weather: null,
+      fireLevel: 2,
+      airGrade: 3,
+      conditionsChecked: true,
+      season: [],
+      reason: '직선 10km 거리의 편도 3시간 20분·보통 코스입니다.',
+      cautions: [{ level: 'warn', text: '미세먼지 나쁨' }],
+    },
+  ],
+  query: { date: '2026-10-26', start: '08:00', duration: 'half', level: 'any', mode: mode as 'car', origin: null },
+  generatedAt: '2026-10-25T00:00:00Z',
+});
+
 let requested: string[] = [];
+let recommendQs: URLSearchParams[] = [];
 beforeEach(() => {
   requested = [];
+  recommendQs = [];
   server.use(
     http.get('/api/v1/hiking/courses/:id/conditions', () => HttpResponse.json(conditionsFor())),
+    http.get('/api/v1/hiking/courses/:id/around', () => HttpResponse.json(AROUND)),
+    http.get('/api/v1/hiking/recommend', ({ request }) => {
+      const qs = new URL(request.url).searchParams;
+      recommendQs.push(qs);
+      return HttpResponse.json(recommendFor(qs.get('mode') ?? 'car'));
+    }),
     http.get('/api/v1/settings/map/public', () => HttpResponse.json({ provider: 'vworld', apiKey: 'test-key' })),
     http.get('/api/v1/hiking/mountains', () => HttpResponse.json(list)),
     http.get('/api/v1/hiking/mountains/:id', ({ params }) => {
@@ -322,6 +394,59 @@ describe('HikingPage', () => {
     fireEvent.change(within(card).getByRole('combobox', { name: '출발 시각' }), { target: { value: String(13 * 60) } });
     expect(within(card).getByTestId('hiking-daylight')).toHaveTextContent('해 진 뒤 하산');
     expect(within(card).getByTestId('hiking-cautions')).toHaveTextContent('해 지기 전에 내려오기 어렵습니다 — 12:10까지 출발하세요');
+  });
+
+  it('추천 모드 — 토글을 켜면 입력 칸·추천 목록, 입력을 바꾸면 다시 받고(URL), 고르면 산·코스로', async () => {
+    renderPage();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.click(screen.getByRole('button', { name: '추천' }));
+    const list = await screen.findByTestId('hiking-recommend-list');
+    expect(screen.getByTestId('location-search')).toHaveTextContent('rec=1');
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent('가리산');
+    expect(items[0]).toHaveTextContent('차로 약 1시간 20분(직선 70km) 거리의 왕복 5시간·보통 코스로');
+    expect(items[1]).toHaveTextContent('미세먼지 나쁨');
+    // 기본 입력 — 반나절·상관없음·차, 위치를 못 찾으면(jsdom) 거리 없이.
+    expect(recommendQs[0]!.get('duration')).toBe('half');
+    expect(recommendQs[0]!.get('level')).toBe('any');
+    expect(recommendQs[0]!.get('mode')).toBe('car');
+    expect(recommendQs[0]!.get('lat')).toBeNull();
+    expect(screen.queryByTestId('hiking-recommend-hint')).toBeNull();
+
+    fireEvent.click(within(screen.getByRole('group', { name: '이동 수단' })).getByRole('button', { name: '대중교통' }));
+    await waitFor(() => expect(recommendQs.at(-1)!.get('mode')).toBe('transit'));
+    expect(screen.getByTestId('location-search')).toHaveTextContent('rm=transit');
+    fireEvent.change(screen.getByRole('combobox', { name: '출발 위치' }), { target: { value: 'busan' } });
+    await waitFor(() => expect(recommendQs.at(-1)!.get('lat')).toBe('35.1796'));
+    expect(screen.getByTestId('location-search')).toHaveTextContent('ro=busan');
+    // 3시간 안 — 받은 코스가 모두 그보다 길면 까닭을 알린다.
+    fireEvent.click(within(screen.getByRole('group', { name: '산행 시간' })).getByRole('button', { name: '3시간 안' }));
+    await waitFor(() => expect(recommendQs.at(-1)!.get('duration')).toBe('short'));
+    expect(await screen.findByTestId('hiking-recommend-hint')).toHaveTextContent('3시간 안 길이로');
+
+    fireEvent.click(within(screen.getByTestId('hiking-recommend-list')).getAllByRole('button')[0]!);
+    expect(await screen.findByTestId('hiking-course')).toBeInTheDocument();
+    expect(screen.getByTestId('location-search')).toHaveTextContent('m=421100101');
+    expect(screen.getByTestId('location-search')).toHaveTextContent('c=421100101-2');
+    // 목록 칸은 추천 모드 그대로.
+    expect(screen.getByTestId('hiking-recommend-list')).toBeInTheDocument();
+  });
+
+  it('가는 법·주변 — 정류장·역·주차·하산 후 맛집, 지하철·주차장·맛집은 각 화면으로', async () => {
+    renderPage('/hiking?m=421100101&c=421100101-2');
+    const around = await screen.findByTestId('hiking-around');
+    await within(around).findByText('휴양림 입구 정류장');
+    expect(within(around).getByTestId('hiking-around-transit')).toHaveTextContent('가평역');
+    expect(within(around).getByText('근처 화장실 정보가 없습니다.')).toBeInTheDocument();
+    expect(within(around).getByRole('heading', { name: '하산 후 맛집' })).toBeInTheDocument();
+    const href = (name: RegExp) => within(around).getByRole('link', { name }).getAttribute('href') ?? '';
+    expect(href(/가평역/)).toContain(`&stn=${encodeURIComponent('K1:가평')}`);
+    expect(href(/가평역/)).toMatch(/^\/subway\?near=/);
+    expect(href(/휴양림 주차장/)).toMatch(/^\/parking\?ll=.*&sel=std-1$/);
+    expect(href(/산채비빔밥집/)).toBe('/r/12345');
+    // 등산 지점은 연결 화면이 없다.
+    expect(within(around).queryByRole('link', { name: /휴양림 입구 정류장/ })).toBeNull();
   });
 
   it('데스크톱 — [산 목록 | 상세 | 지도] 세 칸, 산을 골라도 목록은 남고 패널을 오른쪽으로 옮긴다', async () => {

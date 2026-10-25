@@ -31,6 +31,7 @@ export * from './parking.js';
 export * from './parkingMarker.js';
 export * from './hiking.js';
 export * from './hikingConditions.js';
+export * from './hikingRecommend.js';
 export * from './hikingMarker.js';
 export * from './solar.js';
 export * from './polyline.js';

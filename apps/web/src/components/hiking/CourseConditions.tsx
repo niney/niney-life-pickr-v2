@@ -17,36 +17,14 @@ import {
   type HikingDaylightStatus,
 } from '@repo/utils';
 import { cn } from '~/lib/utils';
+import { HIKING_DEFAULT_START_MIN, hikingDayLabel, hikingDefaultPick, hikingStartsFor, isoHm, kstHm, minToHm, startMs } from './hikingFormat';
 
 // 코스 상세의 "산행 조건" 카드(3차) — 오늘·내일·모레 중 날짜와 출발 시각을 고르면 그 산행 시간대(출발 ~ 출발 + 예상 시간)로
 // 날씨(가장 높은 곳 추정 기온·체감)·대기·산불위험·해 지기 전 하산을 접어 주의할 점을 한 줄씩 보인다. 서버는 3일치를 한 번에 주고
 // 날짜·시각을 바꿔도 다시 받지 않는다(@repo/utils hikingConditions). docs/PLAN-hiking.md §3차
 
-const HOUR_MS = 3_600_000;
-// 고를 수 있는 출발 시각 — 04:00~18:00, 30분 간격(분).
-const START_MINUTES = Array.from({ length: 29 }, (_, i) => 4 * 60 + i * 30);
-const DEFAULT_START_MIN = 8 * 60;
 // 예상 시간이 없는 코스(고도 없음)는 날씨만 이만큼 본다.
 const FALLBACK_WINDOW_MIN = 240;
-const DAY_WORDS = ['오늘', '내일', '모레'];
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-
-const pad = (n: number) => String(n).padStart(2, '0');
-const minToHm = (m: number) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
-const startMs = (date: string, min: number) => Date.parse(`${date}T${minToHm(min)}:00+09:00`);
-const kstHm = (ms: number) => {
-  const d = new Date(ms + 9 * HOUR_MS);
-  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-};
-const isoHm = (iso: string | null) => (iso ? kstHm(Date.parse(iso)) : '—');
-const dayLabel = (date: string, i: number) => {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${DAY_WORDS[i] ?? date} ${d.getUTCMonth() + 1}.${d.getUTCDate()}(${WEEKDAYS[d.getUTCDay()]})`;
-};
-
-// 오늘은 지금 이후 시각만(30분 단위로 올림).
-const startsFor = (date: string, dayIndex: number, nowMs: number): number[] =>
-  dayIndex === 0 ? START_MINUTES.filter((m) => startMs(date, m) >= nowMs) : START_MINUTES;
 
 const worstGrade = (...gs: (number | null)[]): AirGradeLevel | null => {
   const v = gs.filter((g): g is number => g !== null);
@@ -76,18 +54,16 @@ const ConditionsBody = ({ course, data }: { course: HikingCourseDetailType; data
   const [openedAt] = useState(() => Date.now());
   const [pick, setPick] = useState<Choice | null>(null);
   const days = data.days;
-  const todayStarts = days[0] ? startsFor(days[0].date, 0, openedAt) : [];
-  const fallback: Choice = todayStarts.length > 0 ? { day: 0, startMin: todayStarts[0]! } : { day: Math.min(1, days.length - 1), startMin: DEFAULT_START_MIN };
-  const cur = pick ?? fallback;
+  const cur = pick ?? hikingDefaultPick(days.map((d) => d.date), openedAt);
   const day = days[cur.day];
   if (!day) return null;
-  const starts = startsFor(day.date, cur.day, openedAt);
+  const starts = hikingStartsFor(day.date, cur.day, openedAt);
 
   const selectDay = (i: number) => {
     const next = days[i];
     if (!next) return;
-    const allowed = startsFor(next.date, i, openedAt);
-    setPick({ day: i, startMin: allowed.includes(cur.startMin) ? cur.startMin : (allowed[0] ?? DEFAULT_START_MIN) });
+    const allowed = hikingStartsFor(next.date, i, openedAt);
+    setPick({ day: i, startMin: allowed.includes(cur.startMin) ? cur.startMin : (allowed[0] ?? HIKING_DEFAULT_START_MIN) });
   };
 
   const outingMin = course.roundTripMin ?? course.timeMin;
@@ -112,13 +88,13 @@ const ConditionsBody = ({ course, data }: { course: HikingCourseDetailType; data
               type="button"
               onClick={() => selectDay(i)}
               aria-pressed={i === cur.day}
-              disabled={startsFor(d.date, i, openedAt).length === 0}
+              disabled={hikingStartsFor(d.date, i, openedAt).length === 0}
               className={cn(
                 'rounded-full border px-2.5 py-0.5 text-xs disabled:opacity-40',
                 i === cur.day ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
               )}
             >
-              {dayLabel(d.date, i)}
+              {hikingDayLabel(d.date, i)}
             </button>
           ))}
         </div>

@@ -5857,6 +5857,378 @@
         }
       }
     },
+    "/api/v1/hiking/courses/{id}/around": {
+      "get": {
+        "summary": "코스 주변 — 들머리(편도면 날머리도) 정류장·주차·화장실과 하산 후 맛집, 없으면 404",
+        "tags": [
+          "hiking"
+        ],
+        "description": "등산 지점(GPX·등산트레킹의 교통·주차·화장실, 1km)을 먼저 놓고 버스 정류장(500m, 수도권)·지하철역(1.5km)·주차장(1.5km)·공중화장실(1km)을 더한다. 하산 후 맛집은 날머리(원점회귀·왕복은 들머리) 5km 안 크롤 맛집(refId = placeId)을, 없으면 2km 안 상가정보 음식점을 준다. 로컬 DB 만.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6,12}-\\d{1,4}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courseId": {
+                      "type": "string"
+                    },
+                    "start": {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lng",
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "end": {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lng",
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "transit": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "trail",
+                              "bus",
+                              "subway",
+                              "lot",
+                              "public",
+                              "restaurant",
+                              "store"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "distM": {
+                            "type": "integer"
+                          },
+                          "at": {
+                            "type": "string",
+                            "enum": [
+                              "start",
+                              "end"
+                            ]
+                          },
+                          "detail": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "refId": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "lat",
+                          "lng",
+                          "kind",
+                          "name",
+                          "distM",
+                          "at",
+                          "detail",
+                          "refId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "parking": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "trail",
+                              "bus",
+                              "subway",
+                              "lot",
+                              "public",
+                              "restaurant",
+                              "store"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "distM": {
+                            "type": "integer"
+                          },
+                          "at": {
+                            "type": "string",
+                            "enum": [
+                              "start",
+                              "end"
+                            ]
+                          },
+                          "detail": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "refId": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "lat",
+                          "lng",
+                          "kind",
+                          "name",
+                          "distM",
+                          "at",
+                          "detail",
+                          "refId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "toilets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "trail",
+                              "bus",
+                              "subway",
+                              "lot",
+                              "public",
+                              "restaurant",
+                              "store"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "distM": {
+                            "type": "integer"
+                          },
+                          "at": {
+                            "type": "string",
+                            "enum": [
+                              "start",
+                              "end"
+                            ]
+                          },
+                          "detail": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "refId": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "lat",
+                          "lng",
+                          "kind",
+                          "name",
+                          "distM",
+                          "at",
+                          "detail",
+                          "refId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "food": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "restaurants",
+                            "stores"
+                          ],
+                          "nullable": true
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "type": "number"
+                              },
+                              "lng": {
+                                "type": "number"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "trail",
+                                  "bus",
+                                  "subway",
+                                  "lot",
+                                  "public",
+                                  "restaurant",
+                                  "store"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "distM": {
+                                "type": "integer"
+                              },
+                              "at": {
+                                "type": "string",
+                                "enum": [
+                                  "start",
+                                  "end"
+                                ]
+                              },
+                              "detail": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "refId": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "lat",
+                              "lng",
+                              "kind",
+                              "name",
+                              "distM",
+                              "at",
+                              "detail",
+                              "refId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "source",
+                        "items"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "courseId",
+                    "start",
+                    "end",
+                    "transit",
+                    "parking",
+                    "toilets",
+                    "food"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/hiking/courses/{id}/conditions": {
       "get": {
         "summary": "코스 오늘의 조건 — 오늘·내일·모레 날씨(가장 높은 곳 추정 기온)·대기·산불위험예보·해 시각, 없으면 404",
@@ -6975,6 +7347,547 @@
         "responses": {
           "200": {
             "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/v1/hiking/recommend": {
+      "get": {
+        "summary": "오늘 어느 산 — 출발 위치·날짜·출발 시각·산행 시간·난이도·이동 수단으로 산·코스 추천(이유 문장·주의할 점), 미적재면 503",
+        "tags": [
+          "hiking"
+        ],
+        "description": "607코스를 산행 시간 맞춤(short 3시간 안·half 반나절·day 하루)·난이도·거리(직선 × 1.3 도로, 대략 차로 시간)·해 지기 전 하산(일몰 − 예상 시간 − 30분)·이동 수단 접근(차는 들머리 근처 주차·원점회귀/왕복, 대중교통은 들머리·날머리 근처 정류장)·계절 키워드(산 소개)로 점수 매겨 산마다 가장 좋은 코스를 고르고, 상위 산만 오늘의 조건(날씨·산불·대기)을 받아 주의할 점까지 넣어 다시 매긴다. date 는 오늘·내일·모레(KST)만, lat/lng 를 빼면 거리를 보지 않는다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 32,
+              "maximum": 39
+            },
+            "in": "query",
+            "name": "lat",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 124,
+              "maximum": 132
+            },
+            "in": "query",
+            "name": "lng",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "date",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+            },
+            "in": "query",
+            "name": "start",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "half",
+                "day"
+              ],
+              "default": "half"
+            },
+            "in": "query",
+            "name": "duration",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "any",
+                "easy",
+                "moderate",
+                "hard"
+              ],
+              "default": "any"
+            },
+            "in": "query",
+            "name": "level",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "car",
+                "transit"
+              ],
+              "default": "car"
+            },
+            "in": "query",
+            "name": "mode",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 30,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rank": {
+                            "type": "integer"
+                          },
+                          "score": {
+                            "type": "number"
+                          },
+                          "mountain": {
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "type": "number"
+                              },
+                              "lng": {
+                                "type": "number"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "heightM": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "images": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "required": [
+                              "lat",
+                              "lng",
+                              "id",
+                              "name",
+                              "heightM",
+                              "images"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "course": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "no": {
+                                "type": "integer"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "shape": {
+                                "type": "string",
+                                "enum": [
+                                  "loop",
+                                  "summit",
+                                  "traverse"
+                                ]
+                              },
+                              "lengthM": {
+                                "type": "integer"
+                              },
+                              "outingMin": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "difficulty": {
+                                "type": "string",
+                                "enum": [
+                                  "easy",
+                                  "moderate",
+                                  "hard"
+                                ],
+                                "nullable": true
+                              },
+                              "start": {
+                                "type": "object",
+                                "properties": {
+                                  "lat": {
+                                    "type": "number"
+                                  },
+                                  "lng": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "lat",
+                                  "lng"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "no",
+                              "name",
+                              "shape",
+                              "lengthM",
+                              "outingMin",
+                              "difficulty",
+                              "start"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "straightM": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "driveMin": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "access": {
+                            "type": "object",
+                            "properties": {
+                              "parking": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "transit": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "transitEnd": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "parking",
+                              "transit",
+                              "transitEnd"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "startAt": {
+                            "type": "string"
+                          },
+                          "endAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sunset": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "daylight": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "tight",
+                              "dark"
+                            ],
+                            "nullable": true
+                          },
+                          "weather": {
+                            "type": "object",
+                            "properties": {
+                              "sky": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "pty": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "tmpMax": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "topTmpMin": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "popMax": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "windMax": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "sky",
+                              "pty",
+                              "tmpMax",
+                              "topTmpMin",
+                              "popMax",
+                              "windMax"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
+                          },
+                          "fireLevel": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4,
+                            "nullable": true
+                          },
+                          "airGrade": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              {
+                                "type": "number",
+                                "enum": [
+                                  2
+                                ]
+                              },
+                              {
+                                "type": "number",
+                                "enum": [
+                                  3
+                                ]
+                              },
+                              {
+                                "type": "number",
+                                "enum": [
+                                  4
+                                ]
+                              }
+                            ],
+                            "nullable": true
+                          },
+                          "conditionsChecked": {
+                            "type": "boolean"
+                          },
+                          "season": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "cautions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "level": {
+                                  "type": "string",
+                                  "enum": [
+                                    "warn",
+                                    "info"
+                                  ]
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "level",
+                                "text"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "rank",
+                          "score",
+                          "mountain",
+                          "course",
+                          "straightM",
+                          "driveMin",
+                          "access",
+                          "startAt",
+                          "endAt",
+                          "sunset",
+                          "daylight",
+                          "weather",
+                          "fireLevel",
+                          "airGrade",
+                          "conditionsChecked",
+                          "season",
+                          "reason",
+                          "cautions"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "query": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string"
+                        },
+                        "start": {
+                          "type": "string"
+                        },
+                        "duration": {
+                          "type": "string",
+                          "enum": [
+                            "short",
+                            "half",
+                            "day"
+                          ]
+                        },
+                        "level": {
+                          "type": "string",
+                          "enum": [
+                            "any",
+                            "easy",
+                            "moderate",
+                            "hard"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "car",
+                            "transit"
+                          ]
+                        },
+                        "origin": {
+                          "type": "object",
+                          "properties": {
+                            "lat": {
+                              "type": "number"
+                            },
+                            "lng": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "lat",
+                            "lng"
+                          ],
+                          "additionalProperties": false,
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "start",
+                        "duration",
+                        "level",
+                        "mode",
+                        "origin"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "query",
+                    "generatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           }
         }
       }

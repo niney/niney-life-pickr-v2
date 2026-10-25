@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { hikingApi } from '../api/hiking.api.js';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { hikingApi, type HikingRecommendParams } from '../api/hiking.api.js';
 
 // 등산 훅 — 적재본(GPX·산림청)은 배포 때만 바뀌고 서버도 1시간 공개 캐시를 단다. 한 번 받으면 세션 동안 다시 받을
 // 이유가 거의 없어 길게(1시간) 둔다. 산·코스를 넘겨 보다 되돌아오면 캐시로 바로 뜬다.
@@ -36,4 +36,23 @@ export const useHikingConditions = (courseId: string | null) =>
     queryFn: () => hikingApi.conditions(courseId!),
     enabled: courseId !== null,
     staleTime: CONDITIONS_STALE_MS,
+  });
+
+// 코스 주변(정류장·주차·화장실·하산 후 맛집) — 로컬 DB 라 적재본처럼 길게.
+export const useHikingAround = (courseId: string | null) =>
+  useQuery({
+    queryKey: ['hiking', 'around', courseId],
+    queryFn: () => hikingApi.around(courseId!),
+    enabled: courseId !== null,
+    staleTime: STALE_MS,
+  });
+
+// 추천 — 입력이 바뀔 때마다 1콜(params 가 null 이면 비활성, 예: 내 위치를 찾는 중). 입력을 되돌리면 캐시로 바로.
+export const useHikingRecommend = (params: HikingRecommendParams | null) =>
+  useQuery({
+    queryKey: ['hiking', 'recommend', params],
+    queryFn: () => hikingApi.recommend(params!),
+    enabled: params !== null,
+    staleTime: CONDITIONS_STALE_MS,
+    placeholderData: keepPreviousData,
   });

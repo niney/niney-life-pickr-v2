@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ExternalLink, Loader2, PanelLeftOpen, PanelRightOpen, Search, XCircle } from 'lucide-react';
+import { ExternalLink, Loader2, PanelLeftOpen, PanelRightOpen, Search, Sparkles, XCircle } from 'lucide-react';
 import { Routes } from '@repo/api-contract';
 import { HIKING_REGION_GROUPS, formatHikingEle, formatHikingLength, type HikingRegionGroup } from '@repo/utils';
 import { Input } from '~/components/ui/input';
@@ -7,8 +7,8 @@ import { cn } from '~/lib/utils';
 import type { PanelSide } from '~/stores/panelPrefsStore';
 import { formatHikingDistance, type HikingSort, type RankedMountain } from './hikingFormat';
 
-// 등산 산 목록 — 맛집 목록과 같은 틀. 머리(검색·권역 칩·개수·정렬)는 데스크톱이면 목록 칸 위, 모바일이면 상단바 subBar 에
-// 들어가고, 본문(산 행)과 푸터(기준 시점·출처)는 목록 칸·목록 시트 안에 들어간다.
+// 등산 산 목록 — 맛집 목록과 같은 틀. 머리(검색·추천 토글·권역 칩·개수·정렬)는 데스크톱이면 목록 칸 위, 모바일이면 상단바
+// subBar 에 들어가고, 본문(산 행 또는 추천)과 푸터(기준 시점·출처)는 목록 칸·목록 시트 안에 들어간다.
 
 const SORT_OPTIONS: { value: HikingSort; label: string }[] = [
   { value: 'name', label: '이름순' },
@@ -25,10 +25,40 @@ interface HeaderProps {
   onChangeQ: (q: string) => void;
   onChangeGroup: (g: HikingRegionGroup | null) => void;
   onChangeSort: (s: HikingSort) => void;
+  // '추천' 모드(4차) — 켜면 검색·권역·정렬 대신 추천 입력·목록.
+  recommend: boolean;
+  onToggleRecommend: () => void;
   // 데스크톱만 — 패널 좌/우 바꾸기.
   panelSide?: PanelSide;
   onTogglePanelSide?: () => void;
 }
+
+const PanelToggle = ({ panelSide, onToggle }: { panelSide: PanelSide; onToggle: () => void }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    aria-label={`패널을 ${panelSide === 'right' ? '왼쪽' : '오른쪽'}으로`}
+    title={`패널을 ${panelSide === 'right' ? '왼쪽' : '오른쪽'}으로`}
+    className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent"
+  >
+    {panelSide === 'right' ? <PanelLeftOpen className="size-4" /> : <PanelRightOpen className="size-4" />}
+  </button>
+);
+
+const RecommendToggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    aria-pressed={on}
+    title={on ? '추천을 끄고 산 목록으로' : '오늘 어느 산 — 추천'}
+    className={cn(
+      'inline-flex h-9 shrink-0 items-center gap-1 rounded-md border px-2.5 text-sm',
+      on ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+    )}
+  >
+    <Sparkles className="size-4" /> 추천
+  </button>
+);
 
 export const HikingListHeader = ({
   q,
@@ -39,6 +69,8 @@ export const HikingListHeader = ({
   onChangeQ,
   onChangeGroup,
   onChangeSort,
+  recommend,
+  onToggleRecommend,
   panelSide,
   onTogglePanelSide,
 }: HeaderProps) => {
@@ -46,6 +78,16 @@ export const HikingListHeader = ({
   // 다시 그리기가 미완성 글자를 덮어 "ㅅ사산" 이 된다). 조합이 끝나면 한 번에 반영.
   const composingRef = useRef(false);
   const [draft, setDraft] = useState(q);
+
+  if (recommend) {
+    return (
+      <div className="flex items-center gap-2 p-3">
+        <span className="flex-1 text-sm font-semibold">오늘 어느 산</span>
+        <RecommendToggle on onToggle={onToggleRecommend} />
+        {panelSide && onTogglePanelSide && <PanelToggle panelSide={panelSide} onToggle={onTogglePanelSide} />}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2.5 p-3">
@@ -87,17 +129,8 @@ export const HikingListHeader = ({
             </button>
           )}
         </div>
-        {panelSide && onTogglePanelSide && (
-          <button
-            type="button"
-            onClick={onTogglePanelSide}
-            aria-label={`패널을 ${panelSide === 'right' ? '왼쪽' : '오른쪽'}으로`}
-            title={`패널을 ${panelSide === 'right' ? '왼쪽' : '오른쪽'}으로`}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent"
-          >
-            {panelSide === 'right' ? <PanelLeftOpen className="size-4" /> : <PanelRightOpen className="size-4" />}
-          </button>
-        )}
+        <RecommendToggle on={false} onToggle={onToggleRecommend} />
+        {panelSide && onTogglePanelSide && <PanelToggle panelSide={panelSide} onToggle={onTogglePanelSide} />}
       </div>
 
       {/* 모바일은 가로 한 줄 스와이프, md+ 는 줄바꿈(맛집 카테고리 칩과 같다). */}

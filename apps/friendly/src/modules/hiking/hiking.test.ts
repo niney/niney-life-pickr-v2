@@ -11,7 +11,9 @@ vi.mock('./hiking-api.adapter.js', async (importOriginal) => ({
 import type {
   AirForecastResultType,
   AirNearbyResultType,
+  HikingAroundType,
   HikingConditionsType,
+  HikingRecommendResultType,
   HikingCourseDetailType,
   HikingMountainDetailType,
   HikingMountainsResultType,
@@ -36,6 +38,7 @@ const box = (key: string, lat0: number, lat1: number): SigunguShape => ({
   bbox: { minLng: 126.99, minLat: lat0, maxLng: 127.01, maxLat: lat1 },
 });
 const SIGUNGU = [box('51:춘천시', 36.99, 37.003), box('51:홍천군', 37.003, 37.01)];
+const ymdPlus = (d: number) => kmaTodayIsoDate(new Date(Date.now() + d * 86_400_000));
 
 const STEP = 0.0002; // ≈22m
 const trkpt = (lat: number, ele: number) => `<trkpt lat="${lat.toFixed(6)}" lon="127.000000"><ele>${ele}</ele></trkpt>`;
@@ -229,10 +232,14 @@ describe('hiking routes (격리 DB)', () => {
       fetchedAt: new Date().toISOString(),
       stale: false,
     });
+    // 산불 칸은 지금 시각(정시) — 3시간 넘게 지난 칸은 서비스가 버린다.
+    const slotAt = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000).toISOString();
     fire.rows = [
-      { key: '51:춘천시', sido: '강원특별자치도', name: '춘천시', at: `${today}T09:00:00+09:00`, d1: 80, d2: 20, d3: 0, d4: 0, mean: 40, max: 55 },
-      { key: '51:홍천군', sido: '강원특별자치도', name: '홍천군', at: `${today}T09:00:00+09:00`, d1: 100, d2: 0, d3: 0, d4: 0, mean: 20, max: 30 },
-      { key: '11:종로구', sido: '서울특별시', name: '종로구', at: `${today}T09:00:00+09:00`, d1: 100, d2: 0, d3: 0, d4: 0, mean: 20, max: 30 },
+      { key: '51:춘천시', sido: '강원특별자치도', name: '춘천시', at: slotAt, d1: 80, d2: 20, d3: 0, d4: 0, mean: 40, max: 55 },
+      { key: '51:홍천군', sido: '강원특별자치도', name: '홍천군', at: slotAt, d1: 100, d2: 0, d3: 0, d4: 0, mean: 20, max: 30 },
+      { key: '11:종로구', sido: '서울특별시', name: '종로구', at: slotAt, d1: 100, d2: 0, d3: 0, d4: 0, mean: 20, max: 30 },
+      // 추천 테스트용 내일 06시 칸(산불 서비스가 3시간 캐시라 여기서 한 번에 넣는다).
+      { key: '51:춘천시', sido: '강원특별자치도', name: '춘천시', at: `${ymdPlus(1)}T06:00:00+09:00`, d1: 0, d2: 0, d3: 100, d4: 0, mean: 70, max: 80 },
     ] satisfies FireRiskRow[];
 
     const res = await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-1/conditions' });
@@ -265,6 +272,74 @@ describe('hiking routes (격리 DB)', () => {
     expect(partial.weather).toBeNull();
     expect(partial.errors.weather).toContain('한도');
     expect(partial.fire!.areas).toHaveLength(2);
+    vi.restoreAllMocks();
+  });
+
+  it('코스 주변 — 들머리 등산 지점 주차, 날머리 없는 왕복은 들머리 근처 상가정보 음식점(같은 가게 한 번)', async () => {
+    const store = (id: string, name: string, lat: number) => ({
+      id,
+      name,
+      kind: 'food',
+      mclsCd: 'I201',
+      sclsCd: 'I20101',
+      sclsName: '백반/한정식',
+      sggCd: '51110',
+      sggName: '춘천시',
+      lat,
+      lng: 127,
+    });
+    await app.prisma.lifeStore.createMany({
+      data: [store('s1', '산채식당', 37.001), store('s2', '산채식당', 37.0011), store('s3', '두부마을', 37.0015), store('s4', '먼식당', 37.05)],
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-1/around' });
+    expect(res.statusCode).toBe(200);
+    const a = res.json<HikingAroundType>();
+    // 정상에서 끝나는 왕복 — 날머리 없음.
+    expect(a.end).toBeNull();
+    expect(a.parking.map((p) => [p.kind, p.name])).toEqual([['trail', '주차장']]);
+    expect(a.transit).toEqual([]);
+    expect(a.food.source).toBe('stores');
+    expect(a.food.items.map((f) => f.name)).toEqual(['산채식당', '두부마을']);
+    expect(a.food.items[0]).toMatchObject({ kind: 'store', at: 'start', detail: '백반/한정식', refId: null });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-9/around' })).statusCode).toBe(404);
+  });
+
+  it('추천 — 거리·산행 시간·해 지기 전 하산으로 고른 코스와 이유 문장, 날짜·좌표 검증', async () => {
+    vi.spyOn(app.weather, 'getForecast').mockResolvedValue({
+      grid: { nx: 1, ny: 1 },
+      base: null,
+      fallback: false,
+      hours: [],
+      days: [],
+      total: 0,
+      fetchedAt: new Date().toISOString(),
+      stale: false,
+    } satisfies WeatherForecastResultType);
+    vi.spyOn(app.airQuality, 'getNearbyStations').mockResolvedValue({ center: { lat: 37, lng: 127 }, items: [], total: 0, fetchedAt: new Date().toISOString(), stale: false });
+    vi.spyOn(app.airQuality, 'getForecast').mockResolvedValue({ date: 'd', items: [], fetchedAt: new Date().toISOString(), stale: false });
+    // 산불은 오늘의 조건 테스트에서 받아 캐시된 행(내일 06시 춘천 높음 100%)을 쓴다.
+    const tomorrow = ymdPlus(1);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/hiking/recommend?lat=37.1&lng=127&date=${tomorrow}&start=08:00&duration=short&mode=car`,
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json<HikingRecommendResultType>();
+    expect(r.query).toMatchObject({ date: tomorrow, start: '08:00', duration: 'short', level: 'any', mode: 'car', origin: { lat: 37.1, lng: 127 } });
+    expect(r.items).toHaveLength(1);
+    const it0 = r.items[0]!;
+    expect(it0).toMatchObject({ rank: 1, mountain: { id: '421100101', name: '가리산' }, daylight: 'ok', conditionsChecked: true, fireLevel: 3 });
+    // 들머리 근처 GPX 주차(202)가 있다.
+    expect(it0.access.parking).toBe('주차장');
+    expect(it0.straightM).toBeGreaterThan(10_000);
+    expect(it0.reason).toMatch(/^차로 약 \S+.*\(직선 11km\) 거리의 왕복 .*코스로, 08:00에 출발하면 \d\d:\d\d쯤 내려옵니다\(일몰 1\d:\d\d\)\./);
+    expect(it0.cautions.map((c) => c.text)).toContain('산불위험 높음(춘천시 100%) — 입산 통제·화기 금지를 확인하세요');
+
+    const bad = await app.inject({ method: 'GET', url: '/api/v1/hiking/recommend?date=2000-01-01' });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json<{ message: string }>().message).toContain('오늘·내일·모레');
+    expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/recommend?lat=37' })).statusCode).toBe(400);
     vi.restoreAllMocks();
   });
 

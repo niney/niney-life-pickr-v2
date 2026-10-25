@@ -1,14 +1,33 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { ApiError, useHikingCourse, useHikingMountain, useHikingMountains, useUserLocation } from '@repo/shared';
-import { isHikingRegionGroup, type HikingRegionGroup } from '@repo/utils';
+import { ApiError, useHikingCourse, useHikingMountain, useHikingMountains, useHikingRecommend, useUserLocation } from '@repo/shared';
+import {
+  hikingOriginCity,
+  isHikingDuration,
+  isHikingLevel,
+  isHikingRegionGroup,
+  isHikingTravelMode,
+  kmaTodayIsoDate,
+  type HikingRegionGroup,
+} from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { CourseDetail } from '~/components/hiking/CourseDetail';
 import { HikingFooter, HikingListHeader, HikingMountainList } from '~/components/hiking/HikingList';
 import { HikingMap } from '~/components/hiking/HikingMap';
+import { HikingRecommend, type HikingOrigin, type HikingOriginState, type HikingRecommendInput } from '~/components/hiking/HikingRecommend';
 import { MountainDetail } from '~/components/hiking/MountainDetail';
-import { decodePieces, isHikingSort, pointAtDistance, rankMountains, type HikingSort } from '~/components/hiking/hikingFormat';
+import {
+  decodePieces,
+  hikingDefaultPick,
+  hikingStartsFor,
+  hmToMin,
+  isHikingSort,
+  minToHm,
+  pointAtDistance,
+  rankMountains,
+  type HikingSort,
+} from '~/components/hiking/hikingFormat';
 import { BottomSheet } from '~/components/sheet/BottomSheet';
 import { SHEET_PEEK_HEIGHT, sheetHalfInset, useMapSheets } from '~/components/sheet/useMapSheets';
 import { useIsDesktopXl } from '~/lib/useMediaQuery';
@@ -16,8 +35,8 @@ import { cn } from '~/lib/utils';
 import { usePanelSide } from '~/stores/panelPrefsStore';
 
 // 등산 — 100대 명산 607개 코스(한국등산트레킹지원센터 GPX + 산림청). 산 목록(검색·권역·정렬) → 산 상세(사진·선정 이유·
-// 코스 카드) → 코스 상세(예상 시간·난이도·고도 그래프·노면·지점). 상태는 URL(?m 산 · c 코스 · q 검색 · r 권역 · s 정렬) —
-// 공유·뒤로가기. 고도 그래프에서 가리킨 자리·고른 지점은 화면 상태(공유 대상 아님). docs/PLAN-hiking.md
+// 코스 카드) → 코스 상세(예상 시간·난이도·산행 조건·가는 법·고도 그래프·노면·지점). 상태는 URL(?m 산 · c 코스 · q 검색 · r 권역 ·
+// s 정렬 · rec 추천 모드와 그 입력 rd 날짜·rt 출발·rh 산행 시간·rl 난이도·rm 이동 수단·ro 출발 위치) — 공유·뒤로가기. 고도 그래프에서 가리킨 자리·고른 지점은 화면 상태(공유 대상 아님). docs/PLAN-hiking.md
 //
 // 레이아웃은 맛집(RestaurantsV2Page)과 같은 틀 — useIsDesktopXl(JS)로 한 벌만 그린다.
 //   - xl+ : 헤더 아래 한 화면에 [산 목록 400 | 상세 440(산 → 코스) | 지도]. 패널 좌/우는 맛집처럼 바꿀 수 있다.
@@ -94,9 +113,81 @@ export const HikingPage = () => {
   const changeQ = useCallback((next: string) => update({ q: next }), [update]);
   const changeGroup = useCallback((g: HikingRegionGroup | null) => update({ r: g }), [update]);
 
+  // ── 추천 모드(4차) — 입력은 URL, 빠진 값은 기본(오늘 남은 시각 또는 내일 08:00 · 반나절 · 상관없음 · 차 · 내 위치).
+  // 처음 그린 시각을 잡아 두고 날짜 3개·지난 시각 거르기에 쓴다(렌더 중 Date.now() 를 부르지 않게).
+  const recommendOn = params.get('rec') === '1';
+  const [openedAt] = useState(() => Date.now());
+  const dates = useMemo(() => [0, 1, 2].map((i) => kmaTodayIsoDate(new Date(openedAt + i * 86_400_000))), [openedAt]);
+  const recInput = useMemo((): HikingRecommendInput => {
+    const fallback = hikingDefaultPick(dates, openedAt);
+    const dayRaw = dates.indexOf(params.get('rd') ?? '');
+    const day = dayRaw >= 0 && hikingStartsFor(dates[dayRaw]!, dayRaw, openedAt).length > 0 ? dayRaw : fallback.day;
+    const allowed = hikingStartsFor(dates[day]!, day, openedAt);
+    const startRaw = hmToMin(params.get('rt'));
+    const rh = params.get('rh');
+    const rl = params.get('rl');
+    const rm = params.get('rm');
+    const ro = params.get('ro');
+    return {
+      day,
+      startMin: startRaw !== null && allowed.includes(startRaw) ? startRaw : day === fallback.day ? fallback.startMin : (allowed[0] ?? fallback.startMin),
+      duration: isHikingDuration(rh) ? rh : 'half',
+      level: isHikingLevel(rl) ? rl : 'any',
+      mode: isHikingTravelMode(rm) ? rm : 'car',
+      origin: hikingOriginCity(ro) ? (ro as HikingOrigin) : 'me',
+    };
+  }, [params, dates, openedAt]);
+  const originState: HikingOriginState =
+    userLoc.status === 'granted' && me ? 'ok' : userLoc.status === 'pending' ? 'pending' : userLoc.status === 'idle' ? 'idle' : 'failed';
+  const city = recInput.origin === 'me' ? null : hikingOriginCity(recInput.origin);
+  const origin = city ?? (originState === 'ok' ? me : null);
+  // 내 위치를 찾는 동안은 기다린다(찾자마자 거리 넣은 추천으로 다시 받지 않게).
+  const recParams =
+    recommendOn && !(recInput.origin === 'me' && originState === 'pending')
+      ? {
+          ...(origin ? { lat: origin.lat, lng: origin.lng } : {}),
+          date: dates[recInput.day]!,
+          start: minToHm(recInput.startMin),
+          duration: recInput.duration,
+          level: recInput.level,
+          mode: recInput.mode,
+        }
+      : null;
+  const recommendQ = useHikingRecommend(recParams);
+  const changeRecommend = useCallback(
+    (patch: Partial<HikingRecommendInput>) => {
+      const next: Record<string, string | null> = {};
+      if (patch.day !== undefined) next.rd = dates[patch.day] ?? null;
+      if (patch.startMin !== undefined) next.rt = minToHm(patch.startMin).replace(':', '');
+      if (patch.duration) next.rh = patch.duration === 'half' ? null : patch.duration;
+      if (patch.level) next.rl = patch.level === 'any' ? null : patch.level;
+      if (patch.mode) next.rm = patch.mode === 'car' ? null : patch.mode;
+      if (patch.origin) next.ro = patch.origin === 'me' ? null : patch.origin;
+      update(next);
+    },
+    [update, dates],
+  );
+  const locationStatus = userLoc.status;
+  const toggleRecommend = useCallback(() => {
+    update({ rec: recommendOn ? null : '1' });
+    // 켤 때 아직 위치를 안 물었으면 지금 묻는다(버튼 누름 = 사용자 동작).
+    if (!recommendOn && locationStatus === 'idle') refetchLocation();
+  }, [update, recommendOn, locationStatus, refetchLocation]);
+
   const count = ranked.length;
   const locating = sort === 'near' && userLoc.status === 'pending';
-  const headerProps = { q, group, sort, count, locating, onChangeQ: changeQ, onChangeGroup: changeGroup, onChangeSort: changeSort };
+  const headerProps = {
+    q,
+    group,
+    sort,
+    count,
+    locating,
+    onChangeQ: changeQ,
+    onChangeGroup: changeGroup,
+    onChangeSort: changeSort,
+    recommend: recommendOn,
+    onToggleRecommend: toggleRecommend,
+  };
 
   // 모바일 subBar — 산 목록일 때만(상세가 열리면 내려 시트가 더 넓게). 데스크톱은 목록 칸이 자기 머리를 갖는다.
   // 상단바 상태로 올라가는 요소라 값이 같으면 같은 참조여야 한다(아니면 등록 → 다시 그리기가 돈다).
@@ -113,9 +204,11 @@ export const HikingPage = () => {
           onChangeQ={changeQ}
           onChangeGroup={changeGroup}
           onChangeSort={changeSort}
+          recommend={recommendOn}
+          onToggleRecommend={toggleRecommend}
         />
       ) : null,
-    [showSubBar, q, group, sort, count, locating, changeQ, changeGroup, changeSort],
+    [showSubBar, q, group, sort, count, locating, changeQ, changeGroup, changeSort, recommendOn, toggleRecommend],
   );
   // paint 전에 상단바에 등록 — 첫 프레임부터 통합 헤더 높이로 시트가 자리 잡게(맛집과 같음).
   useLayoutEffect(() => {
@@ -127,6 +220,21 @@ export const HikingPage = () => {
     <div className="mx-3 my-4 rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
       {notLoaded ? '등산 데이터가 아직 준비되지 않았습니다.' : '산 목록을 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.'}
     </div>
+  ) : recommendOn ? (
+    <HikingRecommend
+      input={recInput}
+      dates={dates}
+      openedAt={openedAt}
+      originState={originState}
+      onChange={changeRecommend}
+      onUseMyLocation={refetchLocation}
+      result={recommendQ.data}
+      isLoading={recParams === null || recommendQ.isLoading}
+      isFetching={recommendQ.isFetching}
+      isError={recommendQ.isError}
+      selectedMountainId={mountainId}
+      onSelect={(m, c) => update({ m, c }, false)}
+    />
   ) : (
     <HikingMountainList ranked={ranked} isLoading={mountainsQ.isLoading} selectedId={mountainId} onSelect={selectMountain} />
   );
