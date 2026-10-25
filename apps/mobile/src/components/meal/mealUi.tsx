@@ -12,6 +12,7 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@repo/shared';
+import { hapticLight, hapticSelection } from '~/lib/haptics';
 import { mealFont, mealRadius } from './mealTokens';
 
 // 식단 화면 공용 조각 — 섹션 카드, 누름 피드백·버튼, 선택 칩, 아이콘 버튼, 값 타일, 가로 막대.
@@ -97,7 +98,10 @@ export const MealButton = ({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: inactive, busy: !!loading, selected }}
-      onPress={onPress}
+      onPress={() => {
+        if (primary) hapticLight();
+        onPress();
+      }}
       disabled={inactive}
       style={({ pressed }) => [
         styles.button,
@@ -176,7 +180,14 @@ export const Chip = ({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: !!selected, disabled: !!disabled }}
-      onPress={onPress}
+      onPress={
+        onPress
+          ? () => {
+              hapticSelection();
+              onPress();
+            }
+          : undefined
+      }
       disabled={disabled || !onPress}
       style={({ pressed }) => [
         styles.chip,
@@ -228,7 +239,10 @@ export const MealIconButton = ({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: !!active }}
-      onPress={onPress}
+      onPress={() => {
+        hapticSelection();
+        onPress();
+      }}
       hitSlop={4}
       style={({ pressed }) => [
         styles.iconButton,
@@ -314,7 +328,12 @@ export const MealStepper = ({
   accessibilityLabel: string;
 }) => {
   const theme = useTheme();
-  const set = (next: number) => onChange(Math.min(max, Math.max(min, next)));
+  const set = (next: number) => {
+    const clamped = Math.min(max, Math.max(min, next));
+    if (clamped === value) return;
+    hapticSelection();
+    onChange(clamped);
+  };
   const stepButton = (delta: -1 | 1) => {
     const disabled = delta < 0 ? value <= min : value >= max;
     return (

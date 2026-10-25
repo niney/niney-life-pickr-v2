@@ -188,3 +188,6 @@ GL 배관(준비·성능 판정·역압·틱·페이드)과 문지기(3D 로 할
   플래그가 통째로 사라진다. 굳이 넣으려면 `Pods/Target Support Files/...xcconfig` 에 **덧붙인다**.
 - 네이티브 모듈이 새로 추가된 커밋을 받으면 **JS 만 리로드해선 안 되고 재빌드**해야 한다. 안 그러면
   `Cannot find native module 'XXX'` 로 그 화면이 죽는다.
+- 2026-10-25 식단에 `expo-haptics`·`@react-native-community/datetimepicker` 가 들어왔다(햅틱, 입력 시간 시트의
+  날짜·시각 피커). 재빌드 전 앱에선 죽지 않고 햅틱이 빠지며 시간 시트가 숫자 직접 입력으로 돌아간다 —
+  `src/lib/haptics.ts`·`src/lib/nativeDateTimePicker.ts` 가 네이티브 유무를 먼저 본다. 새 모듈은 꼭 이렇게 감싼다.

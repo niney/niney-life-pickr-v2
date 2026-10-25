@@ -10,6 +10,7 @@ import {
   toLocalMonthKey,
 } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
+import { hapticSelection } from '~/lib/haptics';
 import { MealEntryCard } from './MealEntryCard';
 import { MealIconButton, MealSection, MealSectionTitle } from './mealUi';
 import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
@@ -97,7 +98,10 @@ export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) =>
                     accessibilityLabel={date ? `${mealDateTitle(date, today)}${info ? `, ${info.count}끼` : ''}` : undefined}
                     accessibilityState={{ selected: isSelected }}
                     disabled={!date}
-                    onPress={() => setSelected(isSelected ? null : date)}
+                    onPress={() => {
+                      hapticSelection();
+                      setSelected(isSelected ? null : date);
+                    }}
                     style={[styles.cell, isSelected && { backgroundColor: theme.colors.surfaceAlt }]}
                   >
                     {date ? (

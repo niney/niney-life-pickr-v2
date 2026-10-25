@@ -26,6 +26,7 @@ import {
   parseMealBirthYear,
 } from '@repo/utils';
 import { Note, StateBlock } from '~/components/common/Cards';
+import { hapticSuccess } from '~/lib/haptics';
 import { MealDataManagementCard } from './MealDataManagementCard';
 import { MealReminderSettingsCard } from './MealReminderSettingsCard';
 import {
@@ -130,7 +131,10 @@ export const MealPreferenceView = () => {
         onboarded: true,
       },
       {
-        onSuccess: () => setDirty(false),
+        onSuccess: () => {
+          hapticSuccess();
+          setDirty(false);
+        },
         onError: (e) => setError(e instanceof ApiError ? e.message : '저장하지 못했어요.'),
       },
     );

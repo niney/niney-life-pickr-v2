@@ -61,6 +61,7 @@ import { MealTimeSheet } from './MealTimeSheet';
 import { RestaurantPickerSheet } from '~/components/settlement/RestaurantPickerSheet';
 import { Chip, ChipRow, FieldLabel, MealSection, MealSectionTitle } from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
+import { hapticSuccess } from '~/lib/haptics';
 import {
   createUnmanagedPendingMealDraftPhoto,
   deleteMealDraftPhotoFiles,
@@ -588,6 +589,13 @@ export const MealEntryEditor = ({
     draft.setField('eatenAt', d.toISOString());
     draft.setField('eatenDate', toLocalDateKey(d));
   };
+  // 날짜만 바꾸고 시:분은 그대로 둔다(시트의 날짜 피커).
+  const setDay = (day: Date) => {
+    const d = new Date(draft.eatenAt);
+    d.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
+    draft.setField('eatenAt', d.toISOString());
+    draft.setField('eatenDate', toLocalDateKey(d));
+  };
   const setNow = () => {
     const now = new Date();
     draft.setField('eatenAt', now.toISOString());
@@ -657,6 +665,7 @@ export const MealEntryEditor = ({
       if (!isMealDraftIdentityCurrent(identity)) return;
       const cleared = useMealDraftStore.getState().clear(identity.sessionId);
       if (!cleared || !mountedRef.current) return;
+      hapticSuccess();
       // 새 기록은 방금 만든 기록의 상세로(입력 화면 자리를 바꾼다). 들어온 화면으로 돌아가면 상세의
       // "같은 메뉴로 새 기록"을 눌렀을 때 원래 기록이 그대로 보여 저장이 안 된 것처럼 보였다(웹과 같이).
       if (createdId) router.replace(`/meal/${createdId}` as never);
@@ -985,6 +994,7 @@ export const MealEntryEditor = ({
         onShiftDay={shiftDay}
         onShiftTime={shiftTime}
         onSetTime={setTimeOfDay}
+        onSetDate={setDay}
         onPreset={applyPreset}
         onNow={setNow}
       />

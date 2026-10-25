@@ -23,6 +23,7 @@ import {
   toLocalDateKey,
 } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
+import { hapticLight, hapticSelection } from '~/lib/haptics';
 import { MealAnalysisView } from '~/components/meal/MealAnalysisView';
 import { MealCalendarView } from '~/components/meal/MealCalendarView';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
@@ -225,7 +226,10 @@ export default function MealScreen() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={recordsView === 'list' ? '달력으로 보기' : '목록으로 보기'}
-                      onPress={() => setRecordsView(recordsView === 'list' ? 'calendar' : 'list')}
+                      onPress={() => {
+                        hapticSelection();
+                        setRecordsView(recordsView === 'list' ? 'calendar' : 'list');
+                      }}
                       hitSlop={6}
                       style={({ pressed }) => [styles.headerButton, { opacity: pressed ? 0.5 : 1 }]}
                     >
@@ -265,7 +269,10 @@ export default function MealScreen() {
           <View style={styles.tabs}>
             <SegmentedControl
               value={tab}
-              onChange={(v) => setTab(v as Tab)}
+              onChange={(v) => {
+                if (v !== tab) hapticSelection();
+                setTab(v as Tab);
+              }}
               options={TABS.map((t) => ({ value: t.value, label: t.label }))}
             />
           </View>
@@ -505,7 +512,10 @@ export default function MealScreen() {
           <MealScalePressable
             accessibilityRole="button"
             accessibilityLabel="식단 기록하기"
-            onPress={() => router.push('/meal/new' as never)}
+            onPress={() => {
+              hapticLight();
+              router.push('/meal/new' as never);
+            }}
             scaleTo={0.92}
             containerStyle={[styles.fabWrap, { bottom: fabBottom }]}
             style={({ pressed }) => [

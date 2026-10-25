@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BottomSheetBackdrop,
@@ -11,12 +11,16 @@ import {
 import type { MealSlotType } from '@repo/api-contract';
 import { useTheme, type Theme } from '@repo/shared';
 import { MEAL_SLOT_LABEL, daysBetween, mealDateLabel, mealDateTitle, parseTimeOfDay, toLocalDateKey } from '@repo/utils';
+import { loadDateTimePicker } from '~/lib/nativeDateTimePicker';
 import { Chip, ChipRow, FieldLabel, MealIconButton } from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
 
-// 식단 입력의 '언제 먹었나요' 시트 — 화면에는 시각 한 줄만 두고, 날짜 이동·시각 직접 입력·끼니별 보통 시각·
+// 식단 입력의 '언제 먹었나요' 시트 — 화면에는 시각 한 줄만 두고, 날짜 이동·시각 고르기·끼니별 보통 시각·
 // ±30분·지금을 여기 모았다(예전엔 입력 화면에 칩 11개가 늘어서 있었다). 값은 고르는 즉시 draft 에 들어가고
-// '완료'는 닫기만 한다. 네이티브 날짜 피커는 새 네이티브 의존성이라 들이지 않았다.
+// '완료'는 닫기만 한다.
+//
+// 날짜·시각은 네이티브 피커 — iOS 는 날짜 컴팩트 버튼(누르면 달력)과 시각 휠을 시트 안에 두고, Android 는 날짜·시각을
+// 누르면 시스템 대화상자를 연다. 피커 네이티브가 없는 옛 빌드와 Expo Web 은 예전처럼 숫자 직접 입력('1240')이다.
 
 const timeLabel = (iso: string): string => {
   const d = new Date(iso);
@@ -32,6 +36,7 @@ export const MealTimeSheet = ({
   onShiftDay,
   onShiftTime,
   onSetTime,
+  onSetDate,
   onPreset,
   onNow,
 }: {
@@ -43,6 +48,8 @@ export const MealTimeSheet = ({
   onShiftDay: (days: number) => void;
   onShiftTime: (minutes: number) => void;
   onSetTime: (minutesOfDay: number) => void;
+  // 날짜만 바꾼다(시:분은 그대로).
+  onSetDate: (date: Date) => void;
   onPreset: (slot: MealSlotType, time: string) => void;
   onNow: () => void;
 }) => {
@@ -54,6 +61,22 @@ export const MealTimeSheet = ({
   const today = toLocalDateKey(new Date());
   const diff = daysBetween(eatenDate, today);
   const relative = diff !== null && diff >= 0 && diff <= 6 ? mealDateLabel(eatenDate, today) : null;
+  const picker = loadDateTimePicker();
+  const NativePicker = picker?.default ?? null;
+  const pickerValue = new Date(eatenAt);
+  const pickTime = (date: Date) => onSetTime(date.getHours() * 60 + date.getMinutes());
+  // Android 는 피커가 화면에 붙지 않고 대화상자로 뜬다.
+  const openAndroid = (mode: 'date' | 'time') =>
+    picker?.DateTimePickerAndroid.open({
+      value: pickerValue,
+      mode,
+      is24Hour: true,
+      onChange: (event, date) => {
+        if (event.type !== 'set' || !date) return;
+        if (mode === 'date') onSetDate(date);
+        else pickTime(date);
+      },
+    });
 
   // 연 적이 없는 시트에 dismiss() 를 부르면 gorhom v5 모달이 '닫는 중(DISMISSING)'에 갇혀 이후 present() 가
   // 먹히지 않는다(시뮬레이터 실측 — 첫 렌더의 open=false 가 그랬다). 연 뒤에만 닫는다.
@@ -119,14 +142,67 @@ export const MealTimeSheet = ({
 
         <View style={styles.dayRow}>
           <MealIconButton icon="chevron-left" accessibilityLabel="하루 전" onSurface onPress={() => run(() => onShiftDay(-1))} />
-          <View style={styles.dayText}>
-            {relative ? <Text style={styles.relative}>{relative}</Text> : null}
-            <Text style={styles.date}>{mealDateTitle(eatenDate, today)}</Text>
-          </View>
+          {Platform.OS === 'ios' && NativePicker ? (
+            <View style={styles.dayText}>
+              {relative ? <Text style={styles.relative}>{relative}</Text> : null}
+              <NativePicker
+                value={pickerValue}
+                mode="date"
+                display="compact"
+                locale="ko-KR"
+                accentColor={theme.colors.primary}
+                themeVariant={theme.mode}
+                onChange={(event, date) => {
+                  if (event.type === 'set' && date) onSetDate(date);
+                }}
+                accessibilityLabel={`먹은 날짜 ${mealDateTitle(eatenDate, today)}`}
+              />
+            </View>
+          ) : Platform.OS === 'android' && picker ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`먹은 날짜 ${mealDateTitle(eatenDate, today)}, 눌러서 바꾸기`}
+              onPress={() => openAndroid('date')}
+              style={styles.dayText}
+            >
+              {relative ? <Text style={styles.relative}>{relative}</Text> : null}
+              <Text style={styles.date}>{mealDateTitle(eatenDate, today)}</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.dayText}>
+              {relative ? <Text style={styles.relative}>{relative}</Text> : null}
+              <Text style={styles.date}>{mealDateTitle(eatenDate, today)}</Text>
+            </View>
+          )}
           <MealIconButton icon="chevron-right" accessibilityLabel="하루 뒤" onSurface onPress={() => run(() => onShiftDay(1))} />
         </View>
 
-        {editingTime === null ? (
+        {Platform.OS === 'ios' && NativePicker ? (
+          // 휠은 멈출 때마다 바로 반영된다(손을 떼면 onChange). 휠 자체가 네이티브 햅틱을 낸다.
+          <NativePicker
+            value={pickerValue}
+            mode="time"
+            display="spinner"
+            locale="ko-KR"
+            textColor={theme.colors.text}
+            themeVariant={theme.mode}
+            onChange={(_event, date) => {
+              if (date) pickTime(date);
+            }}
+            style={styles.wheel}
+            accessibilityLabel="먹은 시각"
+          />
+        ) : Platform.OS === 'android' && picker ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`시각 ${timeLabel(eatenAt)}, 눌러서 바꾸기`}
+            onPress={() => openAndroid('time')}
+            style={[styles.timeBox, { backgroundColor: theme.colors.surfaceAlt }]}
+          >
+            <Text style={styles.time}>{timeLabel(eatenAt)}</Text>
+            <Text style={styles.timeHint}>눌러서 바꾸기</Text>
+          </Pressable>
+        ) : editingTime === null ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`시각 ${timeLabel(eatenAt)}, 눌러서 직접 입력`}
@@ -216,4 +292,6 @@ const createStyles = (theme: Theme) =>
     },
     timeHint: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     group: { gap: 8 },
+    // UIDatePicker 휠은 고유 폭(약 320pt)이라 늘리면 왼쪽에 붙는다 — 가운데에 둔다.
+    wheel: { alignSelf: 'center', height: 180 },
   });
