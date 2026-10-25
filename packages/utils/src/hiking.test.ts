@@ -8,6 +8,7 @@ import {
   hikingDifficultyReasons,
   hikingInRegionGroup,
   hikingRegionsOf,
+  hikingSteepSections,
 } from './hiking.js';
 
 describe('hikingRegionsOf', () => {
@@ -89,5 +90,27 @@ describe('hikingDifficulty / hikingDifficultyReasons', () => {
     expect(hikingDifficulty(e)).toBe('hard');
     expect(hikingDifficultyReasons(e)).toEqual(['왕복 예상 6시간 40분', '누적 상승 1,315m']);
     expect(hikingDifficulty({ ...base, steepPct: 55 })).toBe('hard');
+  });
+});
+
+describe('hikingSteepSections', () => {
+  // 20m 간격 1km — 200~400m 오르막 40%, 600~760m 내리막 35%, 나머지 평지(경사 5%).
+  const d = Array.from({ length: 51 }, (_, i) => i * 20);
+  const slope = (m: number): number => (m >= 200 && m < 400 ? 0.4 : m >= 600 && m < 760 ? -0.35 : 0.05);
+  const e: number[] = [];
+  d.forEach((m, i) => e.push(i === 0 ? 300 : e[i - 1]! + slope(m - 20) * 20));
+
+  it('100m 구간 경사 30% 넘는 곳을 오르막·내리막으로 이어 붙인다', () => {
+    const s = hikingSteepSections({ d, e });
+    expect(s.map((x) => x.dir)).toEqual(['up', 'down']);
+    expect(s[0]).toMatchObject({ maxPct: 40 });
+    expect(s[0]!.fromM).toBeGreaterThanOrEqual(140);
+    expect(s[0]!.toM).toBeLessThanOrEqual(460);
+    expect(s[1]).toMatchObject({ maxPct: 35 });
+  });
+
+  it('완만하거나 짧은 코스는 없다', () => {
+    expect(hikingSteepSections({ d, e: d.map((m) => 300 + m * 0.1) })).toEqual([]);
+    expect(hikingSteepSections({ d: [0, 20, 40], e: [0, 30, 60] })).toEqual([]);
   });
 });

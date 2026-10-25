@@ -48,6 +48,7 @@ import {
   readPeakZip,
   replaceHiking,
   villageKey,
+  type HikingFacility,
   type PeakPlace,
   type PreparedPeak,
 } from '../src/modules/hiking/hiking-master.service.js';
@@ -124,6 +125,22 @@ const loadPlaces = async (ends: readonly { lat: number; lng: number }[]): Promis
     if (near(p)) out.push({ category: 'PARK', name: l.name, ...p });
   }
   return out;
+};
+
+// 7차 — 코스 지점으로 붙일 시설: 일상지도 공중화장실(좌표 있는 것)·공영 주차장(노상 빼고). 거르기는 조립(hiking-master)이 한다.
+const loadFacilities = async (): Promise<HikingFacility[]> => {
+  const toilets = await prisma.lifeToilet.findMany({
+    where: { lat: { not: null }, lng: { not: null } },
+    select: { id: true, name: true, kind: true, open24: true, lat: true, lng: true },
+  });
+  const lots = await prisma.parkingLot.findMany({
+    where: { ownership: 'public', lat: { not: null }, lng: { not: null }, OR: [{ lotType: null }, { lotType: { not: 'street' } }] },
+    select: { id: true, name: true, feeType: true, lat: true, lng: true },
+  });
+  return [
+    ...toilets.map((t): HikingFacility => ({ id: t.id, category: 'TOILET', name: t.name, detail: [t.kind, t.open24 ? '24시간' : null].filter(Boolean).join(' · '), lat: t.lat!, lng: t.lng! })),
+    ...lots.map((l): HikingFacility => ({ id: l.id, category: 'PARK', name: l.name, detail: l.feeType === 'free' ? '공영 · 무료' : '공영', lat: l.lat!, lng: l.lng! })),
+  ];
 };
 
 // 들머리 리·동 — 300m 안에 역·정류장·주차장이 없는 끝만 역지오코딩(캐시 영구, 못 찾은 곳은 '' 로 기록).
@@ -331,7 +348,9 @@ const main = async (): Promise<void> => {
     villages = await collectVillages(ends, places);
   } else console.log('전국 주요 봉우리 zip 없음 — 100대 명산만 적재(data.go.kr 15108086 zip 을 같은 폴더에 두면 같이 적재)');
 
-  const rows = buildHikingRows({ files, gdTrails, pois, images, sigungu, loadedAt: new Date(), peaks, mountainInfos, places, villages });
+  const facilities = await loadFacilities();
+  console.log(`코스 지점 시설 후보(공중화장실·공영 주차장) ${facilities.length}곳`);
+  const rows = buildHikingRows({ files, gdTrails, pois, images, sigungu, loadedAt: new Date(), peaks, mountainInfos, places, villages, facilities });
   if (rows.peakInfoIds.size > 0) {
     const peakImages = await collectPeakImages(rows.peakInfoIds, serviceKey);
     for (const m of rows.mountains) if (peakImages.has(m.id)) m.images = JSON.stringify(peakImages.get(m.id));

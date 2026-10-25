@@ -1,4 +1,4 @@
-// 등산 "오늘 어느 산" 추천(4차) — ① 607코스를 조건 없이 점수(산행 시간·난이도·거리·해 지기 전 하산·이동 수단 접근·계절, @repo/utils
+// 등산 "오늘 어느 산" 추천(4차, 8차 전국) — ① 전 코스(100대 명산 + 전국 봉우리)를 조건 없이 점수(산행 시간·난이도·거리·해 지기 전 하산·이동 수단 접근·계절, @repo/utils
 // hikingRecommend) → 산마다 가장 좋은 코스 → 상위 max(12, limit)산 ② 그 코스만 오늘의 조건(3차 HikingConditionsService — 날씨 격자·
 // 대기·산불 캐시)을 받아 주의할 점까지 넣어 다시 점수 → 상위 limit. 항목마다 추천 이유 문장.
 // 접근(들머리 근처 주차·정류장)은 코스 색인을 만들 때 한 번 — 등산 지점(주차·교통 1km) 먼저, 없으면 주차장 1km·버스 500m·지하철
@@ -66,6 +66,7 @@ interface IndexedCourse {
 interface IndexedMountain extends LatLng {
   id: string;
   name: string;
+  kind: 'top100' | 'peak';
   heightM: number | null;
   images: number[];
   // 계절 키워드를 찾는 산 소개(부제·선정 이유·개관).
@@ -170,12 +171,12 @@ export class HikingRecommendService {
   private async build(): Promise<IndexedMountain[]> {
     const p = this.deps.prisma;
     const [rows, trail, lots, bus, subway] = await Promise.all([
-      // 전국 봉우리(5차)는 8차에 넣는다 — 후보가 스무 배로 늘어 가중치를 다시 맞춰야 한다. 100대 명산에 합친 봉우리 코스는 들어간다.
+      // 8차 — 전국 봉우리까지 전부(100대 명산은 점수에 가산, @repo/utils HIKING_RECOMMEND_FAMOUS_BONUS).
       p.hikingMountain.findMany({
-        where: { kind: 'top100' },
         select: {
           id: true,
           name: true,
+          kind: true,
           heightM: true,
           summitLat: true,
           summitLng: true,
@@ -228,6 +229,7 @@ export class HikingRecommendService {
     return rows.map((m) => ({
       id: m.id,
       name: m.name,
+      kind: m.kind === 'peak' ? 'peak' : 'top100',
       heightM: m.heightM,
       lat: m.summitLat ?? (m.minLat + m.maxLat) / 2,
       lng: m.summitLng ?? (m.minLng + m.maxLng) / 2,
@@ -265,15 +267,25 @@ export class HikingRecommendService {
     const origin = q.lat !== undefined && q.lng !== undefined ? { lat: q.lat, lng: q.lng } : null;
     const wants = { duration: q.duration, level: q.level, mode: q.mode };
 
-    // ① 조건 없이 — 산마다 가장 좋은 코스.
+    // ① 조건 없이 — 산마다 가장 좋은 코스. 8차부터 코스가 만 개를 넘어 해 시각은 0.1° 칸(≈10km, 일몰 차 1분 안쪽)마다 한 번.
     const best: Candidate[] = [];
+    const sunCache = new Map<string, ReturnType<typeof sunTimes>>();
+    const sunAt = (p: LatLng) => {
+      const k = `${p.lat.toFixed(1)},${p.lng.toFixed(1)}`;
+      let v = sunCache.get(k);
+      if (!v) {
+        v = sunTimes(date, Math.round(p.lat * 10) / 10, Math.round(p.lng * 10) / 10);
+        sunCache.set(k, v);
+      }
+      return v;
+    };
     for (const m of mountains) {
       const season = hikingSeasonKeywords(m.text, month);
       let top: Candidate | null = null;
       for (const c of m.courses) {
         const straightM = origin ? Math.round(haversineM(origin, c.start)) : null;
         const driveMin = straightM !== null ? estimateDriveMinutes(straightM) : null;
-        const sun = sunTimes(date, c.start.lat, c.start.lng);
+        const sun = sunAt(c.start);
         const daylight = c.outingMin !== null ? hikingDaylight(new Date(startAt), c.outingMin, sun) : null;
         const score = hikingRecommendScore(
           {
@@ -287,6 +299,7 @@ export class HikingRecommendService {
             daylight: daylight?.status ?? null,
             cautions: null,
             season,
+            famous: m.kind === 'top100',
           },
           wants,
         );
@@ -347,6 +360,7 @@ export class HikingRecommendService {
         daylight: cand.daylight?.status ?? null,
         cautions: conditionCautions,
         season: cand.season,
+        famous: m.kind === 'top100',
       },
       ctx.wants,
     );
@@ -373,7 +387,7 @@ export class HikingRecommendService {
     return {
       rank: 0,
       score,
-      mountain: { id: m.id, name: m.name, heightM: m.heightM, lat: m.lat, lng: m.lng, images: m.images },
+      mountain: { id: m.id, name: m.name, kind: m.kind, heightM: m.heightM, lat: m.lat, lng: m.lng, images: m.images },
       course: { id: c.id, no: c.no, name: c.name, shape: c.shape, lengthM: c.lengthM, outingMin: c.outingMin, difficulty: c.difficulty, start: c.start },
       straightM: cand.straightM,
       driveMin: cand.driveMin,

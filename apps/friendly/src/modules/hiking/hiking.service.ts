@@ -102,7 +102,7 @@ const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
     gapCount: c.gapCount,
     gapM: c.gapM,
     roughSurfaces,
-    source: kindOf(c.source),
+    source: c.source === 'network' ? 'network' : kindOf(c.source),
     bbox: bboxOf(c),
     pieces: parseJson<string[]>(c.pieces, []),
   };

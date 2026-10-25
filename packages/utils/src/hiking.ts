@@ -243,3 +243,36 @@ export interface HikingProfile {
   d: number[];
   e: number[];
 }
+
+// ── 가파른 구간(7차) ──────────────────────────────────────────────────────────
+// 고도 프로필(20m 간격)에서 100m 구간 평균 경사가 30%(≈17°)를 넘는 곳을 이어 붙인다 — 노면 자료가 없는 전국 봉우리 코스에도
+// 쓸 수 있는 "어디가 힘든지". 40m 안 틈은 하나로, 100m 안 되는 구간은 버린다. dir 은 코스 방향(시작→끝) 기준 오르막·내리막.
+export const HIKING_STEEP_WINDOW_M = 100;
+export const HIKING_STEEP_MIN_PCT = 30;
+const STEEP_JOIN_GAP_M = 40;
+export interface HikingSteepSection {
+  fromM: number;
+  toM: number;
+  maxPct: number;
+  dir: 'up' | 'down';
+}
+export const hikingSteepSections = (profile: HikingProfile): HikingSteepSection[] => {
+  const { d, e } = profile;
+  const raw: HikingSteepSection[] = [];
+  let j = 0;
+  for (let i = 0; i < d.length; i++) {
+    while (j < d.length - 1 && d[j]! - d[i]! < HIKING_STEEP_WINDOW_M) j++;
+    const run = d[j]! - d[i]!;
+    if (run < HIKING_STEEP_WINDOW_M * 0.9) break;
+    const rise = e[j]! - e[i]!;
+    const pct = Math.round((Math.abs(rise) / run) * 100);
+    if (pct < HIKING_STEEP_MIN_PCT) continue;
+    const dir = rise >= 0 ? 'up' : 'down';
+    const last = raw.at(-1);
+    if (last && last.dir === dir && d[i]! - last.toM <= STEEP_JOIN_GAP_M) {
+      last.toM = Math.max(last.toM, d[j]!);
+      last.maxPct = Math.max(last.maxPct, pct);
+    } else raw.push({ fromM: d[i]!, toM: d[j]!, maxPct: pct, dir });
+  }
+  return raw.filter((s) => s.toM - s.fromM >= HIKING_STEEP_WINDOW_M);
+};

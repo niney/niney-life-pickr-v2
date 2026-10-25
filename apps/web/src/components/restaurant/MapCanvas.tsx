@@ -12,6 +12,7 @@ import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
+import TileWMS from 'ol/source/TileWMS';
 import Feature, { type FeatureLike } from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import LineString from 'ol/geom/LineString';
@@ -183,6 +184,15 @@ export interface MapAreas {
   styleOf(feature: Feature): Style | null;
 }
 
+export interface WmsOverlay {
+  url: string;
+  params: Record<string, string>;
+  // 요청 좌표계 이름(브이월드는 EPSG:3857 이 불안정해 같은 좌표인 EPSG:900913).
+  projection?: string;
+  minZoom?: number;
+  opacity?: number;
+}
+
 export interface MapViewport {
   // longitude/latitude (EPSG:4326). bbox 도 같이 — 호출자가 뷰포트 검색에
   // 그대로 박아 쓰기 좋게.
@@ -237,6 +247,9 @@ interface Props {
     | { points: { lat: number; lng: number }[]; color: string }
     | { points: { lat: number; lng: number }[]; color: string }[]
     | null;
+  // WMS 덮개 — 배경 타일 바로 위·벡터 레이어 아래(브이월드 2D데이터 등산로 선 등, 등산 7차). minZoom 아래에선 그리지 않는다.
+  // 브이월드 2D데이터·WMS 는 Referer 로 등록 도메인을 확인한다(브라우저가 페이지 주소를 보낸다). null/미지정이면 없음.
+  wmsOverlay?: WmsOverlay | null;
   // 면 오버레이(MapAreas) — 모든 벡터 레이어 아래 전용 VectorLayer. areas 가 바뀔 때만 다시 그린다.
   // null/미지정이면 빈 레이어. fit 대상에서 제외.
   areas?: MapAreas | null;
@@ -396,6 +409,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onTileError,
     layerControl = true,
     routeLine,
+    wmsOverlay,
     areas,
     onAreaSelect,
     overlayMarkers,
@@ -422,6 +436,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // 차량 전용 소스/보간 상태 — 정류장 마커 파이프라인(선언적 재생성)과 분리해
   // feature 를 재사용하고 geometry 만 rAF 로 갱신한다(프레임 단위 clear 금지).
   const vehicleSourceRef = useRef<VectorSource | null>(null);
+  const wmsLayerRef = useRef<TileLayer<TileWMS> | null>(null);
   const vehicleFeaturesRef = useRef(new Map<string, Feature>());
   const vehicleAnimRef = useRef(new Map<string, VehicleAnim>());
   const vehicleRafRef = useRef<number | null>(null);
@@ -678,6 +693,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     const overlayMarkerLayer = new VectorLayer({ source: overlayMarkerSource, style: markerStyleOf(false) });
     const markerLayer = new VectorLayer({ source: vectorSource, style: markerStyleOf(true) });
     const vehicleLayer = new VectorLayer({ source: vehicleSource });
+    // WMS 덮개 — 소스는 아래 effect 가 wmsOverlay 에 맞춰 넣는다(없으면 숨김).
+    const wmsLayer = new TileLayer<TileWMS>({ visible: false });
+    wmsLayerRef.current = wmsLayer;
+    map.addLayer(wmsLayer);
     map.addLayer(areaLayer);
     map.addLayer(routeLineLayer);
     map.addLayer(overlayMarkerLayer);
@@ -800,6 +819,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       for (const k of eventKeys) unByKey(k);
       // 벡터 레이어 4종 제거 — 다음 마운트가 새 소스로 다시 addLayer 한다.
       // baseLayer(index 0)만 남겨 재사용 시 타일 캐시를 그대로 잇는다.
+      map.removeLayer(wmsLayer);
       map.removeLayer(areaLayer);
       map.removeLayer(routeLineLayer);
       map.removeLayer(overlayMarkerLayer);
@@ -832,6 +852,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       areaSourceRef.current = null;
       overlayMarkerSourceRef.current = null;
       vehicleSourceRef.current = null;
+      wmsLayerRef.current = null;
       tileSourceRef.current = null;
       userInteractedRef.current = false;
     };
@@ -908,6 +929,24 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     }
     src.addFeatures(next);
   }, [areas, apiKey]);
+
+  // WMS 덮개 갱신 — 내용(주소·인자)이 같으면 소스를 다시 만들지 않는다(타일 깜빡임). 지도가 다시 만들어지면(apiKey) 다시 넣는다.
+  const wmsKey = wmsOverlay ? JSON.stringify(wmsOverlay) : '';
+  useEffect(() => {
+    const layer = wmsLayerRef.current;
+    if (!layer) return;
+    if (!wmsOverlay) {
+      layer.setVisible(false);
+      layer.setSource(null);
+      return;
+    }
+    layer.setSource(new TileWMS({ url: wmsOverlay.url, params: wmsOverlay.params, projection: wmsOverlay.projection, transition: 0 }));
+    layer.setMinZoom(wmsOverlay.minZoom ?? 0);
+    layer.setOpacity(wmsOverlay.opacity ?? 1);
+    layer.setVisible(true);
+    // 내용은 wmsKey 로 본다(호출자가 렌더마다 새 객체를 넘겨도 다시 만들지 않게).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wmsKey, apiKey]);
 
   // 노선 형상 갱신 — routeLine 이 바뀔 때만 전용 소스를 다시 칠한다. 점이 2개
   // 미만이면(형상 없음/해제) 소스를 비운다. 이전 피처는 clear 로 확실히 제거해

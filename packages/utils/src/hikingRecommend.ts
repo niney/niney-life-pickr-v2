@@ -11,7 +11,8 @@ export const isHikingDuration = (v: unknown): v is HikingDuration => (HIKING_DUR
 export const HIKING_DURATION_LABEL: Record<HikingDuration, string> = { short: '3시간 안', half: '반나절', day: '하루' };
 // 예상 시간(왕복 또는 코스 방향, 분) 범위와 가장 알맞은 길이.
 export const HIKING_DURATION_RANGE: Record<HikingDuration, { min: number; max: number; target: number }> = {
-  short: { min: 0, max: 180, target: 150 },
+  // 8차 — 아래를 1시간으로(전국 봉우리의 10~20분 고리가 '3시간 안' 맨 위를 차지했다 — 1시간 넘게 모자라면 0).
+  short: { min: 60, max: 180, target: 150 },
   half: { min: 180, max: 330, target: 270 },
   day: { min: 330, max: 600, target: 420 },
 };
@@ -93,6 +94,8 @@ export interface HikingRecommendFacts {
   // 오늘의 조건을 받았으면 해 지기 전 하산을 뺀 주의할 점, 못 받았으면 null.
   cautions: readonly HikingCaution[] | null;
   season: readonly string[];
+  // 8차 — 100대 명산이면 가산(전국 봉우리 2천여 곳과 같이 매기면 가까운 낮은 봉우리가 위를 다 차지한다).
+  famous?: boolean;
 }
 export interface HikingRecommendWants {
   duration: HikingDuration;
@@ -133,6 +136,9 @@ export const hikingConditionFit = (cautions: readonly HikingCaution[] | null): n
   return Math.max(-20, 10 - penalty);
 };
 
+// 8차 — 100대 명산 가산. 계절(+5)보다 조금 작게: 거리·시간·해가 비슷하면 명산이 앞선다.
+export const HIKING_RECOMMEND_FAMOUS_BONUS = 4;
+
 export const hikingRecommendScore = (f: HikingRecommendFacts, w: HikingRecommendWants): number => {
   const daylight = f.daylight === 'ok' ? 15 : f.daylight === 'tight' ? 6 : f.daylight === 'dark' ? -20 : 7;
   const total =
@@ -142,7 +148,8 @@ export const hikingRecommendScore = (f: HikingRecommendFacts, w: HikingRecommend
     daylight +
     hikingAccessFit(f, w.mode) +
     hikingConditionFit(f.cautions) +
-    (f.season.length > 0 ? 5 : 0);
+    (f.season.length > 0 ? 5 : 0) +
+    (f.famous ? HIKING_RECOMMEND_FAMOUS_BONUS : 0);
   return Math.round(total * 10) / 10;
 };
 

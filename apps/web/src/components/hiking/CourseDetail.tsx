@@ -85,6 +85,12 @@ export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBa
             전국 주요 봉우리 자료라 선과 고도만 있습니다 — 이정표·노면 정보가 없고, 코스 지점은 선 가까이의 봉우리·등산 지점을 붙인 것입니다.
           </p>
         )}
+        {course.source === 'network' && (
+          <p className="text-[11px] text-muted-foreground" data-testid="hiking-course-peak-note">
+            전국 주요 봉우리의 등산로 구간을 갈림길에서 이어 만든 길입니다(들머리에서 정상까지 가장 짧은 길). 실제 안내 코스와 다를 수 있고,
+            이정표·노면 정보가 없습니다. 갈림길의 가는 길은 이 코스 기준입니다.
+          </p>
+        )}
       </div>
       <CourseConditions course={course} />
       {course.gapCount > 0 && (

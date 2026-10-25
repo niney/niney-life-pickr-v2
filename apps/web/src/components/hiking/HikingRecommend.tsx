@@ -223,6 +223,9 @@ export const HikingRecommend = ({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-1.5">
                       <span className="truncate text-sm font-medium">{it.mountain.name}</span>
+                      {it.mountain.kind === 'top100' && (
+                        <span className="shrink-0 rounded bg-emerald-500/10 px-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">100대 명산</span>
+                      )}
                       {it.mountain.heightM !== null && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatHikingEle(it.mountain.heightM)}</span>}
                       {it.course.difficulty && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{HIKING_DIFFICULTY_LABEL[it.course.difficulty]}</span>}
                     </span>
@@ -249,8 +252,8 @@ export const HikingRecommend = ({
         </>
       ) : null}
       <p className="px-3 pt-2 text-[11px] leading-relaxed text-muted-foreground">
-        산행 시간·난이도·거리·해 지기 전 하산·주차/정류장·산 소개의 계절 볼거리로 고르고, 위쪽 산만 날씨·산불·대기를 더 봅니다. 차로 시간은
-        직선거리 × 1.3 으로 본 대략값(추정)입니다.
+        100대 명산과 전국 주요 봉우리를 산행 시간·난이도·거리·해 지기 전 하산·주차/정류장·산 소개의 계절 볼거리로 고르고(100대 명산은 조금
+        앞세웁니다), 위쪽 산만 날씨·산불·대기를 더 봅니다. 차로 시간은 직선거리 × 1.3 으로 본 대략값(추정)입니다.
       </p>
     </div>
   );

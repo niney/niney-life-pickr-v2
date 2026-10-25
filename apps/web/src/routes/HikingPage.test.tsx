@@ -107,7 +107,7 @@ const gariDetail: HikingMountainDetailType = {
   summitName: '가리산 정상',
   summitEle: 1040,
   bbox: { minLat: 37, minLng: 127, maxLat: 37.006, maxLng: 127 },
-  courses: [C1, { ...C2, source: 'peak' as const }],
+  courses: [{ ...C1, source: 'network' as const }, { ...C2, source: 'peak' as const }],
   neighbors: [{ id: INWANG.id, name: '인왕산', kind: 'peak', heightM: 338, lat: INWANG.lat, lng: INWANG.lng, distM: 1_200 }],
 };
 const c2Detail: HikingCourseDetailType = {
@@ -213,13 +213,13 @@ const AROUND: HikingAroundType = {
   food: { source: 'restaurants', items: [{ kind: 'restaurant', name: '산채비빔밥집', distM: 900, at: 'start', lat: 37.008, lng: 127, detail: '한식 · 평점 4.5', refId: '12345' }] },
 };
 
-// 추천 — 1위 가리산 2번 코스, 2위 관악산(경고 하나).
+// 추천 — 1위 가리산 2번 코스(100대 명산), 2위 인왕산(전국 봉우리, 경고 하나).
 const recommendFor = (mode: string): HikingRecommendResultType => ({
   items: [
     {
       rank: 1,
       score: 95,
-      mountain: { id: GARI.id, name: '가리산', heightM: 1051, lat: 37.5, lng: 127.5, images: [1] },
+      mountain: { id: GARI.id, name: '가리산', kind: 'top100', heightM: 1051, lat: 37.5, lng: 127.5, images: [1] },
       course: { id: C2.id, no: 2, name: C2.name, shape: 'summit', lengthM: 6474, outingMin: 300, difficulty: 'moderate', start: { lat: 37, lng: 127 } },
       straightM: 70_000,
       driveMin: 80,
@@ -239,7 +239,7 @@ const recommendFor = (mode: string): HikingRecommendResultType => ({
     {
       rank: 2,
       score: 90,
-      mountain: { id: GWANAK.id, name: '관악산', heightM: 632, lat: 37.44, lng: 126.96, images: [] },
+      mountain: { id: INWANG.id, name: '인왕산', kind: 'peak', heightM: 338, lat: 37.585, lng: 126.958, images: [] },
       course: { id: `${GWANAK.id}-1`, no: 1, name: '사당역 → 연주대', shape: 'traverse', lengthM: 5000, outingMin: 200, difficulty: 'moderate', start: { lat: 37.47, lng: 126.98 } },
       straightM: 10_000,
       driveMin: 28,
@@ -366,6 +366,8 @@ describe('HikingPage', () => {
     // 합친 봉우리 코스 표시 · 이어진 봉우리(정상끼리 거리).
     expect(cards[1]).toHaveTextContent('봉우리 자료');
     expect(cards[0]).not.toHaveTextContent('봉우리 자료');
+    // 망에서 이어 만든 코스(6차).
+    expect(cards[0]).toHaveTextContent('이어 만든 길');
     expect(within(screen.getByTestId('hiking-neighbors')).getByRole('button')).toHaveTextContent('인왕산338m· 1km');
 
     fireEvent.click(within(cards[1]!).getByRole('button'));
@@ -424,6 +426,10 @@ describe('HikingPage', () => {
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('가리산');
+    // 8차 — 전국 봉우리도 추천에 나오고 100대 명산엔 배지.
+    expect(items[0]).toHaveTextContent('100대 명산');
+    expect(items[1]).toHaveTextContent('인왕산');
+    expect(items[1]).not.toHaveTextContent('100대 명산');
     expect(items[0]).toHaveTextContent('차로 약 1시간 20분(직선 70km) 거리의 왕복 5시간·보통 코스로');
     expect(items[1]).toHaveTextContent('미세먼지 나쁨');
     // 기본 입력 — 반나절·상관없음·차, 위치를 못 찾으면(jsdom) 거리 없이.

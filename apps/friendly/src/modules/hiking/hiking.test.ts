@@ -25,6 +25,7 @@ import { buildApp } from '../../app.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import type { FireRiskRow, GdTrailRow, TrekkingPoiRow } from './hiking-api.adapter.js';
 import type { SigunguShape } from './hiking-area.js';
+import { HikingConditionsService } from './hiking-conditions.service.js';
 import { buildHikingRows, isSeparateMountainName, matchGpxFolder, preparePeaks, replaceHiking, villageKey } from './hiking-master.service.js';
 
 // 등산 라우트 — 격리 DB(빈 테이블)에 합성 GPX 2코스 + 명산등산로 1행 + 등산트레킹 POI 를 buildHikingRows → replaceHiking
@@ -34,8 +35,8 @@ import { buildHikingRows, isSeparateMountainName, matchGpxFolder, preparePeaks, 
 // 합성 시군구 — 들머리 쪽(37.000~37.003) 춘천, 정상 쪽(37.003~37.010) 홍천.
 const box = (key: string, lat0: number, lat1: number): SigunguShape => ({
   key,
-  polygons: [[[[126.99, lat0], [127.01, lat0], [127.01, lat1], [126.99, lat1], [126.99, lat0]]]],
-  bbox: { minLng: 126.99, minLat: lat0, maxLng: 127.01, maxLat: lat1 },
+  polygons: [[[[126.99, lat0], [127.03, lat0], [127.03, lat1], [126.99, lat1], [126.99, lat0]]]],
+  bbox: { minLng: 126.99, minLat: lat0, maxLng: 127.03, maxLat: lat1 },
 });
 const SIGUNGU = [box('51:춘천시', 36.99, 37.003), box('51:홍천군', 37.003, 37.01)];
 const ymdPlus = (d: number) => kmaTodayIsoDate(new Date(Date.now() + d * 86_400_000));
@@ -358,12 +359,12 @@ describe('hiking routes (격리 DB)', () => {
   it('전국 봉우리 — 100대 명산에 합치기·따로 산·등산로 망 건너뛰기·지나는 봉우리·이어진 봉우리·들머리 이름', async () => {
     const line = (pts: [number, number, number][]) => gpx([], pts.map(([lat, lng, ele]) => `<trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}"><ele>${ele}</ele></trkpt>`));
     const steps = (n: number, f: (i: number) => [number, number, number]) => Array.from({ length: n }, (_, i) => f(i));
-    // 37.004·127.000(800m) 에서 동쪽으로 내려가는 길(정상에서 시작 — 뒤집혀 동쪽 끝이 들머리).
-    const mergedNew = line(steps(31, (i) => [37.004, 127 + i * 0.0003, 800 - i * 13]));
-    // 가리산 1번 코스를 그대로 다시 그린 것(겹침 100% → 버림). 정상 높이만 조금 낮게.
-    const mergedDup = line(steps(31, (i) => [37 + i * STEP, 127, 300 + i * 16]));
-    // 따로 산 — 가리산 정상(37.006·127.000, 880m)에서 동쪽 37.006·127.006(950m)으로 오른다.
-    const indep = line(steps(21, (i) => [37.006, 127 + i * 0.0003, 880 + i * 3.5]));
+    // 37.004·127.000(800m) 에서 동쪽 1.07km 로 내려가는 길(정상에서 시작 — 뒤집혀 동쪽 끝이 들머리). 봉우리 코스는 1km 넘어야 쓴다.
+    const mergedNew = line(steps(41, (i) => [37.004, 127 + i * 0.0003, 800 - i * 10]));
+    // 위 길을 그대로 다시 그린 것(겹침 100% → 버림). 정상 높이만 조금 낮게.
+    const mergedDup = line(steps(41, (i) => [37.004, 127.012 - i * 0.0003, 400 + i * 9.5]));
+    // 따로 산 — 가리산 정상(37.006·127.000, 880m)에서 동쪽 37.006·127.012(950m)로 오른다.
+    const indep = line(steps(41, (i) => [37.006, 127 + i * 0.0003, 880 + i * 1.75]));
     // 등산로 망 — 두 번째 조각 끝이 첫 조각 가운데에 붙는다(T자).
     const network = gpx(
       [],
@@ -373,15 +374,32 @@ describe('hiking routes (격리 DB)', () => {
         ...steps(10, (i) => `<trkpt lat="36.992000" lon="${(127.0059 - i * 0.0001).toFixed(6)}"><ele>210</ele></trkpt>`),
       ],
     );
+    // 6차 — 망뿐인 봉우리: 북쪽으로 오르는 길(36.990 → 37.000, 126.993) 가운데(36.995)에 동쪽 127.005 에서 오는 길이 붙는다.
+    const netOnly = gpx(
+      [],
+      [
+        ...steps(51, (i) => `<trkpt lat="${(36.99 + i * 0.0002).toFixed(6)}" lon="126.993000"><ele>${100 + i * 10}</ele></trkpt>`),
+        '</trkseg><trkseg>',
+        ...steps(61, (i) => `<trkpt lat="36.995000" lon="${(127.005 - i * 0.0002).toFixed(6)}"><ele>${(120 + (i * 230) / 60).toFixed(1)}</ele></trkpt>`),
+      ],
+    );
     const peaks = preparePeaks([
       { mountain: '1111020001_무쇠말재봉', no: 1, xml: mergedNew },
       { mountain: '1111020001_무쇠말재봉', no: 2, xml: mergedDup },
       { mountain: '2222020002_돌산(춘천시)', no: 1, xml: indep },
       { mountain: '2222020002_돌산(춘천시)', no: 2, xml: network },
+      { mountain: '3333020003_망봉', no: 1, xml: netOnly },
     ]);
+    // 돌산의 망 파일은 끝이 정상보다 50m 넘게 낮지 않아 들머리가 없다. 망봉은 왕복 둘 + 넘어가기 하나.
     expect(peaks.map((p) => [p.code, p.pointName, p.courses.length, p.networkFiles])).toEqual([
       ['1111020001', '무쇠말재봉', 2, 0],
       ['2222020002', '돌산', 1, 1],
+      ['3333020003', '망봉', 3, 1],
+    ]);
+    expect(peaks[2]!.courses.map((c) => [c.fileNo, c.origin])).toEqual([
+      [1011, 'network'],
+      [1012, 'network'],
+      [1013, 'network'],
     ]);
     const mergedStart = peaks[0]!.courses[0]!.course.start;
     const rows = buildHikingRows({
@@ -402,16 +420,28 @@ describe('hiking routes (격리 DB)', () => {
       ],
       places: [{ category: 'PARK', name: '돌산공영주차장', lat: 37.0062, lng: 127.0003 }],
       villages: new Map([[villageKey(mergedStart), '무쇠리']]),
+      // 7차 — 망봉 길 9m 옆 공중화장실, 망봉 들머리 55m 옆 공영 주차장, 어느 코스에서도 먼 화장실.
+      facilities: [
+        { id: 't1', category: 'TOILET', name: '망봉 공중화장실', detail: '공중화장실', lat: 36.995, lng: 126.9931 },
+        { id: 'p1', category: 'PARK', name: '망봉 공영주차장', detail: '공영', lat: 36.9905, lng: 126.993 },
+        { id: 't2', category: 'TOILET', name: '먼 화장실', detail: null, lat: 36.98, lng: 126.98 },
+      ],
     });
+    expect(rows.report.facilities).toEqual({ toilets: 1, lots: 1, links: expect.any(Number) });
     expect(rows.report.peaks).toMatchObject({
-      folders: 2,
-      networkFiles: 1,
+      folders: 3,
+      networkFiles: 2,
       merged: 1,
       mergedCourses: 1,
       mergedDup: 1,
-      independent: 1,
-      independentCourses: 1,
-      peakPois: 2,
+      // 망봉 넘어가기는 두 왕복 길을 다시 그린 것이라 버린다.
+      independent: 2,
+      independentCourses: 3,
+      independentDup: 1,
+      networkCourses: 2,
+      networkOnlyPeaks: 1,
+      junctionPois: 1,
+      peakPois: 3,
       infoMatched: 1,
       placeNamed: 1,
       villageNamed: 1,
@@ -424,6 +454,7 @@ describe('hiking routes (격리 DB)', () => {
     expect(l.items.map((m) => [m.id, m.kind, m.peaks])).toEqual([
       ['421100101', 'top100', ['무쇠말재봉']],
       ['2222020002', 'peak', []],
+      ['3333020003', 'peak', []],
     ]);
     // 산정보가 맞아 높이·소재지·권역이 붙는다.
     expect(l.items[1]).toMatchObject({ name: '돌산(춘천시)', heightM: 960, area: '강원도 홍천군 화촌면', regions: ['gangwon'], courseCount: 1 });
@@ -448,6 +479,27 @@ describe('hiking routes (격리 DB)', () => {
     const merged = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/1111020001-1' })).json<HikingCourseDetailType>();
     expect(merged.mountain.id).toBe('421100101');
     expect(merged.pois.map((p) => [p.id, p.category, p.name])).toContainEqual(['peak:1111020001', 'PEAK', '무쇠말재봉']);
+
+    // 6차 — 망에서 만든 코스: 원천 network, 갈림길 지점(이 코스 기준 가는 길 = 정상 쪽).
+    const net = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/3333020003-1011' })).json<HikingCourseDetailType>();
+    expect(net).toMatchObject({ source: 'network', name: '망봉 코스', shape: 'summit' });
+    const jct = net.pois.find((p) => p.id === 'jct:3333020003-0')!;
+    expect(jct).toMatchObject({ category: 'SIGN', name: null });
+    expect(net.pois.map((p) => p.id)).toEqual(expect.arrayContaining(['toilet:t1', 'lot:p1']));
+    expect(jct.guide).toEqual([
+      { dest: '망봉', dir: null, way: 'next' },
+      { dest: '들머리', dir: null, way: 'prev' },
+    ]);
+
+    // 8차 — 추천이 전국 봉우리까지 본다(오늘의 조건은 막아 업스트림 없이). 산 종류가 실린다.
+    const cond = vi.spyOn(HikingConditionsService.prototype, 'get').mockResolvedValue(null);
+    const r = (await app.inject({ method: 'GET', url: `/api/v1/hiking/recommend?lat=36.99&lng=126.99&date=${ymdPlus(1)}&duration=short&limit=5` })).json<HikingRecommendResultType>();
+    expect(r.items.map((it) => [it.mountain.id, it.mountain.kind]).sort()).toEqual([
+      ['2222020002', 'peak'],
+      ['3333020003', 'peak'],
+      ['421100101', 'top100'],
+    ]);
+    cond.mockRestore();
   });
 });
 

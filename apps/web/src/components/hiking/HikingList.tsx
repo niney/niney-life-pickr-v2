@@ -283,7 +283,7 @@ export const HikingFooter = () => (
       <a href="https://www.data.go.kr/data/15108086/fileData.do" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
         전국 주요 봉우리 코스 <ExternalLink className="size-3" />
       </a>
-      ,{' '}
+      , 지도 배경 등산로 선은 산림청 등산로(브이월드),{' '}
       <a href="https://www.forest.go.kr" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
         산림청 <ExternalLink className="size-3" />
       </a>{' '}

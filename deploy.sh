@@ -276,8 +276,8 @@ hiking_status() { pnpm --filter friendly status:hiking 2>/dev/null | grep -E '^(
 # 비어 있거나 stale 이면 적재, 봉우리 zip 을 올렸는데 봉우리가 없어도 적재, force=1(10번)이면 다시. 원천 GPX zip 두 개(100대명산
 # 15098177 · 전국 주요 봉우리 15108086)는 data/open/hiking/ 에 손으로 올린다(docs/data-sources.md). 적재는 명산등산로 1콜 + 등산트레킹
 # POI ~10콜 + 산정보 5콜 + 산 사진(산마다 1콜 + 최대 3장, 봉우리는 1장·한 번에 400곳씩, 받아 둔 사진은 다시 받지 않음) + 들머리
-# 리·동 역지오코딩(브이월드, 처음 6천 곳 남짓 — data/hiking-geocode-cache.json 에 남아 다음부터 0)이라 처음 10분 남짓, 다시 돌리면
-# 1분 안팎. Prisma 로 DB 에 직접 쓰므로 서버를 내리지 않아도 된다.
+# 리·동 역지오코딩(브이월드, 처음 1만 3천 곳 남짓을 차례로 — data/hiking-geocode-cache.json 에 남아 다음부터 0)이라 처음 30~40분
+# (캐시를 로컬에서 올려 두면 몇 분), 다시 돌리면 몇 분. Prisma 로 DB 에 직접 쓰므로 서버를 내리지 않아도 된다.
 hiking_data() {
   local force="${1:-0}"
   local st; st="$(hiking_status)"

@@ -1,11 +1,11 @@
 import { useMemo, useState, type PointerEvent } from 'react';
 import type { HikingPoiType, HikingProfileType, HikingSurfaceType } from '@repo/api-contract';
-import { HIKING_SURFACE_COLOR, formatHikingEle, hikingPoiLabel, isHikingRoughSurface } from '@repo/utils';
+import { HIKING_STEEP_MIN_PCT, HIKING_SURFACE_COLOR, formatHikingEle, hikingPoiLabel, hikingSteepSections, isHikingRoughSurface } from '@repo/utils';
 import { formatAtM } from './hikingFormat';
 
 // 고도 그래프 — 인라인 SVG(차트 라이브러리 없음). 면은 viewBox 를 늘려 채우고(preserveAspectRatio none) 글자는 HTML 로
 // 얹어 찌그러지지 않게 한다. 가리키면 그 거리·고도를 띄우고 onHover 로 지도에 위치를 알린다. 아래 띠는 험한 노면 구간,
-// 위 눈금은 봉우리·위험 지점.
+// 위 눈금은 봉우리·위험 지점, 주황 칠은 가파른 구간(100m 경사 30% 넘음 — 노면 자료가 없는 봉우리 코스도 된다, 7차).
 
 const W = 600;
 const H = 140;
@@ -44,6 +44,7 @@ export const ElevationProfile = ({ profile, lengthM, surfaces, pois, onHover }: 
     [surfaces, lengthM],
   );
   const ticks = useMemo(() => pois.filter((p) => TICK_CATEGORIES.has(p.category)), [pois]);
+  const steep = useMemo(() => hikingSteepSections(profile), [profile]);
 
   if (!geom) return <p className="text-xs text-muted-foreground">이 코스는 원본에 고도가 없어 고도 그래프를 그릴 수 없습니다.</p>;
 
@@ -65,6 +66,9 @@ export const ElevationProfile = ({ profile, lengthM, surfaces, pois, onHover }: 
     <div className="flex flex-col gap-1" data-testid="hiking-profile">
       <div className="relative h-36 touch-none select-none" onPointerMove={handleMove} onPointerDown={handleMove} onPointerLeave={handleLeave}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
+          {steep.map((s, i) => (
+            <rect key={i} x={geom.x(s.fromM)} y={0} width={Math.max(geom.x(s.toM) - geom.x(s.fromM), 1)} height={H} className="fill-orange-500/15" />
+          ))}
           <path d={geom.area} className="fill-emerald-500/20" />
           <path d={geom.line} className="fill-none stroke-emerald-600 dark:stroke-emerald-400" strokeWidth={2} vectorEffect="non-scaling-stroke" />
           {hover !== null && (
@@ -102,6 +106,15 @@ export const ElevationProfile = ({ profile, lengthM, surfaces, pois, onHover }: 
             />
           ))}
         </div>
+      )}
+      {steep.length > 0 && (
+        <p className="text-[11px] text-muted-foreground" data-testid="hiking-steep">
+          <span className="mr-1 inline-block size-2 rounded-sm bg-orange-500/40 align-middle" aria-hidden />
+          가파른 구간(100m 경사 {HIKING_STEEP_MIN_PCT}% 넘음) {steep.length}곳 —{' '}
+          {steep
+            .map((s) => `${formatAtM(s.fromM)}~${formatAtM(s.toM)} ${s.dir === 'up' ? '오르막' : '내리막'} 최대 ${s.maxPct}%`)
+            .join(' · ')}
+        </p>
       )}
       <div className="flex justify-between text-[10px] tabular-nums text-muted-foreground">
         <span>0</span>

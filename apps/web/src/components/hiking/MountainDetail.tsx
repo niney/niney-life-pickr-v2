@@ -118,6 +118,9 @@ export const MountainDetail = ({ mountain, onSelectCourse, onSelectMountain, onB
                     {!isPeak && c.source === 'peak' && (
                       <span className="ml-1.5 rounded bg-muted px-1 align-middle text-[10px] font-normal text-muted-foreground">봉우리 자료</span>
                     )}
+                    {c.source === 'network' && (
+                      <span className="ml-1.5 rounded bg-muted px-1 align-middle text-[10px] font-normal text-muted-foreground">이어 만든 길</span>
+                    )}
                   </span>
                   <CourseFacts course={c} />
                 </span>

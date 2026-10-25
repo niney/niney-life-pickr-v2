@@ -43,6 +43,9 @@ describe('점수 항목', () => {
     expect(hikingTimeFit(150, 'half')).toBeCloseTo(7.5, 5);
     expect(hikingTimeFit(100, 'half')).toBe(0);
     expect(hikingTimeFit(null, 'half')).toBe(5);
+    // 3시간 안은 1시간부터(8차) — 10분짜리 고리는 거의 0.
+    expect(hikingTimeFit(10, 'short')).toBeCloseTo(2.5, 5);
+    expect(hikingTimeFit(150, 'short')).toBe(25);
   });
 
   it('난이도 — 상관없음 만점, 한 단계 차이 6, 두 단계 0', () => {
@@ -78,6 +81,8 @@ describe('점수 항목', () => {
     expect(good).toBe(96.4);
     expect(hikingRecommendScore(facts({ daylight: 'dark' }), wants)).toBeLessThan(good - 30);
     expect(hikingRecommendScore(facts({ season: ['단풍'] }), wants)).toBeCloseTo(good + 5, 5);
+    // 100대 명산 가산(8차).
+    expect(hikingRecommendScore(facts({ famous: true }), wants)).toBeCloseTo(good + 4, 5);
     expect(hikingRecommendScore(facts({ outingMin: 480, driveMin: 200 }), wants)).toBeLessThan(good - 25);
   });
 });

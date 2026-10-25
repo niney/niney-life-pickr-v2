@@ -76,8 +76,9 @@ export const HikingCourseSummary = z.object({
   gapM: z.number().int(),
   // 코스에 나오는 험한 노면(@repo/utils HIKING_ROUGH_SURFACES 중) — 카드 칩.
   roughSurfaces: z.array(z.string()),
-  // 원천 — top100 100대명산 GPX(지점·이정표·노면) · peak 전국 주요 봉우리 GPX(선·고도만, 지점은 근처 봉우리·등산 지점을 붙인 것).
-  source: HikingMountainKind,
+  // 원천 — top100 100대명산 GPX(지점·이정표·노면) · peak 전국 주요 봉우리 GPX(선·고도만, 지점은 근처 봉우리·등산 지점을 붙인 것) ·
+  // network 전국 주요 봉우리의 등산로 망(구간 묶음)을 갈림길에서 이어 만든 코스(6차 — 들머리 → 정상 왕복·넘어가기).
+  source: z.enum(['top100', 'peak', 'network']),
   bbox: HikingBbox,
   pieces: z.array(z.string()),
 });
@@ -309,7 +310,7 @@ export const HikingCaution = z.object({ level: z.enum(['warn', 'info']), text: z
 export const HikingRecommendItem = z.object({
   rank: z.number().int(),
   score: z.number(),
-  mountain: LatLng.extend({ id: z.string(), name: z.string(), heightM: z.number().nullable(), images: z.array(z.number().int()) }),
+  mountain: LatLng.extend({ id: z.string(), name: z.string(), kind: HikingMountainKind, heightM: z.number().nullable(), images: z.array(z.number().int()) }),
   course: z.object({
     id: z.string(),
     no: z.number().int(),

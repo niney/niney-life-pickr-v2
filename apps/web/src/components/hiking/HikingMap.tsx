@@ -18,7 +18,7 @@ import {
   type HikingMapPoiCategory,
   type LatLng,
 } from '@repo/utils';
-import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } from '~/components/restaurant/MapCanvas';
+import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport, type WmsOverlay } from '~/components/restaurant/MapCanvas';
 import { cn } from '~/lib/utils';
 import { decodePieces } from './hikingFormat';
 
@@ -47,6 +47,16 @@ const MY_LOCATION_URL = buildMyLocationMarkerDataUrl();
 const HOVER_ID = 'hover';
 const POI_PREFIX = 'poi:';
 const KOREA_CENTER = { lat: 36.3, lng: 127.8, zoom: 7 };
+// 7차 — 산림청 전국 등산로(브이월드 2D데이터 LT_L_FRSTCLIMB, 5.7만 구간)를 배경 선으로. 줌 12부터(전국을 덮으면 무겁고 안 보인다).
+// 브이월드 WMS 는 EPSG:3857 요청이 자주 502 라 같은 좌표계 이름 EPSG:900913 으로 묻는다.
+const TRAIL_WMS_MIN_ZOOM = 12;
+const trailWms = (apiKey: string): WmsOverlay => ({
+  url: 'https://api.vworld.kr/req/wms',
+  params: { SERVICE: 'WMS', VERSION: '1.3.0', LAYERS: 'lt_l_frstclimb', STYLES: 'lt_l_frstclimb', FORMAT: 'image/png', TRANSPARENT: 'true', KEY: apiKey },
+  projection: 'EPSG:900913',
+  minZoom: TRAIL_WMS_MIN_ZOOM,
+  opacity: 0.6,
+});
 
 interface Props {
   mountains: HikingMountainSummaryType[];
@@ -84,6 +94,7 @@ export const HikingMap = ({
   const apiKey = config.data?.apiKey ?? null;
   const keyMissing = config.isError && config.error instanceof ApiError && config.error.statusCode === 404;
   const handleRef = useRef<MapCanvasHandle>(null);
+  const trailOverlay = useMemo(() => (apiKey ? trailWms(apiKey) : null), [apiKey]);
 
   // 화면 범위·줌 — 지도는 외부 시스템이라 콜백으로 받아 둔다. 줌 HIKING_PEAK_POINT_ZOOM 아래면 100대 명산은 마커, 봉우리는
   // 셀 버블(일상지도·주차와 같은 격자), 이상이면 화면 안(여유 20%) 산을 전부 마커로.
@@ -211,6 +222,7 @@ export const HikingMap = ({
         onViewportSync={setView}
         overlayMarkers={overlayMarkers}
         routeLine={routeLine}
+        wmsOverlay={trailOverlay}
         poolKey="hiking"
         className="h-full w-full"
       />
