@@ -1,15 +1,41 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { HikingCourseDetailType, HikingMountainDetailType, HikingMountainsResultType } from '@repo/api-contract';
-import { decodePolyline } from '@repo/utils';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+// 산불위험예보는 라우트 안 서비스가 어댑터를 직접 부른다 — 업스트림 대신 고정 행.
+const fire = vi.hoisted(() => ({ rows: [] as unknown[] }));
+vi.mock('./hiking-api.adapter.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./hiking-api.adapter.js')>()),
+  fetchFireRisk: vi.fn(async () => fire.rows),
+}));
+
+import type {
+  AirForecastResultType,
+  AirNearbyResultType,
+  HikingConditionsType,
+  HikingCourseDetailType,
+  HikingMountainDetailType,
+  HikingMountainsResultType,
+  WeatherForecastHourType,
+  WeatherForecastResultType,
+} from '@repo/api-contract';
+import { decodePolyline, kmaTodayIsoDate } from '@repo/utils';
 import { buildApp } from '../../app.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
-import type { GdTrailRow, TrekkingPoiRow } from './hiking-api.adapter.js';
+import type { FireRiskRow, GdTrailRow, TrekkingPoiRow } from './hiking-api.adapter.js';
+import type { SigunguShape } from './hiking-area.js';
 import { buildHikingRows, matchGpxFolder, replaceHiking } from './hiking-master.service.js';
 
 // 등산 라우트 — 격리 DB(빈 테이블)에 합성 GPX 2코스 + 명산등산로 1행 + 등산트레킹 POI 를 buildHikingRows → replaceHiking
 // 으로 넣고 ① 미적재 503 ② 산 목록(정상 좌표·권역·사진) ③ 산 상세(코스 선 복원·험한 노면) ④ 코스 상세(프로필·지점 병합·
-// API 지점 연결) ⑤ 404·400 을 본다.
+// API 지점 연결) ⑤ 오늘의 조건(날씨·대기는 앱 싱글톤을 spy, 산불은 어댑터 mock) ⑥ 404·400 을 본다.
+
+// 합성 시군구 — 들머리 쪽(37.000~37.003) 춘천, 정상 쪽(37.003~37.010) 홍천.
+const box = (key: string, lat0: number, lat1: number): SigunguShape => ({
+  key,
+  polygons: [[[[126.99, lat0], [127.01, lat0], [127.01, lat1], [126.99, lat1], [126.99, lat0]]]],
+  bbox: { minLng: 126.99, minLat: lat0, maxLng: 127.01, maxLat: lat1 },
+});
+const SIGUNGU = [box('51:춘천시', 36.99, 37.003), box('51:홍천군', 37.003, 37.01)];
 
 const STEP = 0.0002; // ≈22m
 const trkpt = (lat: number, ele: number) => `<trkpt lat="${lat.toFixed(6)}" lon="127.000000"><ele>${ele}</ele></trkpt>`;
@@ -95,9 +121,12 @@ describe('hiking routes (격리 DB)', () => {
         api({ poiId: '0000000500', category: 'PEAK', name: '가리산 2봉', lat: 37.01, lng: 127.01, ele: 880 }),
       ],
       images: new Map([['421100101', [1, 2]]]),
+      sigungu: SIGUNGU,
       loadedAt: new Date('2026-10-25T00:00:00Z'),
     });
     expect(rows.report).toMatchObject({ courses: 2, reversed: 1, gpxSameSpot: 1, pois: { gpx: 3, api: 2, both: 1 } });
+    expect(rows.report.sigungu).toEqual({ empty: [], maxPerCourse: 2 });
+    expect(JSON.parse(rows.courses[0]!.sigungu!)).toEqual(['51:춘천시', '51:홍천군']);
     // 2번 코스의 정상도 대표 id(gpx:103)로 연결된다(같은 길이라 API 갈림길 999 도 붙는다).
     expect(rows.coursePois.filter((cp) => cp.courseId === '421100101-2').map((cp) => cp.poiId).sort()).toEqual([
       'api:0000000999',
@@ -147,9 +176,102 @@ describe('hiking routes (격리 DB)', () => {
     expect(c.pois.find((p) => p.id === 'api:0000000999')!.guide).toEqual([]);
   });
 
+  it('오늘의 조건 — 3일 해 시각, 가장 높은 곳 추정 기온, 가까운 측정소·예보 권역, 코스 시군구 산불 칸', async () => {
+    const today = kmaTodayIsoDate(new Date());
+    const ymd = today.replace(/-/g, '');
+    const hour = (hh: string, tmp: number): WeatherForecastHourType => ({
+      fcstDate: ymd,
+      fcstTime: `${hh}00`,
+      at: `${today}T${hh}:00:00+09:00`,
+      tmp,
+      tmn: null,
+      tmx: null,
+      sky: 1,
+      pty: 0,
+      pop: 10,
+      pcp: { text: '강수없음', value: null, none: true },
+      sno: { text: '적설없음', value: null, none: true },
+      reh: 50,
+      wsd: 3,
+      vec: 200,
+      uuu: null,
+      vvv: null,
+      wav: null,
+    });
+    const forecast = vi.spyOn(app.weather, 'getForecast').mockResolvedValue({
+      grid: { nx: 1, ny: 1 },
+      base: null,
+      fallback: false,
+      // 다른 날(그제) 칸은 빠진다.
+      hours: [hour('09', 12), hour('10', 13), { ...hour('09', 5), fcstDate: '20000101' }],
+      days: [],
+      total: 3,
+      fetchedAt: new Date().toISOString(),
+      stale: false,
+    } satisfies WeatherForecastResultType);
+    const nearby = vi.spyOn(app.airQuality, 'getNearbyStations').mockResolvedValue({
+      center: { lat: 37, lng: 127 },
+      items: [
+        // 측정값 없는 곳은 건너뛰고 다음 곳.
+        { stationName: '빈곳', dist: 900, measure: null } as AirNearbyResultType['items'][number],
+        { stationName: '북산면', dist: 4_200, measure: { pm10: 31, pm10Grade: 2, pm25: 12, pm25Grade: 1, measuredAt: `${today}T10:00:00+09:00` } } as AirNearbyResultType['items'][number],
+      ],
+      total: 2,
+      fetchedAt: new Date().toISOString(),
+      stale: false,
+    });
+    const airFc = vi.spyOn(app.airQuality, 'getForecast').mockResolvedValue({
+      date: today,
+      items: [
+        { code: 'PM10', targetDate: today, grades: [{ region: '영서', grade: '나쁨' }, { region: '서울', grade: '좋음' }] },
+        { code: 'PM25', targetDate: today, grades: [{ region: '강원영서', grade: '보통' }] },
+      ] as AirForecastResultType['items'],
+      fetchedAt: new Date().toISOString(),
+      stale: false,
+    });
+    fire.rows = [
+      { key: '51:춘천시', sido: '강원특별자치도', name: '춘천시', at: `${today}T09:00:00+09:00`, d1: 80, d2: 20, d3: 0, d4: 0, mean: 40, max: 55 },
+      { key: '51:홍천군', sido: '강원특별자치도', name: '홍천군', at: `${today}T09:00:00+09:00`, d1: 100, d2: 0, d3: 0, d4: 0, mean: 20, max: 30 },
+      { key: '11:종로구', sido: '서울특별시', name: '종로구', at: `${today}T09:00:00+09:00`, d1: 100, d2: 0, d3: 0, d4: 0, mean: 20, max: 30 },
+    ] satisfies FireRiskRow[];
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-1/conditions' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toContain('max-age=300');
+    const out = res.json<HikingConditionsType>();
+    expect(out.errors).toEqual({ weather: null, air: null, fire: null });
+    expect(out.days).toHaveLength(3);
+    expect(out.days[0]!.date).toBe(today);
+    expect(Date.parse(out.days[0]!.sunset!)).toBeGreaterThan(Date.parse(out.days[0]!.sunrise!));
+    // 들머리 → 가장 높은 곳(고도 정리 뒤 값) 100m 당 0.6°C 낮다 — 합성 코스는 ≈560m 차이라 ≈3.4°C.
+    const drop = (0.6 * (out.topEle! - out.ref.ele!)) / 100;
+    expect(drop).toBeGreaterThan(3);
+    expect(out.weather!.hours.map((h) => h.tmp)).toEqual([12, 13]);
+    expect(out.weather!.hours[0]!.topTmp).toBeCloseTo(12 - drop, 1);
+    expect(out.air).toMatchObject({ station: { name: '북산면', distM: 4_200 }, pm10: 31, regions: ['영서'] });
+    expect(out.air!.forecast).toEqual([{ date: today, pm10Grade: 3, pm25Grade: 2 }]);
+    expect(out.fire!.areas.map((a) => [a.key, a.slots[0]!.d2])).toEqual([
+      ['51:춘천시', 20],
+      ['51:홍천군', 0],
+    ]);
+    // 측정소·격자는 들머리 좌표로.
+    expect(nearby).toHaveBeenCalledWith(37, 127, 30_000, 3);
+    expect(forecast).toHaveBeenCalledTimes(1);
+    expect(airFc).toHaveBeenCalledTimes(1);
+
+    // 날씨가 실패해도 나머지는 온다.
+    forecast.mockRejectedValueOnce(Object.assign(new Error('기상청 API 일일 호출 한도를 소진했습니다.'), { statusCode: 503 }));
+    const partial = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-1/conditions' })).json<HikingConditionsType>();
+    expect(partial.weather).toBeNull();
+    expect(partial.errors.weather).toContain('한도');
+    expect(partial.fire!.areas).toHaveLength(2);
+    vi.restoreAllMocks();
+  });
+
   it('없는 산·코스 404, 잘못된 id 400, 없는 사진 404', async () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/999999999' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-9' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-9/conditions' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/abc' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/999999999/images/1' })).statusCode).toBe(404);
   });

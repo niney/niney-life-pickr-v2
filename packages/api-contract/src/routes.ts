@@ -646,6 +646,8 @@ export const Hiking = {
   mountain: (id: string) => `${API_PREFIX}/hiking/mountains/${encodeURIComponent(id)}`,
   // 코스 상세 — 고도 프로필·노면·지점.
   course: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}`,
+  // 코스 오늘의 조건 — 오늘·내일·모레 날씨(정상 추정 기온)·대기·산불위험·해 시각.
+  conditions: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}/conditions`,
   // 산 사진(JPEG, 적재 때 받아 둔 사본) — no 는 산 상세 images 의 순번.
   image: (id: string, no: number | string) => `${API_PREFIX}/hiking/mountains/${encodeURIComponent(id)}/images/${no}`,
 } as const;

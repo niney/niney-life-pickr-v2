@@ -12,11 +12,13 @@ import {
   isHikingMapPoiCategory,
 } from '@repo/utils';
 import { cn } from '~/lib/utils';
+import { CourseConditions } from './CourseConditions';
 import { ElevationProfile } from './ElevationProfile';
 import { DIFFICULTY_CHIP_CLASS, courseDifficultyReasons, courseTimeBreakdown, formatAtM } from './hikingFormat';
 
-// 코스 상세 패널 — 숫자(거리·예상 시간·난이도·오르막·내리막·최고 고도)·형태와 방향별 시간·난이도 까닭·고도 그래프·
-// 험한 노면·코스 지점 목록(지도와 같은 분류, 갈림길은 이 코스로 가는 길·온 길). 지점을 누르면 지도에서 강조된다.
+// 코스 상세 패널 — 숫자(거리·예상 시간·난이도·오르막·내리막·최고 고도)·형태와 방향별 시간·난이도 까닭·산행 조건(날짜·출발
+// 시각별 날씨·대기·산불·하산)·고도 그래프·험한 노면·코스 지점 목록(지도와 같은 분류, 갈림길은 이 코스로 가는 길·온 길).
+// 지점을 누르면 지도에서 강조된다.
 
 interface Props {
   course: HikingCourseDetailType;
@@ -78,6 +80,7 @@ export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBa
             : '고도 기록이 없어 예상 시간·난이도를 계산하지 못했습니다.'}
         </p>
       </div>
+      <CourseConditions course={course} />
       {course.gapCount > 0 && (
         <p className="text-xs text-muted-foreground">
           원본 기록이 {course.gapCount}곳에서 끊겨(직선 {formatHikingLength(course.gapM)}) 선이 이어지지 않는 곳이 있습니다. 거리·예상 시간에는 끊긴

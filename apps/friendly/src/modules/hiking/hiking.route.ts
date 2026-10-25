@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   ErrorResponseSchema,
+  HikingConditions,
   HikingCourseDetail,
   HikingCourseParams,
   HikingImageParams,
@@ -12,22 +13,35 @@ import {
   HikingMountainsResult,
   Routes,
 } from '@repo/api-contract';
+import { env } from '../../config/env.js';
 import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
 import { RATE } from '../../plugins/rate-limit.js';
+import { ForestFireService } from './forest-fire.service.js';
+import { HikingConditionsService } from './hiking-conditions.service.js';
 import { HIKING_IMAGE_DIR, hikingImageFileName } from './hiking-master.service.js';
 import { HikingService } from './hiking.service.js';
 
-// 등산 공개 라우트(비로그인) — 적재본(load:hiking) 읽기만, 업스트림 0콜. 미적재(503)·없는 산/코스(404)는 라우트가 직접
-// 응답한다(error-handler 가 5xx 를 500 으로 뭉개므로 주차와 같은 replyUpstreamError 경로). 적재본은 배포 때만 바뀌어
-// 산·코스 응답에 1시간 공개 캐시를 단다. 사진은 적재 때 받아 둔 사본(30일 immutable — 순번이 같으면 같은 사진).
+// 등산 공개 라우트(비로그인) — 산·코스·사진은 적재본(load:hiking) 읽기만, 업스트림 0콜. 미적재(503)·없는 산/코스(404)는
+// 라우트가 직접 응답한다(error-handler 가 5xx 를 500 으로 뭉개므로 주차와 같은 replyUpstreamError 경로). 적재본은 배포 때만
+// 바뀌어 산·코스 응답에 1시간 공개 캐시를 단다. 사진은 적재 때 받아 둔 사본(30일 immutable — 순번이 같으면 같은 사진).
+// 오늘의 조건(conditions)만 업스트림을 캐시로 부르고(날씨·대기·산불), 항목별 실패는 200 안의 errors 로 낸다.
 // docs/PLAN-hiking.md
 
 const DATA_CACHE_CONTROL = 'public, max-age=3600';
+// 조건은 서버 캐시(단기예보 다음 발표·산불 3시간·대기 매시)가 따로 있어 브라우저는 5분만.
+const CONDITIONS_CACHE_CONTROL = 'public, max-age=300';
 const IMAGE_CACHE_CONTROL = 'public, max-age=2592000, immutable';
 const notFound = (message: string) => ({ statusCode: 404, error: 'Not Found', message });
 
 const hikingRoutes: FastifyPluginAsync = async (app) => {
   const service = new HikingService(app.prisma);
+  // 오늘의 조건 — 날씨·대기는 앱 싱글톤(각 화면과 캐시·쿼터 공유), 산불은 등산만 쓰므로 여기 하나.
+  const conditions = new HikingConditionsService({
+    prisma: app.prisma,
+    weather: app.weather,
+    air: app.airQuality,
+    fire: new ForestFireService({ serviceKey: env.DATA_GO_KR_API_KEY }),
+  });
   const imageDir = resolve(process.cwd(), HIKING_IMAGE_DIR);
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
@@ -83,6 +97,24 @@ const hikingRoutes: FastifyPluginAsync = async (app) => {
       const out = await service.getCourse(req.params.id);
       if (!out) return reply.code(404).send(notFound('코스를 찾을 수 없습니다.'));
       reply.header('Cache-Control', DATA_CACHE_CONTROL);
+      return out;
+    },
+  });
+
+  typed.get(decodeURIComponent(Routes.Hiking.conditions(':id')), {
+    config: { rateLimit: RATE.transitRealtime },
+    schema: {
+      tags: ['hiking'],
+      summary: '코스 오늘의 조건 — 오늘·내일·모레 날씨(가장 높은 곳 추정 기온)·대기·산불위험예보·해 시각, 없으면 404',
+      description:
+        '들머리 격자의 기상청 단기예보(시각마다 topTmp = 들머리 고도 기준 100m 당 0.6°C 낮춘 추정), 가까운 대기 측정소 지금 값과 예보 권역 등급, 코스가 걸친 시군구의 산림청 산불위험예보(3시간 칸, 등급별 면적 %), 일출·일몰(계산)을 준다. 항목마다 따로 받아 하나가 실패하거나 늦으면 그 항목만 null 이고 errors 에 까닭이 실린다. 날짜·출발 시각에 따른 판단은 @repo/utils hikingConditions 규칙으로 클라이언트가 한다.',
+      params: HikingCourseParams,
+      response: { 200: HikingConditions, 404: ErrorResponseSchema },
+    },
+    handler: async (req, reply) => {
+      const out = await conditions.get(req.params.id);
+      if (!out) return reply.code(404).send(notFound('코스를 찾을 수 없습니다.'));
+      reply.header('Cache-Control', CONDITIONS_CACHE_CONTROL);
       return out;
     },
   });

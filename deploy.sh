@@ -270,7 +270,7 @@ parking_data() {
 
 # ── 등산(100대 명산) ────────────────────────────────────────
 # status:hiking 은 "ok mountains=N courses=C pois=P images=I stale=S" 한 줄(테이블 없으면 "missing").
-# stale = 고도는 있는데 이동 분이 빈 코스(2차 마이그레이션 뒤 아직 다시 적재 안 함).
+# stale = 새 열이 빈 코스 — 고도는 있는데 이동 분이 빔(2차) 또는 시군구가 빔(3차). 마이그레이션 뒤 아직 다시 적재 안 함.
 hiking_status() { pnpm --filter friendly status:hiking 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
 
 # 비어 있거나 stale 이면 적재, force=1(10번)이면 다시. 원천 GPX zip(data.go.kr 15098177)은 data/open/hiking/ 에 손으로 올린다
@@ -284,7 +284,7 @@ hiking_data() {
   fi
   local mountains; mountains="$(stat_val mountains "$st")"
   local stale; stale="$(stat_val stale "$st")"
-  echo "  등산 현재: 산 ${mountains:-0} · 코스 $(stat_val courses "$st") · 사진 $(stat_val images "$st") · 예상 시간 빈 코스 ${stale:-0}"
+  echo "  등산 현재: 산 ${mountains:-0} · 코스 $(stat_val courses "$st") · 사진 $(stat_val images "$st") · 다시 적재할 코스(새 열 빔) ${stale:-0}"
   if [[ "$force" == 1 || "${mountains:-0}" == 0 || "${stale:-0}" != 0 ]]; then
     if ! compgen -G "$ROOT/data/open/hiking/*.zip" >/dev/null; then
       echo "  (data/open/hiking/ 에 100대명산 GPX zip(data.go.kr 15098177)이 없어 건너뜁니다 — 올린 뒤 ./deploy.sh 10)"; return 0

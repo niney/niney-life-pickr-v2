@@ -5857,6 +5857,608 @@
         }
       }
     },
+    "/api/v1/hiking/courses/{id}/conditions": {
+      "get": {
+        "summary": "코스 오늘의 조건 — 오늘·내일·모레 날씨(가장 높은 곳 추정 기온)·대기·산불위험예보·해 시각, 없으면 404",
+        "tags": [
+          "hiking"
+        ],
+        "description": "들머리 격자의 기상청 단기예보(시각마다 topTmp = 들머리 고도 기준 100m 당 0.6°C 낮춘 추정), 가까운 대기 측정소 지금 값과 예보 권역 등급, 코스가 걸친 시군구의 산림청 산불위험예보(3시간 칸, 등급별 면적 %), 일출·일몰(계산)을 준다. 항목마다 따로 받아 하나가 실패하거나 늦으면 그 항목만 null 이고 errors 에 까닭이 실린다. 날짜·출발 시각에 따른 판단은 @repo/utils hikingConditions 규칙으로 클라이언트가 한다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6,12}-\\d{1,4}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 60,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courseId": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "ele": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lng",
+                        "ele"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "topEle": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "dawn": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sunrise": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sunset": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "dusk": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "dawn",
+                          "sunrise",
+                          "sunset",
+                          "dusk"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "weather": {
+                      "type": "object",
+                      "properties": {
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "nx": {
+                              "type": "integer"
+                            },
+                            "ny": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "nx",
+                            "ny"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "base": {
+                          "type": "object",
+                          "properties": {
+                            "date": {
+                              "type": "string",
+                              "pattern": "^\\d{8}$"
+                            },
+                            "time": {
+                              "type": "string",
+                              "pattern": "^\\d{4}$"
+                            },
+                            "at": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "date",
+                            "time",
+                            "at"
+                          ],
+                          "additionalProperties": false,
+                          "nullable": true
+                        },
+                        "hours": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "string"
+                              },
+                              "tmp": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "topTmp": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "sky": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "pty": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "pop": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "pcp": {
+                                "type": "object",
+                                "properties": {
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "none": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "text",
+                                  "value",
+                                  "none"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "sno": {
+                                "type": "object",
+                                "properties": {
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "none": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "text",
+                                  "value",
+                                  "none"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "reh": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "wsd": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "vec": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "at",
+                              "tmp",
+                              "topTmp",
+                              "sky",
+                              "pty",
+                              "pop",
+                              "pcp",
+                              "sno",
+                              "reh",
+                              "wsd",
+                              "vec"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "fetchedAt": {
+                          "type": "string"
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "grid",
+                        "base",
+                        "hours",
+                        "fetchedAt",
+                        "stale"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "air": {
+                      "type": "object",
+                      "properties": {
+                        "station": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "distM": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "distM"
+                          ],
+                          "additionalProperties": false,
+                          "nullable": true
+                        },
+                        "measuredAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "pm10": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "pm10Grade": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                3
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                4
+                              ]
+                            }
+                          ],
+                          "nullable": true
+                        },
+                        "pm25": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "pm25Grade": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                3
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                4
+                              ]
+                            }
+                          ],
+                          "nullable": true
+                        },
+                        "regions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "forecast": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "date": {
+                                "type": "string"
+                              },
+                              "pm10Grade": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      3
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      4
+                                    ]
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "pm25Grade": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      3
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      4
+                                    ]
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "date",
+                              "pm10Grade",
+                              "pm25Grade"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "fetchedAt": {
+                          "type": "string"
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "station",
+                        "measuredAt",
+                        "pm10",
+                        "pm10Grade",
+                        "pm25",
+                        "pm25Grade",
+                        "regions",
+                        "forecast",
+                        "fetchedAt",
+                        "stale"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "fire": {
+                      "type": "object",
+                      "properties": {
+                        "areas": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "sido": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slots": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "at": {
+                                      "type": "string"
+                                    },
+                                    "d1": {
+                                      "type": "number"
+                                    },
+                                    "d2": {
+                                      "type": "number"
+                                    },
+                                    "d3": {
+                                      "type": "number"
+                                    },
+                                    "d4": {
+                                      "type": "number"
+                                    },
+                                    "mean": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
+                                    "max": {
+                                      "type": "number",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "at",
+                                    "d1",
+                                    "d2",
+                                    "d3",
+                                    "d4",
+                                    "mean",
+                                    "max"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "sido",
+                              "name",
+                              "slots"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "fetchedAt": {
+                          "type": "string"
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "areas",
+                        "fetchedAt",
+                        "stale"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "errors": {
+                      "type": "object",
+                      "properties": {
+                        "weather": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "air": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fire": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "weather",
+                        "air",
+                        "fire"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "courseId",
+                    "ref",
+                    "topEle",
+                    "days",
+                    "weather",
+                    "air",
+                    "fire",
+                    "errors",
+                    "generatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/hiking/mountains": {
       "get": {
         "summary": "100대 명산 목록 — 정상 좌표·높이·소재지 권역·코스 수·사진 순번(적재본, 미적재면 503)",

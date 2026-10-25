@@ -19,10 +19,8 @@ import {
   ErrorResponseSchema,
   Routes,
 } from '@repo/api-contract';
-import { env } from '../../config/env.js';
 import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
 import { RATE } from '../../plugins/rate-limit.js';
-import { AirQualityService } from './air-quality.service.js';
 
 // 에어코리아 대기오염정보 프록시(공개, 비로그인) — 업스트림 5개 오퍼레이션 1:1.
 // error-handler 플러그인은 statusCode >= 500 을 일괄 500 으로 뭉개므로, 의미 있는
@@ -36,9 +34,8 @@ import { AirQualityService } from './air-quality.service.js';
 // 쿨다운), 라우트는 실시간 대중교통과 같은 분당 60 프리셋을 건다. autoload 가 `*.route.ts` 를 자동 등록한다.
 
 const airQualityRoutes: FastifyPluginAsync = async (app) => {
-  const service = new AirQualityService({
-    serviceKey: env.DATA_GO_KR_API_KEY,
-  });
+  // app.airQuality 싱글톤(plugins/air-quality.ts) — 등산 오늘의 조건과 캐시·쿼터를 공유한다.
+  const service = app.airQuality;
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   // 시도별 실시간 측정정보 — 한글 경로 세그먼트라 Routes 빌더가 인코딩하므로 등록

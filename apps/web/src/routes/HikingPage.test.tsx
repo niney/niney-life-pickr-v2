@@ -5,13 +5,14 @@ import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type {
+  HikingConditionsType,
   HikingCourseDetailType,
   HikingCourseSummaryType,
   HikingMountainDetailType,
   HikingMountainSummaryType,
   HikingMountainsResultType,
 } from '@repo/api-contract';
-import { encodePolyline } from '@repo/utils';
+import { encodePolyline, kmaTodayIsoDate } from '@repo/utils';
 import { server } from '~/test/msw';
 import { usePanelPrefsStore } from '~/stores/panelPrefsStore';
 import { pointAtDistance, rankMountains } from '~/components/hiking/hikingFormat';
@@ -135,10 +136,66 @@ const c2Detail: HikingCourseDetailType = {
   ],
 };
 
+// 오늘의 조건 — 날짜는 실제 오늘 기준(카드가 지금 이후 출발만 고르게 한다). 내일 10~11시 비, 내일 09시 춘천 다소높음 23%,
+// 내일 미세먼지 예보 나쁨. 해는 06:50 / 17:40 로 고정.
+const ymdPlus = (d: number) => kmaTodayIsoDate(new Date(Date.now() + d * 86_400_000));
+const kst = (date: string, hm: string) => `${date}T${hm}:00+09:00`;
+const conditionsFor = (): HikingConditionsType => {
+  const days = [0, 1, 2].map(ymdPlus);
+  const tomorrow = days[1]!;
+  const hour = (hh: number, p: Partial<NonNullable<HikingConditionsType['weather']>['hours'][number]> = {}) => ({
+    at: kst(tomorrow, `${String(hh).padStart(2, '0')}:00`),
+    tmp: 12,
+    topTmp: 8,
+    sky: 3,
+    pty: 0,
+    pop: 20,
+    pcp: { text: '강수없음', value: 0, none: true },
+    sno: { text: '적설없음', value: 0, none: true },
+    reh: 60,
+    wsd: 3,
+    vec: 90,
+    ...p,
+  });
+  return {
+    courseId: c2Detail.id,
+    ref: { lat: 37, lng: 127, ele: 370 },
+    topEle: 1040,
+    days: days.map((date) => ({ date, dawn: null, sunrise: kst(date, '06:50'), sunset: kst(date, '17:40'), dusk: null })),
+    weather: {
+      grid: { nx: 1, ny: 1 },
+      base: { date: tomorrow.replace(/-/g, ''), time: '0500', at: kst(tomorrow, '05:00') },
+      hours: Array.from({ length: 12 }, (_, i) => hour(7 + i, i === 3 || i === 4 ? { pty: 1, pop: 80 } : {})),
+      fetchedAt: '2026-10-25T00:00:00Z',
+      stale: false,
+    },
+    air: {
+      station: { name: '북산면', distM: 4_200 },
+      measuredAt: null,
+      pm10: 21,
+      pm10Grade: 1,
+      pm25: 9,
+      pm25Grade: 1,
+      regions: ['영서'],
+      forecast: [{ date: tomorrow, pm10Grade: 3, pm25Grade: 2 }],
+      fetchedAt: '2026-10-25T00:00:00Z',
+      stale: false,
+    },
+    fire: {
+      areas: [{ key: '51:춘천시', sido: '강원특별자치도', name: '춘천시', slots: [{ at: kst(tomorrow, '09:00'), d1: 77, d2: 23, d3: 0, d4: 0, mean: 50, max: 60 }] }],
+      fetchedAt: '2026-10-25T00:00:00Z',
+      stale: false,
+    },
+    errors: { weather: null, air: null, fire: null },
+    generatedAt: '2026-10-25T00:00:00Z',
+  };
+};
+
 let requested: string[] = [];
 beforeEach(() => {
   requested = [];
   server.use(
+    http.get('/api/v1/hiking/courses/:id/conditions', () => HttpResponse.json(conditionsFor())),
     http.get('/api/v1/settings/map/public', () => HttpResponse.json({ provider: 'vworld', apiKey: 'test-key' })),
     http.get('/api/v1/hiking/mountains', () => HttpResponse.json(list)),
     http.get('/api/v1/hiking/mountains/:id', ({ params }) => {
@@ -242,6 +299,29 @@ describe('HikingPage', () => {
     fireEvent.click(within(c).getByRole('button', { name: /가리산 코스 목록/ }));
     expect(await screen.findByTestId('hiking-mountain')).toBeInTheDocument();
     expect(requested).toEqual(['m:421100101', 'c:421100101-2']);
+  });
+
+  it('산행 조건 — 내일 08시 출발은 해 지기 전 하산·비·산불·미세먼지, 13시 출발은 해 진 뒤 하산', async () => {
+    renderPage('/hiking?m=421100101&c=421100101-2');
+    const card = await screen.findByTestId('hiking-conditions');
+    const days = await within(card).findByRole('group', { name: '산행 날짜' });
+    fireEvent.click(within(days).getAllByRole('button')[1]!);
+    expect(within(days).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(within(card).getByRole('combobox', { name: '출발 시각' }), { target: { value: String(8 * 60) } });
+    // 왕복 5시간 → 13:00 하산, 일몰 17:40 까지 4시간 40분.
+    expect(within(card).getByTestId('hiking-daylight')).toHaveTextContent('08:00 출발 → 13:00 하산 예상해 지기 전 하산');
+    expect(within(card).getByTestId('hiking-daylight')).toHaveTextContent('일몰 17:40 · 여유 4시간 40분 · 늦어도 12:10에 출발');
+    const cautions = within(card).getByTestId('hiking-cautions');
+    expect(cautions).toHaveTextContent('비 예보(2시간)');
+    expect(cautions).toHaveTextContent('산불위험 다소높음(춘천시 23%) — 화기 금지');
+    expect(cautions).toHaveTextContent('미세먼지 나쁨');
+    expect(card).toHaveTextContent('가장 높은 곳(1,040m) 8°C');
+    expect(card).toHaveTextContent('예보 미세먼지 나쁨 · 초미세먼지 보통 영서 권역');
+    expect(card).toHaveTextContent('일출 06:50 · 일몰 17:40');
+
+    fireEvent.change(within(card).getByRole('combobox', { name: '출발 시각' }), { target: { value: String(13 * 60) } });
+    expect(within(card).getByTestId('hiking-daylight')).toHaveTextContent('해 진 뒤 하산');
+    expect(within(card).getByTestId('hiking-cautions')).toHaveTextContent('해 지기 전에 내려오기 어렵습니다 — 12:10까지 출발하세요');
   });
 
   it('데스크톱 — [산 목록 | 상세 | 지도] 세 칸, 산을 골라도 목록은 남고 패널을 오른쪽으로 옮긴다', async () => {

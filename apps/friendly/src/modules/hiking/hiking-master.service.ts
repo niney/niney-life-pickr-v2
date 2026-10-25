@@ -7,6 +7,7 @@ import { encodePolyline, hikingRegionsOf } from '@repo/utils';
 import { listZipEntries } from '../housing/housing-price-master.service.js';
 import { readZipEntryBuffer } from '../life-map/life-flood-master.service.js';
 import type { GdTrailRow, TrekkingPoiRow } from './hiking-api.adapter.js';
+import { courseSigungu, type SigunguShape } from './hiking-area.js';
 import {
   COURSE_POI_M,
   LINE_TOLERANCE_M,
@@ -65,6 +66,8 @@ export interface HikingBuildInput {
   pois: TrekkingPoiRow[];
   // 산 id → 저장된 사진 순번.
   images: ReadonlyMap<string, number[]>;
+  // 시군구 경계(hiking-area parseSigunguGeo) — 없으면 코스 시군구를 비운다(null).
+  sigungu: readonly SigunguShape[] | null;
   loadedAt: Date;
 }
 
@@ -88,6 +91,8 @@ export interface HikingBuildReport {
   summitFromPeak: number;
   // 이정표 안내 — 이정표 있는 코스 지점 수, 그중 이 GPX 의 이정표(기록 방향 앎)·가는 길/온 길을 정한 수.
   guide: { signs: number; ownFrame: number; withNext: number; withPrev: number };
+  // 시군구 — 시군구를 하나도 못 정한 코스, 코스당 시군구 수 최대.
+  sigungu: { empty: string[]; maxPerCourse: number };
 }
 
 export interface HikingRows {
@@ -148,6 +153,7 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
     coursePoiLinks: 0,
     summitFromPeak: 0,
     guide: { signs: 0, ownFrame: 0, withNext: 0, withPrev: 0 },
+    sigungu: { empty: [], maxPerCourse: 0 },
   };
   const folders = new Set(input.files.map((f) => f.mountain));
   const gdByFolder = new Map<string, GdTrailRow & { id: string }>();
@@ -295,6 +301,11 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
       bbox.maxLat = Math.max(bbox.maxLat, course.bbox.maxLat);
       bbox.maxLng = Math.max(bbox.maxLng, course.bbox.maxLng);
       lengths.push(course.lengthM);
+      const sigungu = input.sigungu ? courseSigungu(course, input.sigungu) : null;
+      if (sigungu) {
+        if (sigungu.length === 0) report.sigungu.empty.push(`${folder}/${file.no}`);
+        report.sigungu.maxPerCourse = Math.max(report.sigungu.maxPerCourse, sigungu.length);
+      }
       courses.push({
         id,
         mountainId: gd.id,
@@ -321,6 +332,7 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
         moveMin: course.moveMin,
         moveRevMin: course.moveRevMin,
         steepPct: course.steepPct,
+        sigungu: sigungu ? JSON.stringify(sigungu) : null,
         pieceCount: course.pieces.length,
         gapCount: course.gaps.length,
         gapM: course.gaps.reduce((s, g) => s + g, 0),

@@ -9,8 +9,9 @@
 //   --no-images       사진 API·다운로드를 건너뛴다(이미 받아 둔 파일은 그대로 쓴다).
 //   --refresh-images  받아 둔 사진도 다시 받는다.
 //   --dry-run         조립 리포트만(DB 쓰기 없음, 사진은 받는다 — 막으려면 --no-images 같이).
+//   --geo=<경로>      시군구 경계 GeoJSON(기본 apps/web/public/sigungu-geo.json) — 코스가 걸친 시군구(산불위험예보·대기 예보 권역).
 
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
@@ -27,6 +28,7 @@ import {
   type TrekkingPoiKind,
   type TrekkingPoiRow,
 } from '../src/modules/hiking/hiking-api.adapter.js';
+import { parseSigunguGeo } from '../src/modules/hiking/hiking-area.js';
 import {
   HIKING_IMAGE_DIR,
   buildHikingRows,
@@ -37,7 +39,9 @@ import {
 
 const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '../../../..');
 const DEFAULT_DIR = resolve(REPO_ROOT, 'data/open/hiking');
+const DEFAULT_GEO = resolve(REPO_ROOT, 'apps/web/public/sigungu-geo.json');
 const args = process.argv.slice(2);
+const GEO_PATH = resolve(args.find((a) => a.startsWith('--geo='))?.slice('--geo='.length) ?? DEFAULT_GEO);
 const flag = (name: string): boolean => args.includes(`--${name}`);
 const DRY_RUN = flag('dry-run');
 const NO_IMAGES = flag('no-images');
@@ -141,7 +145,10 @@ const main = async (): Promise<void> => {
     gdTrails.map((g) => g.id).filter((id): id is string => id !== null),
     serviceKey,
   );
-  const rows = buildHikingRows({ files, gdTrails, pois, images, loadedAt: new Date() });
+  // 시군구 경계 — 없으면 적재는 하되 코스 시군구가 비어 산불위험이 안 나온다(status:hiking 이 stale 로 센다).
+  const sigungu = existsSync(GEO_PATH) ? parseSigunguGeo(JSON.parse(readFileSync(GEO_PATH, 'utf8'))) : null;
+  console.log(sigungu ? `시군구 경계 ${sigungu.length}곳 — ${GEO_PATH}` : `시군구 경계 없음(${GEO_PATH}) — 코스 시군구를 비운다`);
+  const rows = buildHikingRows({ files, gdTrails, pois, images, sigungu, loadedAt: new Date() });
   console.log('리포트', JSON.stringify(rows.report, null, 1));
   console.log(`산 ${rows.mountains.length} · 코스 ${rows.courses.length} · 지점 ${rows.pois.length} · 코스 지점 ${rows.coursePois.length}`);
   if (rows.mountains.length === 0) throw new Error('만든 산이 없습니다 — GPX 폴더와 명산등산로 이름을 확인하세요.');

@@ -25,3 +25,15 @@ export const useHikingCourse = (id: string | null) =>
     enabled: id !== null,
     staleTime: STALE_MS,
   });
+
+// 오늘의 조건 — 서버가 단기예보 발표·산불 3시간·대기 매시로 캐시해 두므로 10분이면 충분하다. 날짜·출발 시각은 받은 3일치를
+// 화면이 접는다(@repo/utils hikingConditions) — 바꿔도 다시 받지 않는다.
+const CONDITIONS_STALE_MS = 10 * 60_000;
+
+export const useHikingConditions = (courseId: string | null) =>
+  useQuery({
+    queryKey: ['hiking', 'conditions', courseId],
+    queryFn: () => hikingApi.conditions(courseId!),
+    enabled: courseId !== null,
+    staleTime: CONDITIONS_STALE_MS,
+  });

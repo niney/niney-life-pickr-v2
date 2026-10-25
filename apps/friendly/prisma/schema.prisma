@@ -3066,6 +3066,9 @@ model HikingCourse {
   moveRevMin  Float?
   // 가장 가파른 500m 의 평균 경사(%, 오르내림 무관).
   steepPct    Int?
+  // 코스가 걸친 시군구 키 JSON 배열("<시도 코드>:<시군구>", 산불위험예보·대기 예보 권역용 — hiking-area.ts). 3차 마이그레이션
+  // 전 적재분은 null(status:hiking 이 stale 로 세어 다시 적재한다).
+  sigungu     String?
   pieceCount  Int
   // 30m 넘게 떨어진 조각 사이(기록 끊김) 개수와 직선거리 합.
   gapCount    Int

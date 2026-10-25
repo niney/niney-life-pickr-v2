@@ -1,4 +1,4 @@
-// 등산 적재용 data.go.kr 어댑터 — 전부 DATA_GO_KR_API_KEY, 적재 스크립트에서만 부른다(요청 경로 없음).
+// 등산 data.go.kr 어댑터 — 전부 DATA_GO_KR_API_KEY. 산불위험예보(conditions)만 요청 경로에서, 나머지는 적재 스크립트에서 부른다.
 //   - 산림청 명산등산로 15158915 `1400000/cultureInfoService/gdTrailInfoOpenAPI` — 100대 명산 100건(1콜).
 //   - 산림청 산정보 15058662 `1400000/service/cultureInfoService2/mntInfoImgOpenAPI2` — 산 코드별 사진 파일명.
 //     사진은 https://www.forest.go.kr/images/data/down/mountain/<파일명> (http 는 302).
@@ -224,6 +224,60 @@ export const downloadForestImage = async (file: string, opts: Pick<HikingApiOpti
   const type = res.headers.get('content-type') ?? '';
   if (!res.ok || !type.startsWith('image/')) throw new HikingApiError(`사진 받기 실패 HTTP ${res.status} ${type}`, url);
   return Buffer.from(await res.arrayBuffer());
+};
+
+// ── 산림청 산불위험예보(시군구) — 요청 경로(conditions)에서 부른다 ─────────────────────
+// 15084817 `1400377/forestPointV2/forestPointListSigunguSearchV2`. 실측(2026-10-25): 시도·시군구를 비우면 전국 229곳을 한 번에
+// 준다. excludeForecast=0 이어야 예보(3시간 간격 ≈4일)까지 오고, 생략하면 현재 분석만 온다. numOfRows=10000 한 장(≈7,800행,
+// 1.7MB, 1.5초). 등급별 면적 d1~d4(%)·지수 평균/최대. 시도 코드는 현행(강원 51·전북 52·전남광주 12), 울릉군은 몇 달 묵은 행만
+// 온다(호출측이 오래된 칸을 버린다). area 는 "2,399"/997 처럼 문자열·숫자가 섞여 쓰지 않는다.
+
+const FIRE_URL = 'https://apis.data.go.kr/1400377/forestPointV2/forestPointListSigunguSearchV2';
+
+export interface FireRiskRow {
+  // "<시도 코드>:<시군구 이름>"(hiking-area sigunguKeyOf 와 같은 키).
+  key: string;
+  sido: string;
+  name: string;
+  // 분석·예보 시각 ISO(+09:00).
+  at: string;
+  d1: number;
+  d2: number;
+  d3: number;
+  d4: number;
+  mean: number | null;
+  max: number | null;
+}
+
+// "2026-10-25 10" → ISO.
+const fireTimeToIso = (v: unknown): string | null => {
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2})$/.exec(strOrNull(v)?.trim() ?? '');
+  return m ? `${m[1]}T${m[2]}:00:00+09:00` : null;
+};
+
+export const normalizeFireRisk = (it: Record<string, unknown>): FireRiskRow | null => {
+  const sido = numOrNull(it.upplocalcd);
+  const name = strOrNull(it.sigun)?.trim();
+  const at = fireTimeToIso(it.analdate);
+  if (sido === null || !name || !at) return null;
+  return {
+    key: `${sido}:${name}`,
+    sido: strOrNull(it.doname)?.trim() ?? '',
+    name,
+    at,
+    d1: numOrNull(it.d1) ?? 0,
+    d2: numOrNull(it.d2) ?? 0,
+    d3: numOrNull(it.d3) ?? 0,
+    d4: numOrNull(it.d4) ?? 0,
+    mean: numOrNull(it.meanavg),
+    max: numOrNull(it.maxi),
+  };
+};
+
+export const fetchFireRisk = async (opts: HikingApiOptions): Promise<FireRiskRow[]> => {
+  const { url, masked } = buildUrl(FIRE_URL, 'ServiceKey', { numOfRows: '10000', pageNo: '1', _type: 'json', excludeForecast: '0' }, opts.serviceKey);
+  const page = itemsOf(await getJson(url, masked, opts), masked);
+  return page.items.map(normalizeFireRisk).filter((r): r is FireRiskRow => r !== null);
 };
 
 // ── 한국등산트레킹지원센터 POI ──────────────────────────────────────────────────
