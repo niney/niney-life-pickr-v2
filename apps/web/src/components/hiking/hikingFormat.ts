@@ -12,8 +12,11 @@ import {
 
 // 등산 화면 순수 도우미 — 산 목록 거르기·정렬, 코스 선 복원, 고도 그래프 위치 ↔ 지도 좌표, 예상 시간·난이도 문구.
 
+// 5차 — 기본은 가까운순(사용자 결정 2026-10-25: 내 위치, 안 되면 서울 시청 기준).
 export type HikingSort = 'name' | 'height' | 'near';
+export const HIKING_DEFAULT_SORT: HikingSort = 'near';
 export const isHikingSort = (v: unknown): v is HikingSort => v === 'name' || v === 'height' || v === 'near';
+export const SEOUL_CITY_HALL: LatLng = { lat: 37.5663, lng: 126.9779 };
 
 const norm = (s: string): string => s.replace(/\s+/g, '').toLowerCase();
 
@@ -22,22 +25,25 @@ export interface RankedMountain {
   distM: number | null;
 }
 
-// 검색어는 이름·부제·소재지에서 찾는다(공백 무시). 가까운순인데 내 위치가 없으면 이름순.
+// 검색어는 이름·부제·소재지·합친 봉우리 이름에서 찾는다(공백 무시). origin 은 거리 기준(내 위치, 없으면 서울 시청).
 export const rankMountains = (
   items: readonly HikingMountainSummaryType[],
-  opts: { q: string; group: HikingRegionGroup | null; sort: HikingSort; me: LatLng | null },
+  opts: { q: string; group: HikingRegionGroup | null; sort: HikingSort; origin: LatLng | null },
 ): RankedMountain[] => {
   const q = norm(opts.q);
   const out = items
     .filter((m) => !opts.group || hikingInRegionGroup(m.regions, opts.group))
-    .filter((m) => !q || norm(`${m.name}${m.subtitle ?? ''}${m.area ?? ''}`).includes(q))
-    .map((m) => ({ mountain: m, distM: opts.me ? haversineM(opts.me, m) : null }));
+    .filter((m) => !q || norm(`${m.name}${m.subtitle ?? ''}${m.area ?? ''}${m.peaks.join('')}`).includes(q))
+    .map((m) => ({ mountain: m, distM: opts.origin ? haversineM(opts.origin, m) : null }));
   const byName = (a: RankedMountain, b: RankedMountain) => a.mountain.name.localeCompare(b.mountain.name, 'ko');
   if (opts.sort === 'height') out.sort((a, b) => (b.mountain.heightM ?? 0) - (a.mountain.heightM ?? 0) || byName(a, b));
-  else if (opts.sort === 'near' && opts.me) out.sort((a, b) => a.distM! - b.distM! || byName(a, b));
+  else if (opts.sort === 'near' && opts.origin) out.sort((a, b) => a.distM! - b.distM! || byName(a, b));
   else out.sort(byName);
   return out;
 };
+
+// 목록은 이만큼씩 그린다(2천 곳 남짓을 한 번에 그리지 않게) — '더 보기'로 늘린다.
+export const HIKING_LIST_PAGE = 60;
 
 export const decodePieces = (pieces: readonly string[]): LatLng[][] => pieces.map((p) => decodePolyline(p)).filter((l) => l.length >= 2);
 

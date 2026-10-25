@@ -27,6 +27,8 @@ export const AROUND_RADIUS = {
   store: 2_000,
 } as const;
 const CAP = { transit: 6, parking: 5, toilets: 4, food: 6 } as const;
+// 하산 후 맛집 후보 — 가까운 크롤 맛집 이만큼만 네이버 행을 찾는다(공개 행이 없는 곳이 섞여 cap 보다 넉넉히).
+const FOOD_CANDIDATES = 200;
 
 type Anchor = 'start' | 'end';
 type Place = HikingAroundPlaceType;
@@ -171,11 +173,14 @@ export class HikingAroundService {
       where: { latitude: { gte: b.gte.lat, lte: b.lte.lat }, longitude: { gte: b.gte.lng, lte: b.lte.lng } },
       select: { id: true, latitude: true, longitude: true },
     });
+    // 가까운 FOOD_CANDIDATES 곳만 묻는다 — 도시 안 봉우리(5차)는 5km 안 맛집이 수천이라 id 목록이 SQLite 파라미터 한도를 넘었다.
     const near = within(
       canon.flatMap((x) => (x.latitude !== null && x.longitude !== null ? [{ id: x.id, lat: x.latitude, lng: x.longitude }] : [])),
       p,
       AROUND_RADIUS.restaurant,
-    );
+    )
+      .sort((a, b) => a.d - b.d)
+      .slice(0, FOOD_CANDIDATES);
     if (near.length > 0) {
       const rows = await this.prisma.restaurant.findMany({
         where: { canonicalId: { in: near.map((n) => n.row.id) }, source: 'naver', placeId: { not: null } },

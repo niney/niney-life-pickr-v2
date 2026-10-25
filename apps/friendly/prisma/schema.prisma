@@ -3024,6 +3024,12 @@ model HikingMountain {
   maxLengthM  Int?
   // 저장한 사진 순번 JSON 배열(data/hiking-images/<id>_<no>.jpg) — 없으면 "[]".
   images      String   @default("[]")
+  // 5차(hiking_peaks) — 'top100' 100대 명산(명산등산로) · 'peak' 전국 주요 봉우리(15108086, id = 봉우리 코드 10자리).
+  kind        String   @default("top100")
+  // 100대 명산에 합친 봉우리 이름 JSON 배열(검색용, 봉우리 지점은 HikingPoi 'peak:<코드>') — 없으면 "[]".
+  peaks       String   @default("[]")
+  // 이어진 봉우리 — 정상이 서로의 코스 선 30m 안인 산 id JSON 배열(가까운 순). 없으면 "[]".
+  neighbors   String   @default("[]")
   loadedAt    DateTime
 
   courses HikingCourse[]
@@ -3069,6 +3075,8 @@ model HikingCourse {
   // 코스가 걸친 시군구 키 JSON 배열("<시도 코드>:<시군구>", 산불위험예보·대기 예보 권역용 — hiking-area.ts). 3차 마이그레이션
   // 전 적재분은 null(status:hiking 이 stale 로 세어 다시 적재한다).
   sigungu     String?
+  // 5차 — 'top100' 100대명산 GPX · 'peak' 전국 주요 봉우리 GPX(선·고도만, 이정표·노면 없음).
+  source      String  @default("top100")
   pieceCount  Int
   // 30m 넘게 떨어진 조각 사이(기록 끊김) 개수와 직선거리 합.
   gapCount    Int
@@ -3100,7 +3108,7 @@ model HikingPoi {
   lng         Float
   ele         Float?
   signposts   String?
-  // 'gpx' | 'api' | 'both'
+  // 'gpx' | 'api' | 'both' | 'peak'(전국 주요 봉우리 정상, id = 'peak:<코드>')
   source      String
 
   mountain HikingMountain    @relation(fields: [mountainId], references: [id], onDelete: Cascade)

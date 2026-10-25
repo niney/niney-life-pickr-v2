@@ -1,26 +1,42 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { HikingCourseSummaryType, HikingMountainSummaryType, HikingPoiType } from '@repo/api-contract';
 import { ApiError, useMapPublicConfig } from '@repo/shared';
 import {
   HIKING_MAP_POI_CATEGORIES,
+  HIKING_PEAK_POINT_ZOOM,
   HIKING_SELECTED_COURSE_COLOR,
+  LIFE_CELL_ORIGIN,
+  buildHikingCellMarkerDataUrl,
   buildHikingMountainMarkerDataUrl,
+  buildHikingPeakMarkerDataUrl,
   buildHikingPoiMarkerDataUrl,
   buildMyLocationMarkerDataUrl,
   hikingCourseColor,
   isHikingMapPoiCategory,
+  lifeCellSizeDeg,
   type HikingMapPoiCategory,
   type LatLng,
 } from '@repo/utils';
-import { MapCanvas, type MapCanvasHandle, type MapMarker } from '~/components/restaurant/MapCanvas';
+import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } from '~/components/restaurant/MapCanvas';
 import { cn } from '~/lib/utils';
 import { decodePieces } from './hikingFormat';
 
-// 등산 지도 — 산 마커(초록 산) 위에, 산을 고르면 그 산 코스 선 전부(코스마다 색, 고른 코스는 빨강·맨 위), 코스를 고르면
+// 등산 지도 — 산 마커(100대 명산 초록 산·전국 봉우리 연초록 산 — 줌 10 아래에선 봉우리를 셀 개수 버블로 묶는다) 위에, 산을 고르면 그 산 코스 선 전부(코스마다 색, 고른 코스는 빨강·맨 위), 코스를 고르면
 // 코스 지점(정상·갈림길·위험·화장실·주차·정류장 …)과 고도 그래프에서 가리킨 자리. 카메라는 산·코스 범위에 맞춘다.
 
 const MOUNTAIN_ICON = { src: buildHikingMountainMarkerDataUrl(false), selectedSrc: buildHikingMountainMarkerDataUrl(true) };
+const PEAK_ICON = { src: buildHikingPeakMarkerDataUrl(false), selectedSrc: buildHikingPeakMarkerDataUrl(true) };
+const CELL_PREFIX = 'cell:';
+const cellIconCache = new Map<number, string>();
+const cellIcon = (count: number): string => {
+  let url = cellIconCache.get(count);
+  if (!url) {
+    url = buildHikingCellMarkerDataUrl(count);
+    cellIconCache.set(count, url);
+  }
+  return url;
+};
 const POI_ICON = Object.fromEntries(
   HIKING_MAP_POI_CATEGORIES.map((c) => [
     c,
@@ -69,14 +85,52 @@ export const HikingMap = ({
   const keyMissing = config.isError && config.error instanceof ApiError && config.error.statusCode === 404;
   const handleRef = useRef<MapCanvasHandle>(null);
 
-  // 코스를 고르면 그 산 마커는 뺀다 — 정상 지점(PEAK)과 같은 자리라 겹친다.
-  const markers = useMemo<MapMarker[]>(
-    () =>
-      mountains
-        .filter((m) => !(selectedCourseId && m.id === selectedMountainId))
-        .map((m) => ({ id: m.id, lat: m.lat, lng: m.lng, label: m.name, icon: MOUNTAIN_ICON })),
-    [mountains, selectedCourseId, selectedMountainId],
-  );
+  // 화면 범위·줌 — 지도는 외부 시스템이라 콜백으로 받아 둔다. 줌 HIKING_PEAK_POINT_ZOOM 아래면 100대 명산은 마커, 봉우리는
+  // 셀 버블(일상지도·주차와 같은 격자), 이상이면 화면 안(여유 20%) 산을 전부 마커로.
+  const [view, setView] = useState<MapViewport | null>(null);
+  const zoom = Math.floor(view?.zoom ?? KOREA_CENTER.zoom);
+  const lowZoom = zoom < HIKING_PEAK_POINT_ZOOM;
+  const box = lowZoom ? null : view?.bbox ?? null;
+
+  // 코스를 고르면 그 산 마커는 뺀다 — 정상 지점(PEAK)과 같은 자리라 겹친다. 고른 산은 줌과 상관없이 마커로.
+  const { markers, cells } = useMemo(() => {
+    const visible = mountains.filter((m) => !(selectedCourseId && m.id === selectedMountainId));
+    const toMarker = (m: HikingMountainSummaryType): MapMarker => ({ id: m.id, lat: m.lat, lng: m.lng, label: m.name, icon: m.kind === 'peak' ? PEAK_ICON : MOUNTAIN_ICON });
+    if (!lowZoom) {
+      const padLat = box ? (box.maxLat - box.minLat) * 0.2 : 0;
+      const padLng = box ? (box.maxLng - box.minLng) * 0.2 : 0;
+      const inBox = (m: HikingMountainSummaryType) =>
+        !box || (m.lat >= box.minLat - padLat && m.lat <= box.maxLat + padLat && m.lng >= box.minLng - padLng && m.lng <= box.maxLng + padLng);
+      return { markers: visible.filter((m) => inBox(m) || m.id === selectedMountainId).map(toMarker), cells: [] as { lat: number; lng: number }[] };
+    }
+    const { dLng, dLat } = lifeCellSizeDeg(zoom);
+    const groups = new Map<string, HikingMountainSummaryType[]>();
+    const out: MapMarker[] = [];
+    for (const m of visible) {
+      if (m.kind !== 'peak' || m.id === selectedMountainId) {
+        out.push(toMarker(m));
+        continue;
+      }
+      const k = `${Math.floor((m.lng - LIFE_CELL_ORIGIN.lng) / dLng)},${Math.floor((m.lat - LIFE_CELL_ORIGIN.lat) / dLat)}`;
+      const g = groups.get(k);
+      if (g) g.push(m);
+      else groups.set(k, [m]);
+    }
+    const centers: { lat: number; lng: number }[] = [];
+    for (const g of groups.values()) {
+      // 하나뿐인 셀은 봉우리 마커 그대로.
+      if (g.length === 1) {
+        out.push(toMarker(g[0]!));
+        continue;
+      }
+      const c = { lat: g.reduce((s, m) => s + m.lat, 0) / g.length, lng: g.reduce((s, m) => s + m.lng, 0) / g.length };
+      const src = cellIcon(g.length);
+      // 개수를 새긴 버블이라 셀마다 그림이 다르다 — 사전 래스터화에서 뺀다(perMarker), 줌 축소 없이(fixedScale).
+      out.push({ id: `${CELL_PREFIX}${centers.length}`, lat: c.lat, lng: c.lng, icon: { src, selectedSrc: src, perMarker: true }, fixedScale: true });
+      centers.push(c);
+    }
+    return { markers: out, cells: centers };
+  }, [mountains, selectedCourseId, selectedMountainId, lowZoom, zoom, box]);
 
   const overlayMarkers = useMemo<MapMarker[]>(() => {
     const out: MapMarker[] = [];
@@ -121,9 +175,13 @@ export const HikingMap = ({
   const handleMarkerSelect = useCallback(
     (id: string) => {
       if (id.startsWith(POI_PREFIX)) onSelectPoi(id.slice(POI_PREFIX.length));
-      else if (id !== HOVER_ID && id !== 'me') onSelectMountain(id);
+      else if (id.startsWith(CELL_PREFIX)) {
+        // 봉우리 묶음 — 봉우리가 하나씩 보이는 줌까지 들어간다.
+        const c = cells[Number(id.slice(CELL_PREFIX.length))];
+        if (c) handleRef.current?.flyToZoomIn(c.lat, c.lng, HIKING_PEAK_POINT_ZOOM + 1, { bottomInset: fitBottomInset });
+      } else if (id !== HOVER_ID && id !== 'me') onSelectMountain(id);
     },
-    [onSelectMountain, onSelectPoi],
+    [onSelectMountain, onSelectPoi, cells, fitBottomInset],
   );
 
   if (config.isLoading) {
@@ -150,6 +208,7 @@ export const HikingMap = ({
         selectedMarkerId={selectedMountainId}
         initialCenter={KOREA_CENTER}
         onMarkerSelect={handleMarkerSelect}
+        onViewportSync={setView}
         overlayMarkers={overlayMarkers}
         routeLine={routeLine}
         poolKey="hiking"

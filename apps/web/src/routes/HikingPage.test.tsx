@@ -20,7 +20,7 @@ import { usePanelPrefsStore } from '~/stores/panelPrefsStore';
 import { pointAtDistance, rankMountains } from '~/components/hiking/hikingFormat';
 import { HikingPage } from './HikingPage';
 
-// 등산 페이지 스모크 — 지도(OL)는 목. ① 산 목록(이름순)·검색·권역 칩 ② 산 클릭 → URL m + 상세(선정 이유·공식 코스·
+// 등산 페이지 스모크 — 지도(OL)는 목. ① 산 목록(기본 가까운순 — jsdom 은 위치가 없어 서울 시청 기준)·검색·권역 칩 ② 산 클릭 → URL m + 상세(선정 이유·공식 코스·
 // 코스 카드) ③ 코스 클릭 → URL c + 코스 상세(숫자·고도 그래프·이정표 지점) → 뒤로. 그리고 hikingFormat 순수 함수.
 
 vi.mock('~/components/restaurant/MapCanvas', () => ({
@@ -41,12 +41,16 @@ const mountain = (p: Partial<HikingMountainSummaryType> & { id: string; name: st
   minLengthM: 3000,
   maxLengthM: 6000,
   images: [],
+  kind: 'top100',
+  peaks: [],
   ...p,
 });
 const GARI = mountain({ id: '421100101', name: '가리산', heightM: 1051, area: '강원도 춘천시 북산면', regions: ['gangwon'], courseCount: 2, images: [1] });
 const GWANAK = mountain({ id: '111100101', name: '관악산', heightM: 632, area: '서울특별시 관악구, 경기도 안양시', regions: ['seoul', 'gyeonggi'] });
-const HALLA = mountain({ id: '500000101', name: '한라산', heightM: 1947, area: '제주도 제주시', regions: ['jeju'], lat: 33.36, lng: 126.53 });
-const list: HikingMountainsResultType = { items: [HALLA, GARI, GWANAK], loadedAt: '2026-10-25T00:00:00.000Z' };
+const HALLA = mountain({ id: '500000101', name: '한라산', heightM: 1947, area: '제주도 제주시', regions: ['jeju'], lat: 33.36, lng: 126.53, peaks: ['백록담'] });
+// 전국 주요 봉우리(5차) — 서울 시청 가까이라 가까운순 맨 앞.
+const INWANG = mountain({ id: '1111020050', name: '인왕산', kind: 'peak', heightM: 338, area: '서울 종로구', regions: ['seoul'], lat: 37.585, lng: 126.958, minLengthM: 2100, maxLengthM: 2100 });
+const list: HikingMountainsResultType = { items: [HALLA, GARI, GWANAK, INWANG], loadedAt: '2026-10-25T00:00:00.000Z' };
 
 const LINE = encodePolyline([
   { lat: 37.0, lng: 127.0 },
@@ -74,6 +78,7 @@ const courseSummary = (p: Partial<HikingCourseSummaryType> & { id: string; no: n
   gapCount: 0,
   gapM: 0,
   roughSurfaces: [],
+  source: 'top100',
   bbox: { minLat: 37, minLng: 127, maxLat: 37.006, maxLng: 127 },
   pieces: [LINE],
   ...p,
@@ -102,7 +107,8 @@ const gariDetail: HikingMountainDetailType = {
   summitName: '가리산 정상',
   summitEle: 1040,
   bbox: { minLat: 37, minLng: 127, maxLat: 37.006, maxLng: 127 },
-  courses: [C1, C2],
+  courses: [C1, { ...C2, source: 'peak' as const }],
+  neighbors: [{ id: INWANG.id, name: '인왕산', kind: 'peak', heightM: 338, lat: INWANG.lat, lng: INWANG.lng, distM: 1_200 }],
 };
 const c2Detail: HikingCourseDetailType = {
   ...C2,
@@ -314,13 +320,22 @@ const rows = (): string[] =>
     .map((li) => li.textContent?.replace(/\s+/g, ' ').trim() ?? '');
 
 describe('HikingPage', () => {
-  it('산 목록 — 이름순, 검색·권역 칩으로 거른다', async () => {
+  it('산 목록 — 기본 가까운순(위치 없으면 서울 시청 기준)·100대 명산 배지, 이름순, 검색(합친 봉우리 이름도)·권역 칩으로 거른다', async () => {
     renderPage();
-    await waitFor(() => expect(rows()).toHaveLength(3));
-    expect(rows()[0]).toContain('가리산1,051m');
-    expect(rows()[1]).toContain('관악산632m');
-    expect(rows()[2]).toContain('한라산1,947m');
-    expect(rows()[0]).toContain('코스 2개 · 3.0km~6.0km');
+    await waitFor(() => expect(rows()).toHaveLength(4));
+    expect(rows()[0]).toContain('인왕산338m');
+    expect(rows()[0]).not.toContain('100대 명산');
+    expect(rows()[1]).toContain('가리산100대 명산1,051m');
+    expect(rows()[1]).toContain('코스 2개 · 3.0km~6.0km');
+    expect(rows()[3]).toContain('한라산');
+    expect(screen.getByTestId('hiking-near-basis')).toHaveTextContent('서울 시청 기준');
+    fireEvent.change(screen.getByRole('combobox', { name: '정렬' }), { target: { value: 'name' } });
+    await waitFor(() => expect(rows()[0]).toContain('가리산'));
+    expect(rows().map((r) => r.slice(0, 3))).toEqual(['가리산', '관악산', '인왕산', '한라산']);
+    expect(screen.getByTestId('location-search')).toHaveTextContent('s=name');
+    fireEvent.change(screen.getByRole('searchbox', { name: '산 검색' }), { target: { value: '백록담' } });
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toContain('한라산');
     fireEvent.change(screen.getByRole('searchbox', { name: '산 검색' }), { target: { value: '안양' } });
     await waitFor(() => expect(rows()).toHaveLength(1));
     expect(rows()[0]).toContain('관악산');
@@ -334,7 +349,7 @@ describe('HikingPage', () => {
 
   it('산 → 코스 → 뒤로: URL m·c, 선정 이유·공식 코스·코스 카드, 코스 숫자·고도 그래프·이정표', async () => {
     renderPage();
-    await waitFor(() => expect(rows()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(4));
     fireEvent.click(within(screen.getByTestId('hiking-list')).getByText('가리산'));
     const m = await screen.findByTestId('hiking-mountain');
     expect(screen.getByTestId('location-search')).toHaveTextContent('m=421100101');
@@ -348,6 +363,10 @@ describe('HikingPage', () => {
     expect(cards[1]).toHaveTextContent('왕복 5시간');
     expect(cards[1]).toHaveTextContent('오르막 678m왕복');
     expect(cards[1]).toHaveTextContent('암릉');
+    // 합친 봉우리 코스 표시 · 이어진 봉우리(정상끼리 거리).
+    expect(cards[1]).toHaveTextContent('봉우리 자료');
+    expect(cards[0]).not.toHaveTextContent('봉우리 자료');
+    expect(within(screen.getByTestId('hiking-neighbors')).getByRole('button')).toHaveTextContent('인왕산338m· 1km');
 
     fireEvent.click(within(cards[1]!).getByRole('button'));
     const c = await screen.findByTestId('hiking-course');
@@ -398,7 +417,7 @@ describe('HikingPage', () => {
 
   it('추천 모드 — 토글을 켜면 입력 칸·추천 목록, 입력을 바꾸면 다시 받고(URL), 고르면 산·코스로', async () => {
     renderPage();
-    await waitFor(() => expect(rows()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(4));
     fireEvent.click(screen.getByRole('button', { name: '추천' }));
     const list = await screen.findByTestId('hiking-recommend-list');
     expect(screen.getByTestId('location-search')).toHaveTextContent('rec=1');
@@ -493,7 +512,7 @@ describe('HikingPage (모바일 시트)', () => {
     expect(within(subbar).getByRole('button', { name: '제주' })).toBeInTheDocument();
     expect(document.querySelector('[data-sheet-handle]')).not.toBeNull();
     const sheet = screen.getByTestId('hiking-list-sheet');
-    await waitFor(() => expect(within(sheet).getAllByRole('listitem')).toHaveLength(3));
+    await waitFor(() => expect(within(sheet).getAllByRole('listitem')).toHaveLength(4));
     expect(within(sheet).getByTestId('hiking-footer')).toBeInTheDocument();
     expect(screen.queryByTestId('hiking-detail-sheet')).toBeNull();
 
@@ -516,8 +535,8 @@ describe('HikingPage (모바일 시트)', () => {
 
 describe('hikingFormat', () => {
   it('rankMountains — 높은순·가까운순', () => {
-    expect(rankMountains(list.items, { q: '', group: null, sort: 'height', me: null }).map((r) => r.mountain.name)).toEqual(['한라산', '가리산', '관악산']);
-    const near = rankMountains(list.items, { q: '', group: null, sort: 'near', me: { lat: 33.4, lng: 126.5 } });
+    expect(rankMountains(list.items, { q: '', group: null, sort: 'height', origin: null }).map((r) => r.mountain.name)).toEqual(['한라산', '가리산', '관악산', '인왕산']);
+    const near = rankMountains(list.items, { q: '', group: null, sort: 'near', origin: { lat: 33.4, lng: 126.5 } });
     expect(near.map((r) => r.mountain.name)[0]).toBe('한라산');
   });
 

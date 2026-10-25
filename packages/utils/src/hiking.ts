@@ -225,6 +225,10 @@ export const hikingDifficultyReasons = (e: HikingEffort): string[] => {
 
 // ── 지도 색 ──────────────────────────────────────────────────────────────────
 export const HIKING_MOUNTAIN_COLOR = '#15803d';
+// 전국 주요 봉우리(5차) 마커·묶음 버블.
+export const HIKING_PEAK_COLOR = '#65a30d';
+// 이 줌부터 봉우리를 하나씩(아래는 100대 명산만 마커, 봉우리는 셀 버블).
+export const HIKING_PEAK_POINT_ZOOM = 10;
 // 같은 산 여러 코스를 구분하는 선 색(순환). 선택 코스는 HIKING_SELECTED_COURSE_COLOR.
 export const HIKING_COURSE_COLORS = ['#2563eb', '#db2777', '#0891b2', '#9333ea', '#ea580c', '#0d9488', '#4f46e5', '#be123c'] as const;
 export const HIKING_SELECTED_COURSE_COLOR = '#dc2626';

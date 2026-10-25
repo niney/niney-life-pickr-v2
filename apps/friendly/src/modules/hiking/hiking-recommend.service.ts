@@ -170,7 +170,9 @@ export class HikingRecommendService {
   private async build(): Promise<IndexedMountain[]> {
     const p = this.deps.prisma;
     const [rows, trail, lots, bus, subway] = await Promise.all([
+      // 전국 봉우리(5차)는 8차에 넣는다 — 후보가 스무 배로 늘어 가중치를 다시 맞춰야 한다. 100대 명산에 합친 봉우리 코스는 들어간다.
       p.hikingMountain.findMany({
+        where: { kind: 'top100' },
         select: {
           id: true,
           name: true,

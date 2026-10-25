@@ -6,21 +6,29 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { encodePolyline, hikingRegionsOf } from '@repo/utils';
 import { listZipEntries } from '../housing/housing-price-master.service.js';
 import { readZipEntryBuffer } from '../life-map/life-flood-master.service.js';
-import type { GdTrailRow, TrekkingPoiRow } from './hiking-api.adapter.js';
-import { courseSigungu, type SigunguShape } from './hiking-area.js';
+import { matchPeakInfo, type GdTrailRow, type MountainInfoRow, type TrekkingPoiRow } from './hiking-api.adapter.js';
+import { courseSigungu, sigunguArea, sigunguAt, type SigunguShape } from './hiking-area.js';
+import { LineGrid, PointGrid, overlapShare } from './hiking-grid.js';
 import {
   COURSE_POI_M,
   LINE_TOLERANCE_M,
+  VILLAGE_CATEGORY,
   buildCourse,
   cleanPlaceName,
   distM,
   guideSignposts,
   isGenericPlaceName,
+  isTrailNetwork,
   nameCourse,
   parseGpx,
+  peakPointName,
   projectOnCourse,
   simplifyLine,
   turnAt,
+  type BuiltCourse,
+  type BuiltPoint,
+  type CourseNames,
+  type GpxSignpost,
   type GpxWaypoint,
   type NamedPoint,
 } from './hiking-gpx.js';
@@ -69,6 +77,21 @@ export interface HikingBuildInput {
   // 시군구 경계(hiking-area parseSigunguGeo) — 없으면 코스 시군구를 비운다(null).
   sigungu: readonly SigunguShape[] | null;
   loadedAt: Date;
+  // ── 5차 전국 주요 봉우리(15108086) — 없으면 100대 명산만. ──
+  peaks?: readonly PreparedPeak[];
+  // 산정보 전체(봉우리 소개·높이·소재지).
+  mountainInfos?: readonly MountainInfoRow[];
+  // 들머리 이름 후보 — 지하철역·버스 정류장(TRANS)·공영 주차장(PARK). 스크립트가 DB 에서 봉우리 코스 끝 근처만 골라 준다.
+  places?: readonly PeakPlace[];
+  // 들머리 리·동 이름(역지오코딩 캐시) — villageKey(좌표) → 이름.
+  villages?: ReadonlyMap<string, string>;
+}
+
+export interface PeakPlace {
+  category: 'TRANS' | 'PARK';
+  name: string;
+  lat: number;
+  lng: number;
 }
 
 export interface HikingBuildReport {
@@ -93,6 +116,38 @@ export interface HikingBuildReport {
   guide: { signs: number; ownFrame: number; withNext: number; withPrev: number };
   // 시군구 — 시군구를 하나도 못 정한 코스, 코스당 시군구 수 최대.
   sigungu: { empty: string[]; maxPerCourse: number };
+  // 5차 전국 주요 봉우리 — 넣지 않았으면 null.
+  peaks: PeakBuildReport | null;
+}
+
+export interface PeakBuildReport {
+  folders: number;
+  // 코스로 쓴 파일 · 등산로 망(6차) · 트랙 점이 없는 파일.
+  courseFiles: number;
+  networkFiles: number;
+  emptyFiles: number;
+  // 코스가 하나라도 있는 봉우리.
+  withCourses: number;
+  // 100대 명산에 합친 봉우리·더한 코스·그 산 코스와 겹쳐 버린 코스.
+  merged: number;
+  mergedCourses: number;
+  mergedDup: number;
+  // 따로 산이 된 봉우리·코스·같은 봉우리 안에서 겹쳐 버린 코스.
+  independent: number;
+  independentCourses: number;
+  independentDup: number;
+  // 새로 만든 봉우리 지점 · 같은 자리 기존 봉우리 지점으로 이은 것.
+  peakPois: number;
+  aliasPois: number;
+  // 코스에 붙인 지나는 봉우리(새 봉우리 지점) 연결 수.
+  passLinks: number;
+  infoMatched: number;
+  // 봉우리 코스 이름 — 들머리를 역·정류장·주차장으로 · 리·동으로 · 번호로.
+  placeNamed: number;
+  villageNamed: number;
+  numberNamed: number;
+  // 이어진 봉우리가 있는 산.
+  withNeighbors: number;
 }
 
 export interface HikingRows {
@@ -101,6 +156,8 @@ export interface HikingRows {
   pois: Prisma.HikingPoiCreateManyInput[];
   coursePois: Prisma.HikingCoursePoiCreateManyInput[];
   report: HikingBuildReport;
+  // 따로 산이 된 봉우리 id → 산정보 id(사진 받기용).
+  peakInfoIds: Map<string, string>;
 }
 
 // API 에만 있는 지점을 코스에 붙이는 거리 — GPX 지점(COURSE_POI_M)보다 엄격하게(같은 산 다른 코스의 갈림길이 많다).
@@ -154,6 +211,7 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
     summitFromPeak: 0,
     guide: { signs: 0, ownFrame: 0, withNext: 0, withPrev: 0 },
     sigungu: { empty: [], maxPerCourse: 0 },
+    peaks: null,
   };
   const folders = new Set(input.files.map((f) => f.mountain));
   const gdByFolder = new Map<string, GdTrailRow & { id: string }>();
@@ -169,6 +227,8 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
   const pois: Prisma.HikingPoiCreateManyInput[] = [];
   const coursePois: Prisma.HikingCoursePoiCreateManyInput[] = [];
   const seenPoiIds = new Set<string>();
+  // 5차 봉우리 합치기·지나는 봉우리용 — 100대 명산 코스(정리된 선).
+  const top100Built: Top100Course[] = [];
 
   const filesByFolder = new Map<string, GpxCourseFile[]>();
   for (const f of input.files) filesByFolder.set(f.mountain, [...(filesByFolder.get(f.mountain) ?? []), f]);
@@ -306,41 +366,8 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
         if (sigungu.length === 0) report.sigungu.empty.push(`${folder}/${file.no}`);
         report.sigungu.maxPerCourse = Math.max(report.sigungu.maxPerCourse, sigungu.length);
       }
-      courses.push({
-        id,
-        mountainId: gd.id,
-        no: file.no,
-        name: names.name,
-        nameSource: names.source,
-        startName: names.startName,
-        endName: names.endName,
-        peakName: names.peakName,
-        lengthM: course.lengthM,
-        hasElevation: course.hasElevation,
-        gainM: course.gainM,
-        lossM: course.lossM,
-        minEle: course.minEle,
-        maxEle: course.maxEle,
-        startLat: course.start.lat,
-        startLng: course.start.lng,
-        startEle: course.start.ele,
-        endLat: course.end.lat,
-        endLng: course.end.lng,
-        endEle: course.end.ele,
-        isLoop: course.isLoop,
-        shape: course.shape,
-        moveMin: course.moveMin,
-        moveRevMin: course.moveRevMin,
-        steepPct: course.steepPct,
-        sigungu: sigungu ? JSON.stringify(sigungu) : null,
-        pieceCount: course.pieces.length,
-        gapCount: course.gaps.length,
-        gapM: course.gaps.reduce((s, g) => s + g, 0),
-        ...course.bbox,
-        pieces: JSON.stringify(course.pieces.map((p) => encodePolyline(simplifyLine(p, LINE_TOLERANCE_M)))),
-        profile: JSON.stringify(course.profile),
-        surfaces: JSON.stringify(course.surfaces),
-      });
+      top100Built.push({ id, mountainId: gd.id, course });
+      courses.push(courseRow({ id, mountainId: gd.id, no: file.no, names, course, sigungu, source: 'top100' }));
 
       // 이정표 안내 — 이 GPX 의 이정표가 있으면 그것(기록 방향을 안다), 없으면 병합된 지점의 이정표(API, 방향 모름).
       const named = [...links.values()]
@@ -393,6 +420,7 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
       minLengthM: Math.min(...lengths),
       maxLengthM: Math.max(...lengths),
       images: JSON.stringify(input.images.get(gd.id) ?? []),
+      kind: 'top100',
       loadedAt: input.loadedAt,
     });
 
@@ -422,13 +450,551 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
   // 원천 중복으로 빠진 지점을 가리키는 연결은 버린다(FK).
   const kept = coursePois.filter((cp) => seenPoiIds.has(cp.poiId));
   report.coursePoiLinks = kept.length;
-  return { mountains, courses, pois, coursePois: kept, report };
+  const rows: HikingRows = { mountains, courses, pois, coursePois: kept, report, peakInfoIds: new Map() };
+  if (input.peaks && input.peaks.length > 0) appendPeaks(rows, top100Built, input);
+  return rows;
+};
+
+// 코스 행 — 100대 명산·봉우리 공용.
+const courseRow = (a: {
+  id: string;
+  mountainId: string;
+  no: number;
+  names: CourseNames;
+  course: BuiltCourse;
+  sigungu: string[] | null;
+  source: 'top100' | 'peak';
+}): Prisma.HikingCourseCreateManyInput => {
+  const { course, names } = a;
+  return {
+    id: a.id,
+    mountainId: a.mountainId,
+    no: a.no,
+    name: names.name,
+    nameSource: names.source,
+    startName: names.startName,
+    endName: names.endName,
+    peakName: names.peakName,
+    lengthM: course.lengthM,
+    hasElevation: course.hasElevation,
+    gainM: course.gainM,
+    lossM: course.lossM,
+    minEle: course.minEle,
+    maxEle: course.maxEle,
+    startLat: course.start.lat,
+    startLng: course.start.lng,
+    startEle: course.start.ele,
+    endLat: course.end.lat,
+    endLng: course.end.lng,
+    endEle: course.end.ele,
+    isLoop: course.isLoop,
+    shape: course.shape,
+    moveMin: course.moveMin,
+    moveRevMin: course.moveRevMin,
+    steepPct: course.steepPct,
+    sigungu: a.sigungu ? JSON.stringify(a.sigungu) : null,
+    source: a.source,
+    pieceCount: course.pieces.length,
+    gapCount: course.gaps.length,
+    gapM: course.gaps.reduce((s, g) => s + g, 0),
+    ...course.bbox,
+    pieces: JSON.stringify(course.pieces.map((p) => encodePolyline(simplifyLine(p, LINE_TOLERANCE_M)))),
+    profile: JSON.stringify(course.profile),
+    surfaces: JSON.stringify(course.surfaces),
+  };
+};
+
+// ── 전국 주요 봉우리(5차) ──────────────────────────────────────────────────────
+// docs/PLAN-hiking.md §전국 확장. 원천: 한국등산트레킹지원센터 전국 주요 봉우리 코스(15108086) — 폴더 `<봉우리 코드 10자리>_<이름>`,
+// 지점·노면 없이 선·고도만. 여러 조각 파일은 거의 다 등산로 망(isTrailNetwork)이라 5차는 한 줄(이어 붙는) 코스만 쓴다.
+//   - 정상(코스 중 가장 높은 점)이 100대 명산 코스 범위(여유 200m) 안이고 그 산 코스 선 1km 안이면 그 산에 합친다 — 코스는 그 산 코스와
+//     80% 넘게 겹치면(20m) 버리고, 봉우리는 그 산의 봉우리 지점으로(같은 자리·같은 이름 기존 봉우리가 있으면 그것으로 잇는다).
+//   - 아니면 따로 산(kind peak, id = 봉우리 코드). 같은 봉우리 안에서 겹치는 코스는 버린다.
+//   - 모든 코스에 지나는 봉우리(선 30m 안), 봉우리 코스에는 근처 등산 지점(100대 명산 GPX·API)도 붙인다. 산마다 이어진 봉우리
+//     (정상이 서로의 코스 선 30m 안 — 산으로 자동 묶으면 사슬처럼 번져서 묶지 않고 잇기만 한다).
+
+const PEAK_FOLDER_RE = /^(\d{10})_(.+)$/;
+const PEAK_JOIN_M = 1_000;
+// 범위 판정 여유(≈200m) — 정상이 그 산 코스 범위 가장자리 바로 밖에 찍히는 봉우리(능선 끝 봉우리)도 합치게.
+const PEAK_JOIN_PAD_DEG = 0.002;
+const PEAK_DUP_SHARE = 0.8;
+const PEAK_DUP_M = 20;
+// 코스 선에서 이 안의 지점을 코스 지점으로(봉우리·등산 지점 — API 지점 연결과 같은 엄격함).
+const PEAK_LINK_M = API_POI_LINK_M;
+// 한 코스에 붙는 봉우리끼리 이 안이면 같은 봉우리로 보고 하나만(GPX 봉우리 우선).
+const PEAK_SAME_ON_COURSE_M = 50;
+const PEAK_ALIAS_SPOT_M = 30;
+const PEAK_ALIAS_NAME_M = 150;
+const PLACE_NAME_M = 300;
+const NEIGHBOR_M = 30;
+const NEIGHBOR_MAX = 8;
+// 100대 명산에 더한 봉우리 코스의 순번 — 원래 GPX 번호(최대 37) 뒤.
+const MERGED_NO_BASE = 100;
+
+export interface PreparedPeakCourse {
+  fileNo: number;
+  course: BuiltCourse;
+}
+export interface PreparedPeak {
+  code: string;
+  folder: string;
+  // 산 목록 이름(폴더 이름 그대로 — "장군봉(노원구)"처럼 동명 구분이 들어 있다) · 봉우리 지점 이름(지역 괄호 뗌).
+  name: string;
+  pointName: string;
+  courses: PreparedPeakCourse[];
+  networkFiles: number;
+  emptyFiles: number;
+  // 코스 중 가장 높은 점(고도 없으면 null).
+  top: BuiltPoint | null;
+}
+
+// 파일 하나씩 정리해 쌓는다 — 원문(풀면 538MB)을 한꺼번에 들고 있지 않게.
+const addPeakFile = (byCode: Map<string, PreparedPeak>, f: GpxCourseFile): void => {
+  const m = PEAK_FOLDER_RE.exec(f.mountain);
+  if (!m) return;
+  const code = m[1]!;
+  let peak = byCode.get(code);
+  if (!peak) {
+    const name = m[2]!.trim();
+    peak = { code, folder: f.mountain, name, pointName: peakPointName(name), courses: [], networkFiles: 0, emptyFiles: 0, top: null };
+    byCode.set(code, peak);
+  }
+  const parsed = parseGpx(f.xml);
+  if (isTrailNetwork(parsed.segments)) {
+    peak.networkFiles += 1;
+    return;
+  }
+  const course = buildCourse(parsed);
+  if (!course) {
+    peak.emptyFiles += 1;
+    return;
+  }
+  peak.courses.push({ fileNo: f.no, course });
+  if (course.top && (!peak.top || course.top.ele! > peak.top.ele!)) peak.top = course.top;
+};
+
+const finishPeaks = (byCode: Map<string, PreparedPeak>): PreparedPeak[] => {
+  const out = [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code));
+  for (const p of out) p.courses.sort((a, b) => a.fileNo - b.fileNo);
+  return out;
+};
+
+export const preparePeaks = (files: readonly GpxCourseFile[]): PreparedPeak[] => {
+  const byCode = new Map<string, PreparedPeak>();
+  for (const f of files) addPeakFile(byCode, f);
+  return finishPeaks(byCode);
+};
+
+export const readPeakZip = async (zipPath: string): Promise<PreparedPeak[]> => {
+  const byCode = new Map<string, PreparedPeak>();
+  for (const entry of await listZipEntries(zipPath)) {
+    const m = GPX_ENTRY_RE.exec(entry.name);
+    if (!m) continue;
+    const buf = await readZipEntryBuffer(zipPath, entry);
+    addPeakFile(byCode, { mountain: m[1]!.normalize('NFC'), no: Number(m[2]), xml: buf.toString('utf8') });
+  }
+  return finishPeaks(byCode);
+};
+
+// 역지오코딩 캐시 키(소수 4자리 ≈ 10m).
+export const villageKey = (p: { lat: number; lng: number }): string => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`;
+// 봉우리 코스 끝 — 원점회귀는 시작만(들머리 이름 후보를 찾을 자리).
+export const peakCourseEnds = (peaks: readonly PreparedPeak[]): { lat: number; lng: number }[] =>
+  peaks.flatMap((p) => p.courses.flatMap(({ course }) => (course.isLoop ? [course.start] : [course.start, course.end])));
+
+interface Top100Course {
+  id: string;
+  mountainId: string;
+  course: BuiltCourse;
+}
+interface PoiLite {
+  id: string;
+  mountainId: string;
+  category: string;
+  name: string | null;
+  lat: number;
+  lng: number;
+  ele: number | null;
+  signposts: GpxSignpost[];
+  source: string;
+}
+interface PeakEntry {
+  id: string;
+  mountainId: string;
+  no: number;
+  course: BuiltCourse;
+  peak: PreparedPeak;
+  merged: boolean;
+}
+
+const compactName = (s: string): string => s.replace(/[\s·.,]/g, '');
+// "도봉산(신선대)" → ["도봉산", "신선대"] — 100대 명산의 같은 이름 봉우리 지점을 찾는 이름들.
+const peakLabels = (pointName: string): string[] => {
+  const inner = [...pointName.matchAll(/\(([^)]+)\)/g)].map((m) => m[1]!);
+  return [pointName.replace(/\s*\([^)]*\)/g, ''), ...inner].map(compactName).filter((s) => s.length >= 2);
+};
+
+// 따로 있는 산 이름 — 끝이 '산'이고 그 100대 명산 이름을 담지 않으면(북한산 옆 인왕산·관악산 옆 우면산·신불산 옆 간월산) 범위·거리가
+// 맞아도 합치지 않고 따로 둔다(이어진 봉우리로 잇는다). 실측: 합칠 뻔한 314곳 중 61곳. 봉·대·재 같은 봉우리는 합친다.
+export const isSeparateMountainName = (pointName: string, hostBase: string): boolean => {
+  const core = compactName(pointName.replace(/\s*\([^)]*\)/g, ''));
+  const base = compactName(hostBase);
+  return /산$/.test(core) && !core.includes(base) && !base.includes(core);
+};
+// 이름 끝 괄호의 지역("인릉산(서초구)" → 서초구) — 산정보·소재지를 고를 때 정상 시군구보다 먼저 본다.
+const regionParen = (name: string): string | null => /\(([^()]+(?:시|군|구))\)\s*$/.exec(name)?.[1] ?? null;
+
+const appendPeaks = (rows: HikingRows, top100: readonly Top100Course[], input: HikingBuildInput): void => {
+  const peaks = input.peaks ?? [];
+  const rep: PeakBuildReport = {
+    folders: peaks.length,
+    courseFiles: 0,
+    networkFiles: 0,
+    emptyFiles: 0,
+    withCourses: 0,
+    merged: 0,
+    mergedCourses: 0,
+    mergedDup: 0,
+    independent: 0,
+    independentCourses: 0,
+    independentDup: 0,
+    peakPois: 0,
+    aliasPois: 0,
+    passLinks: 0,
+    infoMatched: 0,
+    placeNamed: 0,
+    villageNamed: 0,
+    numberNamed: 0,
+    withNeighbors: 0,
+  };
+  rows.report.peaks = rep;
+  for (const p of peaks) {
+    rep.courseFiles += p.courses.length;
+    rep.networkFiles += p.networkFiles;
+    rep.emptyFiles += p.emptyFiles;
+    if (p.courses.length > 0) rep.withCourses += 1;
+  }
+
+  const mountainById = new Map(rows.mountains.map((m) => [m.id, m]));
+  const poiLites: PoiLite[] = rows.pois.map((p) => ({
+    id: p.id,
+    mountainId: p.mountainId,
+    category: p.category,
+    name: p.name ?? null,
+    lat: p.lat,
+    lng: p.lng,
+    ele: p.ele ?? null,
+    signposts: p.signposts ? (JSON.parse(p.signposts) as GpxSignpost[]) : [],
+    source: p.source,
+  }));
+  const poiById = new Map(poiLites.map((p) => [p.id, p]));
+  const addPoi = (p: PoiLite): void => {
+    poiLites.push(p);
+    poiById.set(p.id, p);
+    rows.pois.push({ id: p.id, mountainId: p.mountainId, category: p.category, name: p.name, description: null, lat: p.lat, lng: p.lng, ele: p.ele, signposts: null, source: p.source });
+    rep.peakPois += 1;
+  };
+  const peakPoi = (peak: PreparedPeak, mountainId: string, top: BuiltPoint): PoiLite => ({
+    id: `peak:${peak.code}`,
+    mountainId,
+    category: 'PEAK',
+    name: peak.pointName,
+    lat: top.lat,
+    lng: top.lng,
+    ele: top.ele !== null ? Math.round(top.ele) : null,
+    signposts: [],
+    source: 'peak',
+  });
+
+  // 100대 명산 코스 선 — 합치기(1km)·겹침(20m).
+  const nearGrid = new LineGrid<string>(250, 25);
+  const dupGrid = new LineGrid<string>(10, 5);
+  for (const t of top100) {
+    for (const piece of t.course.pieces) {
+      nearGrid.addLine(piece, t.mountainId);
+      dupGrid.addLine(piece, t.mountainId);
+    }
+  }
+  const top100Rows = rows.mountains.filter((m) => (m.kind ?? 'top100') === 'top100');
+  const bboxArea = (m: { minLat: number; minLng: number; maxLat: number; maxLng: number }) => (m.maxLat - m.minLat) * (m.maxLng - m.minLng);
+
+  const entries: PeakEntry[] = [];
+  const subPeaks = new Map<string, string[]>();
+  const nextNo = new Map<string, number>();
+  const independents: PreparedPeak[] = [];
+
+  for (const peak of peaks) {
+    if (peak.courses.length === 0) continue;
+    const top = peak.top ?? peak.courses[0]!.course.start;
+    const host = top100Rows
+      .filter(
+        (m) =>
+          top.lat >= m.minLat - PEAK_JOIN_PAD_DEG &&
+          top.lat <= m.maxLat + PEAK_JOIN_PAD_DEG &&
+          top.lng >= m.minLng - PEAK_JOIN_PAD_DEG &&
+          top.lng <= m.maxLng + PEAK_JOIN_PAD_DEG &&
+          nearGrid.has(top.lat, top.lng, PEAK_JOIN_M, m.id) &&
+          !isSeparateMountainName(peak.pointName, baseName(m.name)),
+      )
+      .sort((a, b) => bboxArea(a) - bboxArea(b))[0];
+
+    if (host) {
+      rep.merged += 1;
+      for (const pc of peak.courses) {
+        if (overlapShare(pc.course.pieces, dupGrid, host.id, PEAK_DUP_M) >= PEAK_DUP_SHARE) {
+          rep.mergedDup += 1;
+          continue;
+        }
+        const no = (nextNo.get(host.id) ?? MERGED_NO_BASE) + 1;
+        nextNo.set(host.id, no);
+        entries.push({ id: `${peak.code}-${pc.fileNo}`, mountainId: host.id, no, course: pc.course, peak, merged: true });
+        for (const piece of pc.course.pieces) dupGrid.addLine(piece, host.id);
+        rep.mergedCourses += 1;
+      }
+      // 같은 자리(30m) 봉우리, 또는 150m 안 같은 이름 봉우리가 그 산에 이미 있으면 새로 만들지 않는다(코스 연결은 그 지점으로).
+      const labels = peakLabels(peak.pointName);
+      const same = poiLites.find((p) => {
+        if (p.mountainId !== host.id || p.category !== 'PEAK') return false;
+        const d = distM(p, top);
+        if (d <= PEAK_ALIAS_SPOT_M) return true;
+        const n = p.name ? compactName(cleanPlaceName(p.name)) : '';
+        return d <= PEAK_ALIAS_NAME_M && n.length >= 2 && labels.some((l) => n === l || n.includes(l));
+      });
+      if (same) rep.aliasPois += 1;
+      else addPoi(peakPoi(peak, host.id, top));
+      const base = baseName(host.name);
+      if (compactName(peak.pointName) !== compactName(base)) subPeaks.set(host.id, [...(subPeaks.get(host.id) ?? []), peak.pointName]);
+      continue;
+    }
+
+    const own = new LineGrid<string>(10, 5);
+    let added = 0;
+    for (const pc of peak.courses) {
+      if (added > 0 && overlapShare(pc.course.pieces, own, peak.code, PEAK_DUP_M) >= PEAK_DUP_SHARE) {
+        rep.independentDup += 1;
+        continue;
+      }
+      entries.push({ id: `${peak.code}-${pc.fileNo}`, mountainId: peak.code, no: pc.fileNo, course: pc.course, peak, merged: false });
+      for (const piece of pc.course.pieces) own.addLine(piece, peak.code);
+      added += 1;
+      rep.independentCourses += 1;
+    }
+    rep.independent += 1;
+    independents.push(peak);
+  }
+
+  // 따로 산이 된 봉우리 — 산 행(지점보다 먼저 넣어야 한다: FK).
+  const infoByName = new Map<string, MountainInfoRow[]>();
+  for (const info of input.mountainInfos ?? []) infoByName.set(info.name, [...(infoByName.get(info.name) ?? []), info]);
+  const entriesOf = new Map<string, PeakEntry[]>();
+  for (const e of entries) entriesOf.set(e.mountainId, [...(entriesOf.get(e.mountainId) ?? []), e]);
+  for (const peak of independents) {
+    const es = entriesOf.get(peak.code) ?? [];
+    const top = peak.top ?? es[0]!.course.start;
+    // 시군구 — 정상 자리, 이름 괄호의 지역, 코스가 걸친 곳(경계 능선의 산은 정상이 이웃 시군구에 찍히곤 한다).
+    const key = input.sigungu ? sigunguAt(input.sigungu, top.lat, top.lng) : null;
+    const crossed = input.sigungu ? [...new Set(es.flatMap((e) => courseSigungu(e.course, input.sigungu!)))] : [];
+    const paren = regionParen(peak.name);
+    const parenKey = paren ? (crossed.find((k) => k.split(':')[1] === paren) ?? null) : null;
+    const nameOf = (k: string) => k.split(':')[1] ?? '';
+    const info = matchPeakInfo(
+      peak.name,
+      { preferred: [...(paren ? [paren] : []), ...(key ? [nameOf(key)] : [])], others: crossed.map(nameOf) },
+      infoByName,
+    );
+    if (info) {
+      rep.infoMatched += 1;
+      rows.peakInfoIds.set(peak.code, info.id);
+    }
+    const areaKey = parenKey ?? key ?? crossed[0] ?? null;
+    const area = info?.address ?? (areaKey ? sigunguArea(areaKey) : null);
+    const lengths = es.map((e) => e.course.lengthM);
+    const row: Prisma.HikingMountainCreateManyInput = {
+      id: peak.code,
+      name: peak.name,
+      gpxName: peak.folder,
+      subtitle: null,
+      heightM: info?.heightM ?? (top.ele !== null ? Math.round(top.ele) : null),
+      area,
+      regions: hikingRegionsOf(area).join(','),
+      overview: info?.details ?? null,
+      details: null,
+      reason: null,
+      officialCourses: null,
+      summitName: peak.pointName,
+      summitLat: top.lat,
+      summitLng: top.lng,
+      summitEle: top.ele !== null ? Math.round(top.ele) : null,
+      minLat: Math.min(...es.map((e) => e.course.bbox.minLat)),
+      minLng: Math.min(...es.map((e) => e.course.bbox.minLng)),
+      maxLat: Math.max(...es.map((e) => e.course.bbox.maxLat)),
+      maxLng: Math.max(...es.map((e) => e.course.bbox.maxLng)),
+      courseCount: es.length,
+      minLengthM: Math.min(...lengths),
+      maxLengthM: Math.max(...lengths),
+      images: JSON.stringify(input.images.get(peak.code) ?? []),
+      kind: 'peak',
+      loadedAt: input.loadedAt,
+    };
+    rows.mountains.push(row);
+    mountainById.set(row.id, row);
+    addPoi(peakPoi(peak, peak.code, top));
+  }
+
+  // 100대 명산에 더한 코스 — 그 산 범위·코스 수·길이·봉우리 이름.
+  for (const e of entries) {
+    if (!e.merged) continue;
+    const m = mountainById.get(e.mountainId)!;
+    m.minLat = Math.min(m.minLat, e.course.bbox.minLat);
+    m.minLng = Math.min(m.minLng, e.course.bbox.minLng);
+    m.maxLat = Math.max(m.maxLat, e.course.bbox.maxLat);
+    m.maxLng = Math.max(m.maxLng, e.course.bbox.maxLng);
+    m.courseCount += 1;
+    m.minLengthM = Math.min(m.minLengthM ?? Infinity, e.course.lengthM);
+    m.maxLengthM = Math.max(m.maxLengthM ?? 0, e.course.lengthM);
+  }
+  for (const [id, names] of subPeaks) mountainById.get(id)!.peaks = JSON.stringify([...new Set(names)]);
+
+  // 코스 지점 찾기 — 선 위 점마다 근처 지점을 모아 정확히 다시 잰다.
+  const poiGrid = new PointGrid<PoiLite>(50);
+  for (const p of poiLites) poiGrid.add(p.lat, p.lng, p);
+  const linksNear = (course: BuiltCourse, accept: (p: PoiLite) => boolean): { poi: PoiLite; atM: number }[] => {
+    const cand = new Set<PoiLite>();
+    for (const piece of course.pieces) {
+      for (let i = 0; i < piece.length; i += 2) for (const { value } of poiGrid.near(piece[i]!.lat, piece[i]!.lng, PEAK_LINK_M + 20)) if (accept(value)) cand.add(value);
+    }
+    const out: { poi: PoiLite; atM: number }[] = [];
+    for (const poi of cand) {
+      const pr = projectOnCourse(course, poi);
+      if (pr.offM <= PEAK_LINK_M) out.push({ poi, atM: pr.atM });
+    }
+    return out.sort((a, b) => a.atM - b.atM);
+  };
+
+  // 100대 명산 코스 — 새 봉우리 지점(지나는 봉우리)만 더한다. 같은 자리 GPX 봉우리가 이미 붙어 있으면 건너뛴다.
+  const linkedByCourse = new Map<string, Set<string>>();
+  for (const cp of rows.coursePois) {
+    const set = linkedByCourse.get(cp.courseId);
+    if (set) set.add(cp.poiId);
+    else linkedByCourse.set(cp.courseId, new Set([cp.poiId]));
+  }
+  for (const t of top100) {
+    const have = linkedByCourse.get(t.id) ?? new Set<string>();
+    const peaksHere = [...have].map((id) => poiById.get(id)).filter((p): p is PoiLite => !!p && p.category === 'PEAK');
+    for (const { poi, atM } of linksNear(t.course, (p) => p.source === 'peak' && !have.has(p.id))) {
+      if (peaksHere.some((q) => distM(q, poi) <= PEAK_SAME_ON_COURSE_M)) continue;
+      peaksHere.push(poi);
+      rows.coursePois.push({ courseId: t.id, poiId: poi.id, atM, guide: null });
+      rep.passLinks += 1;
+    }
+  }
+
+  // 봉우리 코스 — 지점·이름·행.
+  const placeGrid = new PointGrid<PeakPlace>(100);
+  for (const pl of input.places ?? []) placeGrid.add(pl.lat, pl.lng, pl);
+  const villages = input.villages ?? new Map<string, string>();
+  const nearPlaces = (p: { lat: number; lng: number }): NamedPoint[] =>
+    placeGrid
+      .near(p.lat, p.lng, PLACE_NAME_M)
+      .filter(({ value }) => distM(value, p) <= PLACE_NAME_M)
+      .map(({ value }) => ({ category: value.category, name: value.name, lat: value.lat, lng: value.lng, ele: null }));
+  const villagePoint = (p: BuiltPoint): NamedPoint[] => {
+    const v = villages.get(villageKey(p));
+    return v ? [{ category: VILLAGE_CATEGORY, name: v, lat: p.lat, lng: p.lng, ele: null }] : [];
+  };
+  for (const e of entries) {
+    // 등산 지점 먼저(GPX·API 봉우리를 새 봉우리보다 앞에) — 같은 자리 봉우리는 하나만.
+    const found = linksNear(e.course, () => true).sort((a, b) => Number(a.poi.source === 'peak') - Number(b.poi.source === 'peak') || a.atM - b.atM);
+    const kept: { poi: PoiLite; atM: number }[] = [];
+    for (const l of found) {
+      if (l.poi.category === 'PEAK' && kept.some((k) => k.poi.category === 'PEAK' && distM(k.poi, l.poi) <= PEAK_SAME_ON_COURSE_M)) continue;
+      kept.push(l);
+    }
+    kept.sort((a, b) => a.atM - b.atM);
+    const mountainName = e.merged ? baseName(mountainById.get(e.mountainId)!.name) : e.peak.pointName;
+    const ends = e.course.isLoop ? [e.course.start] : [e.course.start, e.course.end];
+    const wpts: NamedPoint[] = [
+      ...kept.map(
+        ({ poi }): NamedPoint => ({
+          category: poi.category,
+          name: poi.name,
+          lat: poi.lat,
+          lng: poi.lng,
+          ele: poi.ele,
+          source: poi.source === 'api' ? 'api' : poi.source === 'both' ? 'both' : 'gpx',
+        }),
+      ),
+      ...ends.flatMap(nearPlaces),
+      ...ends.flatMap(villagePoint),
+    ];
+    const names = nameCourse(e.course, wpts, mountainName, e.no);
+    const startVillage = villages.get(villageKey(e.course.start)) ?? null;
+    if (names.source === 'number') rep.numberNamed += 1;
+    else if (names.startName && names.startName === startVillage) rep.villageNamed += 1;
+    else if (names.startName) rep.placeNamed += 1;
+    const sigungu = input.sigungu ? courseSigungu(e.course, input.sigungu) : null;
+    if (sigungu) {
+      if (sigungu.length === 0) rows.report.sigungu.empty.push(e.id);
+      rows.report.sigungu.maxPerCourse = Math.max(rows.report.sigungu.maxPerCourse, sigungu.length);
+    }
+    rows.courses.push(courseRow({ id: e.id, mountainId: e.mountainId, no: e.no, names, course: e.course, sigungu, source: 'peak' }));
+    rows.report.courses += 1;
+    if (e.course.isLoop) rows.report.loops += 1;
+    if (e.course.reversed) rows.report.reversed += 1;
+    if (!e.course.hasElevation) rows.report.noElevation += 1;
+
+    // 이 코스 기준 이정표 안내 — 100대 명산 지점의 이정표는 이 기록의 방향을 모른다(sameFrame null).
+    const named = kept.filter((k) => k.poi.name && !isGenericPlaceName(cleanPlaceName(k.poi.name))).map((k) => ({ name: k.poi.name!, atM: k.atM }));
+    for (const k of kept) {
+      const guide =
+        k.poi.signposts.length > 0
+          ? guideSignposts({ signposts: k.poi.signposts, atM: k.atM, named, mountainName, topAtM: e.course.top?.atM ?? null, sameFrame: null, turnDeg: turnAt(e.course, k.atM) })
+          : [];
+      rows.coursePois.push({ courseId: e.id, poiId: k.poi.id, atM: k.atM, guide: guide.length > 0 ? JSON.stringify(guide) : null });
+      if (k.poi.source === 'peak') rep.passLinks += 1;
+    }
+  }
+
+  // 이어진 봉우리 — 한 산의 코스 선 30m 안에 다른 산 정상이 있으면 둘을 잇는다(정상끼리 가까운 순, 최대 8).
+  const summits = new PointGrid<string>(50);
+  for (const m of rows.mountains) if (m.summitLat != null && m.summitLng != null) summits.add(m.summitLat, m.summitLng, m.id);
+  const pairs = new Map<string, Map<string, number>>();
+  const addPair = (a: string, b: string, d: number) => {
+    for (const [x, y] of [
+      [a, b],
+      [b, a],
+    ] as const) {
+      const m = pairs.get(x) ?? new Map<string, number>();
+      m.set(y, Math.min(m.get(y) ?? Infinity, d));
+      pairs.set(x, m);
+    }
+  };
+  for (const { mountainId, course } of [...top100, ...entries]) {
+    const self = mountainById.get(mountainId)!;
+    for (const piece of course.pieces) {
+      for (let i = 0; i < piece.length; i += 2) {
+        const p = piece[i]!;
+        for (const s of summits.near(p.lat, p.lng, NEIGHBOR_M + 20)) {
+          if (s.value === mountainId || distM(s, p) > NEIGHBOR_M) continue;
+          const d = self.summitLat != null && self.summitLng != null ? distM({ lat: self.summitLat, lng: self.summitLng }, s) : Infinity;
+          addPair(mountainId, s.value, d);
+        }
+      }
+    }
+  }
+  for (const m of rows.mountains) {
+    const near = pairs.get(m.id);
+    m.neighbors = JSON.stringify(near ? [...near].sort((a, b) => a[1] - b[1]).slice(0, NEIGHBOR_MAX).map(([id]) => id) : []);
+    if (near && near.size > 0) rep.withNeighbors += 1;
+  }
+  rows.report.coursePoiLinks = rows.coursePois.length;
 };
 
 // ── 쓰기 ───────────────────────────────────────────────────────────────────────
 
 const CREATE_CHUNK = 300;
-const REPLACE_TX_TIMEOUT_MS = 120_000;
+// 전국 봉우리까지 넣으면 코스 4천·지점 연결 5만 남짓 — 넉넉히.
+const REPLACE_TX_TIMEOUT_MS = 300_000;
 
 // 전량 교체 — 한 트랜잭션 안에서 비우고 청크로 넣고 적재 이력까지(중간 상태 노출 없음).
 export const replaceHiking = async (prisma: PrismaClient, rows: HikingRows): Promise<void> => {

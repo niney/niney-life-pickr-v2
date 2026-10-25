@@ -224,6 +224,44 @@ export const reverseStitch = <P>(s: StitchResult<P>): StitchResult<P> => ({
   gaps: [...s.gaps].reverse(),
 });
 
+// ── 등산로 망 ──────────────────────────────────────────────────────────────────
+// 전국 주요 봉우리 GPX(15108086)의 여러 조각 파일은 거의 다 코스가 아니라 봉우리 둘레 구간 묶음이다(실측: 여러 조각
+// 3,141 중 3,128) — 조각 끝이 다른 조각의 가운데에 붙거나(T자 갈림길), 한 자리에 조각 끝이 셋 이상 모인다. 이런 파일은
+// 한 줄로 이으면 지그재그 코스가 되므로 코스로 만들지 않는다(6차에 망에서 코스를 만든다).
+const NETWORK_TOUCH_M = 15;
+// 조각 끝에서 이보다 먼 점에 닿아야 "가운데"다.
+const NETWORK_INTERIOR_M = 30;
+
+export const isTrailNetwork = (segments: readonly { lat: number; lng: number }[][]): boolean => {
+  const segs = segments.filter((s) => s.length >= 2);
+  if (segs.length < 2) return false;
+  const ends = segs.flatMap((s, i) => [
+    { i, p: s[0]! },
+    { i, p: s.at(-1)! },
+  ]);
+  for (const e of ends) {
+    if (ends.filter((o) => o.i !== e.i && distM(e.p, o.p) < NETWORK_TOUCH_M).length >= 2) return true;
+    for (let j = 0; j < segs.length; j++) {
+      if (j === e.i) continue;
+      const s = segs[j]!;
+      for (const q of s) {
+        // 위경도 차가 이보다 크면 15m 안일 수 없다(파일당 점 수천 × 끝점 수백이라 거리 계산 전에 거른다).
+        if (Math.abs(q.lat - e.p.lat) > 0.0003 || Math.abs(q.lng - e.p.lng) > 0.0004) continue;
+        if (distM(e.p, q) < NETWORK_TOUCH_M && distM(q, s[0]!) > NETWORK_INTERIOR_M && distM(q, s.at(-1)!) > NETWORK_INTERIOR_M) return true;
+      }
+    }
+  }
+  return false;
+};
+
+// 봉우리 폴더 이름("장군봉(노원구)"·"도봉산(신선대)"·"청계산(국사봉)(의왕)") → 지점 이름. 끝 괄호가 지역(시·군·구·읍·면·
+// 동·리, 두 글자 이상)이면 뗀다 — "남한산(동)"처럼 방향 한 글자는 둔다. 산 목록에는 폴더 이름 그대로 쓴다(동명 구분).
+const REGION_PAREN = /\s*\(([^()]{1,}(?:시|군|구|읍|면|동|리))\)\s*$/;
+export const peakPointName = (folderName: string): string => {
+  const m = REGION_PAREN.exec(folderName);
+  return m && m[1]!.length >= 2 ? folderName.slice(0, m.index).trim() : folderName.trim();
+};
+
 // ── 선 단순화(Douglas–Peucker, 평면 근사) ──────────────────────────────────────
 
 export const simplifyLine = <P extends { lat: number; lng: number }>(pts: readonly P[], toleranceM: number): P[] => {
@@ -512,8 +550,10 @@ export interface NamedPoint {
   source?: 'gpx' | 'api' | 'both';
 }
 
-// 끝점 이름 후보 분류(순서 = 우선순위).
-const END_CATEGORIES = ['ENTRY', 'TRANS', 'PARK', 'SHELTER', 'CULTURAL'] as const;
+// 끝점 이름 후보 분류(순서 = 우선순위). VILLAGE 는 GPX 에 없는 분류 — 전국 봉우리 코스(지점 없음)의 들머리를 역지오코딩한
+// 리·동 이름(가까운 역·정류장·주차장이 없을 때만 쓰게 맨 뒤).
+const END_CATEGORIES = ['ENTRY', 'TRANS', 'PARK', 'SHELTER', 'CULTURAL', 'VILLAGE'] as const;
+export const VILLAGE_CATEGORY = 'VILLAGE';
 // 위에서 못 찾을 때 더 가까이(END_NAME_FALLBACK_M)에서 보는 분류 — 이름이 "천정탐방지원센터"·"허덕교 화장실"·
 // "서성재" 처럼 자리 이름을 담고 있는 경우가 있다(뒤에 붙은 시설 이름은 뗀다).
 const END_FALLBACK_CATEGORIES = ['INFO', 'SIGN', 'REST', 'SPRING', 'TOILET'] as const;

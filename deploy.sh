@@ -268,14 +268,16 @@ parking_data() {
   echo "  적재 후: $(parking_status)"
 }
 
-# ── 등산(100대 명산) ────────────────────────────────────────
-# status:hiking 은 "ok mountains=N courses=C pois=P images=I stale=S" 한 줄(테이블 없으면 "missing").
+# ── 등산(100대 명산 + 전국 주요 봉우리) ────────────────────────────────────────
+# status:hiking 은 "ok mountains=N courses=C pois=P images=I stale=S peaks=K" 한 줄(테이블 없으면 "missing", K = 봉우리 산 수).
 # stale = 새 열이 빈 코스 — 고도는 있는데 이동 분이 빔(2차) 또는 시군구가 빔(3차). 마이그레이션 뒤 아직 다시 적재 안 함.
 hiking_status() { pnpm --filter friendly status:hiking 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
 
-# 비어 있거나 stale 이면 적재, force=1(10번)이면 다시. 원천 GPX zip(data.go.kr 15098177)은 data/open/hiking/ 에 손으로 올린다
-# (docs/data-sources.md). 적재는 명산등산로 1콜 + 등산트레킹 POI ~10콜 + 산 사진(산마다 1콜 + 최대 3장, 받아 둔 사진은
-# 다시 받지 않음)이라 처음 2~3분, 다시 돌리면 수십 초. Prisma 로 DB 에 직접 쓰므로 서버를 내리지 않아도 된다.
+# 비어 있거나 stale 이면 적재, 봉우리 zip 을 올렸는데 봉우리가 없어도 적재, force=1(10번)이면 다시. 원천 GPX zip 두 개(100대명산
+# 15098177 · 전국 주요 봉우리 15108086)는 data/open/hiking/ 에 손으로 올린다(docs/data-sources.md). 적재는 명산등산로 1콜 + 등산트레킹
+# POI ~10콜 + 산정보 5콜 + 산 사진(산마다 1콜 + 최대 3장, 봉우리는 1장·한 번에 400곳씩, 받아 둔 사진은 다시 받지 않음) + 들머리
+# 리·동 역지오코딩(브이월드, 처음 6천 곳 남짓 — data/hiking-geocode-cache.json 에 남아 다음부터 0)이라 처음 10분 남짓, 다시 돌리면
+# 1분 안팎. Prisma 로 DB 에 직접 쓰므로 서버를 내리지 않아도 된다.
 hiking_data() {
   local force="${1:-0}"
   local st; st="$(hiking_status)"
@@ -284,14 +286,18 @@ hiking_data() {
   fi
   local mountains; mountains="$(stat_val mountains "$st")"
   local stale; stale="$(stat_val stale "$st")"
-  echo "  등산 현재: 산 ${mountains:-0} · 코스 $(stat_val courses "$st") · 사진 $(stat_val images "$st") · 다시 적재할 코스(새 열 빔) ${stale:-0}"
-  if [[ "$force" == 1 || "${mountains:-0}" == 0 || "${stale:-0}" != 0 ]]; then
+  local peaks; peaks="$(stat_val peaks "$st")"
+  echo "  등산 현재: 산 ${mountains:-0}(봉우리 ${peaks:-0}) · 코스 $(stat_val courses "$st") · 사진 $(stat_val images "$st") · 다시 적재할 코스(새 열 빔) ${stale:-0}"
+  # 전국 주요 봉우리 zip(15108086, 5차)을 올렸는데 봉우리가 아직 없으면 다시 적재.
+  local peak_pending=0
+  if compgen -G "$ROOT/data/open/hiking/*봉우리*.zip" >/dev/null && [[ "${peaks:-0}" == 0 ]]; then peak_pending=1; fi
+  if [[ "$force" == 1 || "${mountains:-0}" == 0 || "${stale:-0}" != 0 || "$peak_pending" == 1 ]]; then
     if ! compgen -G "$ROOT/data/open/hiking/*.zip" >/dev/null; then
       echo "  (data/open/hiking/ 에 100대명산 GPX zip(data.go.kr 15098177)이 없어 건너뜁니다 — 올린 뒤 ./deploy.sh 10)"; return 0
     fi
-    step "등산 적재(100대명산 GPX + 산림청 명산등산로·사진 + 등산트레킹 POI)"
+    step "등산 적재(100대명산·전국 주요 봉우리 GPX + 산림청 명산등산로·산정보·사진 + 등산트레킹 POI + 들머리 리·동 역지오코딩)"
     pnpm --filter friendly load:hiking \
-      || echo "  (등산 적재 실패 — DATA_GO_KR_API_KEY 활용신청(명산등산로 15158915·산정보 15058662·등산트레킹 봉우리·갈림길·교통) 확인 뒤 ./deploy.sh 10)"
+      || echo "  (등산 적재 실패 — DATA_GO_KR_API_KEY 활용신청(명산등산로 15158915·산정보 15058662·등산트레킹 봉우리·갈림길·교통)·VWORLD_API_KEY 확인 뒤 ./deploy.sh 10)"
   fi
   echo "  적재 후: $(hiking_status)"
 }
@@ -386,7 +392,7 @@ case_9() {  # 주차 데이터 적재/갱신 — 표준데이터·서울 공영�
   pull; gen; parking_data 1; analyze_db
 }
 
-case_10() {  # 등산 데이터 적재/갱신 — data/open/hiking/ 의 100대명산 GPX zip + 산림청·등산트레킹 API(코드 배포·재기동 없음)
+case_10() {  # 등산 데이터 적재/갱신 — data/open/hiking/ 의 100대명산·전국 주요 봉우리 GPX zip + 산림청·등산트레킹 API(코드 배포·재기동 없음)
   pull; gen; hiking_data 1; analyze_db
 }
 
@@ -405,7 +411,7 @@ if [[ -z "$choice" ]]; then
   7) 음식 카탈로그 적재/갱신   — data/open/food/ 의 배포본 + 레시피 API
   8) 집값 데이터 적재/갱신     — data/open/housing/ 의 단지 CSV + 실거래 API (HOUSING_MONTHS=N 으로 백필)
   9) 주차 데이터 적재/갱신     — 전국주차장 표준데이터·서울 공영주차장·교통안전공단·전기차 충전소 API
- 10) 등산 데이터 적재/갱신     — data/open/hiking/ 의 100대명산 GPX zip + 산림청·등산트레킹 API
+ 10) 등산 데이터 적재/갱신     — data/open/hiking/ 의 100대명산·전국 주요 봉우리 GPX zip + 산림청·등산트레킹 API
 MENU
   read -rp "번호 [1-10]: " choice
 fi

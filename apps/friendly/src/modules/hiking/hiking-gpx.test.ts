@@ -7,8 +7,10 @@ import {
   guideSignposts,
   isGenericPlaceName,
   isJunkPlaceName,
+  isTrailNetwork,
   nameCourse,
   parseGpx,
+  peakPointName,
   projectOnCourse,
   signDestNames,
   simplifyLine,
@@ -176,12 +178,50 @@ describe('nameCourse / projectOnCourse', () => {
     expect(nameCourse(course, [], '가리왕산', 3)).toMatchObject({ name: '코스 3', source: 'number' });
   });
 
+  // 5차 전국 봉우리 — 들머리 리·동(VILLAGE)은 역·정류장·주차장이 없을 때만.
+  it('리·동 이름은 맨 뒤 — 주차장이 있으면 주차장, 없으면 리', () => {
+    const village: NamedPoint = { category: 'VILLAGE', name: '진동리', lat: 37, lng: 127, ele: null };
+    const park: NamedPoint = { category: 'PARK', name: '진동공영주차장', lat: 37.0005, lng: 127, ele: null };
+    const peak: NamedPoint = { category: 'PEAK', name: '돌산', lat: 37.004, lng: 127, ele: 600 };
+    expect(nameCourse(course, [village, peak], '돌산', 1).name).toBe('진동리 → 돌산');
+    expect(nameCourse(course, [village, park, peak], '돌산', 1).name).toBe('진동공영주차장 → 돌산');
+  });
+
   it('지점 투영 — 선 위 거리와 떨어진 거리', () => {
     const r = projectOnCourse(course, { lat: 37.001, lng: 127.0001 });
     expect(r.atM).toBeGreaterThan(100);
     expect(r.atM).toBeLessThan(125);
     expect(r.offM).toBeGreaterThan(5);
     expect(r.offM).toBeLessThan(15);
+  });
+});
+
+describe('isTrailNetwork / peakPointName (5차 전국 봉우리)', () => {
+  const seg = (pts: [number, number][]) => pts.map(([lat, lng]) => ({ lat, lng }));
+  const vertical = seg(Array.from({ length: 20 }, (_, i) => [37 + i * STEP, 127]));
+
+  it('조각 끝이 다른 조각 가운데에 붙으면(T자) 망, 끝끼리만 이어지면(기록 끊김) 코스', () => {
+    // 가운데(37.002)에서 동쪽으로 갈라지는 조각.
+    const branch = seg(Array.from({ length: 10 }, (_, i) => [37.002, 127 + i * 0.0002]));
+    expect(isTrailNetwork([vertical, branch])).toBe(true);
+    // 앞 조각 끝(37.0038)에서 이어지는 조각 — 끝끼리 한 쌍뿐이라 코스.
+    const next = seg(Array.from({ length: 10 }, (_, i) => [37.0038 + i * STEP, 127]));
+    expect(isTrailNetwork([vertical, next])).toBe(false);
+    expect(isTrailNetwork([vertical])).toBe(false);
+  });
+
+  it('한 자리에 조각 끝이 셋 모이면 망', () => {
+    const east = seg(Array.from({ length: 10 }, (_, i) => [37, 127 + i * 0.0002]));
+    const west = seg(Array.from({ length: 10 }, (_, i) => [37, 127 - i * 0.0002]));
+    expect(isTrailNetwork([vertical, east, west])).toBe(true);
+  });
+
+  it('봉우리 지점 이름 — 끝 괄호가 지역(두 글자 이상 시·군·구·읍·면·동·리)이면 뗀다', () => {
+    expect(peakPointName('장군봉(노원구)')).toBe('장군봉');
+    expect(peakPointName('송곳산(상북면)')).toBe('송곳산');
+    expect(peakPointName('도봉산(신선대)')).toBe('도봉산(신선대)');
+    expect(peakPointName('남한산(동)')).toBe('남한산(동)');
+    expect(peakPointName('청계산(국사봉)(의왕)')).toBe('청계산(국사봉)(의왕)');
   });
 });
 

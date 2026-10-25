@@ -107,6 +107,21 @@ export const courseSigungu = (course: Pick<BuiltCourse, 'pieces' | 'start' | 'en
   return [...keys];
 };
 
+// 시군구 키 → 소재지 문구(@repo/utils hikingRegionsOf 가 시도를 뽑을 수 있는 꼴) — 산정보에 소재지가 없는 봉우리용.
+// 12(전남광주)는 광주 구면 "광주광역시 …"(hikingRegionsOf 가 광주광역시만 광주로 본다), 아니면 전남.
+const SIDO_AREA: Record<string, string> = {
+  '11': '서울', '26': '부산', '27': '대구', '28': '인천', '30': '대전', '31': '울산', '36': '', '41': '경기', '51': '강원',
+  '43': '충북', '44': '충남', '52': '전북', '47': '경북', '48': '경남', '50': '제주',
+};
+export const sigunguArea = (key: string): string | null => {
+  const [sido, name = ''] = key.split(':');
+  if (!sido || !name) return null;
+  if (sido === '12') return `${GWANGJU_GU.has(name) ? '광주광역시' : '전남'} ${name}`;
+  const prefix = SIDO_AREA[sido];
+  if (prefix === undefined) return null;
+  return prefix ? `${prefix} ${name}` : name;
+};
+
 // 대기 예보 권역(에어코리아 예보통보 informGrade 의 권역 이름). 경기·강원은 남북·영동영서로 나뉘는데 에어코리아가 시군 목록을
 // 밝히지 않아 추정으로 둔다 — 경기북부는 경기 북부 10개 시군, 영동은 기상청 동해안 6개 시군(태백은 영서로 본다).
 const GYEONGGI_NORTH = new Set(['고양시', '의정부시', '남양주시', '파주시', '구리시', '양주시', '동두천시', '포천시', '연천군', '가평군']);

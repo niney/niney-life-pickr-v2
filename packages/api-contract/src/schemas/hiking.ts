@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { AirGradeSchema } from './air-quality.js';
 import { WeatherBase, WeatherPrecip } from './weather.js';
 
-// 등산(/hiking) — 100대 명산 코스. 원천: 한국등산트레킹지원센터 100대명산 GPX(data.go.kr 15098177) + 산림청
-// 명산등산로(15158915)·산정보 사진(15058662) + 한국등산트레킹지원센터 봉우리·갈림길·교통 POI(B553662). 산·코스는 적재본
+// 등산(/hiking) — 100대 명산 + 전국 주요 봉우리 코스. 원천: 한국등산트레킹지원센터 100대명산 GPX(data.go.kr 15098177)·전국 주요
+// 봉우리 코스 GPX(15108086) + 산림청 명산등산로(15158915)·산정보(15058662) + 한국등산트레킹지원센터 봉우리·갈림길·교통 POI(B553662). 산·코스는 적재본
 // (load:hiking)을 읽기만 하고, 오늘의 조건(conditions)만 기상청 단기예보·에어코리아·산림청 산불위험예보를 캐시로 부른다.
 // docs/PLAN-hiking.md
 
@@ -11,10 +11,16 @@ const LatLng = z.object({ lat: z.number(), lng: z.number() });
 export const HikingBbox = z.object({ minLat: z.number(), minLng: z.number(), maxLat: z.number(), maxLng: z.number() });
 export type HikingBboxType = z.infer<typeof HikingBbox>;
 
+// 산 종류(5차) — top100 100대 명산(산림청 명산등산로, id = 산 코드 9자리) · peak 전국 주요 봉우리(한국등산트레킹지원센터
+// 15108086, id = 봉우리 코드 10자리 — 선·고도만 있는 자료라 이정표·노면·공식 코스 문구가 없다).
+export const HikingMountainKind = z.enum(['top100', 'peak']);
+export type HikingMountainKindType = z.infer<typeof HikingMountainKind>;
+
 // 산 목록 한 줄. lat/lng 는 정상(없으면 코스 범위 가운데) — 지도 마커 자리.
 export const HikingMountainSummary = LatLng.extend({
   id: z.string(),
   name: z.string(),
+  kind: HikingMountainKind,
   subtitle: z.string().nullable(),
   heightM: z.number().nullable(),
   area: z.string().nullable(),
@@ -25,6 +31,8 @@ export const HikingMountainSummary = LatLng.extend({
   maxLengthM: z.number().int().nullable(),
   // 저장된 사진 순번(Routes.Hiking.image(id, no)).
   images: z.array(z.number().int()),
+  // 100대 명산에 합친 전국 봉우리 이름(검색용 — "서석대"로 무등산을 찾는다). 봉우리 산은 빈 배열.
+  peaks: z.array(z.string()),
 });
 export type HikingMountainSummaryType = z.infer<typeof HikingMountainSummary>;
 
@@ -68,12 +76,25 @@ export const HikingCourseSummary = z.object({
   gapM: z.number().int(),
   // 코스에 나오는 험한 노면(@repo/utils HIKING_ROUGH_SURFACES 중) — 카드 칩.
   roughSurfaces: z.array(z.string()),
+  // 원천 — top100 100대명산 GPX(지점·이정표·노면) · peak 전국 주요 봉우리 GPX(선·고도만, 지점은 근처 봉우리·등산 지점을 붙인 것).
+  source: HikingMountainKind,
   bbox: HikingBbox,
   pieces: z.array(z.string()),
 });
 export type HikingCourseSummaryType = z.infer<typeof HikingCourseSummary>;
 
+// 이어진 봉우리 — 정상이 서로의 코스 선 30m 안인 산(가까운 순, 최대 8). distM 은 정상끼리 직선거리.
+export const HikingNeighbor = LatLng.extend({
+  id: z.string(),
+  name: z.string(),
+  kind: HikingMountainKind,
+  heightM: z.number().nullable(),
+  distM: z.number().int(),
+});
+export type HikingNeighborType = z.infer<typeof HikingNeighbor>;
+
 export const HikingMountainDetail = HikingMountainSummary.extend({
+  // 100대 명산은 명산등산로 개관, 봉우리는 산림청 산정보 소개(이름·시군구가 맞을 때만).
   overview: z.string().nullable(),
   details: z.string().nullable(),
   // 100대 명산 선정 이유.
@@ -84,6 +105,7 @@ export const HikingMountainDetail = HikingMountainSummary.extend({
   summitEle: z.number().nullable(),
   bbox: HikingBbox,
   courses: z.array(HikingCourseSummary),
+  neighbors: z.array(HikingNeighbor),
 });
 export type HikingMountainDetailType = z.infer<typeof HikingMountainDetail>;
 

@@ -25,7 +25,7 @@ import { buildApp } from '../../app.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import type { FireRiskRow, GdTrailRow, TrekkingPoiRow } from './hiking-api.adapter.js';
 import type { SigunguShape } from './hiking-area.js';
-import { buildHikingRows, matchGpxFolder, replaceHiking } from './hiking-master.service.js';
+import { buildHikingRows, isSeparateMountainName, matchGpxFolder, preparePeaks, replaceHiking, villageKey } from './hiking-master.service.js';
 
 // 등산 라우트 — 격리 DB(빈 테이블)에 합성 GPX 2코스 + 명산등산로 1행 + 등산트레킹 POI 를 buildHikingRows → replaceHiking
 // 으로 넣고 ① 미적재 503 ② 산 목록(정상 좌표·권역·사진) ③ 산 상세(코스 선 복원·험한 노면) ④ 코스 상세(프로필·지점 병합·
@@ -349,6 +349,115 @@ describe('hiking routes (격리 DB)', () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-9/conditions' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/abc' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/999999999/images/1' })).statusCode).toBe(404);
+  });
+
+  // 5차 — 전국 주요 봉우리. ① 가리산 코스 위(37.004) 봉우리 → 가리산에 합친다: 동쪽으로 내려가는 새 코스는 더하고 가리산
+  // 1번 코스를 다시 그린 코스는 버린다 ② 가리산 정상에서 동쪽 530m 봉우리(범위 + 200m 밖) → 따로 산, 등산로 망 파일은 건너뛴다
+  // ③ 따로 산 코스가 가리산 정상을 지나 가리산 정상 지점이 그 코스에 붙고, 둘이 이어진 봉우리가 된다 ④ 들머리 이름은 공영
+  // 주차장(300m 안) · 역지오코딩 리 이름.
+  it('전국 봉우리 — 100대 명산에 합치기·따로 산·등산로 망 건너뛰기·지나는 봉우리·이어진 봉우리·들머리 이름', async () => {
+    const line = (pts: [number, number, number][]) => gpx([], pts.map(([lat, lng, ele]) => `<trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}"><ele>${ele}</ele></trkpt>`));
+    const steps = (n: number, f: (i: number) => [number, number, number]) => Array.from({ length: n }, (_, i) => f(i));
+    // 37.004·127.000(800m) 에서 동쪽으로 내려가는 길(정상에서 시작 — 뒤집혀 동쪽 끝이 들머리).
+    const mergedNew = line(steps(31, (i) => [37.004, 127 + i * 0.0003, 800 - i * 13]));
+    // 가리산 1번 코스를 그대로 다시 그린 것(겹침 100% → 버림). 정상 높이만 조금 낮게.
+    const mergedDup = line(steps(31, (i) => [37 + i * STEP, 127, 300 + i * 16]));
+    // 따로 산 — 가리산 정상(37.006·127.000, 880m)에서 동쪽 37.006·127.006(950m)으로 오른다.
+    const indep = line(steps(21, (i) => [37.006, 127 + i * 0.0003, 880 + i * 3.5]));
+    // 등산로 망 — 두 번째 조각 끝이 첫 조각 가운데에 붙는다(T자).
+    const network = gpx(
+      [],
+      [
+        ...steps(20, (i) => `<trkpt lat="${(36.99 + i * 0.0002).toFixed(6)}" lon="127.005000"><ele>${200 + i}</ele></trkpt>`),
+        '</trkseg><trkseg>',
+        ...steps(10, (i) => `<trkpt lat="36.992000" lon="${(127.0059 - i * 0.0001).toFixed(6)}"><ele>210</ele></trkpt>`),
+      ],
+    );
+    const peaks = preparePeaks([
+      { mountain: '1111020001_무쇠말재봉', no: 1, xml: mergedNew },
+      { mountain: '1111020001_무쇠말재봉', no: 2, xml: mergedDup },
+      { mountain: '2222020002_돌산(춘천시)', no: 1, xml: indep },
+      { mountain: '2222020002_돌산(춘천시)', no: 2, xml: network },
+    ]);
+    expect(peaks.map((p) => [p.code, p.pointName, p.courses.length, p.networkFiles])).toEqual([
+      ['1111020001', '무쇠말재봉', 2, 0],
+      ['2222020002', '돌산', 1, 1],
+    ]);
+    const mergedStart = peaks[0]!.courses[0]!.course.start;
+    const rows = buildHikingRows({
+      files: [
+        { mountain: '가리산', no: 1, xml: COURSE1 },
+        { mountain: '가리산', no: 2, xml: COURSE2 },
+      ],
+      gdTrails: [GD],
+      pois: [],
+      images: new Map(),
+      sigungu: SIGUNGU,
+      loadedAt: new Date('2026-10-25T00:00:00Z'),
+      peaks,
+      mountainInfos: [
+        { id: '999000001', name: '돌산', address: '강원도 홍천군 화촌면', heightM: 960, top100Reason: null, details: '홍천 화촌면의 돌산으로 소나무 숲길이 이어진다.' },
+        // 이름은 같지만 소재지 시군구가 달라 맞지 않는다.
+        { id: '999000002', name: '돌산', address: '전라남도 여수시', heightM: 140, top100Reason: null, details: null },
+      ],
+      places: [{ category: 'PARK', name: '돌산공영주차장', lat: 37.0062, lng: 127.0003 }],
+      villages: new Map([[villageKey(mergedStart), '무쇠리']]),
+    });
+    expect(rows.report.peaks).toMatchObject({
+      folders: 2,
+      networkFiles: 1,
+      merged: 1,
+      mergedCourses: 1,
+      mergedDup: 1,
+      independent: 1,
+      independentCourses: 1,
+      peakPois: 2,
+      infoMatched: 1,
+      placeNamed: 1,
+      villageNamed: 1,
+      withNeighbors: 2,
+    });
+    expect(rows.peakInfoIds).toEqual(new Map([['2222020002', '999000001']]));
+    await replaceHiking(app.prisma, rows);
+
+    const l = (await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains' })).json<HikingMountainsResultType>();
+    expect(l.items.map((m) => [m.id, m.kind, m.peaks])).toEqual([
+      ['421100101', 'top100', ['무쇠말재봉']],
+      ['2222020002', 'peak', []],
+    ]);
+    // 산정보가 맞아 높이·소재지·권역이 붙는다.
+    expect(l.items[1]).toMatchObject({ name: '돌산(춘천시)', heightM: 960, area: '강원도 홍천군 화촌면', regions: ['gangwon'], courseCount: 1 });
+
+    const gari = (await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/421100101' })).json<HikingMountainDetailType>();
+    expect(gari.courses.map((c) => [c.id, c.no, c.source])).toEqual([
+      ['421100101-1', 1, 'top100'],
+      ['421100101-2', 2, 'top100'],
+      ['1111020001-1', 101, 'peak'],
+    ]);
+    expect(gari.courses[2]!.name).toBe('무쇠리 → 무쇠말재봉');
+    expect(gari.neighbors).toEqual([expect.objectContaining({ id: '2222020002', name: '돌산(춘천시)', kind: 'peak' })]);
+
+    const dol = (await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/2222020002' })).json<HikingMountainDetailType>();
+    expect(dol).toMatchObject({ kind: 'peak', summitName: '돌산', overview: '홍천 화촌면의 돌산으로 소나무 숲길이 이어진다.', reason: null });
+    expect(dol.courses).toEqual([expect.objectContaining({ id: '2222020002-1', name: '돌산공영주차장 → 돌산', source: 'peak', shape: 'summit' })]);
+    expect(dol.neighbors.map((n) => n.id)).toEqual(['421100101']);
+
+    // 돌산 코스는 가리산 정상을 지나 가리산 정상 지점(GPX)이 붙는다. 합친 코스엔 무쇠말재봉 지점.
+    const dc = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/2222020002-1' })).json<HikingCourseDetailType>();
+    expect(dc.pois.map((p) => p.id)).toEqual(['gpx:103', 'peak:2222020002']);
+    const merged = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/1111020001-1' })).json<HikingCourseDetailType>();
+    expect(merged.mountain.id).toBe('421100101');
+    expect(merged.pois.map((p) => [p.id, p.category, p.name])).toContainEqual(['peak:1111020001', 'PEAK', '무쇠말재봉']);
+  });
+});
+
+describe('isSeparateMountainName', () => {
+  it('끝이 산이고 100대 명산 이름을 담지 않으면 따로 있는 산 — 봉·대·재·그 산 이름이 든 봉우리는 합친다', () => {
+    expect(isSeparateMountainName('인왕산', '북한산')).toBe(true);
+    expect(isSeparateMountainName('사패산(의정부)', '도봉산')).toBe(true);
+    expect(isSeparateMountainName('보현봉', '북한산')).toBe(false);
+    expect(isSeparateMountainName('청계산(망경대)', '청계산')).toBe(false);
+    expect(isSeparateMountainName('가리산', '가리산')).toBe(false);
   });
 });
 

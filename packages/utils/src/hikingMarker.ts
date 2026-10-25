@@ -1,5 +1,6 @@
+import { formatLifeCount, lifeCountBucket } from './lifeMap.js';
 import { buildCircleMarkerSvg, buildPinMarkerSvg } from './markerFrame.js';
-import { HIKING_MOUNTAIN_COLOR, type HikingMapPoiCategory } from './hiking.js';
+import { HIKING_MOUNTAIN_COLOR, HIKING_PEAK_COLOR, type HikingMapPoiCategory } from './hiking.js';
 
 // 등산 지도 마커 — 식당·주차와 같은 프레임(비선택 26px 원 / 선택 32×48 핀). 산은 초록 산 모양, 코스 지점은 분류별
 // 색·그림(정상 깃발·갈림길 이정표·위험 느낌표·화장실·주차 P·정류장 버스 …).
@@ -36,6 +37,25 @@ const frame = (fill: string, innerSvg: string, selected: boolean): string =>
 
 export function buildHikingMountainMarkerDataUrl(selected: boolean): string {
   return frame(HIKING_MOUNTAIN_COLOR, MOUNTAIN_ICON, selected);
+}
+// 전국 주요 봉우리(5차) — 같은 산 그림, 연한 초록(100대 명산과 같이 보이되 구분되게).
+export function buildHikingPeakMarkerDataUrl(selected: boolean): string {
+  return frame(HIKING_PEAK_COLOR, MOUNTAIN_ICON, selected);
+}
+
+// 저줌 봉우리 묶음 버블 — 일상지도·주차 셀과 같은 크기 버킷, 숫자를 SVG 안에.
+const CELL_SIZE = [26, 34, 40, 46] as const;
+const CELL_FONT = [10, 11, 12, 13] as const;
+export function buildHikingCellMarkerDataUrl(count: number): string {
+  const bucket = lifeCountBucket(count);
+  const size = CELL_SIZE[bucket];
+  const half = size / 2;
+  return toDataUrl(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+      `<circle fill="${HIKING_PEAK_COLOR}" fill-opacity="0.85" stroke="#fff" stroke-width="2" cx="${half}" cy="${half}" r="${half - 1.5}"/>` +
+      `<text x="${half}" y="${half}" fill="#fff" font-family="system-ui, -apple-system, sans-serif" font-size="${CELL_FONT[bucket]}" font-weight="700" text-anchor="middle" dominant-baseline="central">${formatLifeCount(count)}</text>` +
+      '</svg>',
+  );
 }
 export function buildHikingPoiMarkerDataUrl(category: HikingMapPoiCategory, selected: boolean): string {
   return frame(HIKING_POI_COLOR[category], POI_ICON[category], selected);

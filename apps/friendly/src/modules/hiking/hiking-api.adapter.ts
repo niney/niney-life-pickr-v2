@@ -165,25 +165,150 @@ export interface MountainInfoRow {
   heightM: number | null;
   // 100대 명산 선정 이유 — 동명산 중 100대 명산을 고르는 단서.
   top100Reason: string | null;
+  // 산 소개(mntidetails) — 실측 4,705산 중 1,683산만 글이 있고 나머지는 "( - )" 같은 빈 표기라 null.
+  details: string | null;
 }
 
+const MOUNTAIN_INFO_URL = `${FOREST_BASE}/service/cultureInfoService2/mntInfoOpenAPI2`;
+// 산정보 전체 받기 — 1,000건씩(실측 2026-10-25: 4,705산 5콜).
+const MOUNTAIN_INFO_PAGE_SIZE = 1_000;
+const MOUNTAIN_INFO_MAX_PAGES = 10;
+
+const toMountainInfo = (it: Record<string, unknown>): MountainInfoRow => {
+  const details = cleanForestText(it.mntidetails);
+  // 높이 0 은 비어 있다는 표기(실측: 4,705산 중 1,326산 — 우면산 0m).
+  const height = numOrNull(it.mntihigh);
+  return {
+    id: strOrNull(typeof it.mntilistno === 'number' ? String(it.mntilistno) : it.mntilistno)?.trim() ?? '',
+    name: cleanForestText(it.mntiname) ?? '',
+    address: cleanForestText(it.mntiadd),
+    heightM: height !== null && height > 0 ? height : null,
+    top100Reason: cleanForestText(it.mntitop),
+    details: details && details.replace(/[\s()·.,-]/g, '').length >= 20 ? details : null,
+  };
+};
+
 export const fetchMountainInfos = async (name: string, opts: HikingApiOptions): Promise<MountainInfoRow[]> => {
-  const { url, masked } = buildUrl(
-    `${FOREST_BASE}/service/cultureInfoService2/mntInfoOpenAPI2`,
-    'ServiceKey',
-    { searchWrd: name, numOfRows: '50', pageNo: '1', _type: 'json' },
-    opts.serviceKey,
-  );
+  const { url, masked } = buildUrl(MOUNTAIN_INFO_URL, 'ServiceKey', { searchWrd: name, numOfRows: '50', pageNo: '1', _type: 'json' }, opts.serviceKey);
   const page = itemsOf(await getJson(url, masked, opts), masked);
-  return page.items
-    .map((it) => ({
-      id: strOrNull(typeof it.mntilistno === 'number' ? String(it.mntilistno) : it.mntilistno)?.trim() ?? '',
-      name: cleanForestText(it.mntiname) ?? '',
-      address: cleanForestText(it.mntiadd),
-      heightM: numOrNull(it.mntihigh),
-      top100Reason: cleanForestText(it.mntitop),
-    }))
-    .filter((r) => r.id.length > 0 && r.name.length > 0);
+  return page.items.map(toMountainInfo).filter((r) => r.id.length > 0 && r.name.length > 0);
+};
+
+// 산정보 전체 — 전국 주요 봉우리(좌표만 있다)에 소개·높이·소재지를 붙이는 데 쓴다.
+export const fetchAllMountainInfos = async (opts: HikingApiOptions): Promise<MountainInfoRow[]> => {
+  const out: MountainInfoRow[] = [];
+  for (let pageNo = 1; pageNo <= MOUNTAIN_INFO_MAX_PAGES; pageNo++) {
+    const { url, masked } = buildUrl(
+      MOUNTAIN_INFO_URL,
+      'ServiceKey',
+      { numOfRows: String(MOUNTAIN_INFO_PAGE_SIZE), pageNo: String(pageNo), _type: 'json' },
+      opts.serviceKey,
+    );
+    const page = itemsOf(await getJson(url, masked, opts), masked);
+    out.push(...page.items.map(toMountainInfo).filter((r) => r.id.length > 0 && r.name.length > 0));
+    if (page.items.length < MOUNTAIN_INFO_PAGE_SIZE || out.length >= page.totalCount) break;
+  }
+  return out;
+};
+
+// 봉우리 ↔ 산정보 — 이름(끝 괄호를 뗀 것도)이 같고 소재지 문구에 봉우리 시군구 이름이 들어 있는 것이 하나뿐일 때만.
+// 시군구는 [먼저 볼 것(이름 괄호의 지역·정상 시군구), …코스가 걸친 시군구] — 산은 경계(능선)에 많아 정상 하나로만 보면 소재지가
+// 이웃 시군구인 산을 놓친다(실측: 정상 시군구만으로 1,662곳, 걸친 시군구까지 보면 더 맞는다). 여럿 걸리면 먼저 볼 것으로 좁히고,
+// 그래도 여럿이면 동명산이라 묻지 않는다(null).
+export const matchPeakInfo = (
+  peakName: string,
+  sigungu: { preferred: readonly string[]; others: readonly string[] },
+  byName: ReadonlyMap<string, readonly MountainInfoRow[]>,
+): MountainInfoRow | null => {
+  const base = peakName.replace(/\s*\([^)]*\)/g, '').trim();
+  const cands = byName.get(peakName) ?? byName.get(base) ?? [];
+  const inAny = (r: MountainInfoRow, names: readonly string[]): boolean =>
+    names.some((n) => {
+      const short = n.replace(/(시|군|구)$/, '');
+      return !!r.address && (r.address.includes(n) || (short.length >= 2 && r.address.includes(short)));
+    });
+  const hits = cands.filter((r) => inAny(r, [...sigungu.preferred, ...sigungu.others]));
+  if (hits.length <= 1) return hits[0] ?? null;
+  const preferred = hits.filter((r) => inAny(r, sigungu.preferred));
+  return preferred.length === 1 ? preferred[0]! : null;
+};
+
+// ── 브이월드 역지오코딩 — 들머리 리·동 이름 ─────────────────────────────────────
+// 전국 봉우리 코스에는 지점이 없어 들머리 이름을 지번 주소의 리·동으로 짓는다(가까운 역·정류장·주차장이 없을 때).
+// VWORLD_API_KEY(지오코더와 같은 키, 일 4만 건 수준). 2D데이터·WMS 와 달리 Referer 없이 된다(2026-10-25 실측).
+// 응답 text 예: "강원특별자치도 인제군 기린면 진동리 산 34" → 진동리, "서울특별시 관악구 신림동 310-10" → 신림동.
+const VWORLD_ADDRESS_URL = 'https://api.vworld.kr/req/address';
+
+export class VworldAddressError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VworldAddressError';
+  }
+}
+
+export const villageOfAddress = (text: string | null | undefined): string | null => {
+  if (!text) return null;
+  const tokens = text.split(/\s+/).filter(Boolean);
+  for (let i = tokens.length - 1; i >= 1; i--) {
+    const t = tokens[i]!;
+    if (/^[가-힣0-9]+(리|동|가)$/.test(t) && /[가-힣]{2,}/.test(t) && !/^\d/.test(t)) return t;
+  }
+  return null;
+};
+
+// 못 찾으면(바다·경계 밖) null, 키·한도 오류(status ERROR·HTTP 4xx)는 VworldAddressError — 일괄 작업은 멈추고 다음에 잇는다.
+// 네트워크 오류·5xx 는 동시에 여럿 보낼 때 잠깐씩 났다(실측: 동시 4개 → 수백 건 만에 502·fetch failed, 차례로 보내면 없음) —
+// 1·2·4초 뒤 다시 묻고, 그래도 안 되면 VworldTransientError(그 점만 건너뛴다).
+const REVERSE_RETRIES = 3;
+export class VworldTransientError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VworldTransientError';
+  }
+}
+export const reverseGeocodeVillage = async (
+  p: { lat: number; lng: number },
+  key: string,
+  fetchImpl: FetchLike = (u, init) => fetchWithTimeout(u, init ?? {}, TIMEOUT_MS),
+  retryBaseMs = 1_000,
+): Promise<string | null> => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await reverseGeocodeOnce(p, key, fetchImpl);
+    } catch (e) {
+      const transient = !(e instanceof VworldAddressError) || /HTTP 5\d\d/.test(e.message);
+      if (!transient) throw e;
+      if (attempt >= REVERSE_RETRIES) throw new VworldTransientError(`브이월드 주소 요청 실패: ${e instanceof Error ? e.message : String(e)}`);
+      await sleep(retryBaseMs * 2 ** attempt);
+    }
+  }
+};
+
+const reverseGeocodeOnce = async (p: { lat: number; lng: number }, key: string, fetchImpl: FetchLike): Promise<string | null> => {
+  const params = new URLSearchParams({
+    service: 'address',
+    request: 'getAddress',
+    version: '2.0',
+    crs: 'epsg:4326',
+    point: `${p.lng},${p.lat}`,
+    format: 'json',
+    type: 'parcel',
+    zipcode: 'false',
+    simple: 'false',
+    key,
+  });
+  const res = await fetchImpl(`${VWORLD_ADDRESS_URL}?${params.toString()}`);
+  if (!res.ok) throw new VworldAddressError(`브이월드 주소 HTTP ${res.status}`);
+  const json: unknown = await res.json();
+  const r = isObject(json) && isObject(json.response) ? json.response : null;
+  const status = r ? String(r.status ?? '') : '';
+  if (status === 'NOT_FOUND') return null;
+  if (status !== 'OK') {
+    const err = r && isObject(r.error) ? `${String(r.error.code ?? '')} ${String(r.error.text ?? '')}` : status;
+    throw new VworldAddressError(`브이월드 주소 오류: ${err.trim()}`);
+  }
+  const first = Array.isArray(r!.result) ? r!.result[0] : null;
+  return villageOfAddress(isObject(first) ? strOrNull(first.text) : null);
 };
 
 // 명산등산로 행에 맞는 산정보 — 이름이 같고, 100대 명산 선정 이유가 있거나 소재지 시군이 겹치는 것. 여럿이면 높이가 가까운 것.

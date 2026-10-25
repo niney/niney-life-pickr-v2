@@ -80,6 +80,11 @@ export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBa
             ? '예상 시간은 경사별 걷는 속도로 계산한 추정입니다(짧은 휴식 포함, 점심·긴 휴식 제외).'
             : '고도 기록이 없어 예상 시간·난이도를 계산하지 못했습니다.'}
         </p>
+        {course.source === 'peak' && (
+          <p className="text-[11px] text-muted-foreground" data-testid="hiking-course-peak-note">
+            전국 주요 봉우리 자료라 선과 고도만 있습니다 — 이정표·노면 정보가 없고, 코스 지점은 선 가까이의 봉우리·등산 지점을 붙인 것입니다.
+          </p>
+        )}
       </div>
       <CourseConditions course={course} />
       {course.gapCount > 0 && (

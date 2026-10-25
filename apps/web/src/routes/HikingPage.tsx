@@ -13,11 +13,13 @@ import {
 } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { CourseDetail } from '~/components/hiking/CourseDetail';
-import { HikingFooter, HikingListHeader, HikingMountainList } from '~/components/hiking/HikingList';
+import { HikingFooter, HikingListHeader, HikingMountainList, type HikingNearBasis } from '~/components/hiking/HikingList';
 import { HikingMap } from '~/components/hiking/HikingMap';
 import { HikingRecommend, type HikingOrigin, type HikingOriginState, type HikingRecommendInput } from '~/components/hiking/HikingRecommend';
 import { MountainDetail } from '~/components/hiking/MountainDetail';
 import {
+  HIKING_DEFAULT_SORT,
+  SEOUL_CITY_HALL,
   decodePieces,
   hikingDefaultPick,
   hikingStartsFor,
@@ -34,8 +36,8 @@ import { useIsDesktopXl } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
 import { usePanelSide } from '~/stores/panelPrefsStore';
 
-// 등산 — 100대 명산 607개 코스(한국등산트레킹지원센터 GPX + 산림청). 산 목록(검색·권역·정렬) → 산 상세(사진·선정 이유·
-// 코스 카드) → 코스 상세(예상 시간·난이도·산행 조건·가는 법·고도 그래프·노면·지점). 상태는 URL(?m 산 · c 코스 · q 검색 · r 권역 ·
+// 등산 — 100대 명산 + 전국 주요 봉우리 코스(한국등산트레킹지원센터 GPX + 산림청). 산 목록(검색·권역·정렬 — 기본 가까운순, 내 위치가
+// 안 되면 서울 시청 기준) → 산 상세(사진·선정 이유·코스 카드·이어진 봉우리) → 코스 상세(예상 시간·난이도·산행 조건·가는 법·고도 그래프·노면·지점). 상태는 URL(?m 산 · c 코스 · q 검색 · r 권역 ·
 // s 정렬 · rec 추천 모드와 그 입력 rd 날짜·rt 출발·rh 산행 시간·rl 난이도·rm 이동 수단·ro 출발 위치) — 공유·뒤로가기. 고도 그래프에서 가리킨 자리·고른 지점은 화면 상태(공유 대상 아님). docs/PLAN-hiking.md
 //
 // 레이아웃은 맛집(RestaurantsV2Page)과 같은 틀 — useIsDesktopXl(JS)로 한 벌만 그린다.
@@ -55,13 +57,15 @@ export const HikingPage = () => {
   const rawGroup = params.get('r');
   const group = isHikingRegionGroup(rawGroup) ? rawGroup : null;
   const rawSort = params.get('s');
-  const sort: HikingSort = isHikingSort(rawSort) ? rawSort : 'name';
+  const sort: HikingSort = isHikingSort(rawSort) ? rawSort : HIKING_DEFAULT_SORT;
 
   const mountainsQ = useHikingMountains();
   const mountainQ = useHikingMountain(mountainId);
   const courseQ = useHikingCourse(courseId);
-  const userLoc = useUserLocation({ auto: false });
+  // 목록 기본이 가까운순이라 들어오면 위치를 묻는다(5차). 답을 기다리거나 못 받으면 서울 시청 기준.
+  const userLoc = useUserLocation();
   const me = userLoc.coords;
+  const listOrigin = me ?? SEOUL_CITY_HALL;
 
   // 목록/상세 시트 스냅 조율(상세가 열리면 목록 peek·상세 half, 닫히면 복원) — 맛집·주차와 같은 공용 훅.
   const sheets = useMapSheets(mountainId !== null);
@@ -84,8 +88,8 @@ export const HikingPage = () => {
   );
 
   const ranked = useMemo(
-    () => rankMountains(mountainsQ.data?.items ?? [], { q, group, sort, me }),
-    [mountainsQ.data, q, group, sort, me],
+    () => rankMountains(mountainsQ.data?.items ?? [], { q, group, sort, origin: listOrigin }),
+    [mountainsQ.data, q, group, sort, listOrigin],
   );
 
   // 산·코스 데이터가 URL 과 어긋난 동안(다른 산을 막 고름)은 이전 것을 쓰지 않는다.
@@ -105,10 +109,10 @@ export const HikingPage = () => {
   const refetchLocation = userLoc.refetch;
   const changeSort = useCallback(
     (s: HikingSort) => {
-      update({ s: s === 'name' ? null : s });
-      if (s === 'near' && !me) refetchLocation();
+      update({ s: s === HIKING_DEFAULT_SORT ? null : s });
+      if (s === 'near' && !me && userLoc.status !== 'pending') refetchLocation();
     },
-    [update, me, refetchLocation],
+    [update, me, refetchLocation, userLoc.status],
   );
   const changeQ = useCallback((next: string) => update({ q: next }), [update]);
   const changeGroup = useCallback((g: HikingRegionGroup | null) => update({ r: g }), [update]);
@@ -176,12 +180,16 @@ export const HikingPage = () => {
 
   const count = ranked.length;
   const locating = sort === 'near' && userLoc.status === 'pending';
+  // 가까운순 기준 — 내 위치를 받았으면 me, 아니면 서울 시청(거부면 다시 물을 수 없다는 것도 알린다).
+  const nearBasis: HikingNearBasis = me ? 'me' : userLoc.status === 'denied' ? 'seoul-denied' : 'seoul';
   const headerProps = {
     q,
     group,
     sort,
     count,
     locating,
+    nearBasis,
+    onUseMyLocation: refetchLocation,
     onChangeQ: changeQ,
     onChangeGroup: changeGroup,
     onChangeSort: changeSort,
@@ -201,6 +209,8 @@ export const HikingPage = () => {
           sort={sort}
           count={count}
           locating={locating}
+          nearBasis={nearBasis}
+          onUseMyLocation={refetchLocation}
           onChangeQ={changeQ}
           onChangeGroup={changeGroup}
           onChangeSort={changeSort}
@@ -208,7 +218,7 @@ export const HikingPage = () => {
           onToggleRecommend={toggleRecommend}
         />
       ) : null,
-    [showSubBar, q, group, sort, count, locating, changeQ, changeGroup, changeSort, recommendOn, toggleRecommend],
+    [showSubBar, q, group, sort, count, locating, nearBasis, refetchLocation, changeQ, changeGroup, changeSort, recommendOn, toggleRecommend],
   );
   // paint 전에 상단바에 등록 — 첫 프레임부터 통합 헤더 높이로 시트가 자리 잡게(맛집과 같음).
   useLayoutEffect(() => {
@@ -236,7 +246,8 @@ export const HikingPage = () => {
       onSelect={(m, c) => update({ m, c }, false)}
     />
   ) : (
-    <HikingMountainList ranked={ranked} isLoading={mountainsQ.isLoading} selectedId={mountainId} onSelect={selectMountain} />
+    // 검색·권역·정렬이 바뀌면 '더 보기'로 늘린 개수를 처음으로(key 로 새로 그린다 — effect 없이).
+    <HikingMountainList key={`${q}|${group ?? ''}|${sort}`} ranked={ranked} isLoading={mountainsQ.isLoading} selectedId={mountainId} onSelect={selectMountain} />
   );
 
   const loading = (text: string) => (
@@ -260,7 +271,7 @@ export const HikingPage = () => {
         ? failed('코스를 불러오지 못했습니다.')
         : loading('코스를 불러오는 중…')
     : mountain
-      ? <MountainDetail mountain={mountain} onSelectCourse={(c) => update({ c }, false)} onBack={() => update({ m: null }, false)} />
+      ? <MountainDetail mountain={mountain} onSelectCourse={(c) => update({ c }, false)} onSelectMountain={selectMountain} onBack={() => update({ m: null }, false)} />
       : mountainQ.isError
         ? failed('산 정보를 불러오지 못했습니다.')
         : loading('산 정보를 불러오는 중…');

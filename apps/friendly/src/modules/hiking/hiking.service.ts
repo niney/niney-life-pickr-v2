@@ -9,13 +9,14 @@ import type {
   HikingMountainDetailType,
   HikingMountainSummaryType,
   HikingMountainsResultType,
+  HikingNeighborType,
   HikingPoiType,
   HikingProfileType,
   HikingSignGuideType,
   HikingSignpostType,
   HikingSurfaceType,
 } from '@repo/api-contract';
-import { hikingCourseTimes, hikingDifficulty, isHikingCourseShape, isHikingRoughSurface } from '@repo/utils';
+import { haversineM, hikingCourseTimes, hikingDifficulty, isHikingCourseShape, isHikingRoughSurface } from '@repo/utils';
 
 export class HikingNotLoadedError extends Error {
   readonly statusCode = 503;
@@ -41,9 +42,12 @@ const bboxOf = (r: { minLat: number; minLng: number; maxLat: number; maxLng: num
   maxLng: r.maxLng,
 });
 
+const kindOf = (v: string): 'top100' | 'peak' => (v === 'peak' ? 'peak' : 'top100');
+
 const toMountainSummary = (m: HikingMountain): HikingMountainSummaryType => ({
   id: m.id,
   name: m.name,
+  kind: kindOf(m.kind),
   subtitle: m.subtitle,
   heightM: m.heightM,
   area: m.area,
@@ -55,6 +59,7 @@ const toMountainSummary = (m: HikingMountain): HikingMountainSummaryType => ({
   minLengthM: m.minLengthM,
   maxLengthM: m.maxLengthM,
   images: parseJson<number[]>(m.images, []),
+  peaks: parseJson<string[]>(m.peaks, []),
 });
 
 // 형태·예상 시간·난이도·험한 노면 — 코스 요약과 추천(hiking-recommend)이 같이 쓴다. 나들이 시간 = 왕복 또는 코스 방향 편도.
@@ -97,6 +102,7 @@ const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
     gapCount: c.gapCount,
     gapM: c.gapM,
     roughSurfaces,
+    source: kindOf(c.source),
     bbox: bboxOf(c),
     pieces: parseJson<string[]>(c.pieces, []),
   };
@@ -115,8 +121,17 @@ export class HikingService {
   async getMountain(id: string): Promise<HikingMountainDetailType | null> {
     const m = await this.prisma.hikingMountain.findUnique({ where: { id }, include: { courses: { orderBy: { no: 'asc' } } } });
     if (!m) return null;
+    const summary = toMountainSummary(m);
+    // 이어진 봉우리 — 적재 때 정한 id 순서(정상끼리 가까운 순) 그대로.
+    const ids = parseJson<string[]>(m.neighbors, []);
+    const rows = ids.length > 0 ? await this.prisma.hikingMountain.findMany({ where: { id: { in: ids } } }) : [];
+    const byId = new Map(rows.map((r) => [r.id, toMountainSummary(r)]));
+    const neighbors: HikingNeighborType[] = ids
+      .map((nid) => byId.get(nid))
+      .filter((n): n is HikingMountainSummaryType => n !== undefined)
+      .map((n) => ({ id: n.id, name: n.name, kind: n.kind, heightM: n.heightM, lat: n.lat, lng: n.lng, distM: Math.round(haversineM(summary, n)) }));
     return {
-      ...toMountainSummary(m),
+      ...summary,
       overview: m.overview,
       details: m.details,
       reason: m.reason,
@@ -125,6 +140,7 @@ export class HikingService {
       summitEle: m.summitEle,
       bbox: bboxOf(m),
       courses: m.courses.map(toCourseSummary),
+      neighbors,
     };
   }
 

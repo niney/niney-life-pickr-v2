@@ -82,8 +82,9 @@ const hikingRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.hikingRead },
     schema: {
       tags: ['hiking'],
-      summary: '100대 명산 목록 — 정상 좌표·높이·소재지 권역·코스 수·사진 순번(적재본, 미적재면 503)',
-      description: '산 100개를 한 번에 준다(검색·권역 필터는 클라이언트). regions 는 시도 키(seoul·gyeonggi·gangwon …).',
+      summary: '산 목록 — 100대 명산 + 전국 주요 봉우리(코스가 있는 곳), 정상 좌표·높이·소재지 권역·코스 수·사진 순번(적재본, 미적재면 503)',
+      description:
+        '2천 곳 남짓을 한 번에 준다(검색·권역·정렬은 클라이언트). kind 는 top100(100대 명산)·peak(전국 주요 봉우리), regions 는 시도 키(seoul·gyeonggi·gangwon …), peaks 는 100대 명산에 합친 봉우리 이름(검색용).',
       response: { 200: HikingMountainsResult, 503: ErrorResponseSchema },
     },
     handler: async (req, reply) => {
@@ -103,9 +104,9 @@ const hikingRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.hikingRead },
     schema: {
       tags: ['hiking'],
-      summary: '명산 상세 — 소개·선정 이유·공식 코스 문구 + 코스 요약(선은 encoded polyline 조각), 없으면 404',
+      summary: '산 상세 — 소개·선정 이유·공식 코스 문구 + 코스 요약(선은 encoded polyline 조각) + 이어진 봉우리, 없으면 404',
       description:
-        'id 는 산림청 산 코드(9자리). 코스 pieces 는 조각별 encoded polyline(정밀도 1e5) — 조각 사이는 원본 기록이 끊긴 곳이다.',
+        'id 는 산림청 산 코드(9자리, 100대 명산) 또는 봉우리 코드(10자리, 전국 주요 봉우리). 코스 pieces 는 조각별 encoded polyline(정밀도 1e5) — 조각 사이는 원본 기록이 끊긴 곳이다. 코스 source 가 peak 면 선·고도만 있는 자료다(지점은 근처 봉우리·등산 지점을 붙인 것). neighbors 는 정상이 서로의 코스 선 30m 안인 산.',
       params: HikingMountainParams,
       response: { 200: HikingMountainDetail, 404: ErrorResponseSchema },
     },
@@ -122,7 +123,7 @@ const hikingRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['hiking'],
       summary: '코스 상세 — 고도 프로필(20m 간격)·노면 범위·코스 지점(정상·갈림길 이정표·화장실·위험 …), 없으면 404',
-      description: 'id 는 `<산 코드>-<코스 번호>`. pois 는 코스 시작에서의 거리(atM) 순.',
+      description: 'id 는 `<산 코드>-<코스 번호>` — 전국 주요 봉우리 코스는 100대 명산에 합쳐져도 `<봉우리 코드>-<번호>`. pois 는 코스 시작에서의 거리(atM) 순.',
       params: HikingCourseParams,
       response: { 200: HikingCourseDetail, 404: ErrorResponseSchema },
     },
@@ -174,7 +175,7 @@ const hikingRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.hikingRead },
     schema: {
       tags: ['hiking'],
-      summary: '명산 사진(JPEG, 긴 변 960px) — 산림청 산정보 사진을 적재 때 받아 둔 사본, 없으면 404',
+      summary: '산 사진(JPEG, 긴 변 960px) — 산림청 산정보 사진을 적재 때 받아 둔 사본, 없으면 404',
       params: HikingImageParams,
     },
     handler: async (req, reply) => {
