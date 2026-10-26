@@ -291,7 +291,8 @@ export const HikingFooter = () => (
       <a href="https://www.forest.go.kr" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
         산림청 <ExternalLink className="size-3" />
       </a>{' '}
-      명산등산로·산정보(공공데이터포털).
+      명산등산로·산정보(공공데이터포털). 고도 기록이 없는 국립공원 코스의 지형 고도는 AWS Terrain Tiles — SRTM data courtesy of the U.S.
+      Geological Survey.
     </div>
   </footer>
 );

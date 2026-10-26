@@ -112,6 +112,7 @@ export const MyLocationCard = () => {
           </Pressable>
         </View>
         <LifeMapLink />
+        <HikingLink />
       </View>
     );
   }
@@ -195,6 +196,7 @@ export const MyLocationCard = () => {
         </Pressable>
       </View>
       <LifeMapLink />
+      <HikingLink />
     </View>
   );
 };
@@ -211,6 +213,23 @@ const LifeMapLink = () => {
     >
       <MaterialCommunityIcons name="map-search-outline" size={16} color={theme.colors.textMuted} />
       <Text style={[styles.lifeText, { color: theme.colors.text }]}>일상지도 — 내 주변 공중화장실·CCTV</Text>
+      <MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.textMuted} />
+    </Pressable>
+  );
+};
+
+// 등산 진입 — 100대 명산·국립공원 공식 코스(저장 위치가 있으면 가까운 산부터).
+const HikingLink = () => {
+  const theme = useTheme();
+  const router = useRouter();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push('/hiking' as never)}
+      style={({ pressed }) => [styles.lifeRow, { borderTopColor: theme.colors.border, opacity: pressed ? 0.6 : 1 }]}
+    >
+      <MaterialCommunityIcons name="image-filter-hdr" size={16} color={theme.colors.textMuted} />
+      <Text style={[styles.lifeText, { color: theme.colors.text }]}>등산 — 가까운 산·국립공원 공식 코스</Text>
       <MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.textMuted} />
     </Pressable>
   );

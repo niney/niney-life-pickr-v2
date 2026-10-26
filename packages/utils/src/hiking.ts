@@ -1,4 +1,4 @@
-// 등산(/hiking) — 100대 명산 코스의 공용 규칙. 서버 적재(시도 추출)·웹 표시(라벨·색·지도 지점)가 같은 값을 쓴다.
+// 등산(/hiking) — 100대 명산·전국 주요 봉우리·국립공원 공식 코스의 공용 규칙. 서버 적재(시도 추출)·웹 표시(라벨·색·지도 지점)가 같은 값을 쓴다.
 // docs/PLAN-hiking.md
 
 // ── 시도 ──────────────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ const REGION_PATTERN: Record<HikingRegion, RegExp> = {
 export const hikingRegionsOf = (area: string | null | undefined): HikingRegion[] =>
   area ? HIKING_REGIONS.filter((r) => REGION_PATTERN[r].test(area)) : [];
 
-// 목록 칩 — 시도 17개는 너무 잘아 권역으로 묶는다(산 100개라 권역당 10~30개).
+// 목록 칩 — 시도 17개는 너무 잘아 권역으로 묶는다(1차 산 100개 때 권역당 10~30개로 정했다, 지금은 봉우리까지 수천 곳).
 export const HIKING_REGION_GROUPS = [
   { key: 'capital', label: '수도권', regions: ['seoul', 'incheon', 'gyeonggi'] },
   { key: 'gangwon', label: '강원', regions: ['gangwon'] },
@@ -112,14 +112,19 @@ export const HIKING_SURFACE_COLOR: Record<string, string> = {
   너덜길: '#78716c',
 };
 
+// ── 국립공원 산행 전 확인 ─────────────────────────────────────────────────────
+// 탐방로 통제(공원별 정상·부분통제 — 공개 API 가 없어 링크만)·입산시간지정제(탐방로마다 입산 가능 시각). 국립공원공단 누리집.
+export const HIKING_KNPS_CLOSURE_URL = 'https://www.knps.or.kr/front/portal/safe/acsCtrList.do?menuNo=8000340';
+export const HIKING_KNPS_ENTRY_TIME_URL = 'https://www.knps.or.kr/portal/main/contents.do?menuNo=8000198';
+
 // ── 예상 시간 ────────────────────────────────────────────────────────────────
-// docs/PLAN-hiking.md §2차 — 서버가 적재 때 Tobler 보행 함수로 낸 이동 분(moveMin)에 보행 배율과 피로·휴식 보정을 곱한다:
-// 예상 = 1.12 × 이동 × (1 + min(이동, 360) / 600). 산림청 명산등산로 안내 시간 6구간 + 한라산국립공원 안내 시간 2구간에
-// 맞췄다(이동 103~316분, 중앙 오차 2%·가장 큰 오차 +36% 마니산). 맞춘 표본보다 긴 종주(이동 360분 넘음)는 보정 배율을
-// 더 키우지 않는다. 짧은 휴식은 들어 있고 점심·긴 휴식은 없다.
-export const HIKING_TIME_FACTOR = 1.12;
-export const HIKING_FATIGUE_MIN = 600;
-export const HIKING_FATIGUE_CAP_MIN = 360;
+// docs/PLAN-hiking.md §예상 시간 다시 맞추기 — 서버가 적재 때 Tobler 보행 함수로 낸 이동 분(moveMin)에 보행 배율과 피로·휴식
+// 보정을 곱한다: 예상 = 1.35 × 이동 × (1 + min(이동, 180) / 1500). 국립공원 공식 소요시간 103코스 + 2차 안내 시간 7구간에
+// 맞췄다(중앙 오차 12%, 이동 시간대마다 치우침 ±5% 안). 2차 값(1.12 × (1 + min(이동, 360)/600), 8구간)은 짧은 코스를 17% 짧게,
+// 이동 4시간 넘는 코스를 22% 길게 냈다. 짧은 휴식은 들어 있고 점심·긴 휴식은 없다.
+export const HIKING_TIME_FACTOR = 1.35;
+export const HIKING_FATIGUE_MIN = 1500;
+export const HIKING_FATIGUE_CAP_MIN = 180;
 export const estimateHikingMinutes = (moveMin: number): number =>
   Math.round(HIKING_TIME_FACTOR * moveMin * (1 + Math.min(moveMin, HIKING_FATIGUE_CAP_MIN) / HIKING_FATIGUE_MIN));
 

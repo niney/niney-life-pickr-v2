@@ -125,11 +125,12 @@ export const TransitMapView = forwardRef<TransitMapHandle, TransitMapViewProps>(
         fitToMarkers(padding) {
           send({ type: 'fitToMarkers', padding });
         },
-        fitToCoords(coords, padding) {
+        fitToCoords(coords, padding, opts) {
           send({
             type: 'fitToCoords',
             coords: coords.map((c) => [c.lat, c.lng] as [number, number]),
             padding,
+            belowInset: opts?.belowInset,
           });
         },
       }),

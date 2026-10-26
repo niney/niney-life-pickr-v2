@@ -58,6 +58,10 @@ export const HikingParkCourse = z.object({
   difficulty: z.string(),
   schedule: z.string(),
   contact: z.string().nullable(),
+  // 같은 길 GPX 코스에 붙인 문구인데 구간 순서가 이 코스 방향과 반대(안내는 도착 → 출발 쪽으로 걷는 기준).
+  reversed: z.boolean(),
+  // 새 공식 코스(source park)의 고도 출처 — nearby 근처 GPX 기록 · terrain 지형 고도(SRTM 30m). 같은 길 코스·고도 없는 코스는 null.
+  elevationFrom: z.enum(['nearby', 'terrain']).nullable(),
 });
 export type HikingParkCourseType = z.infer<typeof HikingParkCourse>;
 
@@ -97,7 +101,7 @@ export const HikingCourseSummary = z.object({
   roughSurfaces: z.array(z.string()),
   // 원천 — top100 100대명산 GPX(지점·이정표·노면) · peak 전국 주요 봉우리 GPX(선·고도만, 지점은 근처 봉우리·등산 지점을 붙인 것) ·
   // network 전국 주요 봉우리의 등산로 망(구간 묶음)을 갈림길에서 이어 만든 코스(6차 — 들머리 → 정상 왕복·넘어가기) ·
-  // park 국립공원 공식 탐방로 선(9차 — 고도는 근처 GPX 선에서 빌린 것, 못 빌리면 고도 없음).
+  // park 국립공원 공식 탐방로 선(9차 — 고도는 근처 GPX 선에서 빌리고, 못 빌리면 지형 고도(SRTM), 그것도 없으면 고도 없음 — park.elevationFrom).
   source: z.enum(['top100', 'peak', 'network', 'park']),
   // 국립공원 공식 코스 문구(9차) — source park 이거나, 같은 길인 GPX 코스에 붙인 것. 아니면 null.
   park: HikingParkCourse.nullable(),

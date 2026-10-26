@@ -3,7 +3,8 @@
 // 사진(15058662, 산마다 1콜 + 사진 최대 3장). 5차부터 한국등산트레킹지원센터 전국 주요 봉우리 코스 zip(15108086, 봉우리 4,492)
 // + 산정보 전체(5콜, 봉우리 소개·높이·소재지) + 들머리 이름(DB 의 지하철역·버스 정류장·공영 주차장, 없으면 브이월드 역지오코딩
 // 리·동 — data/hiking-geocode-cache.json 에 영구 캐시). 9차부터 행정안전부 산행안전지도(국립공원공단 공식 탐방로 199·국립공원 경계
-// 22·탐방지원센터·안내소·대피소 — 3콜, 원문은 data/hiking-park/ 에 두고 부르기에 실패하면 그것으로). 키는 DATA_GO_KR_API_KEY·
+// 22·탐방지원센터·안내소·대피소 — 3콜, 원문은 data/hiking-park/ 에 두고 부르기에 실패하면 그것으로) + 공식 코스 둘레 지형 고도 타일
+// (AWS Terrain Tiles — data/hiking-dem/ 에 받아 둠, 키 없음). 키는 DATA_GO_KR_API_KEY·
 // VWORLD_API_KEY·SAFETYDATA_COURSE_KEY·SAFETYDATA_PARK_KEY·SAFETYDATA_FACILITY_KEY. 사진은 긴 변 960px JPEG 로 줄여
 // data/hiking-images/<산 id>_<순번>.jpg 에 둔다(있으면 다시 받지 않음). → Hiking* 전량 교체.
 // docs/PLAN-hiking.md · 원본 보관은 docs/data-sources.md
@@ -22,6 +23,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
+import { MapSettingsService } from '../src/modules/settings/map.service.js';
 import sharp from 'sharp';
 import {
   HikingApiError,
@@ -51,9 +53,11 @@ import {
   type ParkFacilityRow,
   type SafetyApi,
 } from '../src/modules/hiking/hiking-park.adapter.js';
+import { demTilesFor, loadDemTiles, makeDemAt, type DemAt } from '../src/modules/hiking/hiking-dem.js';
 import {
   HIKING_IMAGE_DIR,
   buildHikingRows,
+  densifyLine,
   hikingImageFileName,
   peakCourseEnds,
   readHikingZip,
@@ -85,6 +89,7 @@ const PLACE_M = 300;
 const GEOCODE_FAIL_STREAK = 20;
 const GEOCODE_CACHE = 'data/hiking-geocode-cache.json';
 const PARK_CACHE_DIR = 'data/hiking-park';
+const DEM_CACHE_DIR = 'data/hiking-dem';
 const PEAK_IMAGE_CHECKED = 'peak-checked.json';
 const IMAGE_LONG_EDGE = 960;
 const IMAGE_GAP_MS = 150;
@@ -183,6 +188,16 @@ const loadParkData = async (): Promise<{ courses: ParkCourseRow[]; parks: ParkBo
   facilities: (await loadSafetyRows('facility', 'SAFETYDATA_FACILITY_KEY')).map(normalizeParkFacility).filter(nonNull),
 });
 
+// 지형 고도(AWS Terrain Tiles, SRTM) — 근처 GPX 고도를 못 빌린 공식 코스용. 공식 코스 둘레 타일을 data/hiking-dem/ 에 받아 두고
+// 다음부터 그것을 쓴다. 못 받은 타일 자리는 고도 없이(덮인 길이가 모자라면 그 코스는 고도 없는 코스).
+const loadParkDem = async (courses: readonly ParkCourseRow[]): Promise<DemAt> => {
+  const keys = demTilesFor(courses.flatMap((c) => c.lines.flatMap((l) => densifyLine(l, 10))));
+  const r = await loadDemTiles(keys, resolve(process.cwd(), DEM_CACHE_DIR));
+  const failed = r.failed.length > 0 ? ` · 실패 ${r.failed.length}(${r.failed.slice(0, 3).join(', ')})` : '';
+  console.log(`지형 고도 타일 ${keys.length} — 캐시 ${r.cached} · 받음 ${r.fetched}${failed}`);
+  return makeDemAt(r.tiles);
+};
+
 // 들머리 리·동 — 300m 안에 역·정류장·주차장이 없는 끝만 역지오코딩(캐시 영구, 못 찾은 곳은 '' 로 기록).
 const collectVillages = async (ends: readonly { lat: number; lng: number }[], places: readonly PeakPlace[]): Promise<Map<string, string>> => {
   const cachePath = resolve(process.cwd(), GEOCODE_CACHE);
@@ -195,9 +210,13 @@ const collectVillages = async (ends: readonly { lat: number; lng: number }[], pl
     if (k in cache || todo.has(k) || placeGrid.near(e.lat, e.lng, PLACE_M).length > 0) continue;
     todo.set(k, e);
   }
-  const key = process.env.VWORLD_API_KEY ?? '';
+  // 키는 설정>지도 의 vworld 키(DB 우선, 없으면 .env VWORLD_API_KEY) — 집값 적재기와 같다(운영 키가 DB 에만 있을 수 있다).
+  const key =
+    NO_GEOCODE || todo.size === 0
+      ? ''
+      : ((await new MapSettingsService(prisma, { apiKey: process.env.VWORLD_API_KEY ?? '', domains: process.env.VWORLD_DOMAINS ?? '' }).getSecret('vworld')).apiKey ?? '');
   if (NO_GEOCODE || !key) {
-    if (todo.size > 0) console.log(`들머리 리·동: 역지오코딩 건너뜀(${NO_GEOCODE ? '--no-geocode' : 'VWORLD_API_KEY 없음'}) — 캐시 밖 ${todo.size}곳은 이름 없이`);
+    if (todo.size > 0) console.log(`들머리 리·동: 역지오코딩 건너뜀(${NO_GEOCODE ? '--no-geocode' : 'vworld 키 없음 — 어드민 설정>지도 또는 VWORLD_API_KEY'}) — 캐시 밖 ${todo.size}곳은 이름 없이`);
   } else if (todo.size > 0) {
     // 차례로 보낸다(동시에 여럿 보내면 브이월드가 끊는다). 한 점이 끝내 안 되면 건너뛰고, 연속으로 GEOCODE_FAIL_STREAK 번이면
     // 업스트림 장애로 보고 멈춘다(캐시에 없는 점은 다음 실행에서 잇는다).
@@ -368,6 +387,7 @@ const main = async (): Promise<void> => {
   console.log(
     `산행안전지도 공식 코스 ${park.courses.length} · 국립공원 경계 ${park.parks.length} · 탐방지원센터·안내소 ${park.facilities.filter((f) => f.category === 'ENTRY').length} · 대피소 ${park.facilities.filter((f) => f.category === 'SHELTER').length}`,
   );
+  const demAt = park.courses.length > 0 ? await loadParkDem(park.courses) : undefined;
   const parkPlaces: PeakPlace[] = park.facilities.filter((f) => f.category === 'ENTRY').map((f) => ({ category: 'ENTRY', name: f.name, lat: f.lat, lng: f.lng }));
 
   // 5차 전국 주요 봉우리 — zip 이 없으면 100대 명산만.
@@ -416,6 +436,7 @@ const main = async (): Promise<void> => {
     facilities,
     parkCourses: park.courses,
     parks: park.parks,
+    demAt,
   });
   if (rows.peakInfoIds.size > 0) {
     const peakImages = await collectPeakImages(rows.peakInfoIds, serviceKey);

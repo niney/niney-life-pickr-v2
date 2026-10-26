@@ -90,7 +90,8 @@ export type TransitMapCmd =
   // 줌아웃 금지 — 현재 줌이 minZoom 보다 크면 유지하고 중심만 이동.
   | { type: 'flyToZoomIn'; lat: number; lng: number; minZoom: number }
   | { type: 'fitToMarkers'; padding?: number }
-  | { type: 'fitToCoords'; coords: [number, number][]; padding?: number }
+  // belowInset: 아래 패딩에 setViewInset 높이(바텀시트가 덮는 만큼)를 더한다 — 시트 위 보이는 영역에 맞추기(등산).
+  | { type: 'fitToCoords'; coords: [number, number][]; padding?: number; belowInset?: boolean }
   // 무애니메이션 즉시 복원 — 재마운트 폴백 경로 전용.
   | { type: 'setViewport'; lat: number; lng: number; zoom: number };
 

@@ -46,7 +46,7 @@ export interface TransitMapHandle {
   flyTo(lat: number, lng: number, zoom?: number): void;
   flyToZoomIn(lat: number, lng: number, minZoom: number): void;
   fitToMarkers(padding?: number): void;
-  fitToCoords(coords: { lat: number; lng: number }[], padding?: number): void;
+  fitToCoords(coords: { lat: number; lng: number }[], padding?: number, opts?: { belowInset?: boolean }): void;
 }
 
 export interface TransitMapSyncState {

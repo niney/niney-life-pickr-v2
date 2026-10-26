@@ -43,11 +43,11 @@ describe('formatHikingLength', () => {
 });
 
 describe('estimateHikingMinutes / hikingCourseTimes', () => {
-  it('보행 배율 1.12 × 피로 보정(1 + 이동/600), 이동 360분 넘으면 보정 배율을 더 키우지 않는다', () => {
+  it('보행 배율 1.35 × 피로 보정(1 + 이동/1500), 이동 180분 넘으면 보정 배율을 더 키우지 않는다', () => {
     expect(estimateHikingMinutes(0)).toBe(0);
-    // 120 × 1.12 × 1.2
-    expect(estimateHikingMinutes(120)).toBe(161);
-    // 360 이후는 1.6 배 고정 — 이동이 두 배면 예상도 두 배.
+    // 120 × 1.35 × 1.08
+    expect(estimateHikingMinutes(120)).toBe(175);
+    // 180 이후는 1.512 배 고정 — 이동이 두 배면 예상도 두 배.
     expect(estimateHikingMinutes(800)).toBe(estimateHikingMinutes(400) * 2);
   });
 

@@ -5592,6 +5592,17 @@
                         "contact": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "reversed": {
+                          "type": "boolean"
+                        },
+                        "elevationFrom": {
+                          "type": "string",
+                          "enum": [
+                            "nearby",
+                            "terrain"
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -5602,7 +5613,9 @@
                         "distance",
                         "difficulty",
                         "schedule",
-                        "contact"
+                        "contact",
+                        "reversed",
+                        "elevationFrom"
                       ],
                       "additionalProperties": false,
                       "nullable": true
@@ -6887,13 +6900,43 @@
         }
       }
     },
+    "/api/v1/hiking/courses/{id}/gpx": {
+      "get": {
+        "summary": "코스 GPX 파일(GPX 1.1) — 다른 등산 앱·GPS 에 넣을 코스 선·고도·코스 지점, 없으면 404",
+        "tags": [
+          "hiking"
+        ],
+        "description": "선은 코스 상세 pieces 와 같은 정리한 선(조각마다 trkseg), 고도는 고도 프로필을 선 길이 비율로 보간한 값(고도 없는 코스는 ele 없음), 코스 지점은 wpt(이름·분류·설명). metadata desc 에 원천 출처(국립공원 공식 탐방로는 공공누리 제3유형, 지형 고도는 SRTM)를 적는다. Content-Disposition 첨부 — 파일 이름은 `<산 이름> <코스 이름>.gpx`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6,12}-\\d{1,4}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/v1/hiking/mountains": {
       "get": {
         "summary": "산 목록 — 100대 명산 + 전국 주요 봉우리(코스가 있는 곳), 정상 좌표·높이·소재지 권역·코스 수·사진 순번(적재본, 미적재면 503)",
         "tags": [
           "hiking"
         ],
-        "description": "2천 곳 남짓을 한 번에 준다(검색·권역·정렬은 클라이언트). kind 는 top100(100대 명산)·peak(전국 주요 봉우리), regions 는 시도 키(seoul·gyeonggi·gangwon …), peaks 는 100대 명산에 합친 봉우리 이름(검색용), park 는 정상이 든 국립공원 이름(행정안전부 산행안전지도 경계).",
+        "description": "100대 명산 + 코스가 있는 전국 주요 봉우리 전부(수천 곳)를 한 번에 준다(검색·권역·정렬은 클라이언트). kind 는 top100(100대 명산)·peak(전국 주요 봉우리), regions 는 시도 키(seoul·gyeonggi·gangwon …), peaks 는 100대 명산에 합친 봉우리 이름(검색용), park 는 정상이 든 국립공원 이름(행정안전부 산행안전지도 경계).",
         "x-auth": "public",
         "x-rate-limit": {
           "max": 240,
@@ -7046,7 +7089,7 @@
         "tags": [
           "hiking"
         ],
-        "description": "id 는 산림청 산 코드(9자리, 100대 명산) 또는 봉우리 코드(10자리, 전국 주요 봉우리). 코스 pieces 는 조각별 encoded polyline(정밀도 1e5) — 조각 사이는 원본 기록이 끊긴 곳이다. 코스 source 가 peak 면 선·고도만 있는 자료다(지점은 근처 봉우리·등산 지점을 붙인 것). neighbors 는 정상이 서로의 코스 선 30m 안인 산. 코스 park 는 국립공원 공식 코스 문구(행정안전부 산행안전지도 원문 그대로 — source park 는 공식 탐방로 선이고 고도는 근처 GPX 에서 빌린 것), parkArea 는 정상이 든 국립공원 경계(다각형마다 [바깥 고리, 구멍…] encoded polyline).",
+        "description": "id 는 산림청 산 코드(9자리, 100대 명산) 또는 봉우리 코드(10자리, 전국 주요 봉우리). 코스 pieces 는 조각별 encoded polyline(정밀도 1e5) — 조각 사이는 원본 기록이 끊긴 곳이다. 코스 source 가 peak 면 선·고도만 있는 자료다(지점은 근처 봉우리·등산 지점을 붙인 것). neighbors 는 정상이 서로의 코스 선 30m 안인 산. 코스 park 는 국립공원 공식 코스 문구(행정안전부 산행안전지도 원문 그대로 — source park 는 공식 탐방로 선이고 고도는 근처 GPX 에서 빌리거나 지형 고도(SRTM 30m) — park.elevationFrom, 같은 길 GPX 코스와 구간 순서가 반대면 park.reversed), parkArea 는 정상이 든 국립공원 경계(다각형마다 [바깥 고리, 구멍…] encoded polyline).",
         "parameters": [
           {
             "schema": {
@@ -7325,6 +7368,17 @@
                               "contact": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "reversed": {
+                                "type": "boolean"
+                              },
+                              "elevationFrom": {
+                                "type": "string",
+                                "enum": [
+                                  "nearby",
+                                  "terrain"
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -7335,7 +7389,9 @@
                               "distance",
                               "difficulty",
                               "schedule",
-                              "contact"
+                              "contact",
+                              "reversed",
+                              "elevationFrom"
                             ],
                             "additionalProperties": false,
                             "nullable": true

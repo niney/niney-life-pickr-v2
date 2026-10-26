@@ -168,6 +168,8 @@ const P1 = courseSummary({
     difficulty: '중',
     schedule: '당일',
     contact: '북한산국립공원사무소 (02)909-0497',
+    reversed: false,
+    elevationFrom: 'nearby',
   },
 });
 const bukhanDetail: HikingMountainDetailType = {
@@ -535,6 +537,7 @@ describe('HikingPage', () => {
     renderPage(`/hiking?m=${BUKHAN.id}`);
     const m = await screen.findByTestId('hiking-mountain');
     expect(within(m).getByTestId('hiking-mountain-park')).toHaveTextContent('북한산국립공원');
+    expect(within(m).getByRole('link', { name: /탐방로 통제정보/ })).toHaveAttribute('href', expect.stringContaining('knps.or.kr'));
     const cards = within(screen.getByTestId('hiking-courses')).getAllByRole('listitem');
     expect(cards[0]).toHaveTextContent('백운대코스국립공원 코스');
     expect(cards[0]).toHaveTextContent('안내 01시간30분 · 난이도 중');
@@ -548,10 +551,28 @@ describe('HikingPage', () => {
     expect(box).toHaveTextContent('소요시간 01시간30분');
     expect(box).toHaveTextContent('난이도 중');
     expect(box).toHaveTextContent('문의 북한산국립공원사무소 (02)909-0497');
+    expect(within(box).queryByTestId('hiking-course-park-reversed')).toBeNull();
+    expect(within(c).getByTestId('hiking-course-gpx')).toHaveAttribute('href', `/api/v1/hiking/courses/${P1.id}/gpx`);
     expect(within(c).getByTestId('hiking-course-peak-note')).toHaveTextContent('근처 등산 기록에서 가져와');
     const pois = within(screen.getByTestId('hiking-pois')).getAllByRole('listitem');
     expect(pois[0]).toHaveTextContent('백운대탐방지원센터');
     expect(pois[0]).toHaveTextContent('국립공원공단 · 02-998-8365');
+  });
+
+  it('국립공원 — 공식 문구가 코스 방향과 반대면 목록·상세에 알리고, 지형 고도로 계산한 코스는 그렇게 적는다', async () => {
+    const park = { ...p1Detail.park!, reversed: true, elevationFrom: 'terrain' as const };
+    server.use(
+      http.get('/api/v1/hiking/mountains/:id', () => HttpResponse.json({ ...bukhanDetail, courses: bukhanDetail.courses.map((c) => (c.id === P1.id ? { ...c, park } : c)) })),
+      http.get('/api/v1/hiking/courses/:id', () => HttpResponse.json({ ...p1Detail, park })),
+    );
+    renderPage(`/hiking?m=${BUKHAN.id}`);
+    await screen.findByTestId('hiking-mountain');
+    const cards = within(screen.getByTestId('hiking-courses')).getAllByRole('listitem');
+    expect(cards[0]).toHaveTextContent('안내 01시간30분 · 난이도 중 · 반대 방향 기준');
+    fireEvent.click(within(cards[0]!).getByRole('button'));
+    const c = await screen.findByTestId('hiking-course');
+    expect(within(c).getByTestId('hiking-course-park-reversed')).toHaveTextContent('반대 방향(도착 → 출발)');
+    expect(within(c).getByTestId('hiking-course-peak-note')).toHaveTextContent('지형 자료(SRTM 30m)');
   });
 
   it('데스크톱 — [산 목록 | 상세 | 지도] 세 칸, 산을 골라도 목록은 남고 패널을 오른쪽으로 옮긴다', async () => {

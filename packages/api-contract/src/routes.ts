@@ -638,9 +638,10 @@ export const Parking = {
   restaurantReviews: (placeId: string) => `${API_PREFIX}/restaurants/public/${encodeURIComponent(placeId)}/parking-reviews`,
 } as const;
 
-// 등산 — 100대 명산 코스(GPX 적재본 + 산림청·등산트레킹지원센터). 공개, 로컬 SQLite 조회뿐. docs/PLAN-hiking.md
+// 등산 — 100대 명산·전국 주요 봉우리·국립공원 공식 코스(GPX·산행안전지도 적재본 + 산림청·등산트레킹지원센터). 공개. 산·코스·주변·사진·GPX 는
+// 로컬 SQLite 조회뿐, 오늘의 조건·추천만 공공 API 를 서버 캐시로 부른다. docs/PLAN-hiking.md
 export const Hiking = {
-  // 산 100개 전부(지도 마커·목록 — 검색·권역 필터는 클라이언트).
+  // 산 목록 전부 — 100대 명산 + 전국 주요 봉우리(코스가 있는 곳, 수천 곳). 지도 마커·목록, 검색·권역 필터는 클라이언트.
   mountains: `${API_PREFIX}/hiking/mountains`,
   // 산 상세 + 코스 요약(선 포함).
   mountain: (id: string) => `${API_PREFIX}/hiking/mountains/${encodeURIComponent(id)}`,
@@ -650,6 +651,8 @@ export const Hiking = {
   conditions: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}/conditions`,
   // 코스 주변 — 들머리 정류장·주차·화장실, 하산 후 맛집.
   around: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}/around`,
+  // 코스 GPX 파일(다른 등산 앱·GPS 에 넣기) — 선·고도·코스 지점.
+  gpx: (id: string) => `${API_PREFIX}/hiking/courses/${encodeURIComponent(id)}/gpx`,
   // 오늘 어느 산 — 출발 위치·날짜·출발 시각·산행 시간·난이도·이동 수단으로 추천.
   recommend: `${API_PREFIX}/hiking/recommend`,
   // 산 사진(JPEG, 적재 때 받아 둔 사본) — no 는 산 상세 images 의 순번.

@@ -1,4 +1,4 @@
-// 등산 "오늘 어느 산" 추천(4차) — 코스 점수와 추천 이유 문장. 서버(GET /v1/hiking/recommend)가 607코스를 이 점수로 줄 세우고
+// 등산 "오늘 어느 산" 추천(4차) — 코스 점수와 추천 이유 문장. 서버(GET /v1/hiking/recommend)가 전 코스를 이 점수로 줄 세우고
 // 상위 산만 오늘의 조건(날씨·산불·대기)을 받아 다시 매긴다. 사용자 결정(2026-10-25): 입력은 출발 위치·날짜·출발 시각·산행 시간·
 // 난이도·이동 수단, 거리는 직선 + 대략 차로 시간. docs/PLAN-hiking.md §4차
 import { HIKING_DIFFICULTY_LABEL, HIKING_SHAPE_LABEL, formatHikingDuration, type HikingCourseShape, type HikingDifficulty } from './hiking.js';

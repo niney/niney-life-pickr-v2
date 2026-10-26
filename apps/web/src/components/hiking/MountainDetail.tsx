@@ -4,6 +4,7 @@ import { Routes, type HikingCourseSummaryType, type HikingMountainDetailType } f
 import { HIKING_DIFFICULTY_LABEL, HIKING_SHAPE_LABEL, formatHikingEle, formatHikingLength, hikingCourseColor } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { DIFFICULTY_CHIP_CLASS, courseOutingLabel, formatHikingDistance, officialCourseLines } from './hikingFormat';
+import { KnpsLinks } from './KnpsLinks';
 
 // 산 상세 패널 — 사진·높이·소재지·국립공원·선정 이유·개관(접기)·산림청 공식 코스 문구·이 산의 봉우리·코스 카드(지도 선 색과 같은
 // 점, 국립공원 공식 코스가 먼저 — 안내 소요시간·난이도 원문)·이어진 봉우리. 전국 주요 봉우리(kind peak)는 산정보 소개(맞을 때만)와
@@ -73,6 +74,7 @@ export const MountainDetail = ({ mountain, onSelectCourse, onSelectMountain, onB
         </h2>
         {mountain.subtitle && <p className="text-sm text-muted-foreground">{mountain.subtitle}</p>}
         {mountain.area && <p className="mt-0.5 text-xs text-muted-foreground">{mountain.area}</p>}
+        {mountain.park && <KnpsLinks className="mt-1" />}
       </div>
       {mountain.reason && (
         <section>
@@ -140,6 +142,7 @@ export const MountainDetail = ({ mountain, onSelectCourse, onSelectMountain, onB
                     <span className="block text-[11px] text-sky-800 dark:text-sky-300">
                       안내 {c.park.duration} · 난이도 {c.park.difficulty}
                       {c.park.schedule && c.park.schedule !== '당일' && ` · ${c.park.schedule}`}
+                      {c.park.reversed && ' · 반대 방향 기준'}
                     </span>
                   )}
                 </span>

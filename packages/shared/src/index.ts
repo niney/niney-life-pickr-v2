@@ -120,6 +120,7 @@ export * from './hooks/useHousing.js';
 export * from './hooks/useFood.js';
 export * from './hooks/useMeal.js';
 export * from './hooks/useMyLocationGlance.js';
+export * from './hiking/hikingFormat.js';
 export * from './weather/weatherDaily.js';
 export * from './weather/weatherMessages.js';
 export * from './constants/index.js';

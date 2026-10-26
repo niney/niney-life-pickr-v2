@@ -720,8 +720,9 @@ export const buildTransitMapHtml = (
       if (!isFinite(minX)) return;
       var padding2 = typeof cmd.padding === 'number' ? cmd.padding : 60;
       userInteracted = false;
+      var below = cmd.belowInset ? viewBottomInset : 0;
       map.getView().fit([minX, minY, maxX, maxY], {
-        padding: [padding2, padding2, padding2, padding2],
+        padding: [padding2, padding2, padding2 + below, padding2],
         duration: 350,
         maxZoom: 17,
       });

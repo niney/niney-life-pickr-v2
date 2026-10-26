@@ -10,7 +10,7 @@ import {
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
-// 등산(100대 명산 코스) — friendly 적재본 조회(공개, 토큰 불필요). 적재본은 배포 때만 바뀐다. 오늘의 조건·추천만 업스트림(날씨·
+// 등산(100대 명산·전국 주요 봉우리·국립공원 공식 코스) — friendly 적재본 조회(공개, 토큰 불필요). 적재본은 배포 때만 바뀐다. 오늘의 조건·추천만 업스트림(날씨·
 // 대기·산불)을 서버 캐시로 부른다.
 export type HikingRecommendParams = Partial<Pick<HikingRecommendQueryType, 'lat' | 'lng' | 'date' | 'start'>> &
   Pick<HikingRecommendQueryType, 'duration' | 'level' | 'mode'> & { limit?: number };

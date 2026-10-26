@@ -3096,10 +3096,11 @@ model HikingCourse {
   // 전 적재분은 null(status:hiking 이 stale 로 세어 다시 적재한다).
   sigungu     String?
   // 5차 — 'top100' 100대명산 GPX · 'peak' 전국 주요 봉우리 GPX(선·고도만, 이정표·노면 없음) · 'network' 봉우리 등산로 망에서
-  // 이은 코스(6차) · 'park' 국립공원 공식 탐방로 선(9차, 고도는 근처 GPX 에서 빌린다).
+  // 이은 코스(6차) · 'park' 국립공원 공식 탐방로 선(9차, 고도는 근처 GPX 에서 빌리고 못 빌리면 지형 고도 SRTM — park JSON 의 elevationFrom).
   source      String  @default("top100")
   // 9차 국립공원 공식 코스 문구 JSON { parkName, name, sections[], duration, distance, difficulty, schedule, contact, seq } —
   // 산행안전지도 DSSP-IF-00143 원문 그대로(공공누리 3유형 변경금지). 같은 길인 GPX 코스에도 붙인다. 아니면 null.
+  // 우리 꼬리표(9차 보강, 있을 때만): reversed — 같은 길 GPX 코스와 구간 순서가 반대, elevationFrom — 새 코스 고도 출처(nearby·terrain).
   park        String?
   pieceCount  Int
   // 30m 넘게 떨어진 조각 사이(기록 끊김) 개수와 직선거리 합.

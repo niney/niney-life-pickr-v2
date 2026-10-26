@@ -19,6 +19,7 @@ import type {
   HikingSurfaceType,
 } from '@repo/api-contract';
 import { haversineM, hikingCourseTimes, hikingDifficulty, isHikingCourseShape, isHikingRoughSurface } from '@repo/utils';
+import { buildCourseGpx, gpxFileName } from './hiking-gpx-export.js';
 
 export class HikingNotLoadedError extends Error {
   readonly statusCode = 503;
@@ -47,8 +48,8 @@ const bboxOf = (r: { minLat: number; minLng: number; maxLat: number; maxLng: num
 const kindOf = (v: string): 'top100' | 'peak' => (v === 'peak' ? 'peak' : 'top100');
 const courseSourceOf = (v: string): HikingCourseSummaryType['source'] => (v === 'network' || v === 'park' || v === 'peak' ? v : 'top100');
 
-// 국립공원 공식 코스 문구(적재 JSON — 순번 seq 는 정렬에만 쓰고 계약에는 없다).
-type StoredParkCourse = HikingParkCourseType & { seq?: number };
+// 국립공원 공식 코스 문구(적재 JSON — 순번 seq 는 정렬에만 쓰고 계약에는 없다, reversed·elevationFrom 은 있을 때만 적혀 있다).
+type StoredParkCourse = Omit<HikingParkCourseType, 'reversed' | 'elevationFrom'> & { seq?: number; reversed?: boolean; elevationFrom?: 'nearby' | 'terrain' };
 const parkCourseOf = (raw: string | null): StoredParkCourse | null => parseJson<StoredParkCourse | null>(raw, null);
 
 // park id → 이름(산 요약의 국립공원 이름).
@@ -125,6 +126,8 @@ const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
           difficulty: park.difficulty,
           schedule: park.schedule,
           contact: park.contact,
+          reversed: park.reversed === true,
+          elevationFrom: park.elevationFrom ?? null,
         }
       : null,
     bbox: bboxOf(c),
@@ -215,5 +218,24 @@ export class HikingService {
       surfaces: parseJson<HikingSurfaceType[]>(c.surfaces, []),
       pois,
     };
+  }
+
+  // 코스 GPX(다른 등산 앱·GPS 용) — 코스 상세를 그대로 GPX 1.1 로.
+  async getCourseGpx(id: string, publicOrigin: string): Promise<{ fileName: string; gpx: string } | null> {
+    const c = await this.getCourse(id);
+    if (!c) return null;
+    const gpx = buildCourseGpx({
+      courseId: c.id,
+      mountainId: c.mountain.id,
+      mountainName: c.mountain.name,
+      courseName: c.name,
+      source: c.source,
+      park: c.park ? { parkName: c.park.parkName, elevationFrom: c.park.elevationFrom } : null,
+      pieces: c.pieces,
+      profile: c.profile,
+      pois: c.pois,
+      publicOrigin,
+    });
+    return { fileName: gpxFileName(c.mountain.name, c.name), gpx };
   }
 }

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import type { HikingCourseDetailType, HikingSignGuideType } from '@repo/api-contract';
+import { ArrowLeft, Download } from 'lucide-react';
+import { Routes, type HikingCourseDetailType, type HikingSignGuideType } from '@repo/api-contract';
 import {
   HIKING_DIFFICULTY_LABEL,
   HIKING_POI_COLOR,
@@ -15,6 +15,7 @@ import { cn } from '~/lib/utils';
 import { CourseAround } from './CourseAround';
 import { CourseConditions } from './CourseConditions';
 import { ElevationProfile } from './ElevationProfile';
+import { KnpsLinks } from './KnpsLinks';
 import { DIFFICULTY_CHIP_CLASS, courseDifficultyReasons, courseTimeBreakdown, formatAtM } from './hikingFormat';
 
 // 코스 상세 패널 — 국립공원 공식 코스 문구(원문 그대로)·숫자(거리·예상 시간·난이도·오르막·내리막·최고 고도)·형태와 방향별 시간·
@@ -60,6 +61,12 @@ const ParkCourseBox = ({ park }: { park: NonNullable<HikingCourseDetailType['par
       {park.schedule && <span>{park.schedule}</span>}
     </p>
     {park.contact && <p className="mt-0.5 text-muted-foreground">문의 {park.contact}</p>}
+    <KnpsLinks className="mt-1" />
+    {park.reversed && (
+      <p className="mt-1 font-medium text-sky-800 dark:text-sky-300" data-testid="hiking-course-park-reversed">
+        공식 안내는 이 코스와 반대 방향(도착 → 출발)으로 걷는 기준입니다.
+      </p>
+    )}
     <p className="mt-1 text-[11px] text-muted-foreground">
       국립공원공단 안내 문구 그대로입니다(행정안전부 산행안전지도). 소요시간은 안내 구간 전체 기준이라 아래 예상 시간과 다를 수 있습니다.
     </p>
@@ -83,7 +90,18 @@ export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBa
       <button type="button" onClick={onBack} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-3.5" /> {course.mountain.name} 코스 목록
       </button>
-      <h2 className="text-base font-semibold leading-snug">{course.name}</h2>
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="text-base font-semibold leading-snug">{course.name}</h2>
+        {/* 다른 등산 앱·GPS 에 넣을 파일 — 서버가 첨부(Content-Disposition)로 준다. */}
+        <a
+          href={Routes.Hiking.gpx(course.id)}
+          download
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          data-testid="hiking-course-gpx"
+        >
+          <Download className="size-3.5" /> GPX
+        </a>
+      </div>
       {course.park && <ParkCourseBox park={course.park} />}
       <div className="grid grid-cols-3 gap-1.5">
         <Stat label="거리" value={formatHikingLength(course.lengthM)} />
@@ -122,7 +140,9 @@ export const CourseDetail = ({ course, selectedPoiId, onSelectPoi, onHover, onBa
         )}
         {course.source === 'park' && course.hasElevation && (
           <p className="text-[11px] text-muted-foreground" data-testid="hiking-course-peak-note">
-            선은 국립공원 공식 탐방로이고, 고도는 근처 등산 기록에서 가져와 계산했습니다 — 예상 시간·난이도·고도 그래프는 추정입니다.
+            {course.park?.elevationFrom === 'terrain'
+              ? '선은 국립공원 공식 탐방로이고, 고도는 지형 자료(SRTM 30m)로 계산했습니다 — 봉우리가 실제보다 수십 m 낮게 나올 수 있고, 예상 시간·난이도·고도 그래프는 추정입니다.'
+              : '선은 국립공원 공식 탐방로이고, 고도는 근처 등산 기록에서 가져와 계산했습니다 — 예상 시간·난이도·고도 그래프는 추정입니다.'}
           </p>
         )}
       </div>

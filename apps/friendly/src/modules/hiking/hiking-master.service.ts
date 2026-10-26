@@ -9,6 +9,7 @@ import { readZipEntryBuffer } from '../life-map/life-flood-master.service.js';
 import { matchPeakInfo, type GdTrailRow, type MountainInfoRow, type TrekkingPoiRow } from './hiking-api.adapter.js';
 import { courseSigungu, sigunguArea, sigunguAt, type SigunguShape } from './hiking-area.js';
 import { LineGrid, PointGrid, overlapShare } from './hiking-grid.js';
+import type { DemAt } from './hiking-dem.js';
 import { coursesFromNetwork } from './hiking-network.js';
 import type { LatLngPoint, ParkBoundaryRow, ParkCourseRow } from './hiking-park.adapter.js';
 import {
@@ -96,6 +97,8 @@ export interface HikingBuildInput {
   // 공식 탐방로 코스(DSSP-IF-00143) · 국립공원 경계(DSSP-IF-00145).
   parkCourses?: readonly ParkCourseRow[];
   parks?: readonly ParkBoundaryRow[];
+  // 지형 고도(hiking-dem — 적재기가 공식 코스 둘레 타일을 미리 받아 둔다). 근처 GPX 고도를 못 빌린 공식 코스에 쓴다.
+  demAt?: DemAt;
 }
 
 export interface HikingFacility {
@@ -156,10 +159,14 @@ export interface ParkBuildReport {
   enriched: number;
   added: number;
   withElevation: number;
+  // 새 코스 중 근처 GPX 대신 지형 고도를 붙인 것.
+  withTerrain: number;
   // 방향을 시설 이름(구간 처음·끝)으로 정한 것 · 그래서 뒤집은 것 · 고도 검사로 다시 뒤집은 것.
   oriented: number;
   flipped: number;
   eleFixed: number;
+  // 같은 길 코스 중 공식 구간 순서가 그 코스 방향과 반대인 것(문구에 reversed).
+  opposite: string[];
   unassigned: string[];
   // 경계 · 정상이 공원 안인 산.
   parks: number;
@@ -1185,6 +1192,10 @@ export interface ParkCourseInfo {
   contact: string | null;
   // 공원 안 코스 순번 — 산 상세에서 공식 코스끼리 이 순서로.
   seq: number;
+  // 같은 길 GPX 코스에 붙였는데 구간 순서가 그 코스 방향과 반대(구간 끝 → 처음 = 코스 시작 → 끝).
+  reversed?: boolean;
+  // 새 코스의 고도 출처 — 근처 GPX 기록 · 지형 고도(SRTM). 없으면 고도 없음(같은 길 코스는 그 GPX 고도).
+  elevationFrom?: 'nearby' | 'terrain';
 }
 
 const PARK_ELE_M = 30;
@@ -1204,6 +1215,8 @@ const PARK_ORIENT_MARGIN_M = 50;
 // 이름으로 정한 방향의 고도 검사 — 끝 구간이 봉우리(…봉·…산·…대)인데 시작보다 이만큼 낮게 끝나면 거꾸로 본다.
 const PARK_SUMMIT_SECTION = /(봉|산|대)$/;
 const PARK_ORIENT_DROP_M = 100;
+// 왕복 문구 판단 때 떼는 꼬리 — "백무동탐방지원세터"(원문 오타)·"만수봉 구간".
+const PARK_SECTION_TAIL = /(탐방지원[센세]터|탐방안내소|공원지킴터|주차장|구간)$/;
 // 새 공식 코스에 붙이는 등산 지점 — 같은 분류가 이 안에 여럿이면 하나만.
 const PARK_POI_SAME_M = 30;
 // 새 공식 코스 순번 — 100대 명산 GPX·합친 봉우리(100~)·망(1000~) 뒤. 산 상세는 공식 코스를 먼저 보인다(hiking.service).
@@ -1214,7 +1227,7 @@ const PARK_AREA_PAD_DEG = 0.01;
 const PARK_LINE_TOLERANCE_M = 2;
 
 const parkReport = (rows: HikingRows): ParkBuildReport =>
-  (rows.report.park ??= { courses: 0, enriched: 0, added: 0, withElevation: 0, oriented: 0, flipped: 0, eleFixed: 0, unassigned: [], parks: 0, mountainsInPark: 0 });
+  (rows.report.park ??= { courses: 0, enriched: 0, added: 0, withElevation: 0, withTerrain: 0, oriented: 0, flipped: 0, eleFixed: 0, opposite: [], unassigned: [], parks: 0, mountainsInPark: 0 });
 
 type Box = { minLat: number; minLng: number; maxLat: number; maxLng: number };
 const boxOfPoints = (pts: Iterable<LatLngPoint>, pad = 0): Box => {
@@ -1231,7 +1244,7 @@ const boxesOverlap = (a: Box, b: Box): boolean => a.minLat <= b.maxLat && a.maxL
 const inBox = (b: Box, p: LatLngPoint): boolean => p.lat >= b.minLat && p.lat <= b.maxLat && p.lng >= b.minLng && p.lng <= b.maxLng;
 
 // 선을 stepM 안 간격으로 — 정리한 원천 선은 곧은 구간이 길게 남아 끝점만 물으면 사이가 덮였는지 모른다.
-const densifyLine = (line: readonly LatLngPoint[], stepM: number): LatLngPoint[] => {
+export const densifyLine = (line: readonly LatLngPoint[], stepM: number): LatLngPoint[] => {
   const out: LatLngPoint[] = line.length > 0 ? [line[0]!] : [];
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!;
@@ -1242,8 +1255,9 @@ const densifyLine = (line: readonly LatLngPoint[], stepM: number): LatLngPoint[]
   return out;
 };
 
-// 근처 GPX 선 점의 고도를 빌린다(선을 PARK_ELE_STEP_M 간격으로 나눠 점마다). 덮인 길이가 모자라면 전부 null(고도 없는 코스).
-const borrowElevations = (lines: readonly (readonly LatLngPoint[])[], pool: PointGrid<number>): { segments: GpxPoint[][]; borrowed: boolean } => {
+// 선을 PARK_ELE_STEP_M 간격으로 나눠 점마다 고도를 묻는다 — 근처 GPX 선 점(빌리기) 또는 지형 고도. 덮인 길이가 모자라면 전부
+// null(고도 없는 코스).
+const sampleElevations = (lines: readonly (readonly LatLngPoint[])[], eleOf: (p: LatLngPoint) => number | null): { segments: GpxPoint[][]; borrowed: boolean } => {
   let seq = 0;
   let total = 0;
   let covered = 0;
@@ -1254,12 +1268,7 @@ const borrowElevations = (lines: readonly (readonly LatLngPoint[])[], pool: Poin
     return line.map((p, i): GpxPoint => {
       seq += 1;
       const step = i > 0 ? distM(line[i - 1]!, p) : 0;
-      let ele: number | null = null;
-      let bestD = PARK_ELE_M;
-      for (const q of pool.near(p.lat, p.lng, PARK_ELE_M)) {
-        const d = distM(q, p);
-        if (d <= bestD) [ele, bestD] = [q.value, d];
-      }
+      const ele = eleOf(p);
       total += step;
       if (ele !== null) {
         covered += step;
@@ -1274,12 +1283,27 @@ const borrowElevations = (lines: readonly (readonly LatLngPoint[])[], pool: Poin
   const borrowed = total > 0 && covered / total >= PARK_ELE_MIN_SHARE && maxGap <= PARK_ELE_MAX_GAP_M;
   return { segments: borrowed ? segments : segments.map((s) => s.map((p) => ({ ...p, ele: null }))), borrowed };
 };
+// 가장 가까운(PARK_ELE_M 안) GPX 선 점의 고도.
+const nearbyEle =
+  (pool: PointGrid<number>) =>
+  (p: LatLngPoint): number | null => {
+    let ele: number | null = null;
+    let bestD = PARK_ELE_M;
+    for (const q of pool.near(p.lat, p.lng, PARK_ELE_M)) {
+      const d = distM(q, p);
+      if (d <= bestD) [ele, bestD] = [q.value, d];
+    }
+    return ele;
+  };
 
 // 구간 처음·끝 이름 → 원천 선 방향. 'keep' 그대로 · 'flip' 뒤집기 · null 못 정함(원점회귀이거나 이름이 안 맞음).
 const orientBySections = (row: ParkCourseRow, lines: readonly (readonly LatLngPoint[])[], places: ReadonlyMap<string, LatLngPoint[]>): 'keep' | 'flip' | null => {
   const start = lines[0]![0]!;
   const end = lines.at(-1)!.at(-1)!;
   if (distM(start, end) <= PARK_ORIENT_MARGIN_M * 4) return null;
+  // 같은 곳에서 시작해 같은 곳으로 끝나는 왕복 문구(백무동~장터목~천왕봉~장터목~백무동)는 선이 편도로 그려져 있어도 방향이 없다.
+  const base = (s: string | undefined) => compactName(s ?? '').replace(PARK_SECTION_TAIL, '');
+  if (row.sections.length > 1 && base(row.sections[0]).length >= 2 && base(row.sections[0]) === base(row.sections.at(-1))) return null;
   let vote = 0;
   const judge = (name: string | undefined, sign: 1 | -1) => {
     if (!name) return;
@@ -1338,7 +1362,9 @@ const appendParkCourses = (rows: HikingRows, existing: readonly Top100Course[], 
   interface ParkBuilt {
     row: ParkCourseRow;
     course: BuiltCourse;
-    borrowed: boolean;
+    elevationFrom: ParkCourseInfo['elevationFrom'];
+    // 방향을 구간 이름으로 정했다(못 정했으면 낮은 쪽에서 — 같은 길 코스와 방향을 견줄 수 없다).
+    oriented: boolean;
     hitsByCourse: Map<number, number>;
     hitsByMountain: Map<string, number>;
     total: number;
@@ -1347,18 +1373,25 @@ const appendParkCourses = (rows: HikingRows, existing: readonly Top100Course[], 
   const built: ParkBuilt[] = [];
   for (const row of src) {
     const simplified = row.lines.map((l) => simplifyLine(l, PARK_LINE_TOLERANCE_M));
+    // 고도: 근처 GPX 기록 → 모자라면 지형 고도 → 그것도 없으면 고도 없이.
     const build = (o: 'keep' | 'flip' | null) => {
       const lines = o === 'flip' ? [...simplified].reverse().map((l) => [...l].reverse()) : simplified;
-      const { segments, borrowed } = borrowElevations(lines, elePool);
-      return { course: buildCourse({ waypoints: [], segments, surfaces: [] }, { keepDirection: o !== null }), borrowed };
+      let { segments, borrowed } = sampleElevations(lines, nearbyEle(elePool));
+      let elevationFrom: ParkCourseInfo['elevationFrom'] = borrowed ? 'nearby' : undefined;
+      if (!borrowed && input.demAt) {
+        const demAt = input.demAt;
+        ({ segments, borrowed } = sampleElevations(lines, (p) => demAt(p.lat, p.lng)));
+        if (borrowed) elevationFrom = 'terrain';
+      }
+      return { course: buildCourse({ waypoints: [], segments, surfaces: [] }, { keepDirection: o !== null }), elevationFrom };
     };
     let orient = orientBySections(row, simplified, places);
-    let { course, borrowed } = build(orient);
+    let { course, elevationFrom } = build(orient);
     // 끝 구간이 봉우리인데 크게 내려가면 이름이 들머리 근처의 같은 이름 지점에 맞은 것 — 반대로(금수산 상천 코스).
     const last = row.sections.at(-1) ?? '';
     if (course && orient && course.hasElevation && !course.isLoop && PARK_SUMMIT_SECTION.test(last) && !/대피소$/.test(last) && course.end.ele! < course.start.ele! - PARK_ORIENT_DROP_M) {
       orient = orient === 'flip' ? 'keep' : 'flip';
-      ({ course, borrowed } = build(orient));
+      ({ course, elevationFrom } = build(orient));
       rep.eleFixed += 1;
     }
     if (!course) {
@@ -1383,7 +1416,7 @@ const appendParkCourses = (rows: HikingRows, existing: readonly Top100Course[], 
     }
     const grid = new LineGrid<number>(10, 5);
     for (const piece of course.pieces) grid.addLine(piece, 0);
-    built.push({ row, course, borrowed, hitsByCourse, hitsByMountain, total, grid });
+    built.push({ row, course, elevationFrom, oriented: orient !== null, hitsByCourse, hitsByMountain, total, grid });
   }
 
   // 같은 길 — 서로 80% 넘게 겹치는 쌍을 점수(둘 중 작은 겹침) 높은 순으로 하나씩 짝짓는다.
@@ -1445,8 +1478,12 @@ const appendParkCourses = (rows: HikingRows, existing: readonly Top100Course[], 
     const info = parkInfoOf(b.row);
     const same = sameOf.get(bi);
     const sameRow = same !== undefined ? courseRowById.get(near[same]!.id) : undefined;
-    if (sameRow) {
-      sameRow.park = JSON.stringify(info);
+    if (sameRow && same !== undefined) {
+      // 공식 구간 순서가 이 코스와 반대 — 문구는 그대로 두고(변경금지) 화면이 반대 방향이라고 알린다.
+      const gpx = near[same]!.course;
+      const reversed = b.oriented && !gpx.isLoop && distM(b.course.start, gpx.end) < distM(b.course.start, gpx.start);
+      if (reversed) rep.opposite.push(`${b.row.parkName} ${b.row.name} → ${near[same]!.id}`);
+      sameRow.park = JSON.stringify(reversed ? { ...info, reversed } : info);
       sameRow.name = b.row.name;
       sameRow.nameSource = 'points';
       rep.enriched += 1;
@@ -1506,14 +1543,15 @@ const appendParkCourses = (rows: HikingRows, existing: readonly Top100Course[], 
       peakName: auto.peakName,
     };
     const sigungu = input.sigungu ? courseSigungu(b.course, input.sigungu) : null;
-    const row = courseRow({ id, mountainId: host, no, names, course: b.course, sigungu, source: 'park', park: info });
+    const row = courseRow({ id, mountainId: host, no, names, course: b.course, sigungu, source: 'park', park: b.elevationFrom ? { ...info, elevationFrom: b.elevationFrom } : info });
     rows.courses.push(row);
     courseRowById.set(id, row);
     rows.report.courses += 1;
     if (b.course.isLoop) rows.report.loops += 1;
     if (!b.course.hasElevation) rows.report.noElevation += 1;
     rep.added += 1;
-    if (b.borrowed) rep.withElevation += 1;
+    if (b.elevationFrom === 'nearby') rep.withElevation += 1;
+    if (b.elevationFrom === 'terrain') rep.withTerrain += 1;
 
     m.minLat = Math.min(m.minLat, b.course.bbox.minLat);
     m.minLng = Math.min(m.minLng, b.course.bbox.minLng);
