@@ -1,7 +1,7 @@
 ---
 concept: 도메인별 LLM 프롬프트/스키마 버전 상수
-last_compiled: 2026-10-04
-topics_connected: [ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs, food, meal, tarot, saju-c, saju-g, meal-nutrition]
+last_compiled: 2026-10-26
+topics_connected: [ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs, food, meal, tarot, saju-c, saju-g, meal-nutrition, menu-board]
 status: active
 ---
 
@@ -20,6 +20,7 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 
 ## Instances
 
+- **2026-10-10** in [menu-board](../topics/menu-board.md) (`faa12818`): 메뉴판 읽기 `MENU_BOARD_PROMPT_VERSION` 1 → 2(크기·인분별 가격을 첫 번째만 받던 규칙 → 크기마다 한 항목 "꽃게탕 (대)"). 네이버 메뉴판 사진의 읽기 결과에 `promptVersion` 을 남기고(없으면 1), **지금보다 낮은 버전만** 다음 크롤의 자동 읽기·`read:naver-menu-boards` 가 다시 읽는다(같은 주소·같은 버전은 건너뜀) — 버전 상수가 캐시 무효화가 아니라 **재처리 대상 선별 키**로 쓰였다. 원인 가게 한 곳만 바로 다시 읽고(27 → 37개) 나머지 22곳 73장은 v1 그대로 두었다가 다음 크롤에 맡겼다. 바꾸기 전후 검수 정답 F1(99.7 → 99.8%)을 같이 재 [golden-set-precision-gate](golden-set-precision-gate.md) 를 통과했다.
 - **2026-10-04** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) (`e3afe9c`·`2aaaa7e`·`7056244`·`3d067a0`): 식단 추천 `MEAL_RECOMMENDATION_VERSION` 이 **하루 사이 3 → 5**(v3 알레르기·"이번 추천의 중심" 문장, v4 반찬·안주·간식은 혼자 권하지 않기 — 후보가 흔한 한 끼 목록 먼저로 바뀐 뒤, v5 "안 드셨다" 근거를 2주 분포 전체와 후보 줄의 조리형태 개수로) — 버전 상수가 실험 단위로 쓰였다. 프로브 리포트가 버전별 틀린 주장 수(9/64 → 2/36)를 남겨 버전 번호가 곧 측정 기록의 키가 됐다. 영양제 조언 `MEAL_NUTRITION_ADVICE_VERSION = 1` 은 저장본(`MealNutritionAdvice`)에 `promptVersion`·`inputHash` 로 함께 남아 **재사용 판정**(같은 버전·같은 입력이면 LLM 을 다시 부르지 않고 한도도 쓰지 않음)에 쓰인다.
 - **tarot** in [tarot](../topics/tarot.md) (`apps/friendly/src/modules/tarot/tarot.prompts.ts`): `TAROT_PROMPT_VERSION = 2`. 캐시 키·저장 행(`promptVersion`)에 들어가고 메뉴 타로(v3a)는 카드 원소·무드로 후보를 고르고 LLM 은 이유만 쓴다.
 - **saju-c** in [saju-c](../topics/saju-c.md) (`apps/friendly/src/modules/saju/saju.prompts.ts`): `SAJU_PROMPT_VERSION = 3` — v2(6차: 사실 블록에 격국·오신·삼재 줄 추가 → 기존 캐시 무효) → **v3(8차 `739705e`, 2026-09-12: 테마 3개 love·wealth·career 추가 + 시스템 프롬프트에 결혼·이혼 단정 금지)**. 버전 이력이 상수 위 주석(v1/v2/v3 한 줄씩)으로 남는 것이 이 도메인의 형태이고, 9차 "사주에 묻기"(`baecb9b`)는 버전을 올리지 않았다(별도 엔드포인트·별도 프롬프트라 기존 캐시와 무관). 시스템 프롬프트가 "[사주 사실] 블록에 없는 십신·오행·신살을 말하지 않는다"고 못 박아 LLM 은 계산 결과를 문장으로 엮는 역할만. 추론(thinking) 단계는 프롬프트가 아니라 호출 옵션이라 버전과 무관([model-family-call-options](model-family-call-options.md)).
@@ -57,6 +58,7 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 
 ## Sources
 
+- [menu-board](../topics/menu-board.md)
 - [summary in friendly](../topics/friendly.md)
 - [menu-grouping](../topics/menu-grouping.md)
 - [analytics](../topics/analytics.md)

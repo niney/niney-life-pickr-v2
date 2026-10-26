@@ -27,7 +27,7 @@
 
 2026-09-06 사주 범위 갱신: [saju-g](topics/saju-g.md) 추가, 현재 토픽 32개. 아래 수치는 마지막 전체 컴파일 당시 기록이다.
 
-Compiled: 2026-10-10 (29th) | Topics: 41 | Concepts: 40 | Sources: ~4,261 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1750) | Auto-updates on session start
+Compiled: 2026-10-26 (30th) | Topics: 43 | Concepts: 43 | Sources: ~4,815 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1918) | Auto-updates on session start
 
 ## Topic map at a glance
 
@@ -37,6 +37,7 @@ project-overview  (모노레포 전체 — 공개/어드민/소유자/토큰 권
 │   ├── crawl        (Naver/캐치테이블/다이닝코드 크롤러 — 별도 토픽, stealth 적용)
 │   ├── ai           (Ollama Cloud + chat/image purpose, models/preview 저장 전 검증 — 별도 토픽)
 │   ├── menu-grouping (식당 단위 메뉴 변형 → canonical 그룹 LLM 정규화 — 별도 토픽)
+│   ├── menu-board   (메뉴판 사진 읽기 — kimi-k3 + 규칙 프롬프트, 크롤 직후 자동 읽기·등록 메뉴 짝짓기·공개 메뉴 탭 — 별도 토픽)
 │   ├── analytics    (식당 가로지르기 글로벌 머지 + categoryPath — 별도 토픽)
 │   ├── canonical    (출처 가로지르는 같은 가게 묶기 — 별도 토픽)
 │   ├── auto-discover (어드민 자동 발견 — AI 키워드 8개 + 그룹 직렬 크롤 — 별도 토픽)
@@ -50,6 +51,7 @@ project-overview  (모노레포 전체 — 공개/어드민/소유자/토큰 권
 │   ├── weather      (기상청 단기·중기예보 + API허브 AWS, 발표 슬롯 캐시, 245지점 — 별도 토픽)
 │   ├── life-map     (일상지도 — CCTV·화장실·병의원·생활편의(상가 130만) 로컬 마스터 + 배경 레이어 2종(범죄 통계·여행자 밀도) + 점/셀 조회 + 옴니박스 — 별도 토픽)
 │   ├── tour         (여행로그 — AI 허브 4권역 데이터셋 단위 적재 + 맛집 매칭·시드 콘솔 + 공개 집계(/travel/*)·원본 allowlist — 별도 토픽)
+│   ├── hiking       (등산 — 100대 명산·전국 봉우리·국립공원 공식 코스 조립 적재, 예상 시간은 읽을 때, 조건·추천·GPX, 웹 + 앱 목록·산·코스 — 별도 토픽)
 │   └── vote         (그룹 투표 픽 — 별도 토픽)
 ├── map              (vworld OpenLayers + WMTS, 카테고리 라인 아이콘 8종, 모바일 WebView)
 ├── web              (Vite + React 19, 공개 홈·맛집·대중교통·일상지도·날씨·대기질·식단 + 어드민 + 정산 N차 wizard + 상단바 폭 예산·MyLocationChip + 지도 페이지 공통 시트 골격 sheet/useMapSheets + Tailwind v4 dark)

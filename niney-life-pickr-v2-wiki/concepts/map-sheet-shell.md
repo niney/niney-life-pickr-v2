@@ -1,7 +1,7 @@
 ---
 concept: 지도 + 바텀시트 화면 골격 — 시트 위치에서 헤더·지도 인셋이 파생되는 단일 상태
-last_compiled: 2026-10-10
-topics_connected: [web, mobile, map, bus, subway, transit, life-map, housing, parking, sea]
+last_compiled: 2026-10-26
+topics_connected: [web, mobile, map, bus, subway, transit, life-map, housing, parking, sea, hiking]
 status: active
 ---
 
@@ -17,6 +17,7 @@ status: active
 
 ## Instances
 
+- **2026-10-25~26** in [hiking](../topics/hiking.md) / [web](../topics/web.md) / [mobile](../topics/mobile.md) / [map](../topics/map.md) (`54eb0cb8` + 10차, 작업 트리): 등산은 지도를 쓰는 공개 화면 중 **마지막으로 문서형 페이지에 남아 있던** 화면이라, 사용자 결정(2026-10-25 "맛집과 비슷한 레이아웃, 데스크톱 3칸")으로 이 골격에 들어왔다. xl 이상은 [산 목록 400 | 상세 440 | 지도] 세 칸 + 패널 좌우 바꾸기(`usePanelSide('public.hiking')`), xl 미만은 헤더 아래 fixed 지도 + 목록·상세 시트(`useMapSheets`) + 상단바 subBar(검색·권역·정렬, 산을 고르면 내림). 새로 생긴 건 **맞춘 영역이 시트에 가리지 않게** 하는 옵션 — 웹 `MapCanvas.fitToCoords` 의 `opts.bottomInset`(아래 여백만 더함). 앱 등산 화면(10차)은 일상지도 골격(WebView `TransitMapView` + 플로팅 헤더 + 목록·상세 시트)을 복사하고 같은 문제를 WebView 지도 쪽 `fitToCoords(..., { belowInset: true })`(아래 패딩에 `setViewInset` 높이를 더함)로 풀었다 — **같은 뜻의 옵션이 웹·앱에서 다른 이름(`bottomInset` / `belowInset`)과 다른 단위(직접 여백 / 시트 높이 참조)** 로 따로 생겼다. 앱 골격은 일상지도에서 복사해, 일상지도 화면과 같은 시트 패턴의 lint 경고 2개(공유값 수정·effect 안 setState)도 그대로 따라왔다.
 - **2026-09-25** in [parking](../topics/parking.md) / [web](../topics/web.md) (`2ff2c31`): 주차 `/parking` 은 이 골격의 **여섯 번째 웹 페이지**(맛집 v2·버스·지하철·일상지도·집값 다음)이자 "탭 3개가 한 골격을 나눠 쓰는" 첫 사례 — 주차장·충전소·공항 탭(`?t=lot|ev|airport`)이 지도 한 장·목록 시트·상세 시트(`key={`${tab}:${sel}`}`)를 공유한다. 파일 머리 주석이 계보를 직접 적는다: *"레이아웃·분기·시트 조율은 집값·일상지도와 같다(지도 한 장 + 패널, `useIsDesktopXl` 로 JS 분기, 모바일은 상단바 subBar + 목록/상세 바텀시트 + `useMapSheets`)"*. 진입 중심은 URL `ll`/`z` → 저장한 내 위치 → 서울 순(마운트 1회 결정, 저장 위치가 늦게 오면 사용자가 안 움직였을 때만 1회 `flyTo`), 지역 이동은 일상지도의 `LifeGoToBox` 를 그대로, 선택 항목으로의 이동은 시트 인셋(`flyInset`)을 고려한다. 골격을 새로 만들지 않고 **조립만** 한 페이지라 컴포넌트 비용이 도메인 부분(`ParkingLists`·`ParkingDetails`·`ParkingTabBar`·마커)에 몰렸다. 다만 "조립" 의 절반은 **복사**다 — 시트·헤더는 `useMapSheets`·`BottomSheet` 로 공유되지만, 그 위의 페이지 뼈대(`parseZoom`·`parseSel`·`InitialView` 진입 중심 결정·"저장 위치로 1회 이동" ref·뷰포트 디바운스)는 일상지도·집값·주차 세 페이지가 각자 들고 있고, `parseSel` 의 길이 한도는 이미 200 과 80 으로 갈라졌다(web 토픽 Gotchas). 셀 격자(`lifeCellSizeDeg`·`LIFE_CELL_ORIGIN`·`lifeCountBucket`)는 utils 에서 공유되는데 페이지 상태 뼈대는 아직 훅이 없다 — 네 번째 복사 전에 `useMapPageState` 식 페이지 레벨 훅으로 뽑을 후보.
 - **2026-09-24 (의도된 예외)** in [sea](../topics/sea.md) (`4a2bff1`): 바다 `/sea` 는 지도가 있지만 이 골격을 **쓰지 않는다** — `lg` 그리드(지도 360px/데스크톱 600px + 우측 380px 지점 목록 `aside`)의 일반 페이지 흐름이다. 지점 수가 적고(활동별 지점 목록 + 순위) 사용 흐름이 "활동·날짜를 고르고 목록을 훑는다" 라 지도가 주인공이 아닌 날씨·대기 쪽 계보에 가깝다. 골격 선택 기준의 반례로서 유용하다: **지도 위에서 탐색이 일어나면 시트 골격, 목록·표를 읽는 게 주면 페이지 흐름.**
 - **2026-09-02** in [housing](../topics/housing.md) (`254fb76`): [LifeMapPage](../topics/life-map.md) 와 같은 뼈대 — URL 이 진실(`?ll&z&sel…`), 데스크톱 좌 패널 400px(`LifeGoToBox` + `HousingFilterBar`) / 모바일 subBar + 지도 fixed + 목록 시트(면적 구간 칩) + 상세 시트(`useMapSheets(sel)`), 마커 풀 `poolKey 'housing'`. 지역 이동은 새 박스를 만들지 않고 `LifeGoToBox` 에 `extraSections`(아파트 단지)·`onQueryChange` 만 더해 페이지가 자기 검색 훅을 돌린다(훅을 박스로 넘기지 않아 rules-of-hooks 유지). 셀 격자는 일상지도의 두 배(평당가 알약이 넓어서).
@@ -36,6 +37,7 @@ status: active
 
 ## Sources
 
+- [hiking](../topics/hiking.md)
 - [web](../topics/web.md)
 - [mobile](../topics/mobile.md)
 - [map](../topics/map.md)

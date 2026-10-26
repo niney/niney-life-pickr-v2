@@ -1,7 +1,7 @@
 ---
 concept: 외부 API 어댑터 — friendly 프록시 + 정규화 + probe→fixture
-last_compiled: 2026-09-26
-topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map, housing, tour, sea, parking, api-docs]
+last_compiled: 2026-10-26
+topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map, housing, tour, sea, parking, api-docs, hiking, menu-board]
 status: active
 ---
 
@@ -15,6 +15,8 @@ status: active
 
 ## Instances
 
+- **2026-10-26** in [hiking](../topics/hiking.md) (`0e38c4ee` + 9차 보강, 작업 트리 — `hiking-park.adapter.ts`·`hiking-dem.ts`): 행정안전부 산행안전지도(safetydata) 어댑터가 불신 목록을 넓혔다. **데이터셋 이름**까지 불신 — 신청 이름과 내용이 엇갈려(경계 ↔ 코스) 실측으로 API ID 를 고정. **키·IP** — 데이터마다 키가 따로이고 IP 에 묶여 `resultCode 20` 이 "키 틀림" 과 "IP 미등록" 을 함께 뜻하며, 오류 메시지의 URL 은 `serviceKey=***` 로 가린다. **좌표계** — WKT 가 EPSG:3857 이라 역투영을 직접 한다. **값** — 연락처 "000-000-0000" 은 null, 관리번호(MNG_NO)가 id(SN 은 겹침), 영문 WDPA 공원 이름은 한글 표로, 원천 선의 절반가량이 구간 순서와 거꾸로라 방향을 구간 이름·고도로 다시 판정한다. 키·IP 원천이라 받은 원문을 파일로 캐시해 폴백한다([open-data-master-load](open-data-master-load.md)). 지형 고도 어댑터(AWS Terrain Tiles)는 키가 없는 대신 타일 캐시 + 못 받은 타일 목록(`failed`)으로 "부분 실패 = 그 자리 고도 없음" 을 만든다. 픽스처는 테스트 인라인(가짜 `fetch`·`sharp` 로 만든 타일).
+- **2026-10-10** in [menu-board](../topics/menu-board.md) / [crawl](../topics/crawl.md) (`0408f2f2`): 9월 메뉴 드리프트(아래)의 교훈을 새 필드에 바로 적용 — 네이버 모바일 홈 Apollo 의 메뉴판 사진(`menuImages`)은 **응답에 필드가 없으면 직전 값을 두고, 빈 배열이면 비운다**("메뉴 0건 보호와 같은 원칙"). 올린 날짜는 사진 주소의 YYYYMMDD 에서, 등록 메뉴 업데이트 날짜는 `placeMenus.updatedAt` 의 '26.07.16' 표기에서 뽑는다.
 - **2026-09-25** in [crawl](../topics/crawl.md) (`43d7e69` — `naver-place.playwright.adapter.ts` + `restaurant.service.ts`(0건 보호) + `crawl.service.ts`(경보 로그) + `backfill-naver-menus.ts`): 아래 "깨지는 지점" 이 경고한 **조용한 드리프트가 실제로 일어난 사례**. 2026-09-13~25 사이 네이버가 플레이스 메뉴 Apollo 구조를 바꿔(`Menu:{placeId}_<i>`·`placeDetail.menus` → `placeDetail.placeMenus{items, categories, menuCount}`) 파서가 옛 키만 찾는 동안 비배민 가게 메뉴가 **에러 없이 0건**이 됐고, 재크롤이 기존 스냅샷 메뉴까지 `[]` 로 덮었다(`restaurant_menus` 도 비배민 가게엔 행이 한 번도 없어 복구원이 못 됐다). 대응이 이 레시피에 없던 두 다리를 더했다. (e) **런타임 드리프트 감지** — 매 크롤마다 메뉴 출처(배민 그룹/placeMenus/옛 경로)와 개수를 크롤 로그에 남기고, 메뉴 탭이 있는데 0건이면 "메뉴 0건 — 네이버 메뉴 구조 변경 의심" warn. fixture 는 과거를 굳힐 뿐이니 현재의 변화는 운영 로그가 잡는다. (f) **마지막 정상값 유지** — 크롤 결과 메뉴가 0건이면 직전 스냅샷 메뉴를 유지(`메뉴 0건 — 기존 메뉴 N개 유지`). 파서는 우선순위 사슬(배민 그룹 → placeMenus → 옛 `Menu:`)로 과거 구조도 계속 읽고, 새 구조는 테스트 +202줄로 굳혔으며, 이미 망가진 데이터는 `backfill:naver-menus`(리뷰 없이 메뉴만 재수집, 기본 대상 = 메뉴 0건 네이버 가게)로 복구한다. 부수 효과로 홈 응답의 `menuCount` 와 대조해 `/menu/list` 방문을 생략(가게당 ~9초 → ~4초) — 새 구조가 "전량이 왔는지" 를 스스로 알려 주는 필드를 가져서 가능해진 최적화.
 - **2026-09-25** in [parking](../topics/parking.md) (`2ff2c31` — `parking-api.adapter.ts` + `parking-master.service.ts` + `parking-live.service.ts`): 한 모듈이 **봉투 두 계열**(data.go.kr JSON + 서울 열린데이터 `openapi.seoul.go.kr:8088`)과 원천 5개(표준데이터·서울 공영·서울 시영 실시간·한국공항공사·인천공항 + 환경공단 충전소)를 받는다. 필드명 불신이 **키 표기 불신**으로 번졌다 — 같은 표준데이터가 오픈API 로는 camelCase, 포털 파일로는 UPPER_SNAKE 라 정규화가 둘을 한 모양으로 맞추고(`--std-json` 으로 파일 경로도 유지), 값도 불신한다(서울 노상은 구획마다 한 행이라 면수 1 → 여러 행이면 행 수로 셈, 인천은 현재 대수가 면수를 넘어 이력 점유율을 1.5 에서 자름, 관광버스·거주자 전용은 제외). 04/05·5xx 1회 재시도(800ms)는 에어코리아·기상청 규율 그대로. 폴러는 한 원천이 실패하면 **그 원천만 이전 값 유지 + stale 표시**(`Promise.allSettled` 후 `prevBy`). 픽스처는 `__fixtures__` 없이 테스트 인라인.
 - **2026-09-24** in [sea](../topics/sea.md) (`4a2bff1` — `khoa.adapter.ts`): 국립해양조사원 API 는 data.go.kr 게이트웨이지만 **봉투 모양이 다르다**(`response` 감싸개 없이 header/body 가 최상위) — 봉투도 필드명처럼 불신 대상이다. 문서상 필수인 바다낚시 `gubun` 이 실제로는 값과 무관하게 같은 1,750행을 돌려준다는 실측으로 한 번만 부르고, 어종·서핑 등급 행을 슬롯 하나의 `variants` 로 접어 응답을 440→196KB 로 줄였다(정규화가 크기 최적화까지 맡은 예). 04/05·5xx 1회 재시도(700ms), 업스트림 실패 시 12시간 stale. 픽스처는 테스트 인라인.
@@ -54,6 +56,8 @@ status: active
 
 ## Sources
 
+- [hiking](../topics/hiking.md)
+- [menu-board](../topics/menu-board.md)
 - [[../topics/bus]]
 - [[../topics/crawl]]
 - [[../topics/map]]

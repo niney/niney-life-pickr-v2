@@ -1,7 +1,7 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-10-04
-topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering, bus, subway, meal, food, air-quality, weather, life-map, tarot, saju-c]
+last_compiled: 2026-10-26
+topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering, bus, subway, meal, food, air-quality, weather, life-map, tarot, saju-c, hiking]
 status: active
 ---
 
@@ -13,6 +13,7 @@ status: active
 
 ## Instances
 
+- **2026-10-26** in [hiking](../topics/hiking.md) / [shared](../topics/shared.md) / [web](../topics/web.md) / [mobile](../topics/mobile.md) (10차, 작업 트리): 앱 등산 화면을 만들면서 **웹 전용으로 시작한 순수 함수 모음을 뒤늦게 승격**했다 — 웹 `components/hiking/hikingFormat.ts` 의 산 거르기·정렬(`rankMountains`)·코스 선 복원(`decodePieces`·`pointAtDistance`)·나들이 시간·방향별 시간·난이도 까닭 문구를 `@repo/shared` `hiking/hikingFormat.ts`(+ 테스트)로 옮기고, 웹 파일은 다시 내보내기만 해 import 경로를 지켰다(웹 테스트 무수정). 웹 전용(날짜·출발 시각 고르기, Tailwind 난이도 칩 색 `DIFFICULTY_CHIP_CLASS`)은 남겼다. 계약 타입(`HikingMountainSummaryType` 등)에 묶인 함수라 `@repo/utils`(계약 모름)가 아니라 `@repo/shared` 로 갔고, 마커 이미지 빌더(`hikingMarker`)·국립공원 통제 링크 상수는 원래 `@repo/utils` 라 앱이 WebView 브리지 아이콘 사전·링크에 그대로 썼다. 교훈은 사주·타로 때와 같다 — 앱 판이 생길 도메인은 처음부터 순수 함수를 웹 컴포넌트 폴더가 아니라 공용 패키지에 둔다.
 - **2026-09-29** in [settlement](../topics/settlement.md) / [shared](../topics/shared.md) / [web](../topics/web.md) / [mobile](../topics/mobile.md) (`237acd5`·`f1422fd`): 참여 칩 — 축 정의·배지 판정(`packages/shared/src/settlement/participation.ts`)은 공유, 웹 `ParticipationChips`(lucide 아이콘·`aria-pressed`)와 앱 `ParticipationChips`(MaterialCommunityIcons·`accessibilityRole="switch"`)는 표현만. 분류 표시 이름은 서버 PNG 도 쓰므로 shared 가 아니라 api-contract `settlement.labels.ts` 에 둔다(`d7f4ac1` — [zod-ssot-buildless](zod-ssot-buildless.md) 의 표시 문자열 판).
 - **2026-09-25~26** in [saju-c](../topics/saju-c.md) / [tarot](../topics/tarot.md) / [shared](../topics/shared.md) / [web](../topics/web.md) / [mobile](../topics/mobile.md) (`7669111`·`1104574` → `04f009e`·`9d565b3`): **예외 규칙의 철회와 "세션 훅" 단위의 공유.** 웹 페이지가 쥐고 있던 흐름 오케스트레이션(utils 흐름 리듀서 + 원국 계산/카드 뽑기 + LLM 요청 + job long-poll 섹션 병합 + 프로필·기록 저장)을 shared `useSajuSession`·`useTarotSession` 으로 통째로 옮기고(웹 동작 무변경, 이식의 0단계), 웹 전용이던 `sajuPanelTabs`·`sajuTheme`·`useTypewriter`·딥링크 해석(`sajuInitialTab`·`sajuInitialMode`)도 shared 로 승격했다. 그 뒤 앱은 무대(2D Reanimated / iOS 3D expo-gl)와 패널만 새로 그렸다. 지금까지의 공유 단위가 "API 훅·스토어·순수 함수"였다면 이번엔 **한 화면의 상태 기계 전체**가 공유 단위다 — 화면은 훅 결과를 그리기만 한다. WebView 임베드 예외([embedded-webview-bridge](embedded-webview-bridge.md))는 이로써 대체됐다.
 - **2026-09-05~06** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [mobile](../topics/mobile.md): **예외 규칙**(→ 2026-09-26 철회, 위) — 3D 무대·satori 공유 이미지처럼 RN 이식 비용이 큰 기능은 앱이 웹을 WebView 로 임베드한다(`?embed=1` + 브리지). 로직 공유는 그대로(`@repo/utils` 엔진·`@repo/shared` 훅/스토어를 앱이 저장소만 바꿔 주입) 하되 UI 분기 자체를 건너뛴 첫 사례. 상세는 [embedded-webview-bridge](embedded-webview-bridge.md).
@@ -59,6 +60,7 @@ status: active
 
 ## Sources
 
+- [hiking](../topics/hiking.md)
 - [[../topics/shared]]
 - [[../topics/web]]
 - [[../topics/mobile]]

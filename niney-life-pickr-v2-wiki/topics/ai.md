@@ -1,12 +1,14 @@
 ---
 topic: ai
-last_compiled: 2026-10-10
-sources_count: 96
+last_compiled: 2026-10-26
+sources_count: 104
 status: active
-aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think, thinking, 추론, 추론 선택, 추론 5단계, LlmThinking, LlmThinkingType, LlmThinkingSetting, LLM_THINKING_SETTINGS, ThinkOption, thinkOptionFor, thinkTokenMult, isKimiModel, kimi 전용, kimi-only-thinking, llm_provider_configs.thinking, LlmProviderConfig.thinking, 20260912120000_add_llm_provider_thinking, add_llm_provider_thinking, aiModelThink, aiModelThink.test, THINKING_OPTIONS, THINK_TIMEOUT_MAX_MS, think-max, done_reason=length, meal-supplement, purpose-9종, 영양제 조언, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, MEAL_NUTRITION_ADVICE_VERSION, meal-nutrition-advice, MealNutritionAdviceService, sanitizeAdvice, MAX_ENTRIES=16, MEAL_RECOMMENDATION_VERSION, 추천 프롬프트 v5, common-meals, probe:meal-models, probe:meal-nutrition, 모델 비교, gpt-oss vs kimi-k3, acquireLlmTelemetryStream, isLlmTelemetryConnected, 텔레메트리 스트림 공유, RecentCallRow, invalidateProviders, 모델 카탈로그 재조회, review-ask, ASK_CHAT_CONCURRENCY, askChatGate, chatJson, 게이트 밖 LLM 호출, MEMBER_PER_DAY, 회원 일일 100, member_daily, AsyncGate, GateBusyError, 세마포어 통합, TOUR_COLD_CONCURRENCY, BACKGROUND_CHAINS, FailureBackoff, MENU_FAILURE_BACKOFF_MS, MENU_FAILURE_GIVE_UP_AFTER, 메뉴 칼로리 LLM 동시 8]
+aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think, thinking, 추론, 추론 선택, 추론 5단계, LlmThinking, LlmThinkingType, LlmThinkingSetting, LLM_THINKING_SETTINGS, ThinkOption, thinkOptionFor, thinkTokenMult, isKimiModel, kimi 전용, kimi-only-thinking, llm_provider_configs.thinking, LlmProviderConfig.thinking, 20260912120000_add_llm_provider_thinking, add_llm_provider_thinking, aiModelThink, aiModelThink.test, THINKING_OPTIONS, THINK_TIMEOUT_MAX_MS, think-max, done_reason=length, meal-supplement, purpose-9종, 영양제 조언, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, MEAL_NUTRITION_ADVICE_VERSION, meal-nutrition-advice, MealNutritionAdviceService, sanitizeAdvice, MAX_ENTRIES=16, MEAL_RECOMMENDATION_VERSION, 추천 프롬프트 v5, common-meals, probe:meal-models, probe:meal-nutrition, 모델 비교, gpt-oss vs kimi-k3, acquireLlmTelemetryStream, isLlmTelemetryConnected, 텔레메트리 스트림 공유, RecentCallRow, invalidateProviders, 모델 카탈로그 재조회, review-ask, ASK_CHAT_CONCURRENCY, askChatGate, chatJson, 게이트 밖 LLM 호출, MEMBER_PER_DAY, 회원 일일 100, member_daily, AsyncGate, GateBusyError, 세마포어 통합, TOUR_COLD_CONCURRENCY, BACKGROUND_CHAINS, FailureBackoff, MENU_FAILURE_BACKOFF_MS, MENU_FAILURE_GIVE_UP_AFTER, 메뉴 칼로리 LLM 동시 8, menu-board, purpose-10종, 열 번째 purpose, 메뉴판 읽기, OLLAMA_MENU_BOARD_MODEL, MenuBoardService, MENU_BOARD_PROMPT_VERSION, MENU_BOARD_IMAGE_SIDE, eval:menu-boards, menu-board-ocr-probe, 비전 모델 9개 비교, ScanText, qwen3.5 퇴역, qwen3.5:397b-cloud, Pro 5시간 한도, MealNutritionEstimator, 식단 이름 추정]
 ---
 
 # ai — LLM 통합(Ollama Cloud): 용도별 provider 설정·어댑터·2단 게이트·텔레메트리
+
+> **2026-10-10~10-26 변경 흡수 — 열 번째 purpose `menu-board`(메뉴판 사진 읽기, 비전, 기본 kimi-k3) 신설(`4597294b`)과 그 첫 백그라운드 소비자인 네이버 크롤 직후 메뉴판 사진 자동 읽기(`0408f2f2`), 메뉴판 읽기 프롬프트 v2(`faa12818`). 고른 근거는 ollama cloud 비전 모델 9개 + OCR 3종 + Claude·Codex 통사진 비교([menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md)).** 21커밋(+ 작업 트리) 중 ai 모듈 디렉터리를 고친 건 `4597294b` 의 세 파일뿐이다 — [`adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts) 주석 "용도 9개 → 10개"(`MAX_ENTRIES = 16` 그대로), [`ai.config.service.test.ts`](../../apps/friendly/src/modules/ai/ai.config.service.test.ts) 가 **열 장** 합성 기대, [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 한 줄. 도메인은 새 토픽 [menu-board](menu-board.md). (1) **용도 10종** — 계약 [`ai.ts`](../../packages/api-contract/src/schemas/ai.ts) `LlmProviderPurpose` 끝에 `'menu-board'`(주석 "비전 — 메뉴판 사진 읽기(어드민 테스트). 기본 kimi-k3"). 같은 값을 `buildLlmProviderEnv().defaultModels['menu-board'] = env.OLLAMA_MENU_BOARD_MODEL`, utils [`aiModel.ts`](../../packages/utils/src/aiModel.ts) `ModelPurpose`, 어드민 [AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) `PURPOSE_ORDER`(맨 끝)/`PURPOSE_META`(아이콘 `ScanText`, '메뉴판 읽기', placeholder `kimi-k3`, **`thinking` 없음** — 추론 선택을 안 보인다) 네 곳에 더했다. env `OLLAMA_MENU_BOARD_MODEL` 은 [`env.ts`](../../apps/friendly/src/config/env.ts) **코드 기본값 `kimi-k3`**(tarot·saju·saju-g·meal-supplement 처럼 `.env` 에 키만 있으면 켜진다), [`.env.example`](../../apps/friendly/.env.example) 도 `kimi-k3`. 키는 chat 계정 키 상속 — 크롤 직후 자동 읽기가 같은 계정 게이트를 다른 백그라운드 LLM 과 나눈다. 새 마이그레이션 없음(`purpose` 는 free TEXT). (2) **추천 모델** — `recommendModelForPurpose('menu-board', …)` 는 계열 `kimi-k3` 를 먼저 찾고, 없으면 image·meal-photo 와 같은 규칙(가장 작은 비전 모델)으로 떨어진다(주석: kimi-k3 + 규칙 99.8%, gemma4:31b 는 OCR 힌트 없이 89.6%). [aiModel.test.ts](../../packages/utils/src/aiModel.test.ts) +6줄. (3) **호출 옵션** — [MenuBoardService](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) 는 `getResolved('ollama-cloud', 'menu-board')` → `adapterCache.get(resolved).complete({ prompt, model, images: [긴 변 2,000px JPEG base64], temperature: 0, think: thinkOptionForModel(model) })` 한 번. 어드민 추론 설정(`resolved.thinking`)은 읽지 않는다 — 비교에서 생각 켬이 점수를 못 올리고(kimi-k3 97.9%·장당 중앙 71초, gemma4 60번 중 7번 5분 넘게 무응답) 느렸기 때문. `opts.model` 로 용도 기본 모델을 덮을 수 있어 `eval:menu-boards --model=…` 이 모델 비교에 쓴다(세 번째 패턴 `OLLAMA_MENU_MATCH_MODEL` 의 "호출자가 모델만 덮어쓰기"와 같은 모양). 프롬프트는 버전 상수 `MENU_BOARD_PROMPT_VERSION = 2` 로 관리하고, 네이버 사진 읽기 결과에 버전을 남겨 낮은 버전만 다시 읽는다([versioned-llm-prompts](../concepts/versioned-llm-prompts.md)). (4) **비교 실측(보고서)** — 검수 정답 20장 F1: kimi-k3 + 규칙 + 작은 사진 확대 99.8%(friendly 경로 99.7%·장당 중앙 5.5초), gemma4:31b + Paddle 힌트 + 규칙 99.4%(2.7초), Claude Sonnet CLI 99.2%, Codex 98.0%, kimi-k3 단독 97.4%, gemma4 단독 92.6%, 로컬 OCR 25~64%. kimi-k3 는 해상도만큼 토큰을 써서(420×596 사진 입력 약 740 → 4,240토큰) 작은 사진을 키우는 게 듣고, gemma4 는 사진을 정해진 토큰으로 봐서 영향이 거의 없다. 비교 실행이 ollama cloud **Pro 5시간 한도를 소진**해 같은 키의 다른 LLM 기능이 그동안 막혔다. 같은 비교에서 영수증 `image` 의 예시 모델 `qwen3.5:397b-cloud` 가 **2026-09-25 퇴역**한 것을 발견했다(Gotchas — 미수정). (5) **식단 쪽 LLM 소비자(ai 모듈 무변경)** — 웹 식단 사진 인식(`49cb17f0`)은 기존 `meal-photo` 경로를 웹 화면에서 부를 뿐이고, 식단 빈 열량 이름 추정(`92e79e9a`)은 메뉴 칼로리와 같은 `MenuLlmMatchService`(chat 키 + `OLLAMA_MENU_MATCH_MODEL`)를 식단 저장 뒤 백그라운드(`MealNutritionEstimator`, [plugins/meal.ts](../../apps/friendly/src/plugins/meal.ts))와 `backfill:meal-nutrition --estimate` 에서도 쓴다 — 새 purpose·새 env 없음([meal](meal.md)·[food](food.md)). 등산 1~10차는 LLM 을 쓰지 않는다.
 
 > **2026-10-05 변경 흡수 — ai 모듈 서버 코드는 그대로이고, 바뀐 것은 둘레다: 텔레메트리 SSE 를 QueryClient 당 하나로 공유하고 AI 설정 저장 뒤 재조회를 줄였다(`c5052742`). LLM 앞단 한도·동시성 상한도 셋 늘었다 — 회원 하루 100회(`78cbb457`), 공개 리뷰 질문 `review-ask` 한도와 LLM 동시 4(`ab7dad28`), 메뉴 칼로리 백그라운드 LLM 최대 8(`7b060ca4`).** 이번 라운드 40커밋 중 `apps/friendly/src/modules/ai/` 를 고친 커밋은 없다. ai 쪽 변화는 shared 훅과 웹 어드민 화면, 그리고 이 모듈을 부르는 쪽의 한도·게이트다. (1) **텔레메트리 스트림 공유** — [useLlmTelemetry.ts](../../packages/shared/src/hooks/useLlmTelemetry.ts) 가 EventSource 를 훅마다 열지 않는다. `WeakMap<QueryClient, TelemetryStream>` 에 구독 수를 세어 첫 구독에 열고 마지막 해제에 닫는다(`acquireLlmTelemetryStream(qc)` — 같은 해제를 두 번 불러도 한 번만 센다). 연결 상태는 `useSyncExternalStore` 로 모든 훅이 같이 본다(`isLlmTelemetryConnected`). 끊기면 1→2→…→30초 백오프 재연결이고, 그 사이 구독이 다 풀리면 다시 열지 않는다. 예전엔 어드민 전 페이지 플로팅 패널([LlmUsagePanel](../../apps/web/src/components/admin/LlmUsagePanel.tsx))과 [AdminAiUsagePage](../../apps/web/src/routes/admin/AdminAiUsagePage.tsx) 가 각자 스트림을 열어 같은 스냅샷을 초당 두 번 받고 캐시를 두 번 덮어 두 화면을 두 번씩 그렸다. 사용량 페이지의 최근 호출 표는 `RecentCallRow`(`memo`, 비교 키 `id` + `at` — 서버 재시작 뒤 callId 가 1부터 다시 매겨져서)로 새 줄만 그린다. (2) **AI 설정 저장 뒤 재조회** — [useAi.ts](../../packages/shared/src/hooks/useAi.ts) 의 `useUpdateProvider`/`useDeleteProvider` 가 `['ai','providers']` 접두사 무효화 대신 `invalidateProviders(qc, catalogOf?)` 를 쓴다. 목록은 정확 일치(`exact: true`)로만 무효화하고, 모델 카탈로그(`['ai','providers',id,purpose,'models']` — 서버가 캐시 없이 외부 `/api/tags` 를 부른다)는 `apiKey`·`baseUrl` 이 바뀔 때(삭제 포함)만 같이 무효화한다. 용도 카드에서 모델만 저장하면 카탈로그 요청이 나가지 않는다. 신규 웹 테스트 [AdminAiKeysPage.test](../../apps/web/src/routes/admin/AdminAiKeysPage.test.tsx)·[AdminAiUsagePage.test](../../apps/web/src/routes/admin/AdminAiUsagePage.test.tsx), shared [useLlmTelemetry.test](../../packages/shared/src/hooks/useLlmTelemetry.test.ts) 5건. (3) **LLM 앞단 예산** — [usage-quota](usage-quota.md) 가 회원도 기능별 하루 100회(`MEMBER_PER_DAY = 100`, 거절 사유 `member_daily`)로 센다(`78cbb457`, findings F-4). 2026-09-02 의 "회원은 IP·개인 일일 한도 면제" 결정을 바꾼 것이다 — 무료 계정 하나로 전역 예산(사주 3,000/일)을 약 21분에 태워 그날 모든 게스트를 정적 폴백으로 밀어낼 수 있었다. 상수를 `null` 로 두면 예전처럼 무제한이다. 기능 enum 에 `review-ask`(공개 리뷰 질문 — 캐시 미스 1건 = 임베딩 1 + LLM 최대 3콜, 게스트 30·IP 300·전역 3,000/일)가 더해져 LLM 앞단 한도를 소비하는 공개 기능이 넷이 됐다(`ab7dad28`). (4) **이 모듈 밖에서 쓰는 동시성 상한** — 공개 리뷰 질문의 리랭크·답변·검증 LLM 은 [review-search.service.ts](../../apps/friendly/src/modules/review-search/review-search.service.ts) 의 `askChatGate = new ConcurrencyGate(4)`(`ASK_CHAT_CONCURRENCY`) 안에서만 돈다. 같은 질문은 20분 답변 캐시와 진행 중 합류로 받는다. 이 경로의 `chatJson` 은 `adapterCache` 가 아니라 `/api/chat` 직접 fetch 라 purpose·계정 게이트와 텔레메트리를 거치지 않는다 — 그래서 로컬 게이트로 묶었다. 이 사실은 이번에 확인한 것이고, 아래 Purpose·Gotchas 의 "review-search·review-clustering 은 chat purpose 게이트 경유" 라는 이전 서술을 고쳤다. 메뉴 칼로리 백그라운드 판정([food](food.md))은 프로세스 전역 2체인(`BACKGROUND_CHAINS`, 대기 16 — [lib/async-gate.ts](../../apps/friendly/src/lib/async-gate.ts) `AsyncGate`) × 체인당 LLM 4로 최대 8이다(PLAN 실측 64 → 8, `7b060ca4`). 실패한 이름은 30분 재시도 간격을 두고(`FailureBackoff`), 응답 해석 실패가 3번 쌓이면 '포기' 를 영구 저장한다. 업스트림 장애(타임아웃·429·5xx)는 이름 탓이 아니라 횟수에 넣지 않는다. 여행 인사이트 콜드 계산도 ai 의 `ConcurrencyGate`(`TOUR_COLD_CONCURRENCY = 2`)를 빌려 쓴다([tour](tour.md)). (5) **남은 것** — [PLAN-perf-2](../../docs/PLAN-perf-2.md) "남은 것(후속)": "세마포어 구현 2종(`modules/ai/concurrency-gate`·`lib/async-gate`) 통합". 실제로는 공유 이미지 렌더(`lib/share-render.ts` 의 `active` 카운터)와 썸네일 미스 게이트(`media/thumbnail-cache.ts` 의 `waiters`)까지 손으로 짠 세마포어가 넷이다(Gotchas).
 
@@ -26,7 +28,7 @@ aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, im
 >
 > **2026-05-25 변경 흡수 — provider purpose 분리 (chat/image) + 영수증 추출 vision LLM 컨슈머 신규.** `LlmProviderConfig` 의 unique 키가 `(provider, purpose)` 로 확장되어 같은 `ollama-cloud` 에서도 텍스트 추론 (`chat`) 과 비전 (`image`) 모델을 별도 row 로 운영한다. AI 라우트의 모든 `:id` 엔드포인트가 `:purpose` 파라미터를 추가로 받고, `AiConfigService.getResolved(provider, purpose)` 가 purpose 별로 다른 ResolvedProviderConfig 를 반환한다. `adapterCache` 키에도 purpose 가 포함돼 chat/image 어댑터·FIFO 게이트가 분리된다. env fallback 은 `chat` purpose 에만 적용 — `image` 는 DB row 가 있어야 활성화된다. 신규 컨슈머 [`settlement-extraction`](settlement.md) 모듈이 `getResolved('ollama-cloud', 'image')` 로 vision provider 를 얻어 영수증 → 구조화 항목 추출에 사용. 어드민 UI(`AdminAiKeysPage`)는 (provider × purpose) 조합별로 카드를 그리고 "다른 용도 추가" 버튼으로 신규 조합을 등록할 수 있다. `AdminAiTestPage` 는 현재 chat 만 다룬다.
 
-## Purpose [coverage: high — 17 sources]
+## Purpose [coverage: high — 19 sources]
 
 `apps/friendly`의 LLM 통합 모듈. Ollama Cloud(`https://ollama.com`)를 기본 백엔드로
 두고, 어드민 전용으로 노출되는 텍스트 컴플리션·배치 컴플리션·프로바이더 설정
@@ -39,11 +41,12 @@ provider 는 두 차원으로 식별된다.
 
 1. **`provider`** — 벤더 식별자 (`'ollama-cloud'`). `LlmProviderId` enum.
 2. **`purpose`** — 용도 (`'chat'` | `'image'` | `'log-analysis'` | `'meal-photo'` |
-   `'meal-recommend'` | `'meal-supplement'` | `'tarot'` | `'saju'` | `'saju-g'`). 같은 벤더라도 텍스트·비전·
-   로그추론·식단 인식/추천/영양제 조언·타로/사주 풀이는 보통 모델이 달라 한 row 에 묶기 어렵다.
+   `'meal-recommend'` | `'meal-supplement'` | `'tarot'` | `'saju'` | `'saju-g'` | `'menu-board'`). 같은 벤더라도 텍스트·비전·
+   로그추론·식단 인식/추천/영양제 조언·타로/사주 풀이·메뉴판 읽기는 보통 모델이 달라 한 row 에 묶기 어렵다.
    `LlmProviderPurpose` enum — 2026-06 `log-analysis` 로 3종, 2026-08-22 식단용 2종으로
    5종, 2026-09-02~06 공개 기능용 3종(`tarot` `cd5a29b` · `saju` `f8e5dd0` · `saju-g`
-   `1c60ad8`)이 더해져 8종, **2026-10-04 `3d067a0` 영양제 조언 `meal-supplement` 로 9종**. 공개
+   `1c60ad8`)이 더해져 8종, **2026-10-04 `3d067a0` 영양제 조언 `meal-supplement` 로 9종**, **2026-10-10 `4597294b`
+   메뉴판 사진 읽기 `menu-board`(비전, 어드민 테스트 + 네이버 크롤 직후 자동 읽기 — [menu-board](menu-board.md))로 10종**. 공개
    기능 셋은 무인증이라 "전용 키(own)를 두면 계정 한도가 분리된다" 는 권고가 계약 주석·env 주석·어드민
    카드에 같이 적혀 있다. `meal-supplement` 는 로그인 사용자 기능이라 그런 권고가 없다.
 
@@ -56,13 +59,13 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
 **계정 1키 공유 모델** (이번 라운드 핵심 설계 변경):
 
 - `chat` purpose 가 **계정 대표** — 키·baseUrl 은 chat row(없으면 env)에 둔다.
-- `image`·`log-analysis`·`meal-photo`·`meal-recommend`·`meal-supplement`·`tarot`·`saju`·`saju-g` 는 자기
+- `image`·`log-analysis`·`meal-photo`·`meal-recommend`·`meal-supplement`·`tarot`·`saju`·`saju-g`·`menu-board` 는 자기
   row 에 키가 없으면 **계정(chat) 키를 상속**한다(`getResolved` 내부
-  `resolveAccountCredentials`). 키 하나만 있으면 아홉 용도가 다 돈다(~2026-10-03 여덟).
+  `resolveAccountCredentials`). 키 하나만 있으면 열 용도가 다 돈다(~2026-10-03 여덟, ~2026-10-09 아홉).
 - **모델은 상속하지 않는다** — 용도마다 달라야 하므로 각 row 의 `defaultModel`
   (없으면 용도별 `.env` 폴백)만 본다. 폴백의 **코드 기본값**은 용도마다 다르다 —
   기존 5용도는 `''`(`.env.example` 에만 값), `tarot` 는 `gpt-oss:120b`, `saju`·`saju-g`
-  는 `kimi-k3`, **`meal-supplement` 도 `kimi-k3`(2026-10-04)** 가 `env.ts` 에 박혀 있어 `.env` 에 키만 있으면 켜진다.
+  는 `kimi-k3`, **`meal-supplement` 도 `kimi-k3`(2026-10-04)**, **`menu-board` 도 `kimi-k3`(2026-10-10)** 가 `env.ts` 에 박혀 있어 `.env` 에 키만 있으면 켜진다.
 - 와이어 `LlmProviderConfig` 에 출처 배지 필드 — `keySource`(own/inherited/env/none)
   + `defaultModelSource`(own/env/none).
 - **세 번째 모델 지정 경로(2026-09-02 `d12b47d`)** — 메뉴 칼로리 LLM 매칭·세트 분해
@@ -119,7 +122,13 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
   재시도 1회 후 null(정적 본문은 `basicSajuGReport`). 한도 `saju-g-reading`.
 - [`menu-llm-match` / `menu-llm-decompose`](food.md) — 규칙 밖 메뉴명을 카탈로그에 연결·세트
   분해(`MENU_LLM_MATCH_VERSION` / `MENU_LLM_DECOMPOSE_VERSION = 3`). **`chat` purpose + 모델
-  override `OLLAMA_MENU_MATCH_MODEL`**. 어휘 단위 영구 캐시라 호출 자체가 드물다.
+  override `OLLAMA_MENU_MATCH_MODEL`**. 어휘 단위 영구 캐시라 호출 자체가 드물다. 2026-10-23(`92e79e9a`)부터 식단의 빈 열량
+  이름 추정(`MealNutritionEstimator`, [meal](meal.md))도 같은 서비스·캐시를 쓴다(식단 저장 뒤 백그라운드 + `backfill:meal-nutrition --estimate`).
+- [`menu-board`](menu-board.md) 모듈 — 메뉴판 사진 한 장 → 메뉴·가격·설명 목록(`MENU_BOARD_PROMPT_VERSION = 2`, 사진 긴 변
+  2,000px 맞춤 JPEG, `temperature: 0`, `think: thinkOptionForModel(model)` — 추론 설정은 안 읽음). **`menu-board` purpose —
+  2026-10-10 `4597294b` 신규**, 기본 kimi-k3. 호출처: 어드민 테스트 라우트(`POST /admin/menu-board/read`, 분당 20),
+  네이버 크롤 직후 자동 읽기(`NaverMenuBoardReader` — 가게당 12장까지 한 장씩, fire-and-forget, `no_provider` 면 즉시 멈춤),
+  `read:naver-menu-boards`, 회귀 평가 `eval:menu-boards`(`--model` 로 용도 기본 모델 덮기), 프리뷰 `probe:naver-menu-boards`. 정적 폴백은 없다 — 실패한 사진은 다음 크롤에서 다시.
 
 게이트 밖 컨슈머(별개 경로 — LLM 게이트/텔레메트리 안 거침):
 
@@ -146,7 +155,7 @@ LLM 게이트 도메인들(위 목록 — 게이트 밖 둘 제외)은 모두 �
 - 벤더 SDK를 서비스 레이어 밖으로 격리(`LLMProvider` 어댑터 인터페이스).
 - 운영자가 서버 재시작 없이 API 키·동시성 한도·기본 모델을 바꿀 수 있도록
   DB 우선 + env fallback 2단 구성. **키·baseUrl 의 env fallback 은 `chat`
-  한정**(계정 대표), **모델 env fallback 은 아홉 용도 모두**(용도별 `OLLAMA_*_MODEL`
+  한정**(계정 대표), **모델 env fallback 은 열 용도 모두**(2026-10-10 부터, 용도별 `OLLAMA_*_MODEL`
   변수, 조립은 `buildLlmProviderEnv()` 한 곳).
 - 단건/배치 호출 모두에서 부분 실패를 허용하고, 도메인 에러를 와이어 친화적인
   `AiErrorCodeType`으로 변환.
@@ -157,7 +166,7 @@ LLM 게이트 도메인들(위 목록 — 게이트 밖 둘 제외)은 모두 �
   off/low/medium/high/max, kimi 계열에만 반영)이 한 겹 더 얹힌다 — 사주(C)와 2026-10-04 영양제 조언
   (`meal-supplement`)이 읽는다(같은 식단 도메인의 추천 `meal-recommend` 는 읽지 않음).
 - **용도별 모델 분리 + 계정 키 공유** — purpose 별 모델/동시성은 따로, 키는
-  하나. 한 키로 아홉 용도를 돌리되 무거운 vision 호출이 chat 슬롯을 묶지 않게
+  하나. 한 키로 열 용도(2026-10-10~)를 돌리되 무거운 vision 호출이 chat 슬롯을 묶지 않게
   purpose 게이트로 분리하고(식단 사진 `meal-photo` 는 영수증 `image` 와도 분리),
   그 합산은 계정 게이트로 묶는다. 공개 기능(타로·사주)은 트래픽 성격이 달라 own 키로
   계정 게이트 자체를 갈라 두는 것을 권장(강제는 아님).
@@ -167,7 +176,7 @@ LLM 게이트 도메인들(위 목록 — 게이트 밖 둘 제외)은 모두 �
   쓰는지"를 실시간으로 본다. 모든 호출이 한 어댑터 경로로 수렴하는 구조를 이용해
   호출부 수정 없이 계측.
 
-## Architecture [coverage: high — 29 sources]
+## Architecture [coverage: high — 32 sources]
 
 ```
 apps/friendly/src/modules/ai/
@@ -191,7 +200,7 @@ apps/friendly/src/modules/ai/
 ├── telemetry.route.ts               # GET /telemetry(스냅샷) + /telemetry/stream(SSE)
 ├── adapter-cache.ts                 # 모듈 레벨 싱글톤. 키별 Map(MAX_ENTRIES=16, 10-04 ← 8) —
 │                                    #   purpose 어댑터 공존 + 계정 게이트 주입 + 계측
-├── adapter-cache.test.ts            #   (+ "용도 9개를 모두 써도 서로 밀어내지 않는다", 10-04)
+├── adapter-cache.test.ts            #   (+ "용도 9개를 모두 써도 서로 밀어내지 않는다", 10-04; 10-10 menu-board 로 용도 10개 — 주석만 갱신, 16 그대로)
 ├── ai.config.service.ts             # LlmProviderConfig CRUD + 계정 키 상속 +
 │                                    #   용도별 모델 env fallback + 마스킹 + 출처
 │                                    #   + thinking(off/low/medium/high/max — off 는 null 저장, 09-12)
@@ -210,7 +219,7 @@ apps/friendly/src/modules/ai/
 [`packages/utils/src/aiModel.ts`](../../packages/utils/src/aiModel.ts):
 `parseModelFamily` / `groupModelsByFamily`(모델 팝업 그룹핑) / `isVisionModel`
 (이름 휴리스틱 `VISION_NAME_RE` + 멀티모달 계열 접두 `MULTIMODAL_FAMILY_RE`, 2026-08-22) /
-`recommendModelForPurpose(purpose, models)`(키 입력 후 폼 프리필, **9용도** — 2026-10-04 `meal-supplement`) /
+`recommendModelForPurpose(purpose, models)`(키 입력 후 폼 프리필, **10용도** — 2026-10-04 `meal-supplement`, 2026-10-10 `menu-board`) /
 **`thinkOptionForModel(modelId)`**(JSON 호출용 `think` 값 — gpt-oss `'low'`, 그 외 `false`) /
 **2026-09-12 `a823af1` 신규** `isKimiModel(modelId)`(family(`:` 앞)가 `kimi` 로 시작 — `kimi-k3`·`kimi-k2.6:cloud`) ·
 `thinkOptionFor(modelId, setting)`(어드민 `LlmThinkingSetting` → Ollama `ThinkOption`; kimi 가 아니거나 setting 이
@@ -228,12 +237,14 @@ import 못 해 `LlmThinkingSetting` 리터럴을 재선언).
 | purpose | 규칙 |
 | --- | --- |
 | `image`·`meal-photo` | `isVisionModel` 통과 중 파라미터 규모 최소. 없으면 null |
+| **`menu-board`**(2026-10-10 `4597294b`) | 먼저 계열 `kimi-k3`(`id.split(':')[0]` 정확 일치)를 찾고, 없으면 `image`·`meal-photo` 와 같은 비전 최소 규칙. 근거 주석: "메뉴판 읽기 실측(2026-10-10, 검수 20장): kimi-k3 + 규칙 프롬프트 99.8%, gemma4:31b 는 OCR 힌트 없이 89.6%" |
 | `log-analysis`·**`saju`**(계열 후보가 없을 때) | 텍스트(비 vision) 중 규모 최대 — 원인 추론·명리 풀이는 추론력·한국어 품질 우선 |
 | `chat`·`meal-recommend`·**`tarot`** | 텍스트 중 규모 오름차순 중앙값(작은 쪽으로 치우침) |
 | **`saju-g`·`saju`·`meal-supplement`**(saju 는 2026-09-12 `a823af1`, meal-supplement 는 2026-10-04 `3d067a0` 부터) | 다른 규칙보다 먼저 **계열 우선순위 `kimi-k3` → `deepseek-v4-pro` → `kimi-k2.6`** 를 `id.split(':')[0]` 정확 일치로 찾는다(`deepseek-v4-pro:0813` 매칭됨). 하나도 없으면 아래 텍스트 규칙으로 흘러 `saju-g`·`meal-supplement` 는 chat 과 같은 중앙값(`['gpt-oss:20b','gpt-oss:120b']` → `gpt-oss:20b`), `saju` 는 최대 |
 
 함수 머리 주석(`aiModel.ts` 97~100행)의 용도별 규칙 목록은 아직 `image·meal-photo / log-analysis·saju / chat·meal-recommend`
-세 줄뿐이라 계열 우선 분기(saju-g·saju·meal-supplement)와 tarot 를 적지 않는다 — 표가 실제 동작이다.
+세 줄뿐이라 계열 우선 분기(saju-g·saju·meal-supplement)와 tarot 를 적지 않는다 — 표가 실제 동작이다. (2026-10-10 `menu-board` 는
+머리 주석에 한 줄 "kimi-k3 우선(메뉴판 검수 F1 99.8%), 없으면 image 와 같은 규칙" 이 더해져 네 줄이 됐다.)
 
 `saju-g` 에 계열 목록을 박은 이유는 사주(G) 프롬프트 v3 실측(kimi-k3 12/12)을 그대로 추천에
 반영하려는 것 — 규모 휴리스틱으로는 kimi 계열(id 에 파라미터 수 없음 → `modelSizeB = 0`)이
@@ -249,6 +260,8 @@ import 못 해 `LlmThinkingSetting` 리터럴을 재선언).
 - **2026-10-04 식단 프로브 2종(`request*Llm` 같은 공용 함수가 없어 `provider.complete` 를 직접 부른다)**:
   - [`scripts/probe-meal-models.ts`](../../apps/friendly/scripts/probe-meal-models.ts)(`7056244`) — `probe:meal-models [--models=gpt-oss:120b,kimi-k3] [--repeat N] [--from-raw <json>]`. 서비스와 같은 후보 경로·`MEAL_RECOMMENDATION_SYSTEM_PROMPT` 로 시나리오 18개(가상 A·B·C·E × 끼니 + E 의 프리셋·메모)를 한 번 만들고 모델만 바꿔 부른다. `getResolved('ollama-cloud','meal-recommend')` + `adapterCache.get`(분당 제한·일일 한도·저장 없음), 호출 상수 `LLM = { temperature 0.4, maxTokens 1200, numCtx 8192, 서비스 60s / 프로브 120s }`. **이유의 사실 확인 판정기**가 핵심 — "최근 N일 [조리형태] 전혀·거의 안 드셨다"·"어제 X"·"N%"·먹은 음식에 '처음' 같은 기록과 대조할 수 있는 주장만 세고, 원 응답(`data/meal-probe/models-raw-날짜.json`, git 제외)을 남겨 판정 규칙을 고친 뒤 `--from-raw` 로 다시 채점한다.
   - [`scripts/probe-meal-nutrition.ts`](../../apps/friendly/scripts/probe-meal-nutrition.ts)(`c502759`) — `probe:meal-nutrition [--models=kimi-k3,gpt-oss:120b] [--days 14] [--email <addr>] [--repeat 1]`. 서비스의 `adviceCandidates`·`allowedNumbersFor`·`parseAdviceOutput`·`sanitizeAdvice` 와 프롬프트 빌더를 **import 해서** 같은 검사를 돌리고(호출 상수 `LLM = { 0.3, 2000, 8192, 180s }` 는 복사), 지표는 성공·지연·잘림·서버 문장으로 바꾼 칸(사유별 number/hanja/claim/offlist/empty·long/missing)·제품/브랜드 의심 표현. prod.db 는 거부, 리포트 `data/meal-probe/nutrition-report-날짜.md`.
+
+- **2026-10-10 메뉴판 회귀 평가** [`scripts/eval-menu-boards.ts`](../../apps/friendly/scripts/eval-menu-boards.ts)(`4597294b`) — `eval:menu-boards [--model=…] [--only=<key>,…] [--rescore]`. 위 프로브들과 달리 **커밋된 검수 정답**(`golden/menu-boards` 20장)으로 채점하는 회귀 평가다. 서비스(`MenuBoardService.read` — 라우트와 같은 사진 처리·프롬프트·`adapterCache` 호출)를 그대로 부르고 `opts.model` 로 모델만 바꾼다. 동시 호출 없이 한 장씩(계정 한도), 리포트 `data/menu-boards/eval-report.json`(git 제외)을 어드민 '메뉴판 읽기 > 정확도' 탭이 읽는다. 기준(2026-10-10, kimi-k3, 프롬프트 v2) F1 99.8%. 세부 [menu-board](menu-board.md). 모델 고르기에 쓴 9개 비전 모델·OCR 비교 코드(`probe/` Python)는 커밋하지 않고 지웠다 — 숫자는 [menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md) 기록뿐.
 
 진입점은 [`ai.route.ts`](../../apps/friendly/src/modules/ai/ai.route.ts)에서
 export 하는 `aiRoutes` fastify 플러그인. fastify의 `@fastify/autoload`가
@@ -482,7 +495,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
    (jwtVerify 우선, 실패 시 query token 검증). role !== ADMIN 이면 401. analytics/
    auto-discover SSE 와 동일 패턴 ([sse-token-auth](../concepts/sse-token-auth.md)).
 
-## Talks To [coverage: high — 30 sources]
+## Talks To [coverage: high — 33 sources]
 
 **상류(upstream — 모듈을 호출하는 측):**
 
@@ -544,6 +557,15 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `MEAL_RECOMMEND_DAILY_LIMIT` 20, per-user)가 LLM 호출 앞단 — 초과는 어댑터에 안 닿는다.
   추천 프롬프트는 2026-10-04 v5(`MEAL_RECOMMENDATION_VERSION = 5`), 호출 옵션(0.4·1200·8192·60s·
   `thinkOptionForModel`)은 그대로라 어드민 추론 설정을 무시한다.
+- [`menu-board`](menu-board.md)(2026-10-10 `4597294b`·`0408f2f2`) — `menu-board` purpose.
+  [`MenuBoardService.read(buffer, { model? })`](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) 가
+  `getResolved('ollama-cloud','menu-board')` → 모델 = `opts.model ?? resolved.defaultModel`, 둘 다 없으면 `no_provider`
+  → `adapterCache.get(resolved).complete({ images: [JPEG base64], temperature: 0, think: thinkOptionForModel(model) })`.
+  `maxTokens`·`numCtx`·타임아웃은 넘기지 않아 어댑터 기본(`OLLAMA_CLOUD_TIMEOUT_MS`)을 쓴다. 인스턴스는 셋 — 라우트
+  (`menu-board.route.ts`), 크롤 플러그인([plugins/crawl.ts](../../apps/friendly/src/plugins/crawl.ts) — `NaverMenuBoardReader` 안, 테스트에선
+  만들지 않음), 스크립트(`eval:menu-boards`·`read:naver-menu-boards`·`probe:naver-menu-boards`) — 모두 `new AiConfigService(prisma,
+  buildLlmProviderEnv())` 를 따로 만들지만 어댑터·게이트는 `adapterCache` 로 공유한다. 오류 코드는 자체
+  `MenuBoardError`(`invalid_image`/`no_provider`/`llm_failed`/`parse_failed`)라 `AiErrorCodeType` 매핑을 거치지 않는다.
 - [`meal-nutrition`](meal.md)(2026-10-04 `3d067a0`) — `meal-supplement` purpose.
   [`MealNutritionAdviceService.resolveProvider()`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts)
   가 `getResolved` → 모델 비면 null(서버 문장 fallback) → `ResolvedLlm { provider, model, think, tokenMult }`
@@ -600,20 +622,20 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   헤더 제약으로 핸들러 안에서 `jwtVerify` + `?token=` 직접 검증.
 - `env` (`config/env.ts`) — `OLLAMA_CLOUD_API_KEY` / `OLLAMA_CLOUD_BASE_URL`
   / `OLLAMA_CLOUD_TIMEOUT_MS` / `OLLAMA_CLOUD_MAX_CONCURRENT` + **용도별 모델
-  변수 9종** `OLLAMA_DEFAULT_MODEL`(chat) / `OLLAMA_IMAGE_MODEL` / `OLLAMA_LOG_ANALYSIS_MODEL`
+  변수 10종**(2026-10-10~) `OLLAMA_DEFAULT_MODEL`(chat) / `OLLAMA_IMAGE_MODEL` / `OLLAMA_LOG_ANALYSIS_MODEL`
   / `OLLAMA_MEAL_PHOTO_MODEL` / `OLLAMA_MEAL_RECOMMEND_MODEL` / **`OLLAMA_MEAL_SUPPLEMENT_MODEL`(2026-10-04, 기본 kimi-k3)** /
-  `OLLAMA_TAROT_MODEL` / `OLLAMA_SAJU_MODEL` / `OLLAMA_SAJU_G_MODEL` + purpose 가 아닌 override 변수
+  `OLLAMA_TAROT_MODEL` / `OLLAMA_SAJU_MODEL` / `OLLAMA_SAJU_G_MODEL` / **`OLLAMA_MENU_BOARD_MODEL`(2026-10-10, 기본 kimi-k3)** + purpose 가 아닌 override 변수
   `OLLAMA_MENU_MATCH_MODEL`. 키·baseUrl 의 env fallback 은 `chat`(계정 대표)에만, **모델
-  fallback 은 아홉 용도 각자**(`LlmProviderEnv.defaultModels[purpose]`). env → `LlmProviderEnv`
+  fallback 은 열 용도 각자**(`LlmProviderEnv.defaultModels[purpose]`). env → `LlmProviderEnv`
   변환은 `buildLlmProviderEnv()` 한 곳([`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts)).
   `OLLAMA_MENU_MATCH_MODEL` 은 이 조립을 거치지 않고 `restaurant.route.ts` 가 `env` 에서 직접 읽는다.
 - Ollama Cloud HTTP API — `POST {baseUrl}/api/chat` (단건 컴플리션 + 구조화
   출력 + vision `images` + `think`), `GET {baseUrl}/api/tags` (모델 카탈로그).
   두 호출 모두 `Authorization: Bearer {apiKey}` 헤더 필수. (임베딩 `/api/embed`
   는 review-search 가 별도로 부른다 — 이 모듈 경유 아님.)
-- `@repo/api-contract` — 모든 와이어 타입. `LlmProviderPurpose` 9종(`'log-analysis'`
+- `@repo/api-contract` — 모든 와이어 타입. `LlmProviderPurpose` 10종(`'log-analysis'`
   2026-06, `'meal-photo'`·`'meal-recommend'` 2026-08-22, `'tarot'`·`'saju'`·`'saju-g'`
-  2026-09-02~06, `'meal-supplement'` 2026-10-04 — enum 순서상 `meal-recommend` 바로 뒤), `LlmKeySource`/`LlmModelSource`
+  2026-09-02~06, `'meal-supplement'` 2026-10-04 — enum 순서상 `meal-recommend` 바로 뒤, `'menu-board'` 2026-10-10 — 맨 끝), `LlmKeySource`/`LlmModelSource`
   enum + `keySource`/`defaultModelSource` 필드, **`LlmThinking`(off/low/medium/high/max, 2026-09-12 `a823af1`) +
   `LlmProviderConfig.thinking`(필수)·`UpdateLlmProviderInput.thinking`(선택, purpose 제한 없음)**, 텔레메트리 타입
   일습(`LlmTelemetrySnapshot` / `LlmTelemetryCall` / `LlmGateSnapshot` / `LlmTelemetryWindow` / `LlmCallStatus`).
@@ -621,8 +643,8 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `thinkOptionFor` / `thinkTokenMult` / `LLM_THINKING_SETTINGS`). 순수 함수.
   utils 는 api-contract 를 import 못 하므로(순환 금지) purpose 리터럴을 `ModelPurpose`
   유니온으로, thinking 값을 `LlmThinkingSetting` 유니온으로 재선언 — enum 이 늘면 둘을 같이 고친다
-  (2026-09 8종·5단계 → 2026-10-04 9종으로 동기화됨).
-  `thinkOptionForModel` 은 이제 tarot/saju/saju-g/menu-llm-match/meal-recommendation 까지 JSON 호출 전부가 쓰고, 사주(C)와
+  (2026-09 8종·5단계 → 2026-10-04 9종 → 2026-10-10 10종으로 동기화됨).
+  `thinkOptionForModel` 은 이제 tarot/saju/saju-g/menu-llm-match/meal-recommendation/menu-board(2026-10-10) 까지 JSON 호출 전부가 쓰고, 사주(C)와
   영양제 조언(2026-10-04)만 그 위에 `thinkOptionFor(model, resolved.thinking)` 를 얹는다.
 - `usage-quota`([usage-quota](usage-quota.md)) — ai 모듈의 의존은 아니지만 공개 기능 4종(타로·사주(C)·사주(G)·
   2026-10-05 `review-ask`)의 LLM 호출 앞단에서 한도를 소비하는 층. 2026-10-05 부터 회원도 기능별 하루 100회
@@ -650,7 +672,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 - 게이트 acquire 순서는 모든 호출자에서 동일(purpose → account)이라 두 게이트가
   교착하지 않는다. release 는 역순.
 
-## API Surface [coverage: high — 19 sources]
+## API Surface [coverage: high — 20 sources]
 
 모든 라우트 prefix는 `Routes.Ai`(=`/api/v1/admin/ai/*`)이며, 항상
 `onRequest: [authenticate, requireAdmin]` 가드가 걸려 있다. provider 식별은
@@ -670,10 +692,12 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 | GET    | `/telemetry/stream`                             | — (`?token=` 쿼리)            | SSE (`event: snapshot` = `LlmTelemetrySnapshot`) |
 
 - `:id`는 `LlmProviderId` enum(`'ollama-cloud'`)으로 검증 — 알 수 없는 값은 400.
-- `:purpose`는 `LlmProviderPurpose` enum 9종(`'chat'` | `'image'` | `'log-analysis'` |
-  `'meal-photo'` | `'meal-recommend'` | `'meal-supplement'` | `'tarot'` | `'saju'` | `'saju-g'`)으로 검증
-  (`meal-supplement` 2026-10-04 `3d067a0`). 이 모듈의 라우트 수는 그대로다 — 영양제 조언의 사용자 라우트
-  `GET`·`POST /meals/nutrition/advice` 는 [meal](meal.md) 의 `meal-nutrition.route.ts` 에 있다.
+- `:purpose`는 `LlmProviderPurpose` enum 10종(`'chat'` | `'image'` | `'log-analysis'` |
+  `'meal-photo'` | `'meal-recommend'` | `'meal-supplement'` | `'tarot'` | `'saju'` | `'saju-g'` | `'menu-board'`)으로 검증
+  (`meal-supplement` 2026-10-04 `3d067a0`, `menu-board` 2026-10-10 `4597294b`). 이 모듈의 라우트 수는 그대로다 — 영양제 조언의 사용자 라우트
+  `GET`·`POST /meals/nutrition/advice` 는 [meal](meal.md) 의 `meal-nutrition.route.ts` 에, 메뉴판 읽기 어드민 라우트
+  `POST /admin/menu-board/read`·`GET …/samples`·`GET …/samples/:key/image`·`GET …/eval` 은 [menu-board](menu-board.md) 의
+  `menu-board.route.ts` 에 있다.
 - `/complete` / `/complete-batch` 는 path 파라미터 없이 항상 `chat` purpose 를
   사용 (admin AI 테스트 페이지 전용 — 영수증 추출은 자체 라우트).
 - `/models/preview` 는 저장 없이 폼 키로 직접 provider 의 `/models` 만 부른다.
@@ -749,7 +773,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `maskApiKey(key)` 헬퍼(`null | '***' | 'sk-***...{last4}'`).
   `getResolved(provider, purpose)` / `update(provider, purpose, input, actorId)` /
   `remove(provider, purpose)` 모두 purpose 가 두 번째 위치 인자. `list()` 가
-  `ALL_PURPOSES`(= `LlmProviderPurpose.options`, 9종) 카드를 항상 합성(아래 Data 참고).
+  `ALL_PURPOSES`(= `LlmProviderPurpose.options`, 10종 — 2026-10-10~) 카드를 항상 합성(아래 Data 참고).
 - [`AiService`](../../apps/friendly/src/modules/ai/ai.service.ts) +
   `classifyError(unknown) → { error: AiErrorCodeType, message: string }` 헬퍼.
   `AiErrorCodeType`은 `rate_limited | upstream_failed | timeout |
@@ -769,11 +793,11 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `log-analysis` 같은 in-process 호출자만 쓴다.
 - `AiCompleteBatchInput.items` 1–10개. 각 item은 선택 `clientId`(1–64자)로
   결과 매핑.
-- `LlmProviderConfig` 와이어 타입 — `purpose: 'chat'|'image'|'log-analysis'|'meal-photo'|'meal-recommend'|'meal-supplement'|'tarot'|'saju'|'saju-g'`,
+- `LlmProviderConfig` 와이어 타입 — `purpose: 'chat'|'image'|'log-analysis'|'meal-photo'|'meal-recommend'|'meal-supplement'|'tarot'|'saju'|'saju-g'|'menu-board'`,
   `keySource: 'own'|'inherited'|'env'|'none'`, `defaultModelSource: 'own'|'env'|'none'`,
   `defaultModel`(유효 모델, null=둘 다 없음), `apiKeyMasked`/`hasApiKey` 등 + **`thinking:
-  'off'|'low'|'medium'|'high'|'max'`**(필수 — row 없거나 `null` 이면 `'off'`, 2026-09-12 `a823af1`; 아홉 카드
-  모두에 실리지만 의미가 있는 건 saju 와 2026-10-04 부터 meal-supplement 둘).
+  'off'|'low'|'medium'|'high'|'max'`**(필수 — row 없거나 `null` 이면 `'off'`, 2026-09-12 `a823af1`; 열 카드
+  모두에 실리지만 의미가 있는 건 saju 와 2026-10-04 부터 meal-supplement 둘 — `menu-board` 는 읽지 않는다).
 - 텔레메트리 스키마 — `LlmTelemetrySnapshot` = `startedAt` + `totals`(+ok/cancelled/
   retries) + `byPurpose[]` + `byModel[]` + `windows.{m1,m5,h1}`(avg/maxDurationMs) +
   `active[]` + `recent[]`(`LlmTelemetryCall`: queueWaitMs/durationMs/retries 분리) +
@@ -826,7 +850,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   — 꺼두면 필드를 보내지 않아 provider 기본값 사용. **현재 chat purpose 전용**
   — `useProviderModels` 에 `purpose: 'chat'` 하드코딩.
 
-## Data [coverage: high — 18 sources]
+## Data [coverage: high — 20 sources]
 
 **테이블: `llm_provider_configs`** (Prisma 모델 `LlmProviderConfig`)
 
@@ -834,7 +858,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 model LlmProviderConfig {
   id            String   @id @default(cuid())
   provider      String                  // 'ollama-cloud'
-  purpose       String   @default("chat") // 9종 enum 값 (free TEXT — 'tarot'|'saju'|'saju-g'|'meal-supplement' 포함)
+  purpose       String   @default("chat") // 10종 enum 값 (free TEXT — 'tarot'|'saju'|'saju-g'|'meal-supplement'|'menu-board' 포함)
   apiKey        String                  // 평문 저장 (계정 대표=chat, 그 외 용도는 상속 가능)
   baseUrl       String?
   defaultModel  String?
@@ -883,8 +907,8 @@ SQLite, 외래키 없음 — `updatedById`는 단순 텍스트 참조(soft).
 
 **환경 변수 fallback** ([`env.ts`](../../apps/friendly/src/config/env.ts)):
 
-키·baseUrl 의 env fallback 은 `chat`(계정 대표)에만, **모델 fallback 은 아홉 용도
-각자**. chat 외 용도는 자기 키가 없으면 계정(chat row, 없으면 env) 키를 상속.
+키·baseUrl 의 env fallback 은 `chat`(계정 대표)에만, **모델 fallback 은 열 용도
+각자**(2026-10-10~). chat 외 용도는 자기 키가 없으면 계정(chat row, 없으면 env) 키를 상속.
 
 | 변수                          | 기본값(`env.ts` / `.env.example`) | 비고                                  |
 | ----------------------------- | --------------------- | ------------------------------------- |
@@ -893,7 +917,7 @@ SQLite, 외래키 없음 — `updatedById`는 단순 텍스트 참조(soft).
 | `OLLAMA_CLOUD_TIMEOUT_MS`     | `60000`               | 모든 용도 공통. DB에 컬럼 없음 — env 단독 소스 |
 | `OLLAMA_CLOUD_MAX_CONCURRENT` | `15`                  | row 없을 때 폴백 + 계정 게이트 부트스트랩값. DB row의 `maxConcurrent`이 우선|
 | `OLLAMA_DEFAULT_MODEL`        | `''` / `gpt-oss:120b` | **chat** 모델 폴백. DB `defaultModel` 빌 때만 |
-| `OLLAMA_IMAGE_MODEL`          | `''` / `qwen3.5:397b-cloud` | **image** 모델 폴백 (영수증 추출 등)         |
+| `OLLAMA_IMAGE_MODEL`          | `''` / `qwen3.5:397b-cloud` | **image** 모델 폴백 (영수증 추출 등). ⚠️ `.env.example` 값 `qwen3.5:397b-cloud` 는 **2026-09-25 ollama cloud 에서 퇴역**(2026-10-10 메뉴판 비교 중 발견 — [menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md)). 예시·운영 `.env` 교체 필요(Gotchas) |
 | `OLLAMA_LOG_ANALYSIS_MODEL`   | `''` / `deepseek-v4-pro` | **log-analysis** 모델 폴백. 비면 자동 분석 skip |
 | `OLLAMA_MEAL_PHOTO_MODEL`     | `''` / `gemma4:31b`   | **meal-photo** 모델 폴백(2026-08-22 신규). 비면 사진 인식 `no_provider`. 기본값 근거는 `.env.example` 주석(평가셋 60장 실측) |
 | `OLLAMA_MEAL_RECOMMEND_MODEL` | `''` / `gpt-oss:120b` | **meal-recommend** 모델 폴백(2026-08-22). 비면 LLM 추천 skip → 점수 폴백. 2026-10-04 `probe:meal-models` 로 kimi-k3 와 비교해 유지 |
@@ -902,9 +926,10 @@ SQLite, 외래키 없음 — `updatedById`는 단순 텍스트 참조(soft).
 | `OLLAMA_TAROT_MODEL`          | **`gpt-oss:120b`** / `gpt-oss:120b` | **tarot** 모델 폴백(2026-09-02 신규). **코드 기본값이 비어 있지 않다** — 키만 있으면 켜짐. 근거: 샘플 4건 gpt-oss 4/4·p50 2.1s vs gemma4:31b 4/4·3.1s. 재측정 `probe:tarot-reading` |
 | `OLLAMA_SAJU_MODEL`           | **`kimi-k3`** / `kimi-k3` | **saju**(사주(C)) 모델 폴백(2026-09-06 신규, `d31843b`). 코드 기본값 kimi-k3. 근거: 3사주×4섹션 4모델 JSON 12/12, 문장 자연스러움. 재측정 `probe:saju-reading` |
 | `OLLAMA_SAJU_G_MODEL`         | **`kimi-k3`** / `kimi-k3` | **saju-g**(사주(G)) 모델 폴백(2026-09-06 신규). 사주(C)와 별도 변수. 근거: 프롬프트 v3 kimi-k3 12/12. 재측정 `probe:saju-g-reading` |
+| `OLLAMA_MENU_BOARD_MODEL`     | **`kimi-k3`** / `kimi-k3` | **menu-board**(메뉴판 사진 읽기, 비전) 모델 폴백(2026-10-10 `4597294b` 신규). 코드 기본값 kimi-k3. 근거: 검수 정답 20장 kimi-k3 + 규칙 프롬프트 F1 99.8%(OCR 힌트 없이), gemma4:31b 는 힌트 없으면 89.6%. `env.ts` 주석은 "장당 중앙 약 7초", 커밋·보고서의 friendly 경로 측정은 5.5초. 재측정 `eval:menu-boards` |
 | `OLLAMA_MENU_MATCH_MODEL`     | `gemma4:31b` / `gemma4:31b` | **purpose 아님** — `chat` 으로 resolve 한 뒤 메뉴 칼로리 매칭·세트 분해가 모델만 덮어쓴다. 비면 chat 기본 모델. `buildLlmProviderEnv()` 를 거치지 않고 `restaurant.route.ts` 가 직접 읽음. 근거: 골든셋 84건 gemma4 88% |
 
-`LlmProviderEnv.defaultModels` 는 `Record<purpose, string>` — 위 9개 용도 모델 변수를
+`LlmProviderEnv.defaultModels` 는 `Record<purpose, string>` — 위 10개 용도 모델 변수를(2026-10-10 `menu-board` 포함)
 용도 키로 묶는다. 조립은 `buildLlmProviderEnv()`(`llm-provider-env.ts`) 한 곳.
 `OLLAMA_MENU_MATCH_MODEL` 은 여기 들어가지 않는다.
 
@@ -935,11 +960,11 @@ thinking      := LlmThinking.safeParse(row.thinking ?? 'off').success ? 그 값 
 
 **`list()` 동작:** **아홉 용도 카드를 항상** 합성해 반환(~2026-10-03 여덟)
 (`ALL_PURPOSES = LlmProviderPurpose.options` — 계약 enum 순서 chat, image, log-analysis,
-meal-photo, meal-recommend, meal-supplement, tarot, saju, saju-g 가 곧 카드 순서; 어드민 화면은 별도 `PURPOSE_ORDER` 로 같은 순서). DB row 없는 용도도 계정 키
+meal-photo, meal-recommend, meal-supplement, tarot, saju, saju-g, menu-board 가 곧 카드 순서; 어드민 화면은 별도 `PURPOSE_ORDER` 로 같은 순서). DB row 없는 용도도 계정 키
 상속으로 동작할 수 있어 가상 row 로 노출한다. `toView` 가 각 카드의 `keySource`(own/inherited/env/none) +
 `defaultModelSource`(own/env/none) 를 채운다 — chat 은 own/env/none, 그 외 용도는
-own/inherited/none. "다른 용도 추가" 빈 카드 흐름은 사라지고, 항상 아홉 카드가 보인다
-(`ai.config.service.test` "synthesizes all nine purposes" — 2026-10-04 에 eight 에서 바뀜). 2026-09-12 부터 각 카드에 `thinking` 도 실린다 —
+own/inherited/none. "다른 용도 추가" 빈 카드 흐름은 사라지고, 항상 열 카드가 보인다
+(`ai.config.service.test` "synthesizes all ten purposes" — 2026-10-04 에 eight → nine, 2026-10-10 `4597294b` 에 ten). 2026-09-12 부터 각 카드에 `thinking` 도 실린다 —
 row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tarot 카드로 검증), `update()` 응답도 같은 `toView`.
 
 **도메인별 prompt + JSON schema + 청크 사이즈 + purpose:**
@@ -991,7 +1016,19 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   `/complete-batch`)에만 적용** — 백그라운드 도메인은 `AiService` 를 거치지
   않으므로 영향 없음. 영속성 없음 (프로세스 재시작 시 리셋).
 
-## Key Decisions [coverage: high — 34 sources]
+## Key Decisions [coverage: high — 37 sources]
+
+- **2026-10-10 (`4597294b`): 메뉴판 읽기는 새 purpose `menu-board` + kimi-k3, OCR 없이 비전 호출 한 번.** 기존 `image`(영수증)·
+  `meal-photo` 와 모델·게이트·텔레메트리 라벨을 나누려고 purpose 를 새로 뒀다(같은 이유로 `meal-photo` 를 `image` 와 나눴던 2026-08
+  결정과 같은 모양). 모델은 ollama cloud 비전 9개 + OCR 3종 + Claude·Codex 통사진 비교에서 골랐다: kimi-k3 는 Paddle 글자 힌트를 더해도
+  점수가 같아(규칙 + 작은 사진 확대 99.8% 그대로) GPU·Python·OCR 런타임 없이 friendly 의 기존 어댑터 경로 하나로 끝난다. 더 빠른 gemma4:31b
+  + Paddle + 규칙(99.4%·장당 2.7초)은 OCR 을 Node 로 옮겨야 해서(onnxruntime-node + PP-OCRv5 ONNX) 보류. 생각 모드는 끈다 — 비교에서
+  정확도를 못 올리고 몇 배 느렸다(kimi-k3 생각 켬 97.9%·장당 중앙 71초). 그래서 `PURPOSE_META['menu-board']` 에 `thinking` 을 두지 않아
+  어드민 추론 선택도 안 보인다([model-family-call-options](../concepts/model-family-call-options.md)). 회귀 평가는 커밋된 검수 정답
+  20장으로([golden-set-precision-gate](../concepts/golden-set-precision-gate.md)), 프롬프트는 버전 상수로(v2, [versioned-llm-prompts](../concepts/versioned-llm-prompts.md)).
+- **2026-10-10 (`63c7658a`): AI 허브 관광 음식메뉴판 모델(Python `apps/smartly`)은 같은 날 폐기.** 메뉴명 인식기는 위치를 잘라 줘도
+  65% 만 그대로 읽었고 번역 모델 몫은 BLEU 0.03~0.12 였다. 폐기 뒤 리포의 Python 은 다시 군집화(`scripts/cluster_compute.py`, [review-clustering](review-clustering.md))와
+  그 research 프로브뿐이다. 번역이 필요해지면 kimi-k3 로 한다(보고서 다음 단계).
 
 - **2026-10-05 (`78cbb457`): 회원 LLM 은 기능별 하루 100회 — 2026-09-02 "회원 무제한" 결정 변경.** 회원은 IP·게스트
   한도를 면제받았기 때문에 무료 계정 하나가 전역 예산을 태워 게스트 전원을 정적 폴백으로 밀어낼 수 있었다(findings F-4).
@@ -1233,7 +1270,25 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   어댑터가 `listModels`를 구현 안 했거나 호출 실패 시 `{ models: [] }` 반환.
   UI는 `<datalist>`로 자동완성하되 자유 입력도 허용.
 
-## Gotchas [coverage: high — 31 sources]
+## Gotchas [coverage: high — 35 sources]
+
+- **영수증 `image` 예시 모델 `qwen3.5:397b-cloud` 가 퇴역했다 — `.env.example` 미수정** (2026-10-10 발견) — 메뉴판 비교
+  보고서([menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md) 결론 6)가 "2026-09-25 ollama cloud 에서 퇴역, 운영 `.env` 포함
+  교체 필요(이 비교 기준이면 `gemma4:31b` 가 후보)" 라고 적었지만, [`.env.example`](../../apps/friendly/.env.example) 은 여전히
+  `OLLAMA_IMAGE_MODEL=qwen3.5:397b-cloud` 다(2026-10-26 확인). `env.ts` 코드 기본값은 `''` 라 `.env` 에 이 값을 복사해 둔 환경(운영 포함)은
+  영수증 추출이 퇴역 모델을 부르게 된다(이번 라운드에서 실호출로 확인하지는 않았다). DB row 의 `defaultModel` 로 덮었다면 영향 없음. 보고서 다음 단계 4 "퇴역 모델 교체(영수증 추출
+  회귀 확인 포함)" 가 남은 일.
+- **모델 비교를 돌리면 같은 계정 한도를 태운다** (2026-10-10) — 메뉴판 비교가 ollama cloud **Pro 5시간 한도**를 소진해
+  (`429 You reached your Pro 5-hour limit`) 같은 키를 쓰는 식단 추천·AI 분석 등이 풀릴 때까지 막혔다(보고서). `eval:menu-boards` 는
+  그래서 동시 호출 없이 한 장씩이고, 크롤 직후 메뉴판 자동 읽기도 가게 안에서는 한 장씩이다. 다만 여러 가게를 연달아 크롤하면 가게마다
+  자동 읽기가 따로 떠 동시에 돈다 — 상한은 `menu-board` purpose 게이트(`maxConcurrent`)와 계정 게이트뿐이다.
+- **`menu-board` 는 어드민 추론 설정을 읽지 않는다** — DB row 에 `thinking` 이 들어 있어도(API 로 넣을 수는 있다 —
+  `UpdateLlmProviderInput.thinking` 은 purpose 제한 없음) `MenuBoardService` 는 `thinkOptionForModel(model)` 만 쓴다. 화면에도 선택이 없다.
+- **`menu-board` 의 5xx 는 클라이언트에서 500 으로 보인다** — 라우트가 `no_provider` 503·`llm_failed`/`parse_failed` 502 를 던지지만
+  공통 에러 핸들러가 5xx 를 500 으로 접는다(같은 문제가 다른 라우트에도 있다 — [menu-board](menu-board.md) Gotchas).
+- **계약 주석이 소비자를 다 말하지 않는다** — [`ai.ts`](../../packages/api-contract/src/schemas/ai.ts) 의 purpose 목록 주석은
+  `menu-board` 를 "메뉴판 사진 읽기(어드민 테스트)" 로만 적어, 네이버 크롤 직후 백그라운드 자동 읽기(`0408f2f2`)가 같은 purpose·계정 게이트를
+  쓴다는 것이 드러나지 않는다(미수정). 어드민 카드 설명도 "어드민 테스트 —" 로 시작한다.
 
 - **review-search·review-clustering 의 LLM 은 사용량 패널에 안 보인다(임베딩만이 아니다).** 두 모듈은 `chat` row 의 키·모델을
   읽지만 `/api/chat` 을 직접 fetch 한다 — purpose·계정 게이트, 어댑터의 429 백오프, `think` 조립(`thinkOptionForModel`),
@@ -1490,8 +1545,16 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   재사용할 수 있어 의도적으로 피한 것 — 미리보기는 비용이 작고(`/models` 한
   번) 빈도도 낮으므로 캐시 효용이 미미.
 
-## Sources [coverage: high — 96 sources]
+## Sources [coverage: high — 104 sources]
 
+- [`apps/friendly/src/modules/menu-board/menu-board.service.ts`](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) (신규 2026-10-10 `4597294b` — `menu-board` purpose 소비자, `getResolved`·`adapterCache`·`thinkOptionForModel`, 긴 변 2,000px JPEG, `opts.model` 덮기)
+- [`apps/friendly/src/modules/menu-board/menu-board.prompt.ts`](../../apps/friendly/src/modules/menu-board/menu-board.prompt.ts) (신규 — `MENU_BOARD_PROMPT`·`MENU_BOARD_PROMPT_VERSION = 2`(`faa12818`)·`'</think>'` 뒤 파싱)
+- [`apps/friendly/src/modules/menu-board/menu-board.route.ts`](../../apps/friendly/src/modules/menu-board/menu-board.route.ts) (신규 — 어드민 읽기 라우트, 503/502 → 공통 핸들러가 500)
+- [`apps/friendly/src/modules/menu-board/menu-board.naver.ts`](../../apps/friendly/src/modules/menu-board/menu-board.naver.ts) (신규 2026-10-10 `0408f2f2` — 크롤 직후 백그라운드 소비자 `NaverMenuBoardReader`, `no_provider` 면 즉시 멈춤)
+- [`apps/friendly/scripts/eval-menu-boards.ts`](../../apps/friendly/scripts/eval-menu-boards.ts) (신규 — 검수 정답 회귀 평가, `--model` 비교, 한 장씩)
+- [`apps/friendly/src/plugins/crawl.ts`](../../apps/friendly/src/plugins/crawl.ts) (2026-10-10 — 메뉴판 리더용 `AiConfigService(buildLlmProviderEnv())` 조립)
+- [`apps/friendly/src/plugins/meal.ts`](../../apps/friendly/src/plugins/meal.ts) (2026-10-23 `92e79e9a` — `MealNutritionEstimator` 가 `MenuLlmMatchService`(chat + `OLLAMA_MENU_MATCH_MODEL`)를 재사용, 테스트에선 LLM 없음)
+- [`docs/menu-board-ocr-probe.md`](../../docs/menu-board-ocr-probe.md) (신규 2026-10-10 — 비전 9모델·OCR 3종·Claude·Codex 비교, 생각 모드·규칙·사진 확대 실험, Pro 5시간 한도 소진, `qwen3.5:397b-cloud` 퇴역 발견)
 - [`apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts) (신규 2026-10-04 `3d067a0` — `meal-supplement` 컨슈머, `thinkOptionFor`·`thinkTokenMult`, 0.3·2000·8192·90s(상한 180s), `sanitizeAdvice` 칸 단위 검사, 저장본·`inFlight`·`mealMutationBarrier`)
 - [`apps/friendly/src/modules/meal-nutrition/meal-nutrition.prompts.ts`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.prompts.ts) (신규 — `MEAL_NUTRITION_ADVICE_VERSION = 1`·시스템 프롬프트·후보 enum JSON schema·`supplementAllowed`·IU 환산)
 - [`apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts) (신규 — LLM 없는 결정적 점검, 조언 대상 선정의 입력)
@@ -1527,9 +1590,9 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
 - [`docs/PLAN-saju.md`](../../docs/PLAN-saju.md) (결정 4 kimi 후보, LLM 설계 절, 진행 기록 2026-09-06 프로브·kimi-k3 채택 근거)
 - [`docs/PLAN-saju-g.md`](../../docs/PLAN-saju-g.md) ("Kimi 와 AI 해석 v4" 절 — kimi-k3 기본·deepseek 비교 후보·재전송 없음)
 
-- [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (신규 2026-08-22 — `buildLlmProviderEnv()` `.env → LlmProviderEnv` 단일 조립점; 2026-09 `tarot`·`saju`·`saju-g` 키 추가; 2026-10-04 `meal-supplement` 키 추가)
+- [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (신규 2026-08-22 — `buildLlmProviderEnv()` `.env → LlmProviderEnv` 단일 조립점; 2026-09 `tarot`·`saju`·`saju-g` 키 추가; 2026-10-04 `meal-supplement` 키 추가; 2026-10-10 `menu-board` 키 추가)
 - [`packages/utils/src/aiModel.test.ts`](../../packages/utils/src/aiModel.test.ts) (신규 — `isVisionModel` 멀티모달 계열·`recommendModelForPurpose`·`thinkOptionForModel`; 2026-09-06 `saju-g` 계열 우선순위 케이스, 17건; 2026-10-04 "영양제 조언도 Kimi K3를 먼저 추천한다" +1)
-- [`apps/friendly/.env.example`](../../apps/friendly/.env.example) (수정 — 용도별 모델 8종 + `OLLAMA_MENU_MATCH_MODEL` + meal-photo/타로/사주/메뉴 매칭 실측 근거·재측정 명령 주석; 2026-10-04 `OLLAMA_MEAL_SUPPLEMENT_MODEL=kimi-k3`·`MEAL_SUPPLEMENT_DAILY_LIMIT=10` 주석 포함 9종)
+- [`apps/friendly/.env.example`](../../apps/friendly/.env.example) (수정 — 용도별 모델 8종 + `OLLAMA_MENU_MATCH_MODEL` + meal-photo/타로/사주/메뉴 매칭 실측 근거·재측정 명령 주석; 2026-10-04 `OLLAMA_MEAL_SUPPLEMENT_MODEL=kimi-k3`·`MEAL_SUPPLEMENT_DAILY_LIMIT=10` 주석 포함 9종; 2026-10-10 `OLLAMA_MENU_BOARD_MODEL=kimi-k3`(10종). `OLLAMA_IMAGE_MODEL=qwen3.5:397b-cloud` 는 퇴역 모델 그대로)
 - [`apps/friendly/src/plugins/logs.ts`](../../apps/friendly/src/plugins/logs.ts) (수정 — `buildLlmProviderEnv()` 소비)
 - [`apps/friendly/src/plugins/random-crawl.ts`](../../apps/friendly/src/plugins/random-crawl.ts) (수정 — 동일)
 - [`apps/friendly/src/plugins/schedule.ts`](../../apps/friendly/src/plugins/schedule.ts) (수정 — 동일)
@@ -1548,16 +1611,16 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
 - [`apps/friendly/src/modules/ai/llm-telemetry.ts`](../../apps/friendly/src/modules/ai/llm-telemetry.ts) (신규 — `LlmTelemetry` + `llmTelemetry` 싱글턴)
 - [`apps/friendly/src/modules/ai/llm-telemetry.test.ts`](../../apps/friendly/src/modules/ai/llm-telemetry.test.ts) (신규)
 - [`apps/friendly/src/modules/ai/telemetry.route.ts`](../../apps/friendly/src/modules/ai/telemetry.route.ts) (신규 — `/telemetry` + `/telemetry/stream` SSE)
-- [`apps/friendly/src/modules/ai/adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts) (수정 — 키별 Map + 계정 게이트 주입 + 계측 훅; 2026-10-04 `MAX_ENTRIES` 8 → 16)
+- [`apps/friendly/src/modules/ai/adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts) (수정 — 키별 Map + 계정 게이트 주입 + 계측 훅; 2026-10-04 `MAX_ENTRIES` 8 → 16; 2026-10-10 주석 "용도 10개", 16 유지)
 - [`apps/friendly/src/modules/ai/adapter-cache.test.ts`](../../apps/friendly/src/modules/ai/adapter-cache.test.ts) (수정; 2026-10-04 "용도 9개를 모두 써도 서로 밀어내지 않는다" — 단 파일 머리 ENV 는 8키)
 - [`apps/friendly/src/modules/ai/ai.config.service.ts`](../../apps/friendly/src/modules/ai/ai.config.service.ts) (수정 — 계정 키 상속 + 용도별 모델 폴백 + `keySource`/`defaultModelSource`; 2026-08-22 `ALL_PURPOSES = LlmProviderPurpose.options`)
-- [`apps/friendly/src/modules/ai/ai.config.service.test.ts`](../../apps/friendly/src/modules/ai/ai.config.service.test.ts) (수정 — 2026-09 "synthesizes all eight purposes", 픽스처 8키; 2026-10-04 "synthesizes all nine purposes", 픽스처 9키)
+- [`apps/friendly/src/modules/ai/ai.config.service.test.ts`](../../apps/friendly/src/modules/ai/ai.config.service.test.ts) (수정 — 2026-09 "synthesizes all eight purposes", 픽스처 8키; 2026-10-04 "synthesizes all nine purposes", 픽스처 9키; 2026-10-10 "synthesizes all ten purposes", 픽스처 10키·`toHaveLength(10)`)
 - [`apps/friendly/src/modules/ai/ai.service.ts`](../../apps/friendly/src/modules/ai/ai.service.ts)
 - [`apps/friendly/src/modules/ai/ai.service.test.ts`](../../apps/friendly/src/modules/ai/ai.service.test.ts) (수정)
 - [`apps/friendly/src/modules/ai/ai.route.ts`](../../apps/friendly/src/modules/ai/ai.route.ts) (수정 — 용도별 resolve; 2026-08-22 자체 `buildEnvBlock` 제거 → `buildLlmProviderEnv()`)
 - [`apps/friendly/src/modules/ai/ai.test.ts`](../../apps/friendly/src/modules/ai/ai.test.ts)
 - [`apps/friendly/src/modules/logs/log-analysis.service.ts`](../../apps/friendly/src/modules/logs/log-analysis.service.ts) (신규 컨슈머 — `log-analysis` purpose)
-- [`packages/utils/src/aiModel.ts`](../../packages/utils/src/aiModel.ts) (모델 식별/추천 헬퍼; 2026-08-22 `MULTIMODAL_FAMILY_RE`·`thinkOptionForModel`; 2026-09-06 `ModelPurpose` 8종·`saju-g` 계열 우선순위·`saju` 최대·`tarot` 중앙값; 2026-10-04 `ModelPurpose` 9종·`meal-supplement` 계열 우선순위)
+- [`packages/utils/src/aiModel.ts`](../../packages/utils/src/aiModel.ts) (모델 식별/추천 헬퍼; 2026-08-22 `MULTIMODAL_FAMILY_RE`·`thinkOptionForModel`; 2026-09-06 `ModelPurpose` 8종·`saju-g` 계열 우선순위·`saju` 최대·`tarot` 중앙값; 2026-10-04 `ModelPurpose` 9종·`meal-supplement` 계열 우선순위; 2026-10-10 `ModelPurpose` 10종·`menu-board` kimi-k3 우선 → 비전 최소)
 - [`packages/shared/src/hooks/useLlmTelemetry.ts`](../../packages/shared/src/hooks/useLlmTelemetry.ts) (신규 — SSE 구독 훅; 2026-10-05 `acquireLlmTelemetryStream`·`isLlmTelemetryConnected` — QueryClient 당 스트림 1개)
 - [`packages/shared/src/hooks/useLlmTelemetry.test.ts`](../../packages/shared/src/hooks/useLlmTelemetry.test.ts) (신규 2026-10-05 — 두 곳 구독에도 스트림 1개·이중 해제·재구독·끊김 뒤 재연결/취소·QueryClient 별 스트림 5건)
 - [`apps/web/src/components/admin/LlmUsagePanel.tsx`](../../apps/web/src/components/admin/LlmUsagePanel.tsx) (신규 — 플로팅 사용량 패널)
@@ -1582,11 +1645,11 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
 - [`apps/friendly/src/modules/settlement-extraction/settlement-extraction.prompts.ts`](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.prompts.ts) (수정 — `EXTRACTION_VERSION` 1 → 2, `buildExtractionUserPrompt({ roundHint })` 추가)
 - [`apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts`](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts)
 - [`apps/friendly/prisma/migrations/20260523010655_pnpm_filter_friendly_test_src_modules_ai/migration.sql`](../../apps/friendly/prisma/migrations/20260523010655_pnpm_filter_friendly_test_src_modules_ai/migration.sql)
-- [`packages/api-contract/src/schemas/ai.ts`](../../packages/api-contract/src/schemas/ai.ts) (수정 — `LlmProviderPurpose` 8종(`meal-photo`·`meal-recommend` 2026-08-22, `tarot`·`saju`·`saju-g` 2026-09) + `LlmKeySource`/`LlmModelSource` + `keySource`/`defaultModelSource` + 텔레메트리 타입 일습; 2026-10-04 `meal-supplement` 로 9종)
+- [`packages/api-contract/src/schemas/ai.ts`](../../packages/api-contract/src/schemas/ai.ts) (수정 — `LlmProviderPurpose` 8종(`meal-photo`·`meal-recommend` 2026-08-22, `tarot`·`saju`·`saju-g` 2026-09) + `LlmKeySource`/`LlmModelSource` + `keySource`/`defaultModelSource` + 텔레메트리 타입 일습; 2026-10-04 `meal-supplement` 로 9종; 2026-10-10 `menu-board` 로 10종 — 주석 "(어드민 테스트)")
 - [`packages/api-contract/src/routes.ts`](../../packages/api-contract/src/routes.ts) (수정 — `Routes.Ai.telemetry` / `telemetryStream` 추가)
 - [`packages/api-contract/src/index.ts`](../../packages/api-contract/src/index.ts) (barrel — 신규 schema 자동 re-export)
 - [`packages/shared/src/api/ai.api.ts`](../../packages/shared/src/api/ai.api.ts) (수정 — `aiApi.telemetry` + `buildAiTelemetryStreamUrl`)
 - [`packages/shared/src/hooks/useAi.ts`](../../packages/shared/src/hooks/useAi.ts) (수정 — purpose 별 모델 훅; 2026-10-05 `invalidateProviders` — 목록 정확 일치 무효화, 카탈로그는 키·Base URL 변경 시만)
-- [`apps/friendly/src/config/env.ts`](../../apps/friendly/src/config/env.ts) (수정 — 용도별 모델 변수 8종; 2026-09 `OLLAMA_TAROT_MODEL`(기본 gpt-oss:120b)·`OLLAMA_SAJU_MODEL`·`OLLAMA_SAJU_G_MODEL`(기본 kimi-k3)·`OLLAMA_MENU_MATCH_MODEL`(gemma4:31b) — 프로브 근거 주석 포함; 2026-10-04 `OLLAMA_MEAL_SUPPLEMENT_MODEL`(기본 kimi-k3)·`MEAL_SUPPLEMENT_DAILY_LIMIT`(10))
-- [`apps/web/src/routes/admin/AdminAiKeysPage.tsx`](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) (수정 — 계정 카드 + 용도 카드 분리, `KeySourceBadge`, `recommendModelForPurpose`; 2026-09 `PURPOSE_ORDER`/`PURPOSE_META` 8용도 — 타로·사주(C)·사주(G) 카드 Sparkles; 2026-10-04 `meal-supplement` 카드(Pill·`thinking: true`))
+- [`apps/friendly/src/config/env.ts`](../../apps/friendly/src/config/env.ts) (수정 — 용도별 모델 변수 8종; 2026-09 `OLLAMA_TAROT_MODEL`(기본 gpt-oss:120b)·`OLLAMA_SAJU_MODEL`·`OLLAMA_SAJU_G_MODEL`(기본 kimi-k3)·`OLLAMA_MENU_MATCH_MODEL`(gemma4:31b) — 프로브 근거 주석 포함; 2026-10-04 `OLLAMA_MEAL_SUPPLEMENT_MODEL`(기본 kimi-k3)·`MEAL_SUPPLEMENT_DAILY_LIMIT`(10); 2026-10-10 `OLLAMA_MENU_BOARD_MODEL`(기본 kimi-k3, 주석 "장당 중앙 약 7초"))
+- [`apps/web/src/routes/admin/AdminAiKeysPage.tsx`](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) (수정 — 계정 카드 + 용도 카드 분리, `KeySourceBadge`, `recommendModelForPurpose`; 2026-09 `PURPOSE_ORDER`/`PURPOSE_META` 8용도 — 타로·사주(C)·사주(G) 카드 Sparkles; 2026-10-04 `meal-supplement` 카드(Pill·`thinking: true`); 2026-10-10 `menu-board` 카드(ScanText·'메뉴판 읽기'·`thinking` 없음))
 - [`apps/web/src/routes/admin/AdminAiTestPage.tsx`](../../apps/web/src/routes/admin/AdminAiTestPage.tsx)

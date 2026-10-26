@@ -1,12 +1,21 @@
 ---
 topic: web
-last_compiled: 2026-10-10
-sources_count: 387
+last_compiled: 2026-10-26
+sources_count: 452
 status: active
-aliases: [vite, react, web-app, frontend-web, embed-mode, embed-1, lp:embed, isEmbedMode, lib-embed, embedBridge, __LP_EMBED__, ReactNativeWebView, postLpEmbedMessage, readLpEmbedInit, isLpEmbedded, webview-embed, app-webview, useGuestKeyStore, guest-key-v1, TarotPage, TarotSharedPage, MyTarotPage, SajuPage, SajuSharedPage, MySajuPage, SajuGPage, HousingPage, housingPrefsStore, lp:housing-prefs, LifeGoToBox-extraSections, complex-search, AdminQuotasPage, admin-quotas, usage-quota-tab, settings-quotas, ai-purpose-8, font-serif-kr, noto-serif-kr, three-chunk, r3f, react-three-fiber, detectTarotRender, lite-fallback, home-entry-cards, nav-order-11, nav-11, MenuKcalChip, kcal-chip, reviewThumbnailUrl, decoding-async, ImgWithFallback-size, web-tests-120, AirQualityPage, air-quality-page, WeatherPage, weather-page, LifeMapPage, life-map-page, MealPage, meal-page, MealRecommendTab, MealPreferenceTab, MealPhotoImg, AccountMenu, account-menu, MyLocationChip, my-location-chip, top-bar-width-budget, 폭예산, nav-order, sidebar-account, useMapSheets, map-sheets, sheet-pattern, map-sheet-shell, useMediaQuery, useIsDesktopXl, map-bottom-inset, flyTo-bottomInset, fixedScale, marker-style-cache, AdminFoodPage, admin-food, admin-restaurant-search, ai-purpose-5, meal-photo, meal-recommend, compareReviewRecencyDesc, visitedAt-desc, handleUnauthorizedForCurrentSession, 401-current-session, lifeMapPrefsStore, lifeMapRecentStore, LifeGoToBox, LifeLayerBar, LifeNearbyList, LifeDetailCard, LifeMapView, AirNearbySection, AirStationsMap, AirHourStrip, AirHistoryChart, AirPrimitives, WeatherMeteogram, WeatherDailyStrip, WeatherNowHero, air-series-token, weather-temp-token, web-tests-77, matchMedia-mock, MapCanvas-mock, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle, home-ranking-link, lightbox-portal, createPortal, sticky-stacking-context-trap, lightbox-backdrop-close, my-location-guide, geolocation-permission-change, insecure-context-http, code-splitting, route-lazy, AdminRoutes, manualChunks, codeSplitting-groups, vite8, rolldown, react-memo, interaction-hot-path, setQueryData-batch-merge, lightbox-promoted, eslint-web, react-compiler-lint, s-token-route, og-proxy, dark-mode-web, theme-store, lp-theme, MapLayerControl, midnight-layer, satellite-layer, vworld-dark, MyLocationButton, soft-tonal-variant, tonal-button, tonal-badge, detail-CategoryTree, insight-tip-filter, menu-filter, lightbox-thumbnail, card-borderless-tab, review-photo-fullwidth, card-click-flyto, card-doubleclick-zoom, flyToZoomIn, SubwayPage, subway-web, subway-station-search, subway-arrival-panel, subway-path-panel, subway-timetable, subway-congestion, SubwayLineBadge, SubwayStationsMap, SubwayNearbyBusSection, TransitTabs, transit-unified, TransitFavoritesSection, CrossSearchSection, TransitCrossToggleChip, transitFavExpandStore, transitCrossShowStore, transitMapViewport, ol-map-pooling, poolKey, overlayMarkers, tsconfig-noEmit, stale-js-emit, admin-scheduler-ui, ScheduleSection, cron-preset, schedule-sse, admin-category-tree-collapsed, AskTab, review-qa, review-ask, ReviewAskToaster, ResummarizeToaster, global-toaster, sonner, ClusterTopics, review-clusters, aspect-summary, InsightsTab, ModelPickerPopup, model-picker, AdminReviewSearchPage, review-search, rag-ops, AdminLogsPage, AdminLogRunDetailPage, AdminLogSettingsPage, operation-runs, joblog, log-retention, AdminTablingPage, AdminTablingTestPage, tabling, AdminTelegramPage, telegram-config, AdminAiUsagePage, LlmUsagePanel, llm-telemetry, ai-usage, RegionStatsPanel, RegionStatsMap, choropleth, sigungu-geo, region-stats, RandomCrawlSection, random-crawl, share-url-r, seo-preview, ask-tab, admin-test-accordion, BusPage, bus-web, bus-station-search, bus-nearby-mode, near-param, bus-favorites, bus-arrival-panel, bus-route-tracking, bus-vehicle-marker, map-marker-icon, VehicleMarker, follow-vehicle, MenuTab-groups, menuGroups, representative-menu-preview, review-noise-aspect, cluster-noise-fallback, travel, /travel/jeju, /travel/plan, TravelInsightsPage, TravelPlanPage, 여행, 여행로그화면, TourFilterBar, 지역칩, 권역칩, TOUR_REGION_GROUPS, tourFormat, TourRegionSection, TourLodgingSection, TourSourceNote, TourTab, 여행자탭, TourSummaryBadge, TourMatchBadge, StoreInfoBadges, 폐업의심배지, AdminTourPage, 시드콘솔, TourEvidencePanel, 여행자근거, LifeCrimeCard, LifeTourCard, 배경레이어, overlay, lifeMapAreas, useSigunguGeo, tourDensityGeo, 여행자밀도, 범죄통계, SajuAsk, SajuThemes, SajuPairPanel, sajuPanelTabs, presetOptions, 코스추천프리필, SeaPage, sea-page, /sea, 바다, 바다페이지, SeaMap, SeaSpotDetail, seaFormat, rankSeaSpots, seaSlotFor, seaSlotSummary, 7일지수띠, 물때, 이안류, ParkingPage, parking-page, /parking, 주차, 주차페이지, ParkingMapView, ParkingTabBar, ParkingLists, ParkingLotList, EvList, AirportList, ParkingDetails, ParkingLotDetailCard, EvStationDetailCard, AirportDetailCard, PatternChart, 평소혼잡도, 예상요금, ParkingFooter, parkingMarkers, parseParkingMarkerId, parkingFormat, naverCarDirections, parkingPrefsStore, useParkingPrefsStore, lp:parking-prefs, ParkingSection, ParkingNearbySection, ParkingSummaryLine, 가는법주차, 주차한줄요약, nav-14, nav-order-14, poolKey-sea, poolKey-parking, 침수흔적, housing-flood, FloodGlyph, 물방울배지, flood-droplet-badge, AdminRestaurantDetailPage, admin-restaurant-detail-tabs, restaurant-detail/, AdminDetailHeader, AdminLocationAside, AdminRawInfo, AdminReviewItem, AdminReviewsTab, ADMIN_DETAIL_TABS, PUBLIC_TABS_IN_ADMIN, AdminDetailTabKey, availableTabs, 출처행, SourceRow, 재수집, review-match, useRestaurantReviewMatch, useRestaurantCanonicalSummaryEvents, useInvalidateRestaurantDetailCaches, ReviewAnalysisDetails, SatisfactionChip, VideoPlayerModal, AdminVisitorReview, 출처통합리뷰, web-tests-149, 29파일149건, MealEntryFormPage, MealNewPage, MealEditPage, MealDetailPage, MealItemInputRow, MealNutritionTab, mealLayout, MEAL_PAGE_CLASS, MEAL_SPLIT_CLASS, MEAL_MAIN_CLASS, MEAL_SIDE_CLASS, useIsDesktopLg, useMealDraftReady, meal-page, scrollbar-gutter, /me/meals/new, /me/meals/:id, /me/meals/:id/edit, meal-tab-url, 식단입력, 식단상세, 식단수정, 빠른추가칩, 같은메뉴로새기록, 최근추천, 지난추천보는중, 추천삭제, 영양탭, 영양제조언, meal-supplement, meal-nutrition-advice, ai-purpose-9, 식단두단, 데스크톱두단, ParticipationChips, ParticipationToggles, ParticipationBadges, 긍정형토글칩, uncategorizedNote, SETTLEMENT_CATEGORY_LABEL, 기타설명, 기타(모두나눔), useSajuSession, useTarotSession, session-hook-lift, web-tests-173, 32파일173건, perf-web, web-perf, 웹성능, 첫로드, first-load-516kB, firstLoadGuard, lp:first-load-guard, vite-config-js-stale, --config-vite.config.ts, sideEffects-false, api-contract-constants, isErrorResponse, icons-chunk, minShareCount, react-vendor-zustand, AdminSectionFallback, admin-per-page-lazy, 어드민27페이지lazy, RegionStatsMap-lazy, retry-4xx, useCurrentUser-staleTime, mapMarkerSync, syncMarkerFeatures, MARKER_PROP, mapIconRaster, markerIcon, ICON_RASTER_MAX, perMarker, MAP_POOL_MAX, map-pool-lru-3, BottomSheet-single-tree, RestaurantDetailWarmup, useInViewOnce, fallbackSrc, fetchPriority, lightbox-window-2, INITIAL_AREA_WAIT_MS, keepPrevious, placeholderData-same-subject, viewportQueryAbort, query-signal-abort, VIEWPORT_GC_MS, waitingSaved, 저장위치대기, useMealPhotoUrl-cache, MealPhotoImg-near, prepareReceiptImage, RECEIPT_MAX_UPLOAD_BYTES, useDeleteSettlements, useSettlementDraftHydrate-enabled, 수정모드덮어쓰기, FrameDriver, frameloop-demand, STAGE_IDLE_FPS, STAGE_SETTLE_S, sparkles, TAROT_IMAGE_SIZES-112-224, TarotCardImage-sizes, crawlBatchMerge, mergePersistedBatch, useDebouncedDraft, lazyDetail, llm-telemetry-shared-eventsource, VOTE_VOTERS_FULL_MESSAGE_PREFIX, 투표자상한409, ParkingNearbySection-no-coords, useCrawlJobStream-fallback, crawl-job-single-get, nginx-gzip, sigungu-geo-cache, web-tests-426, 90파일426건, 29차]
+aliases: [vite, react, web-app, frontend-web, embed-mode, embed-1, lp:embed, isEmbedMode, lib-embed, embedBridge, __LP_EMBED__, ReactNativeWebView, postLpEmbedMessage, readLpEmbedInit, isLpEmbedded, webview-embed, app-webview, useGuestKeyStore, guest-key-v1, TarotPage, TarotSharedPage, MyTarotPage, SajuPage, SajuSharedPage, MySajuPage, SajuGPage, HousingPage, housingPrefsStore, lp:housing-prefs, LifeGoToBox-extraSections, complex-search, AdminQuotasPage, admin-quotas, usage-quota-tab, settings-quotas, ai-purpose-8, font-serif-kr, noto-serif-kr, three-chunk, r3f, react-three-fiber, detectTarotRender, lite-fallback, home-entry-cards, nav-order-11, nav-11, MenuKcalChip, kcal-chip, reviewThumbnailUrl, decoding-async, ImgWithFallback-size, web-tests-120, AirQualityPage, air-quality-page, WeatherPage, weather-page, LifeMapPage, life-map-page, MealPage, meal-page, MealRecommendTab, MealPreferenceTab, MealPhotoImg, AccountMenu, account-menu, MyLocationChip, my-location-chip, top-bar-width-budget, 폭예산, nav-order, sidebar-account, useMapSheets, map-sheets, sheet-pattern, map-sheet-shell, useMediaQuery, useIsDesktopXl, map-bottom-inset, flyTo-bottomInset, fixedScale, marker-style-cache, AdminFoodPage, admin-food, admin-restaurant-search, ai-purpose-5, meal-photo, meal-recommend, compareReviewRecencyDesc, visitedAt-desc, handleUnauthorizedForCurrentSession, 401-current-session, lifeMapPrefsStore, lifeMapRecentStore, LifeGoToBox, LifeLayerBar, LifeNearbyList, LifeDetailCard, LifeMapView, AirNearbySection, AirStationsMap, AirHourStrip, AirHistoryChart, AirPrimitives, WeatherMeteogram, WeatherDailyStrip, WeatherNowHero, air-series-token, weather-temp-token, web-tests-77, matchMedia-mock, MapCanvas-mock, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle, home-ranking-link, lightbox-portal, createPortal, sticky-stacking-context-trap, lightbox-backdrop-close, my-location-guide, geolocation-permission-change, insecure-context-http, code-splitting, route-lazy, AdminRoutes, manualChunks, codeSplitting-groups, vite8, rolldown, react-memo, interaction-hot-path, setQueryData-batch-merge, lightbox-promoted, eslint-web, react-compiler-lint, s-token-route, og-proxy, dark-mode-web, theme-store, lp-theme, MapLayerControl, midnight-layer, satellite-layer, vworld-dark, MyLocationButton, soft-tonal-variant, tonal-button, tonal-badge, detail-CategoryTree, insight-tip-filter, menu-filter, lightbox-thumbnail, card-borderless-tab, review-photo-fullwidth, card-click-flyto, card-doubleclick-zoom, flyToZoomIn, SubwayPage, subway-web, subway-station-search, subway-arrival-panel, subway-path-panel, subway-timetable, subway-congestion, SubwayLineBadge, SubwayStationsMap, SubwayNearbyBusSection, TransitTabs, transit-unified, TransitFavoritesSection, CrossSearchSection, TransitCrossToggleChip, transitFavExpandStore, transitCrossShowStore, transitMapViewport, ol-map-pooling, poolKey, overlayMarkers, tsconfig-noEmit, stale-js-emit, admin-scheduler-ui, ScheduleSection, cron-preset, schedule-sse, admin-category-tree-collapsed, AskTab, review-qa, review-ask, ReviewAskToaster, ResummarizeToaster, global-toaster, sonner, ClusterTopics, review-clusters, aspect-summary, InsightsTab, ModelPickerPopup, model-picker, AdminReviewSearchPage, review-search, rag-ops, AdminLogsPage, AdminLogRunDetailPage, AdminLogSettingsPage, operation-runs, joblog, log-retention, AdminTablingPage, AdminTablingTestPage, tabling, AdminTelegramPage, telegram-config, AdminAiUsagePage, LlmUsagePanel, llm-telemetry, ai-usage, RegionStatsPanel, RegionStatsMap, choropleth, sigungu-geo, region-stats, RandomCrawlSection, random-crawl, share-url-r, seo-preview, ask-tab, admin-test-accordion, BusPage, bus-web, bus-station-search, bus-nearby-mode, near-param, bus-favorites, bus-arrival-panel, bus-route-tracking, bus-vehicle-marker, map-marker-icon, VehicleMarker, follow-vehicle, MenuTab-groups, menuGroups, representative-menu-preview, review-noise-aspect, cluster-noise-fallback, travel, /travel/jeju, /travel/plan, TravelInsightsPage, TravelPlanPage, 여행, 여행로그화면, TourFilterBar, 지역칩, 권역칩, TOUR_REGION_GROUPS, tourFormat, TourRegionSection, TourLodgingSection, TourSourceNote, TourTab, 여행자탭, TourSummaryBadge, TourMatchBadge, StoreInfoBadges, 폐업의심배지, AdminTourPage, 시드콘솔, TourEvidencePanel, 여행자근거, LifeCrimeCard, LifeTourCard, 배경레이어, overlay, lifeMapAreas, useSigunguGeo, tourDensityGeo, 여행자밀도, 범죄통계, SajuAsk, SajuThemes, SajuPairPanel, sajuPanelTabs, presetOptions, 코스추천프리필, SeaPage, sea-page, /sea, 바다, 바다페이지, SeaMap, SeaSpotDetail, seaFormat, rankSeaSpots, seaSlotFor, seaSlotSummary, 7일지수띠, 물때, 이안류, ParkingPage, parking-page, /parking, 주차, 주차페이지, ParkingMapView, ParkingTabBar, ParkingLists, ParkingLotList, EvList, AirportList, ParkingDetails, ParkingLotDetailCard, EvStationDetailCard, AirportDetailCard, PatternChart, 평소혼잡도, 예상요금, ParkingFooter, parkingMarkers, parseParkingMarkerId, parkingFormat, naverCarDirections, parkingPrefsStore, useParkingPrefsStore, lp:parking-prefs, ParkingSection, ParkingNearbySection, ParkingSummaryLine, 가는법주차, 주차한줄요약, nav-14, nav-order-14, poolKey-sea, poolKey-parking, 침수흔적, housing-flood, FloodGlyph, 물방울배지, flood-droplet-badge, AdminRestaurantDetailPage, admin-restaurant-detail-tabs, restaurant-detail/, AdminDetailHeader, AdminLocationAside, AdminRawInfo, AdminReviewItem, AdminReviewsTab, ADMIN_DETAIL_TABS, PUBLIC_TABS_IN_ADMIN, AdminDetailTabKey, availableTabs, 출처행, SourceRow, 재수집, review-match, useRestaurantReviewMatch, useRestaurantCanonicalSummaryEvents, useInvalidateRestaurantDetailCaches, ReviewAnalysisDetails, SatisfactionChip, VideoPlayerModal, AdminVisitorReview, 출처통합리뷰, web-tests-149, 29파일149건, MealEntryFormPage, MealNewPage, MealEditPage, MealDetailPage, MealItemInputRow, MealNutritionTab, mealLayout, MEAL_PAGE_CLASS, MEAL_SPLIT_CLASS, MEAL_MAIN_CLASS, MEAL_SIDE_CLASS, useIsDesktopLg, useMealDraftReady, meal-page, scrollbar-gutter, /me/meals/new, /me/meals/:id, /me/meals/:id/edit, meal-tab-url, 식단입력, 식단상세, 식단수정, 빠른추가칩, 같은메뉴로새기록, 최근추천, 지난추천보는중, 추천삭제, 영양탭, 영양제조언, meal-supplement, meal-nutrition-advice, ai-purpose-9, 식단두단, 데스크톱두단, ParticipationChips, ParticipationToggles, ParticipationBadges, 긍정형토글칩, uncategorizedNote, SETTLEMENT_CATEGORY_LABEL, 기타설명, 기타(모두나눔), useSajuSession, useTarotSession, session-hook-lift, web-tests-173, 32파일173건, perf-web, web-perf, 웹성능, 첫로드, first-load-516kB, firstLoadGuard, lp:first-load-guard, vite-config-js-stale, --config-vite.config.ts, sideEffects-false, api-contract-constants, isErrorResponse, icons-chunk, minShareCount, react-vendor-zustand, AdminSectionFallback, admin-per-page-lazy, 어드민27페이지lazy, RegionStatsMap-lazy, retry-4xx, useCurrentUser-staleTime, mapMarkerSync, syncMarkerFeatures, MARKER_PROP, mapIconRaster, markerIcon, ICON_RASTER_MAX, perMarker, MAP_POOL_MAX, map-pool-lru-3, BottomSheet-single-tree, RestaurantDetailWarmup, useInViewOnce, fallbackSrc, fetchPriority, lightbox-window-2, INITIAL_AREA_WAIT_MS, keepPrevious, placeholderData-same-subject, viewportQueryAbort, query-signal-abort, VIEWPORT_GC_MS, waitingSaved, 저장위치대기, useMealPhotoUrl-cache, MealPhotoImg-near, prepareReceiptImage, RECEIPT_MAX_UPLOAD_BYTES, useDeleteSettlements, useSettlementDraftHydrate-enabled, 수정모드덮어쓰기, FrameDriver, frameloop-demand, STAGE_IDLE_FPS, STAGE_SETTLE_S, sparkles, TAROT_IMAGE_SIZES-112-224, TarotCardImage-sizes, crawlBatchMerge, mergePersistedBatch, useDebouncedDraft, lazyDetail, llm-telemetry-shared-eventsource, VOTE_VOTERS_FULL_MESSAGE_PREFIX, 투표자상한409, ParkingNearbySection-no-coords, useCrawlJobStream-fallback, crawl-job-single-get, nginx-gzip, sigungu-geo-cache, web-tests-426, 90파일426건, 29차, HikingPage, hiking-page, /hiking, 등산, components/hiking, HikingList, HikingListHeader, HikingMountainList, HikingFooter, HikingMap, MountainDetail, CourseDetail, ParkCourseBox, CourseConditions, 산행 조건, CourseAround, 가는 법·주변, ElevationProfile, 고도 그래프, HikingRecommend, 등산 추천, KnpsLinks, 산행 전 확인, 탐방로 통제정보, 입산 가능 시각, HIKING_KNPS_CLOSURE_URL, hikingFormat, hikingFormat-shared, rankMountains, pointAtDistance, HIKING_LIST_PAGE, SEOUL_CITY_HALL, DIFFICULTY_CHIP_CLASS, hikingDefaultPick, public.hiking, poolKey-hiking, nav-15, GPX 받기, hiking-gpx-download, Routes.Hiking.gpx, park-reversed, 반대 방향 기준, elevationFrom-terrain, SRTM, trail-wms, lt_l_frstclimb, EPSG:900913, labelZoom, compactScale, marker-zIndex, wmsOverlay, fitToCoords-bottomInset, AdminMenuBoardPage, admin-menu-board, /admin/menu-board, 메뉴판 읽기, ReadTab, EvalTab, ZoomableImage, AdminSmartlyTestPage, smartly-test, smartly-api, MenuBoardSection, 메뉴판 사진, boardPriceByName, AdminMenuBoardSection, menu-board-read, ai-purpose-10, ScanText, MealPhotoSection, useMealPhotoIntake, mealPhotoFile, parseExifTakenAt, prepareMealPhoto, MEAL_PHOTO_UPLOAD_LIMIT_BYTES, MealPhotoLightbox, useMealPhotoUrls, exifJpeg, 식단 사진 인식, 다른 후보, photoTokens-edit, Lightbox-loading, MealNutritionGapSection, 열량 빈 식단 이름, ios-input-zoom, unlayered-16px, web-tests-467, 96파일467건, 30차]
 ---
 
 # web — Vite + React 웹 앱
+
+**2026-10-10~10-26 변경 흡수 — 30차: 공개 라우트 `/hiking` 등산 신설(NAV 15 — 데스크톱 3칸·폰 지도 + 바텀시트, 산행 조건·추천·가는 법·국립공원 공식 코스·GPX 받기) + 식단 입력의 사진 넣기·인식·수정 사진·EXIF 시각·끌어다 놓기/붙여넣기·사진 크게 보기 + 폰 작은 글씨 입력칸 확대 막기 + 어드민 '메뉴판 읽기'·맛집 메뉴 탭 메뉴판 사진·어드민 상세 메뉴판 섹션·음식 카탈로그 "열량 빈 식단 이름" + `MapCanvas` 마커 `labelZoom`·`compactScale`·`zIndex`·`wmsOverlay`·`fitToCoords` 아래 여백 + 테스트 90→96파일·426→467건**(apps/web 커밋분 55파일 — 신규 29·수정 26: 메뉴판 `448b4cd4`·`4597294b`(AI 키 행만)·`9e4c598c`·`0408f2f2`·`ee70bc2d` 2026-10-10, 식단 `49cb17f0`·`f55598c2`·`62b2e6b3`·`92e79e9a` 2026-10-23, 등산 `72c9982e`·`a77d1ac6`·`54eb0cb8`·`00804516`·`ffd2d827`·`bff8ca7c`·`7eb02951` 2026-10-25·`6da860c7`·`0e38c4ee` 2026-10-26; 그리고 **(작업 트리, 커밋 전)** 등산 5파일 수정 + [KnpsLinks.tsx](../../apps/web/src/components/hiking/KnpsLinks.tsx) 신규. `96df0e70`·`63c7658a`·`faa12818` 은 웹 파일 변경 없음 — `448b4cd4` 가 만든 `components/admin/smartly/` 10파일·`AdminSmartlyTestPage`(+test)·`vite.config.ts` `/smartly-api` 프록시는 같은 날 `9e4c598c` 가 지워 순변경 0):
+- **(1) 등산 `/hiking`** — [App.tsx](../../apps/web/src/App.tsx) lazy [HikingPage](../../apps/web/src/routes/HikingPage.tsx), [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx)(`Mountain`)·[PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx) NAV 에 '등산'을 **일상지도 바로 뒤**에(15개, 비로그인·게스트 14). 1차(`72c9982e`)는 흐르는 문서형 페이지(목록 → 산 → 코스, URL `?m&c&q&r&s`)였다가 `54eb0cb8` 에서 맛집과 같은 틀 — xl+ `[산 목록 400 | 상세 440 | 지도]` + 패널 좌우(`usePanelSide('public.hiking')`), xl- fixed 지도 + 목록/상세 `BottomSheet` + subBar([map-sheet-shell](../concepts/map-sheet-shell.md)). 차수마다 화면이 붙었다: 난이도 칩·예상 시간(2차) → 코스 상세 "산행 조건" 카드(3차 [CourseConditions](../../apps/web/src/components/hiking/CourseConditions.tsx)) → 목록 머리 '추천' 모드·"가는 법·주변"(4차 [HikingRecommend](../../apps/web/src/components/hiking/HikingRecommend.tsx)·[CourseAround](../../apps/web/src/components/hiking/CourseAround.tsx), URL `rec·rd·rt·rh·rl·rm·ro`) → 봉우리 통합·**가까운순 기본**·60곳씩 더 보기·줌 10 아래 셀 버블(5차) → 가파른 구간 주황 칠·브이월드 전국 등산로 WMS 배경(7차) → 산 마커 크기·이름 줌(`6da860c7`) → 국립공원 배지·공식 코스 칸·공원 경계(9차) → (작업 트리, 커밋 전) **GPX 받기**·국립공원 통제/입산 링크(`KnpsLinks`)·"반대 방향 기준"·지형 고도(SRTM) 안내·순수 도우미를 `@repo/shared` 로. 아래 등산 화면 절, 도메인은 [hiking](hiking.md).
+- **(2) 식단 사진(`49cb17f0`·`62b2e6b3`)** — 웹 입력이 "손으로만"(28차)에서 사진 넣기(고르기·끌어다 놓기·Ctrl+V) → EXIF 촬영 시각으로 먹은 시각 → 줄여 올리기 → `replace-recognized` 인식으로([useMealPhotoIntake.ts](../../apps/web/src/routes/meal/useMealPhotoIntake.ts)·[mealPhotoFile.ts](../../apps/web/src/routes/meal/mealPhotoFile.ts)·[MealPhotoSection.tsx](../../apps/web/src/routes/meal/MealPhotoSection.tsx)). 수정 화면도 사진을 더하고 빼며, **수정 저장이 `photoTokens` 전체를 보낸다**(28차 "수정은 키 자체를 안 보냄" 결정이 뒤집힘 — Gotchas). 음식 줄에 인식 "다른 후보" 칩 둘, 사진을 누르면 공용 `Lightbox`([MealPhotoLightbox.tsx](../../apps/web/src/routes/meal/MealPhotoLightbox.tsx) — 보는 장 ±1 원본만 objectURL). 도메인은 [meal](meal.md).
+- **(3) 폰 입력칸 확대 막기(`f55598c2`)** — [global.css](../../apps/web/src/styles/global.css) 의 iOS 16px 규칙이 `@layer base` 라 `text-sm`(15px)·`text-xs`(13px) 를 단 입력칸 약 40곳에서 유틸리티에 져 줌이 났다 → 그 둘만 **layer 밖** `@media (max-width: 639px)` 에서 16px. 어드민 메뉴판 읽기의 폰 폭 가로 넘침 78px 도 `grid-cols-1` 로.
+- **(4) 메뉴판(`448b4cd4`→`9e4c598c`·`0408f2f2`·`ee70bc2d`)** — 어드민 테스트 그룹 맨 아래 '메뉴판 읽기'(`/admin/menu-board`, lazy 17.1kB — 같은 날 AI 허브 모델 체험 `/admin/smartly-test` 를 대체), [AdminAiKeysPage](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) 용도 **10종**(`menu-board`, `ScanText`, placeholder `kimi-k3`), 어드민 맛집 상세 메뉴 탭 [AdminMenuBoardSection](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx)·로그 라벨 `menu-board-read`, 공개 맛집 메뉴 탭 [MenuBoardSection](../../apps/web/src/components/restaurant/detail/MenuBoardSection.tsx)(사진 띠 → 라이트박스, 사진에서 찾은 메뉴 8개 + 더 보기, AI 안내)과 등록 메뉴 카드의 "메뉴판 사진 가격 · 날짜" 한 줄. 아래 메뉴판 절, 도메인은 [menu-board](menu-board.md).
+- **(5) 어드민 음식 카탈로그 "열량 빈 식단 이름"(`92e79e9a`)** — [MealNutritionGapSection.tsx](../../apps/web/src/routes/admin/MealNutritionGapSection.tsx)(빈 이름·추정 이름을 기록 수·사용자 수와, 사용자 미노출 — "다시 찾기"; 추정값은 화면에 "○○ 기준 추정"으로 밝힌다 — [provenance-tagged-fill](../concepts/provenance-tagged-fill.md)), [AdminFoodPage](../../apps/web/src/routes/admin/AdminFoodPage.tsx) 어휘 `portion` 안내에 원재료 식품군 키(`raw_fruit`·`raw_vegetable` 등)·"사과 → 200". 도메인은 [meal](meal.md)·[food](food.md).
+- **(6) 지도 공용(상세는 [map](map.md))** — `fitToCoords(coords, padding, { bottomInset })`(`54eb0cb8` — half 시트에 범위가 가리지 않게, [map-sheet-shell](../concepts/map-sheet-shell.md)), `wmsOverlay`(배경 위·벡터 아래 TileWMS, `7eb02951`), `MapMarker.labelZoom`·`compactScale`·`zIndex`(`6da860c7` — 지정하지 않은 지도는 그대로, 스타일 캐시 키·`mapMarkerSync` 겉모습 비교에 포함), 풀 키 8번째 `hiking`(상한 3 그대로).
+- **(7) 테스트 90파일 426건 → 96파일 467건**(작업 트리 포함, `apps/web/src` 의 `it(` 직접 셈) — 신규 `AdminMenuBoardPage` 6·`AdminMenuBoardSection` 3·`MenuBoardSection` 3·`mealPhotoFile` 6·`MealNutritionGapSection` 2·`HikingPage` 11, 늘어난 것 `MealEntryFormPage` 9→16·`MealDetailPage` 5→6·`useMealPhotoUrl` 6→7·`mapMarkerSync` 8→9. 아래 테스트 인프라 절.
 
 **2026-10-05~10-10 변경 흡수 — 29차: 웹 프론트 성능 라운드(첫 로드 JS 2,059→516kB, gzip 628→165) + 화면마다 헛조회·재렌더·재마운트 축소 + 지도 마커 차분 갱신·아이콘 사전 래스터화 + 테스트 33→90파일·183→426건 + 좌표 없는 식당의 가는 법 주차 · 투표자 상한 409 문구**(apps/web 소스·설정 208파일 — 신규 67(테스트 57)·수정 141, 그 밖에 타로 카드 112·224px 변형 158장 + manifest; `4710c617`·`da755684`…`c5052742` 14커밋 2026-10-05, `008e0081` 2026-10-10. 웹 파일을 조금 건드린 서버 커밋: `ab7dad28` 어드민 한도 카드 `review-ask`, `78ea38a5` 여행 동반 필터 화이트리스트, `622bfca2` 정산 임시저장 목록 메타 타입, `007ac899` 주차 푸터 교통안전공단 출처, `878e6bb9` 크롤 종료 폴백 웹 테스트. 서버 쪽 perf-2 는 [friendly](friendly.md)):
 - **(1) 첫 로드 516kB(`da755684`)** — 원인은 `vite.config.ts` 의 `three` 청크 정규식에 엔트리도 쓰는 `zustand`·`use-sync-external-store` 가 들어 있어 Rolldown 이 그 의존성까지 three 그룹으로 끌어가 엔트리가 three 청크(1MB)를 정적 import 한 것(2,059kB 실측). 둘을 `react-vendor` 로 옮기고, `packages/{shared,api-contract,utils}` 에 `sideEffects: false`, FE 가 값으로 쓰는 상수를 zod 없는 [api-contract constants.ts](../../packages/api-contract/src/constants.ts)·`restaurant.aggregates.ts` 로 빼고 shared `apiFetch` 의 오류 판정을 `ErrorResponseSchema.safeParse` 에서 타입 가드 `isErrorResponse` 로(→ zod 는 지연 청크에만), 어드민 27페이지를 **페이지별 lazy**(진입 919kB 한 덩어리 → 셸 22kB + 페이지), 지역 통계 지도 lazy, lucide 아이콘 `icons` 청크(`minShareCount: 2` — 1kB 미만 청크 62개 난립, 맛집 상세 진입 요청 21→10), `ol` 그룹에서 `ol/format`·`GeometryCollection` 제외(범죄 통계 배경을 켤 때만 ~10kB), Noto Serif KR `wght@600..700`(CSS 190→95kB)·jsdelivr preconnect. 빌드 플러그인 `firstLoadGuard`(엔트리 정적 closure 에 three 면 **빌드 실패**, zod 면 경고). `dev`/`build`/`preview` 가 `--config vite.config.ts` 를 명시하고 `deploy.sh` 가 빌드 전에 낡은 `apps/web/vite.config.js` 를 지운다 — 운영 빌드가 gitignore 된 옛 `tsc -b` 산출물 `vite.config.js` 로 돌고 있던 것으로 **추정**(로컬 three 그룹 제외 빌드와 청크 파일명 36개가 해시까지 같음, 서버 직접 확인 안 함). CLAUDE.md 규칙 2줄(값 상수는 zod 없는 모듈에 · `packages/*` 에 부작용 전용 모듈 금지).
@@ -109,7 +118,7 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
 공개 맛집 v2 (`/restaurants-v2` + BottomSheet) + 위치 기반 첫 진입 + 공개 리뷰
 페이지네이션 분리 + 공개 사이드바/탑바.
 
-## Purpose [coverage: high — 23 sources]
+## Purpose [coverage: high — 28 sources]
 
 `apps/web/`는 Life Pickr 서비스의 브라우저용 SPA다. 세 가지 사용 흐름을 한
 번들 안에 담는다.
@@ -124,6 +133,7 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
   - **`/subway`** — 수도권 전철 역 검색·실시간 도착·노선 추적·시간표·혼잡도·길찾기 (`/bus`와 "대중교통" 서브탭으로 묶임, 앱도 있음 — [subway](subway.md))
   - **`/parking`** — 주차: 주차장(전국 표준데이터 + 서울 공영, 서울 시영 실시간 여석·평소 혼잡도)·전기차 충전소(충전기 상태 10분 반영)·공항 주차(5분) 3탭 지도 + 패널/시트. 27차 신규(`2ff2c31`, 2026-09-25), **웹 전용**(앱 미구현) — [parking](parking.md)
   - **`/life-map`** — 일상지도: 전국 CCTV·공중화장실·병의원을 OL 지도 한 장에(뷰포트 점/셀 + 주변 목록 + 상세, 지역 이동 옴니박스). 24차 신규, 앱 화면도 있음 — [life-map](life-map.md)
+  - **`/hiking`** — 등산: 100대 명산 + 전국 주요 봉우리(산 3,879 · 코스 9,435 — 로컬 적재, `7eb02951`·`0e38c4ee` 본문) 목록·지도 → 산 상세 → 코스 상세(예상 시간·난이도·고도 그래프·지점·산행 조건·가는 법·주변·국립공원 공식 안내·GPX 받기) + '추천' 모드. 30차 신규(`72c9982e`, 2026-10-25), 데스크톱 3칸·폰 시트(`54eb0cb8`). 앱 등산 화면은 작업 트리(커밋 전)에 목록·산·코스만 — [hiking](hiking.md)
   - **`/weather`** — 기상청 단기·중기예보 예시 페이지(실황·6시간·3일 메테오그램·열흘·중기전망·해상·발표 정보). 24차 신규 — [weather](weather.md)
   - **`/sea`** — 바다: 국립해양조사원 생활해양예보지수 6종(해수욕·서핑·바다낚시·갯벌체험·바닷길·바다여행) 7일 오전/오후 지수를 지도 마커색·순위 목록으로, 지점 상세에 7일 띠·어종/등급 지수·이안류·물때. 날씨의 해상 중기예보(`/weather?sea=`)와는 별개 원천. 27차 신규(`4a2bff1`, 2026-09-24), **웹 전용** — [sea](sea.md)
   - **`/air`** — 에어코리아 대기정보 예시 페이지(측정소 지금·지도/내 주변·추이·시도 현황·전국 비교·나쁨 이상·예보·주간예보). 24차 신규 — [air-quality](air-quality.md)
@@ -132,7 +142,7 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
   - **`/saju-c`**(+`/saju-c/s/:token`) — 사주(C): 생년월일로 사주팔자·오늘·궁합·택일·오행 음식, 천문도 3D 무대 + 풀이 패널. 25차 신규(`0a7f637`, 경로 `5f49026`) — [saju-c](saju-c.md)
   - **`/saju-g`**(+`/saju-g/pair`·`/saju-g/s/:token`) — 사주(G): 같은 주제의 다른 세션 구현(오행 지도·Kimi 해석·궁합). 25차 신규(`1c60ad8`·`e40b4c0`) — [saju-g](saju-g.md)
   - **`/travel/jeju`**·**`/travel/plan`** — 여행로그 인사이트·코스 추천(26차 신규 — 이 목록엔 26차에 빠져 있던 것을 27차에 보정) — [tour](tour.md)
-  - 공개 NAV 순서(상단바 lg+ 가로 / 그 아래 드로어): 홈 · 맛집 · 대중교통 · 일상지도 · **집값** · 날씨 · 대기질(`69ed65f` 로 날씨가 앞) · **타로 · 사주(C) · 사주(G)** · 식단(로그인만) — 25차에 4개 추가(`254fb76`·`6a414ef`·`0a7f637`·`1c60ad8`), 순서는 각 커밋이 append 한 그대로. **27차 현재 14개**: 홈 · 맛집 · 대중교통 · **주차** · 일상지도 · 집값 · **여행**(26차) · 날씨 · **바다** · 대기질 · 타로 · 사주(C) · 사주(G) · 식단 — 주차·바다는 append 가 아니라 관련 메뉴 바로 뒤에 끼웠다(`2ff2c31`·`4a2bff1`)
+  - 공개 NAV 순서(상단바 lg+ 가로 / 그 아래 드로어): 홈 · 맛집 · 대중교통 · 일상지도 · **집값** · 날씨 · 대기질(`69ed65f` 로 날씨가 앞) · **타로 · 사주(C) · 사주(G)** · 식단(로그인만) — 25차에 4개 추가(`254fb76`·`6a414ef`·`0a7f637`·`1c60ad8`), 순서는 각 커밋이 append 한 그대로. **27차 현재 14개**: 홈 · 맛집 · 대중교통 · **주차** · 일상지도 · 집값 · **여행**(26차) · 날씨 · **바다** · 대기질 · 타로 · 사주(C) · 사주(G) · 식단 — 주차·바다는 append 가 아니라 관련 메뉴 바로 뒤에 끼웠다(`2ff2c31`·`4a2bff1`). **30차 현재 15개** — '등산'(`72c9982e`, 사이드바 아이콘 `Mountain`)이 일상지도 바로 뒤에: 홈 · 맛집 · 대중교통 · 주차 · 일상지도 · **등산** · 집값 · 여행 · 날씨 · 바다 · 대기질 · 타로 · 사주(C) · 사주(G) · 식단
   - 홈 진입 카드: 슬롯 픽 → 투표 링크 → 🔮 타로 → 🧧 사주(C) → 즐겨찾기 스트립 → 命 사주(G) → 맛집 랭킹
   - `/login` LoginPage — 이메일 로그인 + 회원가입 + 게스트 진입
   - **앱 WebView 임베드** — 어느 공개 라우트든 `?embed=1`(또는 앱 브리지 주입)이면 상단바·사이드바 없이 본문만. 앱은 타로·사주(C) 화면을 이렇게 연다([mobile](mobile.md))
@@ -144,6 +154,8 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
     → 2026-09-29(`b5bfe77`)부터 **손으로 적는 기록은 웹에서도**: `/me/meals/new`(새 기록)·`/me/meals/:id`(상세 — 수정·같은 메뉴로
     새 기록·삭제)·`/me/meals/:id/edit`(수정). 사진 촬영·인식·첨부만 앱. 탭은 `?tab=` 6개(기록·달력·통계·추천·**영양**(28차)·설정),
     데스크톱(lg+)은 "왼쪽 본문 | 오른쪽 맥락·동작 패널" 두 단(`b09e0a4`)
+    → 2026-10-23(`49cb17f0`)부터 **사진 넣기·인식도 웹에서**(새 기록·수정 모두, 끌어다 놓기·붙여넣기, EXIF 촬영 시각), 사진을 누르면 크게(`62b2e6b3`).
+    웹에 남은 앱 전용은 "지난번대로"(사진 복제)뿐
   - **`/me/tarot[/:id]`** — 회원 타로 기록 목록·상세(서버 자동 저장분, 삭제) — [tarot](tarot.md). 계정 메뉴 "내 타로 기록"
   - **`/me/saju-c[/:id]`** — 회원 사주(C) 기록 — [saju-c](saju-c.md). **`/me/saju-g[/:id]`·`/me/saju-g/profiles`** — 사주(G) 기록·프로필([saju-g](saju-g.md); App 에서 `RequireUser` 로 감싸지 않음 — Gotchas)
   - `/s/:token` — 공유 토큰 read-only (인증 X, PublicLayout 밖)
@@ -153,14 +165,16 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
   - canonical 단위 맛집 관리(병합·분리·삭제) + 다이닝코드/**테이블링** 정식 크롤링
   - **맛집 상세(`/admin/restaurants/:placeId`)** — 27차(`420a6be`)부터 공개 상세와 같은 탭 구성(홈·분석·여행자·메뉴·리뷰·질문·사진·정보·로그)에
     운영 헤더(출처 행·재수집·실패 재분석 배지)를 얹고, 리뷰·요약 진행을 같은 가게(canonical)의 모든 출처로 통합해 본다
-  - 테스트(아코디언 그룹): 네이버 / 캐치테이블 / 다이닝코드 / 테이블링 / AI
+  - 테스트(아코디언 그룹): 네이버 / 캐치테이블 / 다이닝코드 / 테이블링 / AI / **메뉴판 읽기**(30차 `9e4c598c` — 사진 한 장을 비전 LLM 으로 메뉴·가격
+    목록, 검수 정답 정확도 리포트; 같은 날 `448b4cd4` 의 AI 허브 모델 체험 페이지를 대체, [menu-board](menu-board.md))
   - 맛집 발견(네이버 PC 지도) + 맛집 자동 발견(AI 키워드 → 직렬 크롤)
   - AI 분석 관리(정규화→머지 스케줄러 + **자동 발굴 스케줄러**)
-  - **음식 카탈로그**(`/admin/food`, 24차 — 공공 데이터 적재 잡·통계·병합 충돌·인식 품질·카탈로그 편집, [food](food.md))
+  - **음식 카탈로그**(`/admin/food`, 24차 — 공공 데이터 적재 잡·통계·병합 충돌·인식 품질·카탈로그 편집, [food](food.md); 30차 `92e79e9a` 에
+    "열량 빈 식단 이름" 카드)
   - **리뷰 문맥검색**(enrich + 군집 + RAG 운영), **작업 로그**(feature별 run + 스텝 로그 —
     24차에 `food-import`·`meal-recognition`·`meal-recommendation` 라벨 추가, 28차 `meal-nutrition-advice` "영양제 조언"),
     **AI 사용량**(LLM 텔레메트리 — 전역 floating 패널 + 상세 페이지)
-  - 설정: AI 키(`usePreviewModels` 모델 미리보기, 용도 **8종** chat/image/log-analysis/meal-photo/meal-recommend/**tarot/saju/saju-g** — 25차 → 28차 `3d067a0` 에 `meal-supplement` 가 meal-recommend 뒤에 끼어 **9종**) / 지도 키 / 텔레그램 / 로그 보존 / **사용량 한도**(25차 `fae8190` — 타로·사주(C)·사주(G) 익명 한도·그날 사용량, [usage-quota](usage-quota.md))
+  - 설정: AI 키(`usePreviewModels` 모델 미리보기, 용도 **8종** chat/image/log-analysis/meal-photo/meal-recommend/**tarot/saju/saju-g** — 25차 → 28차 `3d067a0` 에 `meal-supplement` 가 meal-recommend 뒤에 끼어 **9종** → 30차 `4597294b` 에 `menu-board` "메뉴판 읽기"가 끝에 붙어 **10종**) / 지도 키 / 텔레그램 / 로그 보존 / **사용량 한도**(25차 `fae8190` — 타로·사주(C)·사주(G) 익명 한도·그날 사용량, [usage-quota](usage-quota.md))
   - 등록 맛집 목록에 **통합 검색**(`?q=` — 가게명·카테고리·Place ID, 24차 `5e25cc0`)
 
 `apps/mobile`(React Native)와 동일한 백엔드(`apps/friendly`)를 바라보며,
@@ -168,7 +182,7 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
 대상 — 디자인은 Pretendard + 네이버 지도 톤. 어드민은 운영 도구 — shadcn
 디폴트 + system-ui.
 
-## Architecture [coverage: high — 266 sources]
+## Architecture [coverage: high — 301 sources]
 
 ### 빌드 / 런타임
 
@@ -1104,7 +1118,9 @@ objectURL(언마운트 해제)(정산 영수증 미리보기와 같은 함정). 
 저장소라 effect — 주석이 이유를 적음), 수정은 `useMealEntry(id)` 도착 뒤 `mealDraftInitFromEntry` 로 1회 채움. 저장은
 `runMealDraftSaveSingleFlight` + `getMealDraftIdentity`/`isMealDraftIdentityCurrent`(저장 중 계정이 바뀌면 결과를 버린다) →
 새 기록 `useCreateMealEntry`(`source: originRecommendationId ? 'recommendation' : 'manual'`, `photoTokens: []`) / 수정
-`useUpdateMealEntry`(**`photoTokens` 키 자체를 안 보냄**). 저장 뒤 새 기록은 `navigate('/me/meals/<새 id>', { replace: true })`(`d035560`),
+`useUpdateMealEntry`(**`photoTokens` 키 자체를 안 보냄**) → 30차(`49cb17f0`) 이제 새 기록·수정 모두 `photoTokens: draft.photos 의 token 전부`,
+새 기록 `source` 는 추천 > (`recognition` 이 있거나 사진이 있으면) `'photo'` > `'manual'`(앱과 같음) + `recognition` 동봉, 저장 버튼은 사진
+올리기·인식 중(`photoIntake.busy`)에도 막힌다. 저장 뒤 새 기록은 `navigate('/me/meals/<새 id>', { replace: true })`(`d035560`),
 수정은 들어온 화면으로(`location.key !== 'default'` 면 `navigate(-1)`, 직접 진입이면 폴백 경로 `replace`). 시각 입력 옆 끼니별 평소
 시각 칩(`useMealTimePresets`), "먹은 음식" 위 빠른 추가 칩 줄(`QuickAddChips` — `useFrequentMealItems(slot)`, `aria-pressed` 는
 `mealItemNameKey` 로 이미 든 항목 판정). 데스크톱: 왼쪽 먹은 음식·사진 | 오른쪽 언제·어떻게(패널 높이만 `lg:max-h-[calc(100dvh-10rem)]` 로
@@ -1113,6 +1129,8 @@ objectURL(언마운트 해제)(정산 영수증 미리보기와 같은 함정). 
 **[MealItemInputRow](../../apps/web/src/routes/meal/MealItemInputRow.tsx)** — 이름(카탈로그 자동완성 `useFoodSearch(name, { limit: 6,
 enabled: open && 2자 이상 })`, `useId` 로 listbox id) + 주식/반찬 + 양 + 인분 + 삭제. 카탈로그 항목을 고르면 `foodId`·분류를 함께
 채우고 이름을 손으로 고치면 매칭을 푼다(앱 `MealItemRow` 와 같은 규칙). 사진 인식 후보·"지난번대로"는 앱에서만.
+→ 30차(`49cb17f0`) 인식 후보는 웹에도 — 이름 아래 "다른 후보" 점선 칩(지금 이름과 같은 후보는 빼고 둘까지, 고르면 `source: 'recognized'`·
+`selectedCandidateRank`·`foodId: null`). "지난번대로"(사진 복제)만 앱 전용으로 남았다.
 
 **[MealDetailPage](../../apps/web/src/routes/meal/MealDetailPage.tsx)** — `useMealEntry(id)` + 출처 라벨(사진 기록/직접 기록/추천에서
 기록) + 음식별 분류·양·영양(`summarizeMealNutrition`, 근거 문구 "{근거} 기준 추정" — `9019cf5`). 버튼 순서(`d035560`): **수정**(기본 —
@@ -1161,6 +1179,26 @@ CSS(lg:)가 하고 이 훅은 **데스크톱에서만 부르는 요청·기본 �
 흐리게. 자동완성(`MealItemInputRow`)은 200ms 디바운스 + 조합 중인 끝 낱자모 제외. 추천 탭의 노출(`shown`)·식당 열기 이벤트는 추천 조회를
 무효화하지 않고 노출은 추천당 한 번만. 설정 탭은 effect 로 서버 값을 폼에 복사하지 않고 "손댄 값 ?? 서버 값" 을 **렌더 중 계산**. 사진은
 위 `MealPhotoImg` 절. 테스트 MealPage 19→27 · MealEntryFormPage 8→9.
+
+**30차(`49cb17f0`·`62b2e6b3`, 2026-10-23) 사진 넣기·인식·크게 보기** — 사용자 결정: 수정 화면도 사진 추가·빼기 / 촬영 시각(EXIF)으로 먹은 시각
+맞추기 / 데스크톱 끌어다 놓기·붙여넣기 / 업로드 전 브라우저 축소. 서버 업로드·인식 API 와 shared 업로드 함수는 이미 웹 Blob 을 받아 작업은 웹
+입력 화면에 몰렸다(커밋 본문). `routes/meal/` 에 4파일 + 테스트 픽스처:
+
+| 파일 | 역할 |
+| --- | --- |
+| [useMealPhotoIntake.ts](../../apps/web/src/routes/meal/useMealPhotoIntake.ts) | 흐름 훅 — `addFiles(files)`: 바쁘면 거절 → 사진 파일만 → 남은 장수(`MEAL_DRAFT_MAX_PHOTOS`)만 → `beginMealDraftPhotoPreparation(identity)` **lease** 안에서 첫 EXIF 시각을 `eatenAt`·`eatenDate`·`slot`(`guessMealSlot`)에 반영(올리기 성공과 무관) → 장마다 `prepareMealPhoto` → `useUploadMealPhoto` 즉시 업로드 → 다 올린 뒤 전체 토큰으로 `useRecognizeMeal` + `applyRecognition(…, { mode: 'replace-recognized' })`, 음식을 찾았으면 빈 줄 치움. 앱 Expo Web 경로와 같은 규칙이지만 웹은 파일을 draft 에 붙들 수 없어 **업로드 대기열 없이 즉시 업로드**. 각 단계마다 `isMealDraftIdentityCurrent` — draft 세대가 바뀌면(취소·저장·계정 전환) 결과를 버리고 방금 올린 사진은 같은 계정일 때만 바로 `useDeleteMealPhoto`(다른 계정이면 서버 24시간 정리). `busy` = 올리는 중 또는 인식 중 → 저장·추가 막음, 인식 실패는 "직접 입력해 주세요" 안내(막다른 길 아님) |
+| [mealPhotoFile.ts](../../apps/web/src/routes/meal/mealPhotoFile.ts) | 순수 손질 — `parseExifTakenAt`: 의존성 없이 JPEG APP1 의 IFD0/Exif IFD 를 직접 읽어 `DateTimeOriginal` → `DateTime`(앞 256KB 만, 10분 넘는 미래 시각은 버림). `prepareMealPhoto`: 긴 변 1,600px·1.5MB 를 넘거나 JPEG 가 아니면 캔버스로 JPEG 0.9(EXIF 회전은 브라우저가 적용), 브라우저가 못 읽는 HEIC 는 원본 그대로 서버 변환에 맡기되 `MEAL_PHOTO_UPLOAD_LIMIT_BYTES`(5MB) 넘으면 올리지 않음 |
+| [MealPhotoSection.tsx](../../apps/web/src/routes/meal/MealPhotoSection.tsx) | 사진 칸 — 고르기(폰 브라우저는 카메라도)·끌어다 놓기(`dataTransfer.types` 에 `Files` 일 때만)·붙여넣기(**문서에 거는 `paste` 리스너** — 포커스가 입력칸에 없어도 받고, 이미지 없는 글자 붙여넣기는 건드리지 않음; 외부 시스템이라 effect), `accept="image/*,.heic,.heif"`, 진행·안내·"사진 찍은 시각(…)으로 먹은 시각을 맞췄어요.", "다시 인식하기". 썸네일을 누르면 크게(인식 확인), 모서리 X 는 빼기만(`62b2e6b3`) |
+| [MealPhotoLightbox.tsx](../../apps/web/src/routes/meal/MealPhotoLightbox.tsx) | 크게 보기 — 식단 사진은 JWT 가 필요해 `<img src>` 에 주소를 못 넣으므로 shared `useMealPhotoUrls(tokens, { variant: 'full', enabled: 장마다 abs(i − index) ≤ 1 })` 로 **보는 장과 양옆만 원본(1,600px) objectURL**, 받는 동안은 칸에서 이미 받아 둔 썸네일(`variant: 'thumb', enabled: false` — 새로 받지 않음), 둘 다 없으면 빈 문자열 → 공용 `Lightbox` 가 실패 아이콘 대신 `Loader2`(`62b2e6b3` 이 더한 분기, 다른 사용처는 늘 주소를 넘겨 영향 없음) |
+
+- 상세([MealDetailPage](../../apps/web/src/routes/meal/MealDetailPage.tsx))는 사진을 누르면 그 장부터 열려 그 기록의 사진을 넘겨 본다. 목록 썸네일은
+  카드 전체가 상세 링크라 그대로.
+- 문구 정리 — `App.tsx` 식단 라우트 주석·`MealPage` 머리("사진을 넣거나 직접 적어 먹은 것을 남겨요.")에서 "사진 기록은 앱에서" 가 빠졌다.
+- 실측(커밋 본문, 헤드리스 크로미움): 4032×3024 12MB → 1600×1200 0.96MB(촬영 시각 읽음), Orientation=6 3200×1600 → 800×1600, 작은 JPEG 원본 유지;
+  라이트박스 390·1280px 에서 열기·→·Esc(API 목업). **로그인한 실제 화면의 업로드 → 인식은 미확인**.
+- 테스트: `MealEntryFormPage` 9→16(인식·후보·저장 / EXIF / 붙여넣기·끌어다 놓기 / 실패·사진 아닌 파일 / 올리는 중 저장 막기·취소 시 삭제 / 수정 사진 교체 /
+  크게 보기와 빼기 분리), [mealPhotoFile.test](../../apps/web/src/routes/meal/mealPhotoFile.test.ts) 6(EXIF 파싱·축소 — 픽스처
+  [exifJpeg.ts](../../apps/web/src/test/fixtures/exifJpeg.ts) 가 EXIF 든 JPEG 바이트를 만든다), `MealDetailPage` 5→6, `useMealPhotoUrl` 6→7(여러 장 훅이 고른 장만 받기).
 
 ### 지도 + 바텀시트 화면 골격 공유 — `sheet/` · `useMapSheets` · `useMediaQuery` [신규 — 24차]
 
@@ -1509,6 +1547,8 @@ CSS(lg:)가 하고 이 훅은 **데스크톱에서만 부르는 요청·기본 �
 - [App.tsx](../../apps/web/src/App.tsx) — `/sea` 는 `/weather` 다음, `/parking` 은 `/life-map` 앞에 등록됐다(둘 다 주석
   없음). `/parking` 이 기존 "일상지도(전국 CCTV·공중화장실) — 공개 페이지, OL 지도라 lazy." 주석과 `/life-map` 사이에
   끼어 그 주석이 주차 라우트 위에 붙은 모양이 됐다(Gotchas).
+- → **30차 NAV 15(`72c9982e`)** — `{ to: '/hiking', label: '등산' }`(드로어 `Mountain`)을 일상지도 바로 뒤에, 라우트도 `/life-map` 다음에
+  (역시 주석 없음). 상단바 폭 예산 주석은 여전히 "NAV 7개"(Gotchas). 지도 풀 키는 `hiking`(`HikingMap` 고정값)이 더해져 **8종**, 상한 3 그대로.
 - **OL 지도 풀 키가 7개로** — [MapCanvas](../../apps/web/src/components/restaurant/MapCanvas.tsx) `mapPool` 을 쓰는 키가 `transit-desktop`·
   `transit-mobile`(07-07 `4128d6b`) → `air`(`AirStationsMap` 고정값)·`life`·`housing`(`LifeMapView`·`HousingMapView` 의 prop 기본값)
   → 27차 `sea`(`SeaMap`)·`parking`(`ParkingMapView`) 고정값. 풀엔 상한·축출이 없어(`mapPool.set` — 같은 키가
@@ -1771,6 +1811,101 @@ context 는 `{ setSubBar: noop, headerHeight: 56 }`, `MapCanvas` 목이 뷰포�
 단계의 뽑힌 카드 위 커서가 pointer(원본은 매 프레임 지워져 안 보였다). 남긴 것: 패널을 켠 채 크롤 잡이 끝나면 로그 탭에 최신 100건이 두 번
 보임(서버 응답에 seq 필요), 사주 인장이 2~3개씩 몰아 찍히는 것(원본과 같음 — 고치면 연출이 길어짐), 효과음은 단위 테스트만.
 
+### 등산 화면 — `/hiking` · `components/hiking/` [신규 — 30차]
+
+도메인(적재·코스 조립·예상 시간 공식·산행 조건·추천 점수·국립공원·GPX 내보내기·계약)은 [hiking](hiking.md), 설계·실측 문서는
+[docs/PLAN-hiking.md](../../docs/PLAN-hiking.md). 여기선 **페이지 골격 · URL state · 컴포넌트 · 테스트**만. 사용자 결정(2026-10-25): 독립 메뉴
+`/hiking`(사이드바 일상지도 다음), 웹 먼저, 맛집과 비슷한 레이아웃·데스크톱 3칸·패널 좌우 바꾸기.
+
+**[HikingPage](../../apps/web/src/routes/HikingPage.tsx)** (372줄) — 1차(`72c9982e`)는 문서형 페이지였고, `54eb0cb8` 에서 "지도를 쓰는 다른 공개
+화면(맛집·주차·일상지도·집값·버스·지하철)과 같은 틀"로 다시 짰다. 뼈대는 일상지도 계열(`parseZoom`·`InitialView`·뷰포트 URL)이 아니라
+**맛집 V2 쪽**이다 — 뷰포트를 URL 에 쓰지 않고 카메라는 고른 산·코스 범위로만 맞춘다([map-sheet-shell](../concepts/map-sheet-shell.md) 의
+공용 훅 `useMapSheets`·`useIsDesktopXl`·`BottomSheet` 만 공유).
+- **URL = 진실** — `?m`(산) · `c`(코스 — `m` 이 있을 때만 읽음) · `q`(검색) · `r`(권역 `isHikingRegionGroup`) · `s`(정렬 — 기본 `near` 는 키 없음) ·
+  `rec=1`(추천 모드)과 그 입력 `rd`(날짜) · `rt`(출발 `HHMM`) · `rh`(산행 시간, 기본 `half` 생략) · `rl`(난이도, 기본 `any`) · `rm`(이동 수단, 기본
+  `car`) · `ro`(출발 도시, 기본 `me`). 한 함수 `update(patch, replace = true)` 가 null·빈 값 키를 지우고, **산·코스 이동만 push**(`replace=false`
+  — 뒤로가기가 산 → 목록), 검색·필터·추천 입력은 `replace`. 고도 그래프에서 가리킨 자리·고른 지점은 화면 상태(공유 대상 아님).
+- **렌더 중 계산 규율** — 산·코스 데이터가 URL id 와 다르면 쓰지 않는다(`mountainQ.data.id === mountainId`, 막 다른 산을 고른 동안 이전 것
+  안 보임). 고른 지점은 `{ courseId, poiId }` 로 들고 있어 **코스가 바뀌면 effect 없이 풀린다**. 추천의 날짜 3개·지난 시각 거르기는 처음 그린
+  시각 `useState(() => Date.now())` 기준(렌더 중 `Date.now()` 금지). 목록 '더 보기' 개수는 `key={q|r|s}` 로 새로 그려 처음으로(effect 없음).
+- **위치** — `useUserLocation()`(마운트 자동 요청 — 목록 기본이 가까운순이라)만 쓰고 **저장한 내 위치는 읽지 않는다**(앱 등산 화면은 내 위치 →
+  저장 위치 → 서울 시청). 위치를 기다리는 동안·거부·실패면 `SEOUL_CITY_HALL` 기준과 그 사실("서울 시청 기준(위치 권한 꺼짐)" + "내 위치로")을
+  목록 머리에. 추천은 '내 위치' 출발이면 측위가 끝날 때까지 요청을 미룬다(찾자마자 거리를 넣은 추천으로 다시 받지 않게), 추천을 켤 때 아직 안
+  물었으면 그때 묻는다(버튼 = 사용자 동작).
+- **레이아웃** — xl+(1280px~) = 헤더 아래 `calc(100dvh - headerHeight)` 한 화면에 `[산 목록 aside 400 | 상세 aside 440(산 → 코스, 산을 골랐을 때만) |
+  지도 order-3]`, 패널 좌/우(`usePanelSide('public.hiking')` → `flex-row-reverse`, [panelPrefsStore](../../apps/web/src/stores/panelPrefsStore.ts)
+  `PanelKey` 에 `public.hiking` 기본 left — 맛집과 같은 버튼). xl 미만 = 헤더 아래 fixed 지도(`--map-bottom-inset: SHEET_PEEK_HEIGHT`) + 목록 시트
+  (z 20, `data-testid="hiking-list-sheet"`) + 상세 시트(`key={mountainId}`, z 30 — 산을 고르면 half, 같은 시트에서 코스 상세) + 상단바 subBar(검색·추천
+  토글·권역·정렬 — 산을 고르면 내림, `useMemo` 로 같은 값 같은 참조 + `useLayoutEffect` 로 paint 전 등록, 맛집과 같음). 지도는 두 분기에서 같은 첫
+  칸이라 폭이 xl 경계를 넘나들어도 인스턴스가 그대로다. 산·코스 범위 맞춤은 모바일에서 `fitBottomInset = sheetHalfInset(headerHeight)`(→ `fitToCoords`
+  `bottomInset`, [map-sheet-shell](../concepts/map-sheet-shell.md)).
+- 503 이면 "등산 데이터가 아직 준비되지 않았습니다."(적재 전), 그 밖 오류는 다시 시도 안내. 페이지 제목은 `sr-only` 만.
+
+| 파일 | 역할 |
+| --- | --- |
+| [HikingList.tsx](../../apps/web/src/components/hiking/HikingList.tsx) | `HikingListHeader`(검색 — 한글 조합 중엔 URL 을 안 바꾸고 로컬 draft 만, 맛집과 같은 이유 "ㅅ사산"; '추천' 토글; 권역 칩 전체 + 6; "N개 산 · 서울 시청 기준…"; 정렬 select 이름/높은/가까운순; 데스크톱만 패널 좌우 버튼) · `HikingMountainList`(`HIKING_LIST_PAGE` 60곳씩 '더 보기', 사진 썸네일 `Routes.Hiking.image`, 100대 명산 배지, 거리) · `HikingFooter`(기준 시점·출처 — 작업 트리에서 "고도 기록이 없는 국립공원 코스의 지형 고도는 AWS Terrain Tiles — SRTM data courtesy of the U.S. Geological Survey." 추가 — [license-shaped-surfaces](../concepts/license-shaped-surfaces.md)) |
+| [HikingMap.tsx](../../apps/web/src/components/hiking/HikingMap.tsx) | `MapCanvas`(`poolKey="hiking"`, 시작 36.3/127.8 z7) 한 장. 산 마커: 100대 명산 `TOP100_LOOK { labelZoom: 9, compactScale: 0.75, zIndex: 2 }`(줌 9부터 26px·이름), 봉우리 `PEAK_LOOK { labelZoom: 12, compactScale: 0.8 }`(21px, 줌 12부터 이름), `HIKING_PEAK_POINT_ZOOM` 아래면 봉우리를 일상지도 격자(`lifeCellSizeDeg`·`LIFE_CELL_ORIGIN`)로 묶은 개수 버블(`perMarker`·`fixedScale`·`zIndex: 1` — 그리는 순서 봉우리 → 버블 → 100대 명산), 위면 화면 범위 +20% 안 산만. 코스를 고르면 그 산 마커는 뺀다(정상 지점과 겹침). 산을 고르면 코스 선 전부(`hikingCourseColor(i)`, 고른 코스 `HIKING_SELECTED_COURSE_COLOR` 맨 위), 코스 지점은 `overlayMarkers`(지도 분류만) + 가리킨 자리. 배경: 브이월드 전국 등산로 WMS(`lt_l_frstclimb`, 줌 12부터, 투명도 0.6, `EPSG:900913` — 3857 요청이 자주 502, 7차), 고른 산의 국립공원 경계 `areas`(점선·옅은 칠, 9차). 카메라 effect 의존은 `focus.key`(산 id·코스 id) + `apiKey`(같은 코스 데이터가 다시 와도 사용자가 옮긴 화면을 되돌리지 않게) |
+| [MountainDetail.tsx](../../apps/web/src/components/hiking/MountainDetail.tsx) | 산 상세 — 사진·높이·소재지·국립공원 배지(+작업 트리 `KnpsLinks`), 선정 이유·개관(접기)·산림청 공식 코스 문구(`officialCourseLines`)·이 산의 봉우리·코스 카드(지도 선 색 점·난이도 칩 `DIFFICULTY_CHIP_CLASS`·`courseOutingLabel`·형태; 국립공원 공식 코스 먼저 + "국립공원 코스" 칩·"안내 01시간30분 · 난이도 중" 원문, 작업 트리 `· 반대 방향 기준`)·이어진 봉우리. 봉우리(`kind: 'peak'`)는 산정보 소개(맞을 때만)와 "선·고도만 있는 자료" 안내 |
+| [CourseDetail.tsx](../../apps/web/src/components/hiking/CourseDetail.tsx) | 코스 상세 — 제목 옆 **GPX** 받기(작업 트리 — `<a href={Routes.Hiking.gpx(id)} download>`, 서버가 `Content-Disposition: attachment` 로 준다), `ParkCourseBox`(국립공원공단 문구 원문 그대로 — 공공누리 3유형 변경금지, [license-shaped-surfaces](../concepts/license-shaped-surfaces.md), 연락처, 작업 트리 `KnpsLinks`·"공식 안내는 이 코스와 반대 방향(도착 → 출발)으로 걷는 기준입니다."), `Stat` 3열(거리·예상 시간·난이도·오르막·내리막·최고 고도), 방향별 시간(`courseTimeBreakdown`)·난이도 까닭(`courseDifficultyReasons`), 원천 안내(`source` 별 — 공식 탐방로 + 고도 빌림, 작업 트리부터 `park.elevationFrom === 'terrain'` 이면 "지형 자료(SRTM 30m)로 계산 — 봉우리가 실제보다 수십 m 낮게" — [provenance-tagged-fill](../concepts/provenance-tagged-fill.md)), 끊김 안내, `CourseConditions`, `ElevationProfile`, 험한 노면 칩, 지점 목록(갈림길은 가는 길 → 다른 길 → 온 길, 센터·대피소 연락처), `CourseAround` |
+| [ElevationProfile.tsx](../../apps/web/src/components/hiking/ElevationProfile.tsx) | 인라인 SVG 고도 그래프(차트 라이브러리 없음) — 면은 `preserveAspectRatio="none"` 로 늘리고 글자는 HTML 로 얹어 찌그러지지 않게. 가리키면 거리·고도 + `onHover(atM)` → 페이지가 `pointAtDistance` 로 지도 좌표. 아래 띠 = 험한 노면(코스의 대부분을 덮는 범위는 칩으로만), 위 눈금 = 봉우리·위험 지점, 주황 칠 = 가파른 구간(`hikingSteepSections` — 100m 경사 30% 초과, 7차) |
+| [CourseConditions.tsx](../../apps/web/src/components/hiking/CourseConditions.tsx) | "산행 조건"(3차) — 날짜 칩 오늘·내일·모레 + 출발 시각 select(04:00~18:00, 30분, 오늘은 지금 이후만 — `hikingStartsFor`) → "HH:MM 출발 → HH:MM 하산 예상 · 일몰 … · 늦어도 …에 출발(일몰 30분 전 하산)" → 주의할 점 → 날씨(가장 높은 곳 추정 기온·체감)·대기·산불·해. `useHikingConditions(course.id)` 로 **3일치를 한 번** 받고 날짜·시각을 바꿔도 다시 받지 않는다(접기는 `@repo/utils` `hikingConditions`). 예상 시간 없는 코스는 하산 판단 없이 날씨만 출발 뒤 4시간 |
+| [HikingRecommend.tsx](../../apps/web/src/components/hiking/HikingRecommend.tsx) | '추천' 모드(4차) — 산 목록 자리에 입력(출발 위치 select 내 위치/도시 16곳 · 이동 수단 · 날짜 · 출발 · 산행 시간 · 난이도)과 순위 목록(사진·100대 명산 배지·이유 문장·경고 둘 + "주의 N개 더"). 고르면 그 산·코스로 가고 추천은 남는다(URL). 맞는 코스가 없으면 까닭 |
+| [CourseAround.tsx](../../apps/web/src/components/hiking/CourseAround.tsx) | "가는 법·주변"(4차) — 서버 목록을 그대로: 등산 지점 · 버스 → `/bus?near=&stId=` · 지하철 → `/subway?near=&stn=` · 주차장 → `/parking?ll=&z=17&sel=` · 공중화장실 · 맛집 → `/r/:placeId`(좌표는 `roundCoord`, 편도면 "날머리" 꼬리표) — 맛집 '가는 법' 탭과 같은 링크 규약 |
+| [KnpsLinks.tsx](../../apps/web/src/components/hiking/KnpsLinks.tsx) | (작업 트리, 커밋 전) "산행 전 확인 · 탐방로 통제정보 · 입산 가능 시각" — 통제·입산 시각은 공개 API 가 없어 국립공원공단 누리집으로(`@repo/utils` `HIKING_KNPS_CLOSURE_URL`·`HIKING_KNPS_ENTRY_TIME_URL`), 산 상세(국립공원 산)와 공식 코스 칸 |
+| [hikingFormat.ts](../../apps/web/src/components/hiking/hikingFormat.ts) | (작업 트리) 113줄 → 62줄: 산 목록 거르기·정렬(`rankMountains`)·코스 선 복원(`decodePieces`·`pointAtDistance`)·시간/난이도 문구·`HIKING_LIST_PAGE`·`SEOUL_CITY_HALL` 을 앱과 함께 쓰려고 `@repo/shared` `hiking/hikingFormat.ts` 로 옮기고 **다시 내보낸다**(소비처 import 경로 무변경, [platform-ui-split](../concepts/platform-ui-split.md)). 웹에 남은 것은 날짜·출발 시각 도우미(`HIKING_START_MINUTES`·`hikingDayLabel`·`hikingDefaultPick`·`kstHm` 등)와 `DIFFICULTY_CHIP_CLASS` |
+
+테스트 [HikingPage.test.tsx](../../apps/web/src/routes/HikingPage.test.tsx) 11건 — 목록(가까운순·서울 시청 기준·배지·이름순·합친 봉우리 검색·권역) / 산 → 코스 →
+뒤로(URL `m`·`c`, 고도 그래프·이정표) / 산행 조건(08시 출발 해 지기 전 하산·비·산불·미세먼지, 13시 출발은 해 진 뒤) / 추천 모드(입력 → URL → 다시 받기 → 산·코스로) /
+가는 법·주변 링크 / 국립공원(배지·공식 코스 먼저·원문·연락처·작업 트리의 통제 링크 `knps.or.kr`·GPX `href`) / (작업 트리) 반대 방향·지형 고도 문구 / 데스크톱
+3칸·패널 오른쪽 / **모바일 subBar·목록 시트 → 상세 시트**(`matchMedia` 목 — 주차·바다와 달리 시트 분기도 본다) / `rankMountains`·`pointAtDistance`(re-export 경유).
+MSW 는 산 목록·산·코스·산행 조건·추천·가는 법과 지도 키(`/api/v1/settings/map/public`)를 `beforeEach` 로 건다(`onUnhandledRequest: 'error'`), `MapCanvas` 는 늘 쓰는 `vi.mock`. 커밋 본문의 헤드리스 확인: 1400·1440·390px 로 목록 →
+설악산 → 코스·고도 그래프, 북한산(데스크톱)·설악산(폰), 라이트·다크 줌 7~13(`6da860c7`).
+
+### 메뉴판 — 어드민 '메뉴판 읽기' · 맛집 메뉴 탭 메뉴판 사진 [신규 — 30차]
+
+도메인(kimi-k3 + 규칙 프롬프트, 검수 정답 20장 F1, 네이버 메뉴판 사진 수집·짝짓기, 공개 응답 `menuBoard`)은 [menu-board](menu-board.md).
+
+- **하루 사이 두 번 바뀐 어드민 페이지** — `448b4cd4`(2026-10-10)는 AI 허브 메뉴판 모델 체험 `/admin/smartly-test`(인식·번역·사진 → 번역·사전·
+  정확도 5탭 + 장치 상태, `components/admin/smartly/` 10파일, lazy 35.6kB): 로컬 전용 Python 서버(`apps/smartly`)를 Vite 개발 프록시
+  `/smartly-api → 127.0.0.1:8700` 으로 불렀고(운영 nginx 엔 경로가 없어 '연결 안 됨' 안내만), **shared `apiFetch` 대신 페이지 전용 fetch** — 어드민 JWT 를
+  Python 서버로 보내지 않고 그 서버 오류로 로그아웃되지 않게, 응답 타입도 api-contract 가 아닌 웹 로컬. 같은 날 `9e4c598c` 가 이것과 프록시를 지우고
+  friendly menu-board API 를 쓰는 화면으로 바꿨다(Python 모델 폐기는 `63c7658a`).
+- **[AdminMenuBoardPage](../../apps/web/src/routes/admin/AdminMenuBoardPage.tsx)** (`/admin/menu-board`, lazy 17.1kB) — 어드민 사이드바 '테스트' 그룹
+  끝 + 상단바 제목 '메뉴판 읽기'(`ScanText`). 탭 `?tab=eval`(읽기 `read` 는 키 없음, `replace`).
+  - [ReadTab](../../apps/web/src/components/admin/menu-board/ReadTab.tsx) — 사진 올리기·끌어다 놓기·수집 샘플 고르기(검수 정답 있는 사진 먼저, 20MB 한도·
+    사진 형식은 올리기 전에 거름) → **'메뉴 읽기'를 눌러야** 모델 호출(`useReadMenuBoard`). 결과 = 메뉴·가격·설명 표 + 모델·시간·토큰·모델에 넘긴 사진
+    크기·응답 원문. 샘플 사진은 어드민 인증이 필요해 Blob → objectURL(바꿀 때 이전 URL 해제). 폰 폭 가로 넘침은 `f55598c2` 가 `grid-cols-1` 로.
+  - [ZoomableImage](../../apps/web/src/components/admin/menu-board/ZoomableImage.tsx) — 사진 칸 안 맞춤·100%·200%, 누른 지점을 가운데로 확대·다시 누르면 맞춤,
+    확대 중 끌어 이동(끌기/누르기를 이동 거리로 가름, 배율을 바꾼 뒤 스크롤하려고 `flushSync`), 전체 화면은 Radix Dialog(맞춤 = 사진 전체). 화면 사진은
+    원본 해상도라(최대 3661×7205) 모델에 넘긴 긴 변 2,000px 보다 선명하다. 라이브러리 추가 없음.
+  - [EvalTab](../../apps/web/src/components/admin/menu-board/EvalTab.tsx) — `eval:menu-boards` 마지막 리포트(F1·정밀도·재현율·이름 정확·가격 일치·맞힘·
+    지어냄·표지 오인·장당 중앙) + 사진별 틀린 곳(놓침·지어냄·이름·가격) 펼치기, 리포트가 없으면 실행 명령 안내.
+- **어드민 맛집 상세 메뉴 탭**(`0408f2f2`) — [AdminRestaurantDetailPage](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) 의 `menu` 탭이 공개
+  `MenuTab` → (`snapshot.menuBoardImages` 가 있으면) [AdminMenuBoardSection](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx)
+  (사진·읽음 여부, 사진에만 있는 메뉴 `origin: 'menu-board'`, 가격이 다른 등록 메뉴와 어느 쪽이 최신인지 — 사진 날짜 vs `menuUpdatedOn`) →
+  `MenuRankingSection` 순. [AdminLogsPage](../../apps/web/src/routes/admin/AdminLogsPage.tsx) `FEATURE_LABEL` 에 `menu-board-read` "메뉴판 사진 읽기".
+- **공개 맛집 메뉴 탭**(`ee70bc2d`) — [MenuTab](../../apps/web/src/components/restaurant/detail/MenuTab.tsx) 이 `detail.menuBoard` 가 있으면 등록 메뉴 아래
+  `border-t` 로([provenance-tagged-fill](../concepts/provenance-tagged-fill.md) — 사진에만 있는 메뉴를 등록 메뉴와 섞지 않음) [MenuBoardSection](../../apps/web/src/components/restaurant/detail/MenuBoardSection.tsx)(사진 N장 · 날짜 범위, 썸네일 띠 → 사진 탭과 같은
+  `Lightbox`, 사진에서 찾은 등록 메뉴에 없는 메뉴 `FIRST_SHOWN` 8개 + 더 보기, "AI 가 읽은 결과라 실제와 다를 수 있으니 사진으로 확인" 안내), 등록 메뉴가
+  없는 가게는 이 섹션만. 등록 메뉴 카드는 [shared.tsx](../../apps/web/src/components/restaurant/detail/shared.tsx) `MenuGrid` 의 `boardPriceByName` 으로
+  `newerPrices`(사진이 등록 메뉴 업데이트보다 최신이고 가격이 다를 때만) 이름에 "메뉴판 사진 14,000원 · 날짜" 한 줄. 앱은 아직(공개 API 필드는 공용).
+  실제 화면 확인: 북경대반점(사진에서 찾은 메뉴 58개)·쿄코코(최신 사진 가격 2줄).
+- 테스트: [AdminMenuBoardPage.test](../../apps/web/src/routes/admin/AdminMenuBoardPage.test.tsx) 6(읽기 호출·결과 표, 파일 거르기, 서버 오류 메시지, 배율·전체 화면,
+  정확도 리포트 없음/있음) · [AdminMenuBoardSection.test](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.test.tsx) 3 ·
+  [MenuBoardSection.test](../../apps/web/src/components/restaurant/detail/MenuBoardSection.test.tsx) 3(날짜 범위·더 보기·AI 안내·라이트박스, 카드의 최신 사진 가격).
+  헤드리스로 실제 kimi-k3 읽기(김진목삼 24개, 8.6초)와 분지로 3661×7205 확대·끌기·전체 화면(`9e4c598c`).
+
+### 웹 테스트 인프라 현황 — 96파일 467건 [갱신 — 30차]
+
+**30차(2026-10-10~10-26) — 96파일 467건**(작업 트리 포함; `apps/web/src` 의 `*.test.ts(x)` 96개에서 `it(` 467개를 직접 셌다). 커밋 본문 수치 진행:
+436(`448b4cd4`, 체험 페이지 5 + 드래그 좌표 5) → 432(`9e4c598c`·`4597294b` — 체험 페이지 10건을 지우고 메뉴판 읽기 6) → 438(`0408f2f2`) → 450(`49cb17f0`·
+`f55598c2`) → 453(`62b2e6b3`) → 455(`92e79e9a`) → 459(`72c9982e`) → 461(`54eb0cb8`) → 462(`00804516`) → 464(`ffd2d827`·`bff8ca7c`·`7eb02951`) →
+465(`6da860c7`) → 466(`0e38c4ee`) → 467(작업 트리 — 반대 방향·지형 고도 1건). 새 6파일: `AdminMenuBoardPage` 6 · `AdminMenuBoardSection` 3 ·
+`MenuBoardSection` 3 · `mealPhotoFile` 6 · `MealNutritionGapSection` 2 · `HikingPage` 11. 늘어난 것: `MealEntryFormPage` 9→16 · `MealDetailPage` 5→6 ·
+`useMealPhotoUrl` 6→7 · `mapMarkerSync` 8→9(겉모습 비교에 `labelZoom`·`compactScale`·`zIndex`). 러너·setup·MSW 정책은 그대로. 기법 메모: (1) EXIF 는
+실제 사진 대신 [exifJpeg.ts](../../apps/web/src/test/fixtures/exifJpeg.ts) 가 IFD0/Exif IFD 를 직접 써 만든 JPEG 바이트로, (2) 등산은 `matchMedia` 목으로
+모바일 시트 분기까지 본다(`useIsDesktopXl` 폴백은 여전히 데스크톱), (3) 공용 순수 도우미를 shared 로 옮긴 뒤에도 웹 테스트는 웹 re-export 경로로 같은 함수를 부른다.
+
 ### 웹 테스트 인프라 현황 — 90파일 426건 [갱신 — 29차]
 
 **29차(2026-10-05~10-10) — 90파일 426건**(기준선 33파일 183건 — 28차 문단의 "32/173" 은 2026-10-04 `fee9377a` 의 `TravelPlanPage.test.tsx` 10건을
@@ -1846,7 +1981,7 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 [이전 컴파일 본 참고]. (어드민 라우트 등록만 `AdminRoutes.tsx` 로 이전 — 위 코드
 스플리팅 참조.)
 
-## Talks To [coverage: high — 72 sources]
+## Talks To [coverage: high — 80 sources]
 
 - **`@repo/api-contract`** — N차 모델 zod 스키마:
   - `SettlementSessionType` / `SettlementRoundType` (rounds[] 추가) / `DraftRound` /
@@ -1857,6 +1992,24 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 - **`@repo/api-contract`(29차)** — 값 상수는 zod 없는 [constants.ts](../../packages/api-contract/src/constants.ts)(`BUS/SUBWAY/RESTAURANT_FAVORITES_MAX`·
   `TAROT/SAJU/SAJU_G/REVIEW_ASK_GUEST_KEY_HEADER`·`VOTE_OPTIONS_MIN/MAX`·`VOTE_VOTERS_FULL_MESSAGE_PREFIX`(`VotePage` 가 409 메시지 앞머리로 상한/마감 구분)·
   `MEAL_*_CONFIRMATION`·`AIR_HISTORY_TERMS` 등)에서, 스키마는 타입으로만. 웹 엔트리 경로가 스키마 파일 값을 import 하면 `firstLoadGuard` 가 경고.
+- **`@repo/api-contract`(30차)** — 등산 타입(`HikingMountainSummaryType`·`HikingMountainDetailType`·`HikingCourseSummaryType`·`HikingCourseDetailType`·`HikingPoiType`·
+  `HikingParkAreaType`·`HikingAroundPlaceType`·`HikingSignGuideType` — 코스 `park{ duration, difficulty, schedule, contact, reversed, elevationFrom }` — 끝의 둘은 작업 트리)과
+  `Routes.Hiking.image(id, no)`·`Routes.Hiking.gpx(id)`(작업 트리) — 화면이 **`<img src>`·`<a href download>` 에 그대로 넣는 상대 경로**(`apiFetch` 의 `baseUrl` 을 거치지
+  않음, Gotchas). 메뉴판 `RestaurantPublicMenuBoardType`(공개 `detail.menuBoard{ images, addedMenus, newerPrices }`)·`NaverPlaceDataType` 의 `menuBoardImages`·
+  `menuBoardMenus`(`MenuBoardMenuType` — `origin`·`priceCheck`)·`menuUpdatedOn`, AI 용도 enum `menu-board`. 도메인은 [api-contract](api-contract.md)·[hiking](hiking.md)·[menu-board](menu-board.md).
+- **`@repo/shared`(30차)** — 등산 `useHikingMountains`·`useHikingMountain(id)`·`useHikingCourse(id)`·`useHikingConditions(courseId)`·`useHikingRecommend(params | null)`·
+  `useHikingAround(courseId)`, (작업 트리) `hiking/hikingFormat.ts`(웹 `hikingFormat` 이 다시 내보내는 순수 도우미 — 앱 등산 화면과 공용); 메뉴판
+  `useMenuBoardSamples`·`useMenuBoardSampleImage`(Blob)·`useReadMenuBoard`·`useMenuBoardEvalReport`; 식단 사진 `useUploadMealPhoto`·`useDeleteMealPhoto`·
+  `useRecognizeMeal`·`beginMealDraftPhotoPreparation`(저장과 맞물리는 lease)·`MEAL_DRAFT_MAX_PHOTOS`·**`useMealPhotoUrls(tokens, { variant, enabled: boolean[] })`**
+  (`62b2e6b3` — `useMealPhotoUrl` 과 같은 캐시·쿼리 설정을 한 함수로 묶어 공유); 음식 `useMealNutritionGaps`·`useEstimateMealNutritionGaps`(`92e79e9a`).
+  세부는 [shared](shared.md).
+- **`@repo/utils`(30차)** — 등산 `hiking.ts`·`hikingMarker.ts`(`buildHiking{Mountain,Peak,Cell,Poi}MarkerDataUrl`·`HIKING_MAP_POI_CATEGORIES`·
+  `HIKING_PEAK_POINT_ZOOM`·`HIKING_SELECTED_COURSE_COLOR`·`hikingCourseColor`)·`polyline.ts`(`decodePolyline`)·`hikingConditions`(산행 조건 접기 — 해 시각
+  계산 `solar` 는 그 안쪽)·`hikingRecommend`(`HIKING_ORIGIN_CITIES`·`hikingOriginCity`·`isHiking{Duration,Level,TravelMode}`)·`isHikingRegionGroup`·`HIKING_REGION_GROUPS`·
+  `hikingSteepSections`·`HIKING_KNPS_CLOSURE_URL`·`HIKING_KNPS_ENTRY_TIME_URL`(작업 트리),
+  일상지도 격자 `lifeCellSizeDeg`·`LIFE_CELL_ORIGIN` 재사용 — [utils](utils.md).
+- **외부(30차)** — 브이월드 WMS `https://api.vworld.kr/req/wms` `LAYERS=lt_l_frstclimb`(브라우저가 지도 키로 직접 타일 요청), 국립공원공단 누리집
+  (통제·입산 시각 링크만 — 작업 트리).
 - **`@repo/shared`** — 신규/확장 훅:
   - **29차 웹 성능 라운드가 쓰는 shared 변경**(도메인 세부는 [shared](shared.md)) — `apiFetch` 오류 판정 `isErrorResponse`(zod 무의존)·`ApiError`
     (main 의 `retry` 가 `statusCode` 4xx 로 판정), `useCurrentUser` `staleTime` 5분, `useRestaurantsPublic(query, { enabled })`, 리뷰 목록·메뉴 순위·
@@ -2022,7 +2175,8 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
   (게스트 타로 로컬 기록), 사주(C) `sajuProfileStore`·사주(G) 스토어들([shared](shared.md)). [27차, 웹 로컬]
   **`useParkingPrefsStore`**(`lp:parking-prefs` v1 — 주차장·충전소 필터 플래그). [28차, shared] **`useMealDraftStore`** 를 웹도 쓴다
   (`b5bfe77` — 앱과 같은 스토어, 웹은 sessionStorage·principal namespace; 입력·상세·추천 탭이 공유). draft vs prefs
-  vs theme 수명·스코프가 달라 각각 분리.
+  vs theme 수명·스코프가 달라 각각 분리. [30차] `panelPrefsStore` `PanelKey` 에 `'public.hiking'`(기본 left — "맛집과 같은 3-column 이라 같은 쪽에서
+  시작", 저장값을 기본 키 목록으로 걸러 읽으므로 옛 `lp:panelPrefs` 에도 안전), 식단 draft 의 `photos`(토큰)·`recognition` 을 웹 사진 흐름도 쓴다(`49cb17f0`).
 - **TanStack Query 키** —
   - `['settlements', 'list', query]`, `['settlements', 'detail', id]`,
     `['settlements', 'shared', token]`, `['settlement-drafts', 'list', activeOnly]`. *(29차 대조 정정 — 실제 키는 단수형
@@ -2048,7 +2202,7 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 도메인 의미 / 분배 알고리즘은 [settlement.md](settlement.md), 크롤/SSE/분석은
 [shared.md](shared.md), [crawl.md](crawl.md), [analytics.md](analytics.md) 참조.
 
-## API Surface [coverage: high — 70 sources]
+## API Surface [coverage: high — 76 sources]
 
 웹 앱은 HTTP 엔드포인트가 아닌 **브라우저 URL** + 재사용 컴포넌트 노출.
 
@@ -2066,6 +2220,9 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   `sel` 삭제, `p` 없으면 KST 정오 기준 기본) [27차]
 - **`/parking`** — 주차 (공개, `?t=lot|ev|airport`(lot 은 생략)`&ll=lat,lng&z=줌&sel=id` — `sel` 은 탭마다 주차장 id(`std:`/`seoul:`)·충전소 id·
   공항 IATA; 식당 상세 주차 섹션이 `?ll=…&z=17&sel=` 로 딥링크) [27차]
+- **`/hiking`** — 등산 (공개, `?m=산id&c=코스id&q=&r=권역&s=name|height`(가까운순 `near` 는 생략) · 추천 `rec=1&rd=YYYY-MM-DD&rt=HHMM&rh=short|day&rl=easy|moderate|hard&rm=transit&ro=도시`
+  (기본값은 생략) — 산·코스 이동만 push, 나머지 `replace`. 코스 상세 "가는 법·주변"이 `/bus?near=&stId=`·`/subway?near=&stn=`·`/parking?ll=&z=17&sel=`·`/r/:placeId` 로
+  딥링크, GPX 받기는 API 경로 `/api/v1/hiking/courses/:id/gpx` 직링크(작업 트리)) [30차]
 - **`/travel/jeju`**(`?region=`·`ageGrp`·`gender`·`accompany`·`month`·`nights`) · **`/travel/plan`** — 여행로그(26차, 목록 누락 보정)
 - **`/me/meals`** — 내 식단 조회 (`RequireUser`; 탭은 로컬 state, URL 없음) → 28차 `?tab=calendar|stats|recommend|nutrition|preference`
   (기록 `list` 는 키 없음, `replace`). 데스크톱 기록 탭의 최근 7일 요약이 `/me/meals?tab=stats` 링크로 통계 탭을 연다
@@ -2094,8 +2251,21 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   settings(ai-keys / map / **telegram** / **logs** / **quotas** [25차])
 - **`/admin/restaurants/:placeId?tab=`** — `insights|tour|menu|reviews|ask|photos|info|logs`(홈은 키 없음, `tour` 는 매칭 없으면 홈으로) [27차
   `420a6be`]. 헤더 "공개 화면" 은 `/r/:placeId` 새 탭, 출처 행 다이닝코드 → `/admin/diningcode/:vRid`
+- **`/admin/menu-board[?tab=eval]`** — 메뉴판 읽기(읽기·정확도) [30차 `9e4c598c`]. 같은 날 잠깐 있던 `/admin/smartly-test` 는 사라졌다
 
 내부 재사용 컴포넌트 (신규/변경):
+
+- [30차 신규] — 페이지 `routes/HikingPage`·`routes/admin/AdminMenuBoardPage`, 디렉터리 `components/hiking/`(10 — `HikingList`(`HikingListHeader`·
+  `HikingMountainList`·`HikingFooter`·`HikingNearBasis` 타입)·`HikingMap`·`MountainDetail`·`CourseDetail`·`CourseConditions`·`CourseAround`·`ElevationProfile`·
+  `HikingRecommend`(`HikingRecommendInput`·`HikingOrigin`·`HikingOriginState`)·`hikingFormat`·`KnpsLinks`(작업 트리)), `components/admin/menu-board/`(4 — `ReadTab`·`EvalTab`·
+  `ZoomableImage`·`format`), `components/admin/restaurant-detail/AdminMenuBoardSection`, `restaurant/detail/MenuBoardSection({ menuBoard })`, 식단
+  `routes/meal/{MealPhotoSection({ intake }), MealPhotoLightbox({ tokens, index, onChangeIndex, onClose }), useMealPhotoIntake() → MealPhotoIntake, mealPhotoFile}`,
+  어드민 `routes/admin/MealNutritionGapSection`, 테스트 픽스처 `test/fixtures/exifJpeg`.
+- [30차 변경 — 공개 prop/시그니처] — `MapCanvas`(`MapMarker.labelZoom?`·`compactScale?`·`zIndex?`, `wmsOverlay?: WmsOverlay | null`, 핸들 `fitToCoords(coords, padding?,
+  opts?: { bottomInset? })`), `Lightbox`(빈 주소 = 받는 중 스피너), `restaurant/detail/MenuTab`(메뉴판 섹션)·`detail/shared.tsx` `MenuGrid`(`boardPriceByName?`),
+  `MealItemInputRow`(인식 다른 후보 칩), `MealEntryFormPage`(사진 칸·`photoTokens` 전송), `MealDetailPage`(사진 크게), `AdminRestaurantDetailPage`(메뉴 탭 메뉴판 섹션),
+  `AdminAiKeysPage`(용도 10), `AdminLogsPage`(+`menu-board-read`), `AdminFoodPage`(빈 이름 카드·portion 안내), `AdminLayout`·`AdminTopBar`·`AdminRoutes`(메뉴판 읽기),
+  `App.tsx`·`PublicSidebar`·`PublicTopBar`(`/hiking`·NAV 15), `stores/panelPrefsStore`(`public.hiking`), `styles/global.css`(폰 작은 입력칸 16px).
 
 - [29차 신규] — 지도 `restaurant/mapMarkerSync`(`syncMarkerFeatures`·`MARKER_PROP`)·`restaurant/mapIconRaster`(`markerIcon`·`ICON_RASTER_MAX`·`IconAnchor`),
   맛집 `restaurant/RestaurantDetailWarmup`(render-null 선조회)·`restaurant/detail/useInViewOnce(rootMargin = '200px') → [ref, inView]`, 크롤
@@ -2199,7 +2369,7 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   `MapCanvas.flyToZoomIn` imperative, `PublicRestaurantCard.onZoom`(더블클릭 확대).
 - 그 외 모든 컴포넌트는 직전 라운드와 동일.
 
-## Data [coverage: high — 39 sources]
+## Data [coverage: high — 44 sources]
 
 - 로컬 DB 없음. 상태 갈래:
   - **서버 상태** — TanStack Query 캐시.
@@ -2225,7 +2395,16 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
     월·고른 날, 영양 기간은 여전히 로컬 state. [27차] **SeaPage**(`a`/`d`/`p`/`sel` — `d` 는 응답 `dates` 안의 값만
     유효, `p` 기본은 시계 파생), **ParkingPage**(`t`/`ll`/`z`/`sel` — 뷰포트는 사용자 이동만, 필터는 스토어), **AdminRestaurantDetailPage**
     `tab`(공개 상세처럼 **push** — 탭 이동이 history 에 쌓인다; 리뷰 탭 필터 6종·페이지 수는 로컬 state, 팁/메뉴 필터는 탭 간 이동을 위해
-    페이지 state `reviewFilter` 로 끌어올림).
+    페이지 state `reviewFilter` 로 끌어올림). [30차] **HikingPage**(`m`/`c`/`q`/`r`/`s` + 추천 `rec`/`rd`/`rt`/`rh`/`rl`/`rm`/`ro` — 뷰포트는 URL 에
+    쓰지 않는다; **산·코스 이동만 push**·나머지 `replace`, 기본값은 키 삭제, 범위 밖 `rd`·지난 `rt` 는 렌더 중 기본값으로 대체), **AdminMenuBoardPage**
+    `tab`(`replace`).
+  - **등산** [30차] — 스토어 없음(패널 좌우만 `lp:panelPrefs`). 산 목록은 `['hiking','mountains']` **한 번에 전량**(산 3,879 — 서버 1시간 공개 캐시,
+    shared `staleTime` 1시간)을 받아 검색·권역·정렬·거리를 **클라이언트에서**(`rankMountains`), 그리는 것만 60곳씩. 산·코스 상세 `['hiking','mountain'|'course',id]`
+    1시간, 산행 조건 `['hiking','conditions',courseId]` 10분(3일치 한 번 — 날짜·시각 바꿔도 재요청 없음), 추천 `['hiking','recommend',params]` 10분 +
+    `keepPreviousData`(입력을 바꾸는 동안 이전 순위를 `isFetching` 으로 흐리게), 가는 법·주변 1시간. 위치는 브라우저 GPS(`useUserLocation`)만 — 저장 위치 미합류
+    ([saved-location-glance](../concepts/saved-location-glance.md) 의 예외 쪽, 바다와 같음).
+  - **식단 사진** [30차] — draft 에는 **업로드된 토큰**(`photos[{ token, localUri: null }]`)과 `recognition` 만 — 웹은 `File` 을 draft(sessionStorage)에 붙들 수
+    없어 넣는 즉시 올린다. 표시·크게 보기는 shared 사진 objectURL 캐시(`useMealPhotoUrl`/`useMealPhotoUrls`, 썸네일·원본 variant 별 키)를 칸·라이트박스가 공유.
   - **일상지도 취향** [신규 — 24차] — `useLifeMapPrefsStore`(zustand persist `lp:life-map-prefs`,
     version 2 + migrate: 레이어 on/off `{cctv,toilet,hospital}` 기본 전부 켬 · CCTV 설치목적
     다중(빈 = 전체) · 화장실 편의 5키 AND · 병의원 종별 다중; `partialize` 로 액션 제외),
@@ -2280,6 +2459,7 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   - [27차] `['sea','forecast',activity]`·`['sea','tide',lat3,lng3,date]`; `['parking','status']`·`['parking','lots'|'ev','points',bbox,zoom,flags]`·
     `['parking','lots'|'ev','nearby',lat4,lng4,radius,limit,flags]`·`['parking','lots'|'ev','detail',id]`·`['parking','airports']`·
     `['parking','restaurant-reviews',placeId]`; `['restaurant','review-match',placeId,tip,menu]`.
+  - [30차] `['hiking','mountains'|'mountain'|'course'|'conditions'|'around'|'recommend',…]`(위 등산 bullet), `['admin','menu-board','samples'|'eval']`.
 - **localStorage** —
   - `lp:token`, `lp:guest`, `lp:theme`, `lp:panelPrefs`, `lp:adminSidebarCollapsed`,
     `lp:settlementPrefs` [신규], `lp:transit-cross-show`, **`lp:life-map-prefs`(version 2)·
@@ -2292,7 +2472,45 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   `onUnauthorized: clearSession`. 게스트 키는 shared `useGuestKeyStore` 가 `X-Guest-Key` 로 붙인다
   (한도 소비 기능 — [usage-quota](usage-quota.md)).
 
-## Key Decisions [coverage: high — 122 sources]
+## Key Decisions [coverage: high — 132 sources]
+
+- **2026-10-25 등산은 맛집과 같은 3칸 틀, 문서형 페이지는 하루 만에 버렸다(`54eb0cb8`)** — 사용자 결정(데스크톱 3칸 권장안·패널 좌우 버튼). 지도를 쓰는
+  다른 공개 화면이 모두 지도 + 패널/시트인데 등산만 문서형이었다. 일상지도 골격(뷰포트 URL·저장 위치 진입·옴니박스)이 아니라 **맛집 V2 골격**을 고른 것은
+  등산의 탐색 단위가 "지도 영역"이 아니라 "산 → 코스" 선택이기 때문 — URL 에 뷰포트를 쓰지 않고 카메라는 고른 산·코스 범위로만, 목록은 전량을 한 번 받아
+  클라이언트에서 거른다. 산을 골라도 목록 칸이 남는 3칸이라 [산 목록 | 상세 | 지도] 를 나란히 비교할 수 있다. [map-sheet-shell](../concepts/map-sheet-shell.md)
+  의 공용 훅(`useMapSheets`·`BottomSheet`·`useIsDesktopXl`)만 공유.
+- **2026-10-25 등산 목록 기본은 가까운순 — 위치는 GPS 만, 못 받으면 서울 시청이라고 밝힌다(`bff8ca7c`)** — 사용자 결정("내 위치 가까운순, 안 되면 서울
+  시청 기준"). 저장한 내 위치(`useAirLocation`)는 쓰지 않는다(앱 등산 화면은 작업 트리에서 GPS → 저장 위치 → 서울 시청 — 웹·앱 기준이 다르다, Gotchas).
+  기준이 서울 시청일 때 목록 머리에 그 사실과 "내 위치로" 버튼을 둬 거리가 내 기준이 아님을 숨기지 않는다.
+- **2026-10-25 추천은 목록 자리의 '모드', 입력은 전부 URL(`ffd2d827`)** — 사용자 결정(산 목록 위 '추천' 모드). 추천에서 산을 골랐다 돌아와도 입력·순위가
+  남고(URL + 10분 캐시), 공유 링크가 같은 추천을 다시 만든다. 지도에 추천 순위를 따로 그리지는 않았다(PLAN 남은 것).
+- **2026-10-26 산 마커는 지도마다 다른 축소·라벨 기준을 갖는다(`6da860c7`)** — 맛집 기준(줌 14 아래 14px 점·이름 없음)을 전역으로 바꾸지 않고
+  `MapMarker` 에 `labelZoom`·`compactScale`·`zIndex` 를 옵트인으로 더했다 — 지정하지 않은 지도(맛집·주차·일상지도 …)는 그대로. 산은 맛집보다 훨씬 드물어
+  100대 명산은 줌 9부터 원래 크기·이름, 봉우리는 21px·줌 12부터 이름, 그리는 순서 봉우리 → 버블 → 100대 명산(사용자 "맵 기본 마커가 티가 좀 더 나면").
+- **2026-10-26 순수 도우미는 앱이 쓰는 순간 shared 로, 웹 경로는 다시 내보내기로 유지(작업 트리, 커밋 전)** — 앱 등산 화면(10차)이 산 정렬·코스 선 복원·
+  시간/난이도 문구를 같이 쓰게 되자 웹 `hikingFormat.ts` 에서 `@repo/shared` `hiking/hikingFormat.ts` 로 옮기고, 웹 파일은 `export { … } from '@repo/shared'`
+  로 소비처 import 를 그대로 뒀다. 웹 전용(날짜·출발 시각 select, 난이도 칩 색)만 남는다 — 28차 사주·타로 세션 훅 이전과 같은 방향([platform-ui-split](../concepts/platform-ui-split.md)).
+- **2026-10-26 GPX 는 API 직링크, 통제 정보는 공식 링크만(작업 트리, 커밋 전)** — 사용자 결정("GPX 내보내기만", "공식 안내 링크만"). 받기는 fetch·Blob 없이
+  `<a href={Routes.Hiking.gpx(id)} download>` — 서버가 `Content-Disposition: attachment` 로 파일 이름까지 정한다(공개·무인증이라 JWT 문제가 없다). 탐방로 통제·
+  입산 시각은 공개 API 가 없어(PLAN 10차 조사) 국립공원공단 누리집으로만 보낸다. 공식 문구가 코스와 반대 방향이면 문구를 고치지 않고(공공누리 3유형 변경금지)
+  "반대 방향 기준" 표시를 더한다([license-shaped-surfaces](../concepts/license-shaped-surfaces.md)).
+- **2026-10-23 웹 식단 사진은 즉시 업로드 + 저장과 맞물린 lease(`49cb17f0`)** — 사용자 결정 넷(수정 화면 사진 추가·빼기 / EXIF 로 먹은 시각 / 끌어다 놓기·
+  붙여넣기 / 업로드 전 브라우저 축소). 앱 Expo Web 경로와 같은 규칙을 따르되 웹은 `File` 을 draft 에 붙들 수 없어 업로드 대기열을 두지 않고 넣는 즉시 올린다.
+  저장이 올리기·인식 도중에 눌려도 사진과 인식 원본이 빠지지 않게 `beginMealDraftPhotoPreparation` lease 안에서 일하고, draft 세대가 바뀌면 결과를 버리고 방금
+  올린 사진을 바로 지운다([principal-scoped-client-state](../concepts/principal-scoped-client-state.md)). EXIF 는 라이브러리 없이 APP1 IFD 를 직접 읽는다.
+  수정 저장이 `photoTokens` 전체를 보내도록 바뀐 것은 draft 가 기존 사진을 들고 열리기 때문(서버는 받은 목록으로 갈아끼움).
+- **2026-10-23 인증이 필요한 사진도 공용 Lightbox 로 — 보는 장 ±1 만 원본(`62b2e6b3`)** — 맛집 사진·정산 영수증이 쓰는 `Lightbox` 를 그대로 쓰고, JWT 때문에
+  `<img src>` 에 못 넣는 식단 사진은 보는 장과 양옆만 원본 objectURL 을 받으며 그동안 받아 둔 썸네일을 먼저 보인다. 공용 컴포넌트엔 "빈 주소 = 받는 중" 분기
+  하나만 더했다.
+- **2026-10-23 폰 입력칸 확대는 layer 밖 규칙으로, 작은 크기만 골라(`f55598c2`)** — 기존 base 규칙(`e6a67a0c`, 2026-05)을 지우지 않고 그 위에 `text-sm`·`text-xs`
+  를 단 입력칸만 unlayered 로 16px. 전부 덮으면 이 리포의 `text-base`(17px) 입력칸이 16px 로 작아진다. shadcn `Input` 은 `text-base sm:text-sm` 이라 해당 없음.
+- **2026-10-10 어드민 메뉴판 읽기는 friendly API 하나로 — 별도 Python 서버·전용 fetch 를 걷어냈다(`9e4c598c`)** — 체험 페이지(`448b4cd4`)는 Python 서버를
+  Vite 개발 프록시로 부르고 JWT 를 보내지 않는 페이지 전용 fetch·웹 로컬 타입을 썼지만, kimi-k3 + 규칙 프롬프트가 OCR 없이 검수 20장 F1 99.7~99.8% 를
+  내자([menu-board](menu-board.md)) 운영에 없는 경로(`/smartly-api`)를 지우고 shared 훅·api-contract 타입을 쓰는 어드민 화면으로 바꿨다. 모델 호출은 버튼을
+  눌러야만, 정확도는 회귀 평가 리포트를 읽기만([golden-set-precision-gate](../concepts/golden-set-precision-gate.md)).
+- **2026-10-10 메뉴판에서 찾은 메뉴는 등록 메뉴와 섞지 않는다(`ee70bc2d`)** — 공개 메뉴 탭은 등록 메뉴 아래 별도 섹션에 출처·사진 날짜·"AI 가 읽은 결과" 안내를
+  달고, 등록 메뉴 카드에는 **사진이 더 최신이고 가격이 다를 때만** 한 줄. 칼로리·정산 등 다른 화면은 아직 이 값을 쓰지 않는다
+  ([provenance-tagged-fill](../concepts/provenance-tagged-fill.md)).
 
 - **2026-10-05 첫 로드는 규칙 + 빌드 가드로 지킨다, 측정은 "엔트리 정적 closure"(`da755684`)** — 2,059kB 의 원인은 import 한 줄이 아니라 청크 그룹
   정규식(공용 패키지가 three 그룹에 섞여 Rolldown 이 의존성을 끌어감)과 스키마 파일 값 import(zod 고정)였다. 둘 다 리뷰로는 안 보이는 종류라
@@ -2769,7 +2987,36 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 정산 Stepper 점프 게이팅 = "산출물 존재" 기준 (이번 라운드도 `participantsCount>0`/
 `rounds.every(source!=null)`/`itemsCount>0` 으로 유지).
 
-## Gotchas [coverage: high — 113 sources]
+## Gotchas [coverage: high — 121 sources]
+
+- **(2026-10-10, 30차) 어드민 맛집 상세 메뉴 탭에 메뉴판 사진이 두 번 나온다** — 메뉴 탭은 공개 `MenuTab`(공개 상세 응답을 차용)을 그대로 그리는데,
+  `ee70bc2d` 부터 그 안에 공개 `MenuBoardSection`(사진 띠·사진에서 찾은 메뉴)이 들어가고, 바로 아래 `0408f2f2` 의 `AdminMenuBoardSection`(사진·읽음 여부·
+  구분값 표)이 또 붙는다. 게다가 [AdminMenuBoardSection.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx) 머리 주석은 여전히
+  "공개 화면·칼로리·정산에는 아직 쓰지 않는다" — 공개 화면 쪽은 같은 날 사실이 아니게 됐다(미수정). 공개 섹션을 어드민에서 숨길지(27차 `PUBLIC_TABS_IN_ADMIN`
+  처럼) 정해야 한다.
+- **(2026-10-10, 30차) AI 키 '메뉴판 읽기' 설명이 "어드민 테스트 — …" 그대로** — [AdminAiKeysPage](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) `menu-board`
+  `desc` 는 `4597294b` 시점 문구인데, 같은 날 `0408f2f2` 부터 이 용도가 **크롤 직후 네이버 메뉴판 사진 자동 읽기**(가게당 12장 상한, fire-and-forget)에도 쓰인다.
+  모델을 바꾸면 운영 크롤 경로도 바뀐다는 사실이 화면에서 안 보인다(미수정).
+- **(2026-10-26, 30차) 등산 GPX·사진 링크는 `apiFetch` 의 `baseUrl` 을 거치지 않는 상대 경로** — `Routes.Hiking.image(...)`(1차부터)·`Routes.Hiking.gpx(id)`
+  (작업 트리)를 `<img src>`·`<a href>` 에 그대로 넣는다. 웹은 `configureApi({ baseUrl: import.meta.env.VITE_API_URL ?? '' })` 인데 `apps/web/.env.example` 이
+  `VITE_API_URL=http://localhost:3000` 이라, 그 값을 쓰는 dev 에서도 이 링크들은 Vite `/api` 프록시로 간다(동작은 함). 웹과 API 를 다른 출처로 띄우는
+  배포라면 깨진다 — 지금 운영은 같은 출처(nginx)라 문제없음.
+- **(2026-10-26, 30차) 등산 거리 기준이 웹·앱에서 다르다** — 웹은 GPS 만(못 받으면 서울 시청), 앱 등산 화면(작업 트리)은 GPS → 저장한 내 위치 → 서울 시청
+  ([docs/PLAN-hiking.md](../../docs/PLAN-hiking.md) 10차). 날씨·대기·주차·일상지도의 "저장 위치 우선"과도 다르다. 로그인 사용자가 위치 권한을 끈 웹에서는 저장
+  위치가 있어도 서울 시청 기준으로 정렬된다.
+- **(2026-10-26, 30차) PLAN 의 "웹 +2"(10차)와 실제 `it(` 수가 달랐다 (작업 트리에서 고침)** — 작업 트리의 `HikingPage.test.tsx` 는 HEAD 10건 → 11건(+1: 9차 보강의
+  반대 방향·지형 고도 — PLAN "9차 보강 웹 +1" 과 맞음), 10차의 GPX `href`·통제 링크는 기존 국립공원 테스트에 단언만 더했다. 웹 전체도 커밋 `0e38c4ee` 466 → 작업 트리 467.
+  PLAN 10차 칸은 작업 트리에서 "웹 단언 2(기존 테스트에)" 로 고쳐졌다 — 테스트 수를 셀 때 "새 `it`" 과 "단언" 을 구분할 것.
+- **(2026-10-25, 30차) 상단바 폭 예산 주석은 여전히 "NAV 7개"인데 NAV 는 15개** — 27차 항목(아래)의 연장. '등산'(라벨 2자)이 일상지도 뒤에 끼어 `lg+` 가로 NAV
+  가 하나 더 길어졌고, `App.tsx` 의 `/hiking` 라우트도 `/sea`·`/parking` 처럼 주석 없이 들어갔다. 1024~1280px 재실측 기록 없음.
+- **(2026-10-23, 30차) 식단 사진 — 실화면·실기기 확인이 남았다** — `49cb17f0` 은 로그인한 실제 화면의 업로드 → 인식을 확인하지 못했고(헤드리스는 축소·EXIF 만),
+  `f55598c2` 는 헤드리스 390px A/B 13화면뿐 **아이폰 실기기 확인은 남음**(커밋 본문). 새 기록에서 사진을 X 로 빼면 draft 에서만 빠지고 서버 사진은 서버 24시간
+  정리에 맡겨진다(취소·계정 전환으로 버려진 업로드만 바로 지운다 — `useMealPhotoIntake` 주석).
+- **(2026-10-23, 30차) 붙여넣기는 문서 전체에 걸린다** — `MealPhotoSection` 의 `paste` 리스너가 `document` 에 붙어, 식단 입력 화면이 떠 있는 동안 어느 입력칸에서
+  Ctrl+V 해도 **이미지 파일이 든 붙여넣기**는 사진으로 들어간다(글자만 든 붙여넣기는 건드리지 않음). 메모 칸에 이미지를 붙여 넣으려는 동작은 없다는 전제.
+- **(2026-10-23, 30차) 폰 16px 규칙은 클래스 이름에 묶여 있다** — unlayered 규칙은 `:is(input, textarea, select):is(.text-xs, .text-sm)` 뿐이라, 입력칸에
+  `text-[13px]` 같은 **임의 값 유틸리티**를 직접 달면 base 규칙을 이기고 이 규칙엔 안 걸려 iOS 확대가 다시 난다(크기 클래스 없이 부모 글씨를 물려받는 입력칸은
+  base 규칙이 맡아 괜찮다). 30차 시점 입력칸에 임의 값 크기를 단 곳은 찾지 못했다(대략 grep) — 새 입력칸은 `text-xs`/`text-sm` 로.
 
 - **(2026-10-05, 29차) 배포는 서버·웹·앱을 함께** — PLAN-perf-2 배포 체크리스트 1번: 정산 임시저장 **목록** 응답이 메타만(`SettlementDraftMetaType` —
   웹 `SettlementHistoryPage` 가 `622bfca2` 에서 타입을 바꿨다)으로 바뀌어 구 앱은 목록 payload 로 복원하던 경로가 깨지고, 공개 질문은 게스트 키
@@ -2817,7 +3064,9 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
   화면"이 새로고침 직후에만 재현된다.
 - **(2026-09-29, 28차) 웹 수정 저장에 `photoTokens` 를 넣지 말 것** — 서버는 `photoTokens` 가 오면 사진 연결을 **전량 교체**한다. 웹엔 사진 첨부
   UI 가 없으므로 수정 PATCH 는 키 자체를 빼야 기존 사진이 남는다(새 기록 POST 는 `photoTokens: []`). 웹에 사진 첨부를 열 때 이 분기를 같이 바꿔야
-  한다. 테스트가 두 경로 모두 본문을 단언한다.
+  한다. 테스트가 두 경로 모두 본문을 단언한다. → **2026-10-23(`49cb17f0`) 예고대로 바뀌었다** — 웹에 사진 칸이 생겨 새 기록·수정 모두
+  `photoTokens: draft.photos 의 token 전부`를 보낸다(수정 draft 는 `mealDraftInitFromEntry` 가 기존 사진을 들고 연다). 이제 위험은 반대 방향: draft 가
+  기존 사진을 못 싣고 열리면(초기화 전 저장 등) 저장이 사진을 **지운다**. 테스트는 "수정 사진 교체" 를 단언한다.
 - **(2026-09-29, 28차) 목록 카드 = 링크라 안에 링크를 두지 않는다** — `MealEntryRow` 전체가 `<Link to=/me/meals/:id>` 라 예전 카드 안의 식당 링크
   (`/restaurants-v2/:placeId`)는 상세 화면으로 옮겼다. 카드에 버튼·링크를 다시 넣으려면 카드 구조부터 바꿔야 한다(`<a>` 중첩은 HTML 무효·클릭 대상 모호).
 - **(2026-10-04, 28차) 두 단은 DOM 순서를 바꾼다** — `MEAL_SPLIT_CLASS` 는 자식이 본문·패널 둘뿐이라, 좁은 화면에선 패널 내용이 본문 **뒤**에 쌓인다.
@@ -3214,7 +3463,49 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
   groupIndex<0 분기, 영수증 미리보기 = JWT 필요 → `<img src>` 직접 X, 그 외
   이전 라운드 다수.
 
-## Sources [coverage: high — 387 sources]
+## Sources [coverage: high — 451 sources]
+
+30차 신규/변경(2026-10-10~10-26, "작업 트리" = 커밋 전):
+- [docs/PLAN-hiking.md](../../docs/PLAN-hiking.md) — *등산 1~10차 결정·실측·남은 것 — 웹 절(레이아웃 결정 2026-10-25), 9차 보강(SRTM·반대 방향), 10차(GPX·통제 링크·앱 화면·`hikingFormat` shared 이전), 차수 표의 "9차 보강 웹 +1"·"10차 웹 단언 2(기존 테스트에)"(작업 트리에서 고침)*
+- [docs/PLAN-meal.md](../../docs/PLAN-meal.md) — *`49cb17f0`: 웹 사진 입력 단계 / `92e79e9a`: 빈 열량 보강*
+- [apps/web/src/routes/HikingPage.tsx](../../apps/web/src/routes/HikingPage.tsx) — *NEW(`72c9982e`) → `54eb0cb8` 3칸·시트 재작성 → `ffd2d827` 추천 모드 URL → `bff8ca7c` 가까운순 기본·서울 시청 폴백 → `0e38c4ee` 공원 경계 prop (372줄)*
+- [apps/web/src/routes/HikingPage.test.tsx](../../apps/web/src/routes/HikingPage.test.tsx) — *NEW: 11건(작업 트리 +1 반대 방향·지형 고도, GPX `href`·통제 링크 단언), `matchMedia` 목으로 모바일 시트 분기*
+- [apps/web/src/components/hiking/HikingList.tsx](../../apps/web/src/components/hiking/HikingList.tsx) — *NEW(`54eb0cb8`): 머리·산 행·푸터 분리, 한글 조합 중 URL 미반영, 60곳씩 더 보기(`bff8ca7c`); 작업 트리: 푸터 SRTM 출처*
+- [apps/web/src/components/hiking/HikingMap.tsx](../../apps/web/src/components/hiking/HikingMap.tsx) — *NEW(`72c9982e`): `poolKey="hiking"`, 셀 버블(`bff8ca7c`), 등산로 WMS(`7eb02951`), 마커 LOOK(`6da860c7`), 공원 경계 `areas`(`0e38c4ee`)*
+- [apps/web/src/components/hiking/MountainDetail.tsx](../../apps/web/src/components/hiking/MountainDetail.tsx) · [CourseDetail.tsx](../../apps/web/src/components/hiking/CourseDetail.tsx) — *NEW(`72c9982e`): 산·코스 상세; 2차 시간·난이도, 9차 공식 코스 칸; 작업 트리: GPX 받기·`KnpsLinks`·반대 방향·`elevationFrom === 'terrain'` 문구*
+- [apps/web/src/components/hiking/ElevationProfile.tsx](../../apps/web/src/components/hiking/ElevationProfile.tsx) — *NEW(`72c9982e`): 인라인 SVG 고도 그래프, 가파른 구간 주황(`7eb02951`)*
+- [apps/web/src/components/hiking/CourseConditions.tsx](../../apps/web/src/components/hiking/CourseConditions.tsx) — *NEW(`00804516`): 산행 조건 카드(3일치 한 번)*
+- [apps/web/src/components/hiking/HikingRecommend.tsx](../../apps/web/src/components/hiking/HikingRecommend.tsx) · [CourseAround.tsx](../../apps/web/src/components/hiking/CourseAround.tsx) — *NEW(`ffd2d827`): 추천 모드 / 가는 법·주변 링크 규약*
+- [apps/web/src/components/hiking/KnpsLinks.tsx](../../apps/web/src/components/hiking/KnpsLinks.tsx) — *NEW(작업 트리): 국립공원 통제정보·입산 가능 시각 링크*
+- [apps/web/src/components/hiking/hikingFormat.ts](../../apps/web/src/components/hiking/hikingFormat.ts) — *NEW(`72c9982e`); 작업 트리: 순수 도우미를 `@repo/shared` 에서 다시 내보내고 날짜·출발 시각·난이도 칩만 남김(113→62줄)*
+- [packages/shared/src/hiking/hikingFormat.ts](../../packages/shared/src/hiking/hikingFormat.ts) · [packages/shared/src/hooks/useHiking.ts](../../packages/shared/src/hooks/useHiking.ts) — *작업 트리: 웹에서 옮긴 순수 도우미(앱 공용) / 등산 훅 6종·`staleTime` 1시간·조건·추천 10분·추천 `keepPreviousData`*
+- [packages/utils/src/hikingRecommend.ts](../../packages/utils/src/hikingRecommend.ts) · [hikingMarker.ts](../../packages/utils/src/hikingMarker.ts) — *추천 입력 상수(`HIKING_DURATIONS`·`HIKING_LEVELS`·`HIKING_TRAVEL_MODES`·출발 도시) / 산·봉우리·셀·지점 마커 SVG*
+- [packages/api-contract/src/schemas/hiking.ts](../../packages/api-contract/src/schemas/hiking.ts) — *등산 계약; 작업 트리: `park.reversed`·`park.elevationFrom`*
+- [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — *`Routes.Hiking.image`·(작업 트리) `Routes.Hiking.gpx` — 화면이 상대 경로로 직접 씀*
+- [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) — *`auto` 기본 true — 등산 목록 진입 시 위치 요청*
+- [apps/web/src/stores/panelPrefsStore.ts](../../apps/web/src/stores/panelPrefsStore.ts) — *`54eb0cb8`: `PanelKey` 에 `public.hiking`(기본 left)*
+- [apps/web/src/App.tsx](../../apps/web/src/App.tsx) · [PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx) · [PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx) — *`72c9982e`: `/hiking` lazy·NAV 15(일상지도 뒤, `Mountain`); `49cb17f0`: 식단 라우트 주석*
+- [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx) · [mapMarkerSync.ts](../../apps/web/src/components/restaurant/mapMarkerSync.ts) — *`54eb0cb8` `fitToCoords` `bottomInset` / `7eb02951` `wmsOverlay` / `6da860c7` `labelZoom`·`compactScale`·`zIndex`(스타일 캐시 키·겉모습 비교) — 상세는 [map](map.md)*
+- [apps/web/src/routes/admin/AdminMenuBoardPage.tsx](../../apps/web/src/routes/admin/AdminMenuBoardPage.tsx) (+[test](../../apps/web/src/routes/admin/AdminMenuBoardPage.test.tsx) 6) — *NEW(`9e4c598c`): 읽기·정확도 탭, `/admin/smartly-test`(`448b4cd4`) 대체*
+- [apps/web/src/components/admin/menu-board/ReadTab.tsx](../../apps/web/src/components/admin/menu-board/ReadTab.tsx) · [EvalTab.tsx](../../apps/web/src/components/admin/menu-board/EvalTab.tsx) · [ZoomableImage.tsx](../../apps/web/src/components/admin/menu-board/ZoomableImage.tsx) — *NEW(`9e4c598c`); `f55598c2`: ReadTab `grid-cols-1`(폰 가로 넘침)*
+- [apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx) (+[test](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.test.tsx) 3) — *NEW(`0408f2f2`): 어드민 메뉴 탭 메뉴판 사진·구분값 — 머리 주석 낡음(Gotchas)*
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) · [AdminLogsPage.tsx](../../apps/web/src/routes/admin/AdminLogsPage.tsx) · [AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) — *`0408f2f2`: 메뉴 탭 섹션·`menu-board-read` 라벨 / `4597294b`: 용도 10종 `menu-board`*
+- [apps/web/src/components/admin/AdminLayout.tsx](../../apps/web/src/components/admin/AdminLayout.tsx) · [AdminTopBar.tsx](../../apps/web/src/components/admin/AdminTopBar.tsx) · [AdminRoutes.tsx](../../apps/web/src/routes/admin/AdminRoutes.tsx) — *`448b4cd4`→`9e4c598c`: 테스트 그룹 '메뉴판 읽기'·`/admin/menu-board`*
+- [apps/web/src/components/restaurant/detail/MenuBoardSection.tsx](../../apps/web/src/components/restaurant/detail/MenuBoardSection.tsx) (+[test](../../apps/web/src/components/restaurant/detail/MenuBoardSection.test.tsx) 3) · [MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx) · [shared.tsx](../../apps/web/src/components/restaurant/detail/shared.tsx) — *NEW/수정(`ee70bc2d`): 공개 메뉴 탭 메뉴판 사진·사진에서 찾은 메뉴, `MenuGrid` `boardPriceByName`*
+- [apps/web/src/routes/meal/useMealPhotoIntake.ts](../../apps/web/src/routes/meal/useMealPhotoIntake.ts) · [MealPhotoSection.tsx](../../apps/web/src/routes/meal/MealPhotoSection.tsx) — *NEW(`49cb17f0`): 사진 넣기 흐름(lease·즉시 업로드·세대 확인) / 사진 칸(고르기·끌어다 놓기·문서 `paste`); `62b2e6b3` 크게 보기*
+- [apps/web/src/routes/meal/mealPhotoFile.ts](../../apps/web/src/routes/meal/mealPhotoFile.ts) (+[test](../../apps/web/src/routes/meal/mealPhotoFile.test.ts) 6) · [test/fixtures/exifJpeg.ts](../../apps/web/src/test/fixtures/exifJpeg.ts) — *NEW(`49cb17f0`): EXIF 직접 파싱·1,600px/1.5MB 축소·HEIC 5MB / EXIF JPEG 바이트 픽스처*
+- [apps/web/src/routes/meal/MealPhotoLightbox.tsx](../../apps/web/src/routes/meal/MealPhotoLightbox.tsx) · [components/Lightbox.tsx](../../apps/web/src/components/Lightbox.tsx) — *NEW/수정(`62b2e6b3`): ±1 원본 objectURL / 빈 주소 = 받는 중 스피너*
+- [apps/web/src/routes/meal/MealEntryFormPage.tsx](../../apps/web/src/routes/meal/MealEntryFormPage.tsx) · [MealItemInputRow.tsx](../../apps/web/src/routes/meal/MealItemInputRow.tsx) · [MealDetailPage.tsx](../../apps/web/src/routes/meal/MealDetailPage.tsx) · [MealPage.tsx](../../apps/web/src/routes/meal/MealPage.tsx) — *`49cb17f0`: 사진 칸·`photoTokens` 전체 전송·`source` photo·다른 후보 칩·문구 / `62b2e6b3`: 상세 사진 크게*
+- [packages/shared/src/stores/mealDraftStore.ts](../../packages/shared/src/stores/mealDraftStore.ts) · [packages/shared/src/hooks/useMeal.ts](../../packages/shared/src/hooks/useMeal.ts) — *`mealDraftInitFromEntry` 가 기존 사진 토큰을 싣는다·`beginMealDraftPhotoPreparation` / `62b2e6b3` `useMealPhotoUrls`*
+- [apps/web/src/test/useMealPhotoUrl.test.tsx](../../apps/web/src/test/useMealPhotoUrl.test.tsx) — *`62b2e6b3`: 6→7(여러 장 훅이 고른 장만)*
+- [apps/web/src/styles/global.css](../../apps/web/src/styles/global.css) — *`f55598c2`: 폰 `text-sm`·`text-xs` 입력칸만 unlayered 16px*
+- [apps/web/src/routes/admin/MealNutritionGapSection.tsx](../../apps/web/src/routes/admin/MealNutritionGapSection.tsx) (+[test](../../apps/web/src/routes/admin/MealNutritionGapSection.test.tsx) 2) · [AdminFoodPage.tsx](../../apps/web/src/routes/admin/AdminFoodPage.tsx) — *NEW/수정(`92e79e9a`): 열량 빈 식단 이름 카드·portion 안내*
+- [apps/web/.env.example](../../apps/web/.env.example) · [packages/shared/src/api/client.ts](../../packages/shared/src/api/client.ts) — *`VITE_API_URL` 과 `apiFetch` `baseUrl` — 등산 링크가 거치지 않는 경로(Gotchas)*
+- 토픽 [hiking](hiking.md) · [menu-board](menu-board.md) · [map](map.md) · [meal](meal.md) · [food](food.md) · [shared](shared.md) · [utils](utils.md) · [api-contract](api-contract.md),
+  컨셉 [map-sheet-shell](../concepts/map-sheet-shell.md) · [saved-location-glance](../concepts/saved-location-glance.md) · [platform-ui-split](../concepts/platform-ui-split.md) ·
+  [principal-scoped-client-state](../concepts/principal-scoped-client-state.md) · [golden-set-precision-gate](../concepts/golden-set-precision-gate.md) ·
+  [provenance-tagged-fill](../concepts/provenance-tagged-fill.md)(메뉴판 찾은 메뉴 분리·"○○ 기준 추정"·등산 원천/`elevationFrom` 안내) ·
+  [license-shaped-surfaces](../concepts/license-shaped-surfaces.md)(국립공원 공식 문구 원문 그대로·SRTM 출처)
 
 29차 신규/변경(2026-10-05~10-10):
 - [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md) — *성능 감사 2차 계획·진행 로그 — 배포 체크리스트(서버·웹·앱 동시), 남은 것(웹: 정산 카드 금액 칸 잘림), 리뷰 반영(크롤 종료 폴백), 웹 테스트 수 기록*

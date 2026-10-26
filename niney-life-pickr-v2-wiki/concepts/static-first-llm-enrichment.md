@@ -1,7 +1,7 @@
 ---
 concept: 정적 결과 먼저, LLM 은 나중에 — 규칙 결과를 즉시 주고 AI 보강은 비동기로 덧입힌다
-last_compiled: 2026-10-04
-topics_connected: [food, saju-c, tarot, ai, shared, web, meal-nutrition, meal]
+last_compiled: 2026-10-26
+topics_connected: [food, saju-c, tarot, ai, shared, web, meal-nutrition, meal, menu-board, crawl]
 status: active
 ---
 
@@ -18,6 +18,8 @@ status: active
 
 ## Instances
 
+- **2026-10-23** in [meal](../topics/meal.md) / [food](../topics/food.md) (`92e79e9a`): 식단의 빈 열량 — 저장은 **캐시만 보고 즉시** 끝내고, 아직 안 물어본 이름은 커밋 뒤 백그라운드(전역 동시 1·대기열 8)가 규칙 엔진 → LLM 매칭 캐시(표준명을 엔진에 다시 넣음) → 웹 실측 캐시 순으로 찾아 그 이름의 빈 항목을 채운다. 숫자는 카탈로그·웹에서만 오고 LLM 은 "가까운 음식" 만 고른다. 2~30자 밖 이름은 외부로 보내지 않고, 테스트는 규칙만 돈다. 채운 값은 `basis: donor_estimate` 로 표시된다([provenance-tagged-fill](provenance-tagged-fill.md)).
+- **2026-10-10** in [menu-board](../topics/menu-board.md) / [crawl](../topics/crawl.md) (`0408f2f2`): 크롤은 네이버 '메뉴판 이미지로 보기' 사진 목록만 스냅샷에 넣고 끝나며, 읽기(LLM 비전)는 크롤 직후 **fire-and-forget** 으로 새 사진만(`NaverMenuBoardReader` — 가게당 12장 상한, 모델·키가 없으면 바로 멈춤, 작업 로그 `menu-board-read`, 테스트 환경은 끔). 등록 메뉴와의 짝짓기(구분값)는 LLM 없이 저장할 때마다 다시 계산하므로, 읽기가 늦게 도착해도 다음 저장에서 공개 응답이 맞춰진다.
 - **2026-10-04** in [meal-nutrition](../topics/meal-nutrition.md) / [meal](../topics/meal.md) (`3d067a0`): 영양 탭은 점검(KDRI 대조, 결정적)을 즉시 보이고 영양제 조언은 사용자가 누를 때만 LLM 으로 받는다 — LLM 이 없거나 실패하면 같은 모양의 서버 문장으로 `status: fallback`. 여기서 한 걸음 더 나가 **무엇을 LLM 에 맡기는가**(후보·숫자는 서버, 걸린 칸만 서버 문장으로 교체)가 별도 패턴이 됐다 — [server-decides-llm-narrates](server-decides-llm-narrates.md).
 - **2026-09-06** in [saju-c](../topics/saju-c.md) / [shared](../topics/shared.md) (`f8e5dd0`): `POST /saju-c/readings` 가 원국 + 정적 섹션 4개 + `jobId` 를 즉시 돌려주고, `SajuJobRegistry` 가 4개 LLM 호출을 병렬로 띄운 뒤 `useSajuJob` 이 long-poll 로 도착 순 병합. 회원 저장은 4개가 모두 끝난 뒤 한 번. 패널은 pending 섹션에 "AI 가 사주를 읽는 중이에요 — 먼저 기본 풀이를 보여 드려요".
 - **2026-09-03~05** in [tarot](../topics/tarot.md): 동기 응답이지만 같은 태도 — LLM 실패·한도 초과면 정적 해석 + `source: static` 배지, 요청 실패(`failed`)에만 재시도 버튼. 메뉴 타로는 후보 3개를 시드 결정적으로 먼저 고르고 LLM 은 이유 문장만.
@@ -29,6 +31,8 @@ LLM 을 "응답 경로의 필수 단계"에서 "결과를 꾸미는 후처리"�
 
 ## Sources
 
+- [menu-board](../topics/menu-board.md)
+- [meal](../topics/meal.md)
 - [../topics/food](../topics/food.md)
 - [../topics/saju-c](../topics/saju-c.md)
 - [../topics/tarot](../topics/tarot.md)

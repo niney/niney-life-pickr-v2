@@ -1,7 +1,7 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
-last_compiled: 2026-10-10
-topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, api-docs]
+last_compiled: 2026-10-26
+topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, api-docs, hiking, menu-board]
 status: active
 ---
 
@@ -13,6 +13,7 @@ status: active
 
 ## Instances
 
+- **2026-10-25~26** in [hiking](../topics/hiking.md) / [menu-board](../topics/menu-board.md) / [api-contract](../topics/api-contract.md) / [utils](../topics/utils.md) (`72c9982e`…`0e38c4ee` + 작업 트리): 이중 정의 추적의 다음 장. 등산은 코스 형태·난이도·추천 입력(산행 시간·난이도·이동 수단) 리터럴을 계약 `schemas/hiking.ts` 의 인라인 `z.enum` 과 utils `HIKING_*` 목록에 따로 적었고 9차까지 동일성 테스트가 없었다 — 위키 점검에서 지적돼 `hiking-contract.test.ts` 가 다섯 쌍을 대조한다(작업 트리, 주차 `parking-master.service.test.ts` 와 같은 장치; enum 이 객체 안 인라인이라 zod v3 내부(`.unwrap()`·`_def.innerType`·`_def.schema.shape`)로 꺼낸다). 새 **스키마 간 import 방향**도 생겼다 — `hiking.ts` 가 `air-quality`·`weather` 스키마를 가져다 쓰고(산행 조건이 대기·날씨 모양을 그대로 싣는다), 공공데이터 도메인 스키마가 지켜 오던 "파일 하나로 자기완결" 이 처음 깨졌다. 메뉴판은 `crawl.ts` → `menu-board.ts` 방향이 생겼다(크롤 스냅샷 필드가 메뉴판 읽기 결과 모양을 싣는다). 둘 다 순환은 아니지만, 스키마 파일 하나를 고칠 때 다른 도메인의 응답 모양이 함께 바뀐다.
 - **2026-05-07** in [[../topics/api-contract]]: `package.json`이 `./src/index.ts`를 main/types로 직접 가리킨다. 컴파일 산출물 없음. `Routes.Auth.login` 같은 경로 상수 + zod 스키마가 한 파일에서 노출.
 - **2026-05-07** in [[../topics/friendly]]: `fastify-type-provider-zod`로 동일 zod 스키마를 검증기 + 시리얼라이저 + OpenAPI 변환기로 재사용. `app.ts`가 `setValidatorCompiler` / `setSerializerCompiler`로 와이어링.
 - **2026-05-07** in [[../topics/shared]]: `client.ts`의 fetch 래퍼가 `ErrorResponseSchema.safeParse`로 응답 검증. API 함수 시그니처는 `z.infer<typeof X>`로 도출 — 별도 타입 선언 없음.
@@ -68,6 +69,8 @@ status: active
 
 ## Sources
 
+- [hiking](../topics/hiking.md)
+- [menu-board](../topics/menu-board.md)
 - [[../topics/api-contract]]
 - [[../topics/friendly]]
 - [[../topics/shared]]
