@@ -3,7 +3,8 @@ import { AirGradeSchema } from './air-quality.js';
 import { WeatherBase, WeatherPrecip } from './weather.js';
 
 // 등산(/hiking) — 100대 명산 + 전국 주요 봉우리 코스. 원천: 한국등산트레킹지원센터 100대명산 GPX(data.go.kr 15098177)·전국 주요
-// 봉우리 코스 GPX(15108086) + 산림청 명산등산로(15158915)·산정보(15058662) + 한국등산트레킹지원센터 봉우리·갈림길·교통 POI(B553662). 산·코스는 적재본
+// 봉우리 코스 GPX(15108086) + 산림청 명산등산로(15158915)·산정보(15058662) + 한국등산트레킹지원센터 봉우리·갈림길·교통 POI(B553662)
+// + 행정안전부 산행안전지도(국립공원공단 공식 탐방로·국립공원 경계·탐방지원센터·대피소, 9차). 산·코스는 적재본
 // (load:hiking)을 읽기만 하고, 오늘의 조건(conditions)만 기상청 단기예보·에어코리아·산림청 산불위험예보를 캐시로 부른다.
 // docs/PLAN-hiking.md
 
@@ -33,6 +34,8 @@ export const HikingMountainSummary = LatLng.extend({
   images: z.array(z.number().int()),
   // 100대 명산에 합친 전국 봉우리 이름(검색용 — "서석대"로 무등산을 찾는다). 봉우리 산은 빈 배열.
   peaks: z.array(z.string()),
+  // 정상이 든 국립공원 이름("북한산국립공원", 9차). 공원 밖이면 null.
+  park: z.string().nullable(),
 });
 export type HikingMountainSummaryType = z.infer<typeof HikingMountainSummary>;
 
@@ -41,6 +44,22 @@ export const HikingMountainsResult = z.object({
   loadedAt: z.string(),
 });
 export type HikingMountainsResultType = z.infer<typeof HikingMountainsResult>;
+
+// 국립공원 공식 코스 문구(9차) — 행정안전부 산행안전지도(국립공원공단 탐방로) 원문 그대로(공공누리 3유형 변경금지).
+// sections 는 원문 구간("구룡탐방지원센터~구룡사~…~비로봉")을 '~' 로 나눈 것. duration 은 안내 구간 전체의 소요시간("01시간30분" —
+// 편도·원점회귀는 코스마다 다르다), distance 공식 거리("1.9km" — 선 길이 lengthM 과 다를 수 있다), difficulty 상·중·하, schedule
+// 당일·1박2일, contact 관리 사무소 연락처.
+export const HikingParkCourse = z.object({
+  parkName: z.string(),
+  name: z.string(),
+  sections: z.array(z.string()),
+  duration: z.string(),
+  distance: z.string(),
+  difficulty: z.string(),
+  schedule: z.string(),
+  contact: z.string().nullable(),
+});
+export type HikingParkCourseType = z.infer<typeof HikingParkCourse>;
 
 // 코스 요약 — 산 상세 목록·지도용. pieces 는 조각별 encoded polyline(정밀도 1e5, @repo/utils decodePolyline).
 // 조각 사이는 원본 기록이 끊긴 곳(gapCount·gapM, 직선거리 합 — 길이 lengthM 에는 넣지 않는다).
@@ -77,8 +96,11 @@ export const HikingCourseSummary = z.object({
   // 코스에 나오는 험한 노면(@repo/utils HIKING_ROUGH_SURFACES 중) — 카드 칩.
   roughSurfaces: z.array(z.string()),
   // 원천 — top100 100대명산 GPX(지점·이정표·노면) · peak 전국 주요 봉우리 GPX(선·고도만, 지점은 근처 봉우리·등산 지점을 붙인 것) ·
-  // network 전국 주요 봉우리의 등산로 망(구간 묶음)을 갈림길에서 이어 만든 코스(6차 — 들머리 → 정상 왕복·넘어가기).
-  source: z.enum(['top100', 'peak', 'network']),
+  // network 전국 주요 봉우리의 등산로 망(구간 묶음)을 갈림길에서 이어 만든 코스(6차 — 들머리 → 정상 왕복·넘어가기) ·
+  // park 국립공원 공식 탐방로 선(9차 — 고도는 근처 GPX 선에서 빌린 것, 못 빌리면 고도 없음).
+  source: z.enum(['top100', 'peak', 'network', 'park']),
+  // 국립공원 공식 코스 문구(9차) — source park 이거나, 같은 길인 GPX 코스에 붙인 것. 아니면 null.
+  park: HikingParkCourse.nullable(),
   bbox: HikingBbox,
   pieces: z.array(z.string()),
 });
@@ -94,6 +116,15 @@ export const HikingNeighbor = LatLng.extend({
 });
 export type HikingNeighborType = z.infer<typeof HikingNeighbor>;
 
+// 국립공원 경계(9차 — 산행안전지도 DSSP-IF-00145, WDPA). polygons 는 다각형마다 [바깥 고리, 구멍…] encoded polyline(30m 단순화).
+export const HikingParkArea = z.object({
+  id: z.string(),
+  name: z.string(),
+  designatedYear: z.number().int().nullable(),
+  polygons: z.array(z.array(z.string())),
+});
+export type HikingParkAreaType = z.infer<typeof HikingParkArea>;
+
 export const HikingMountainDetail = HikingMountainSummary.extend({
   // 100대 명산은 명산등산로 개관, 봉우리는 산림청 산정보 소개(이름·시군구가 맞을 때만).
   overview: z.string().nullable(),
@@ -105,8 +136,11 @@ export const HikingMountainDetail = HikingMountainSummary.extend({
   summitName: z.string().nullable(),
   summitEle: z.number().nullable(),
   bbox: HikingBbox,
+  // 국립공원 공식 코스(park 있음)가 먼저(공원 안 순번), 그다음 순번(no).
   courses: z.array(HikingCourseSummary),
   neighbors: z.array(HikingNeighbor),
+  // 정상이 든 국립공원 경계(지도 면). 공원 밖이면 null.
+  parkArea: HikingParkArea.nullable(),
 });
 export type HikingMountainDetailType = z.infer<typeof HikingMountainDetail>;
 

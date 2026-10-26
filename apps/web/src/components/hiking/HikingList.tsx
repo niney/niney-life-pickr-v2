@@ -104,7 +104,7 @@ export const HikingListHeader = ({
           <Input
             type="search"
             aria-label="산 검색"
-            placeholder="산·봉우리 이름·지역 검색"
+            placeholder="산·봉우리 이름·지역·국립공원 검색"
             className="pl-9 pr-9"
             value={draft}
             onChange={(e) => {
@@ -271,7 +271,7 @@ export const HikingMountainList = ({ ranked, isLoading, selectedId, onSelect }: 
 export const HikingFooter = () => (
   <footer className="flex flex-col gap-1 px-3 py-3 text-[11px] leading-relaxed text-muted-foreground" data-testid="hiking-footer">
     <div>
-      코스·지점은 100대 명산 2022년 1월·전국 주요 봉우리 2022년 11월 기준 조사 자료입니다. 입산통제·탐방로 폐쇄·공사는 반영되지 않으니 산행 전
+      코스·지점은 100대 명산 2022년 1월·전국 주요 봉우리 2022년 11월·국립공원 공식 코스 2024년 2월 기준 자료입니다. 입산통제·탐방로 폐쇄·공사는 반영되지 않으니 산행 전
       국립공원·지자체 안내를 확인하세요.
     </div>
     <div>
@@ -283,7 +283,11 @@ export const HikingFooter = () => (
       <a href="https://www.data.go.kr/data/15108086/fileData.do" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
         전국 주요 봉우리 코스 <ExternalLink className="size-3" />
       </a>
-      , 지도 배경 등산로 선은 산림청 등산로(브이월드),{' '}
+      , 국립공원 공식 코스·경계·탐방지원센터·대피소는{' '}
+      <a href="https://www.safetydata.go.kr" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
+        행정안전부 산행안전지도 <ExternalLink className="size-3" />
+      </a>
+      (국립공원공단), 지도 배경 등산로 선은 산림청 등산로(브이월드),{' '}
       <a href="https://www.forest.go.kr" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline">
         산림청 <ExternalLink className="size-3" />
       </a>{' '}

@@ -296,6 +296,7 @@ export const HikingPage = () => {
         <HikingMap
           mountains={mountainsQ.data?.items ?? []}
           selectedMountainId={mountainId}
+          parkArea={mountain?.parkArea ?? null}
           courses={mountain?.courses ?? null}
           selectedCourseId={courseId}
           pois={course?.pois ?? []}

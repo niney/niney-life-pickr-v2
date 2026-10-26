@@ -27,6 +27,7 @@ import type { FireRiskRow, GdTrailRow, TrekkingPoiRow } from './hiking-api.adapt
 import type { SigunguShape } from './hiking-area.js';
 import { HikingConditionsService } from './hiking-conditions.service.js';
 import { buildHikingRows, isSeparateMountainName, matchGpxFolder, preparePeaks, replaceHiking, villageKey } from './hiking-master.service.js';
+import type { ParkBoundaryRow, ParkCourseRow } from './hiking-park.adapter.js';
 
 // 등산 라우트 — 격리 DB(빈 테이블)에 합성 GPX 2코스 + 명산등산로 1행 + 등산트레킹 POI 를 buildHikingRows → replaceHiking
 // 으로 넣고 ① 미적재 503 ② 산 목록(정상 좌표·권역·사진) ③ 산 상세(코스 선 복원·험한 노면) ④ 코스 상세(프로필·지점 병합·
@@ -427,7 +428,7 @@ describe('hiking routes (격리 DB)', () => {
         { id: 't2', category: 'TOILET', name: '먼 화장실', detail: null, lat: 36.98, lng: 126.98 },
       ],
     });
-    expect(rows.report.facilities).toEqual({ toilets: 1, lots: 1, links: expect.any(Number) });
+    expect(rows.report.facilities).toEqual({ toilets: 1, lots: 1, centers: 0, shelters: 0, links: expect.any(Number) });
     expect(rows.report.peaks).toMatchObject({
       folders: 3,
       networkFiles: 2,
@@ -500,6 +501,118 @@ describe('hiking routes (격리 DB)', () => {
       ['421100101', 'top100'],
     ]);
     cond.mockRestore();
+  });
+
+  // 9차 — 국립공원(산행안전지도). ① 가리산 1번 코스와 같은 길 → 새로 넣지 않고 공식 문구만 ② 가리산 길 윗부분(갈림길 → 정상, 위에서
+  // 아래로 그린 선) → 새 코스, 구간 첫 이름 '갈림길'이 GPX 갈림길에 맞아 뒤집고 고도는 가리산 GPX 에서 빌린다 ③ 갈림길에서 동쪽으로
+  // 가는 길(서 → 동으로 그린 선, 첫 구간이 동쪽 끝 탐방지원센터) → 뒤집고, 근처 GPX 가 없어 고도 없음, 산은 1km 안 정상(가리산)
+  // ④ 먼 섬길 → 산을 못 정해 뺀다. 경계 사각형 안에 가리산 정상. 탐방지원센터(동쪽 끝)·대피소(가리산 길 17m 옆)가 코스 지점으로.
+  it('국립공원 — 같은 길에 공식 문구, 새 공식 코스(방향·고도 빌림·산 정하기), 경계·산 배지, 탐방지원센터·대피소', async () => {
+    const lineOf = (n: number, f: (i: number) => { lat: number; lng: number }) => [Array.from({ length: n }, (_, i) => f(i))];
+    const parkCourse = (p: Partial<ParkCourseRow> & { sn: number; seq: number; name: string; sections: string[]; lines: ParkCourseRow['lines'] }): ParkCourseRow => ({
+      parkCode: '099',
+      parkName: '가리산국립공원',
+      duration: '01시간30분',
+      distance: '1.9km',
+      difficulty: '중',
+      schedule: '당일',
+      contact: '가리산국립공원사무소 (033)000-0000',
+      ...p,
+    });
+    const park: ParkBoundaryRow = {
+      id: '9001',
+      name: '가리산국립공원',
+      nameEn: 'Garisan',
+      designatedYear: 2000,
+      polygons: [
+        [
+          [
+            { lat: 36.99, lng: 126.99 },
+            { lat: 36.99, lng: 127.02 },
+            { lat: 37.02, lng: 127.02 },
+            { lat: 37.02, lng: 126.99 },
+            { lat: 36.99, lng: 126.99 },
+          ],
+        ],
+      ],
+    };
+    const rows = buildHikingRows({
+      files: [
+        { mountain: '가리산', no: 1, xml: COURSE1 },
+        { mountain: '가리산', no: 2, xml: COURSE2 },
+      ],
+      gdTrails: [GD],
+      pois: [],
+      images: new Map(),
+      sigungu: SIGUNGU,
+      loadedAt: new Date('2026-10-26T00:00:00Z'),
+      parkCourses: [
+        parkCourse({ sn: 101, seq: 1, name: '장구목이코스', sections: ['장구목이', '가리산'], lines: lineOf(31, (i) => ({ lat: 37 + i * STEP, lng: 127 })) }),
+        parkCourse({ sn: 102, seq: 2, name: '정상코스', sections: ['갈림길', '가리산 정상'], lines: lineOf(16, (i) => ({ lat: 37.006 - i * STEP, lng: 127 })) }),
+        parkCourse({ sn: 103, seq: 3, name: '동쪽코스', sections: ['동쪽탐방지원센터', '갈림길'], lines: lineOf(41, (i) => ({ lat: 37.003, lng: 127 + i * 0.00025 })) }),
+        parkCourse({ sn: 104, seq: 1, parkName: '어딘가국립공원', name: '섬길', sections: ['선착장', '등대'], lines: lineOf(20, (i) => ({ lat: 35 + i * STEP, lng: 128 })) }),
+      ],
+      parks: [park],
+      facilities: [
+        { id: 'e1', category: 'ENTRY', name: '동쪽탐방지원센터', detail: '국립공원공단 · 033-000-0001', lat: 37.003, lng: 127.0101, ele: 250, source: 'park' },
+        { id: 's1', category: 'SHELTER', name: '정상대피소', detail: '국립공원공단', lat: 37.0055, lng: 127.0002, ele: 860, source: 'park' },
+      ],
+    });
+    expect(rows.report.park).toMatchObject({
+      courses: 4,
+      enriched: 1,
+      added: 2,
+      withElevation: 1,
+      oriented: 2,
+      flipped: 2,
+      eleFixed: 0,
+      unassigned: ['어딘가국립공원 섬길'],
+      parks: 1,
+      mountainsInPark: 1,
+    });
+    expect(rows.report.facilities).toMatchObject({ centers: 1, shelters: 1 });
+    await replaceHiking(app.prisma, rows);
+
+    const l = (await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains' })).json<HikingMountainsResultType>();
+    expect(l.items[0]).toMatchObject({ id: '421100101', park: '가리산국립공원', courseCount: 4 });
+    const m = (await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains/421100101' })).json<HikingMountainDetailType>();
+    expect(m.parkArea).toMatchObject({ id: '9001', name: '가리산국립공원', designatedYear: 2000 });
+    expect(decodePolyline(m.parkArea!.polygons[0]![0]!)).toHaveLength(5);
+    // 공식 코스가 먼저(공원 안 순번) — 같은 길 GPX 코스(문구만 붙음) → 새 공식 코스 둘 → 나머지.
+    expect(m.courses.map((c) => [c.id, c.source, c.name])).toEqual([
+      ['421100101-1', 'top100', '장구목이코스'],
+      ['421100101-3002', 'park', '정상코스'],
+      ['421100101-3003', 'park', '동쪽코스'],
+      ['421100101-2', 'top100', '가리산 정상 코스'],
+    ]);
+    expect(m.courses[0]!.park).toEqual({
+      parkName: '가리산국립공원',
+      name: '장구목이코스',
+      sections: ['장구목이', '가리산'],
+      duration: '01시간30분',
+      distance: '1.9km',
+      difficulty: '중',
+      schedule: '당일',
+      contact: '가리산국립공원사무소 (033)000-0000',
+    });
+    expect(m.courses[3]!.park).toBeNull();
+
+    // 위에서 아래로 그린 윗부분 — 뒤집혀 갈림길(600m)에서 정상(900m)으로, 고도는 가리산 GPX 에서.
+    const up = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-3002' })).json<HikingCourseDetailType>();
+    expect(up).toMatchObject({ hasElevation: true, startName: '갈림길', endName: '가리산 정상', shape: 'summit' });
+    expect(up.start.lat).toBeCloseTo(37.003, 4);
+    expect(up.start.ele!).toBeLessThan(up.end.ele!);
+    expect(up.pois.map((p) => p.id)).toContain('knps:s1');
+
+    // 동쪽 길 — 뒤집혀 탐방지원센터 쪽에서 시작, 고도 없음, 들머리에 탐방지원센터(연락처).
+    const east = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-3003' })).json<HikingCourseDetailType>();
+    expect(east).toMatchObject({ hasElevation: false, startName: '동쪽탐방지원센터', endName: '갈림길', timeMin: null });
+    expect(east.start.lng).toBeCloseTo(127.01, 3);
+    expect(east.pois.find((p) => p.id === 'knps:e1')).toMatchObject({ category: 'ENTRY', name: '동쪽탐방지원센터', description: '국립공원공단 · 033-000-0001', atM: 0 });
+
+    // 같은 길 GPX 코스엔 원래 지점 그대로 + 대피소.
+    const c1 = (await app.inject({ method: 'GET', url: '/api/v1/hiking/courses/421100101-1' })).json<HikingCourseDetailType>();
+    expect(c1.pois.map((p) => p.id)).toEqual(expect.arrayContaining(['gpx:101', 'gpx:103', 'knps:s1']));
   });
 });
 

@@ -3030,12 +3030,32 @@ model HikingMountain {
   peaks       String   @default("[]")
   // 이어진 봉우리 — 정상이 서로의 코스 선 30m 안인 산 id JSON 배열(가까운 순). 없으면 "[]".
   neighbors   String   @default("[]")
+  // 9차 — 정상이 든 국립공원(HikingPark.id). 공원 밖이면 null.
+  parkId      String?
   loadedAt    DateTime
 
   courses HikingCourse[]
   pois    HikingPoi[]
 
   @@map("hiking_mountains")
+}
+
+// 9차 국립공원 경계 — 행정안전부 산행안전지도 DSSP-IF-00145(WDPA, 22곳). id = WDPA id. 경계는 다각형마다 [바깥 고리, 구멍…]
+// 을 30m 로 단순화한 encoded polyline JSON(string[][]). 산(HikingMountain.parkId)과 FK 없이 잇는다(전량 교체가 같이 한다).
+model HikingPark {
+  id             String   @id
+  // 한글 이름("북한산국립공원") — 원천은 영문(WDPA NAME)뿐이라 이름표로 옮긴다.
+  name           String
+  nameEn         String
+  designatedYear Int?
+  minLat         Float
+  minLng         Float
+  maxLat         Float
+  maxLng         Float
+  polygons       String
+  loadedAt       DateTime
+
+  @@map("hiking_parks")
 }
 
 // 코스 — id = `<산 id>-<GPX 번호>`. 선은 조각별 encoded polyline(정밀도 1e5) JSON 배열, 고도 프로필은
@@ -3075,8 +3095,12 @@ model HikingCourse {
   // 코스가 걸친 시군구 키 JSON 배열("<시도 코드>:<시군구>", 산불위험예보·대기 예보 권역용 — hiking-area.ts). 3차 마이그레이션
   // 전 적재분은 null(status:hiking 이 stale 로 세어 다시 적재한다).
   sigungu     String?
-  // 5차 — 'top100' 100대명산 GPX · 'peak' 전국 주요 봉우리 GPX(선·고도만, 이정표·노면 없음).
+  // 5차 — 'top100' 100대명산 GPX · 'peak' 전국 주요 봉우리 GPX(선·고도만, 이정표·노면 없음) · 'network' 봉우리 등산로 망에서
+  // 이은 코스(6차) · 'park' 국립공원 공식 탐방로 선(9차, 고도는 근처 GPX 에서 빌린다).
   source      String  @default("top100")
+  // 9차 국립공원 공식 코스 문구 JSON { parkName, name, sections[], duration, distance, difficulty, schedule, contact, seq } —
+  // 산행안전지도 DSSP-IF-00143 원문 그대로(공공누리 3유형 변경금지). 같은 길인 GPX 코스에도 붙인다. 아니면 null.
+  park        String?
   pieceCount  Int
   // 30m 넘게 떨어진 조각 사이(기록 끊김) 개수와 직선거리 합.
   gapCount    Int
@@ -3108,7 +3132,8 @@ model HikingPoi {
   lng         Float
   ele         Float?
   signposts   String?
-  // 'gpx' | 'api' | 'both' | 'peak'(전국 주요 봉우리 정상, id = 'peak:<코드>')
+  // 'gpx' | 'api' | 'both' | 'peak'(전국 주요 봉우리 정상, id = 'peak:<코드>') | 'network'(망 갈림길 'jct:') |
+  // 'facility'(일상지도 화장실 'toilet:'·공영 주차장 'lot:') | 'park'(국립공원 탐방지원센터·안내소·대피소 'knps:<관리번호>')
   source      String
 
   mountain HikingMountain    @relation(fields: [mountainId], references: [id], onDelete: Cascade)

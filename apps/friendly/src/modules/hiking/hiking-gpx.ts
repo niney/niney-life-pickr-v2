@@ -413,8 +413,9 @@ export const steepestPct = (pieces: readonly BuiltPoint[][]): number | null => {
   return best === null ? null : Math.round(best * 100);
 };
 
-// GPX 하나 → 정리된 코스. 트랙 점이 2개 미만이면 null.
-export const buildCourse = (parsed: GpxParsed): BuiltCourse | null => {
+// GPX 하나 → 정리된 코스. 트랙 점이 2개 미만이면 null. keepDirection — 시작이 끝보다 높아도 뒤집지 않는다(국립공원 공식 코스처럼
+// 방향을 이미 아는 선).
+export const buildCourse = (parsed: GpxParsed, opts: { keepDirection?: boolean } = {}): BuiltCourse | null => {
   let stitched = stitchPieces(parsed.segments);
   const flat = stitched.pieces.flat();
   if (flat.length < 2) return null;
@@ -426,7 +427,7 @@ export const buildCourse = (parsed: GpxParsed): BuiltCourse | null => {
   const lastPt = stitched.pieces.at(-1)!.at(-1)!;
   const isLoop = distM(first, lastPt) <= LOOP_M;
   let reversed = false;
-  if (!isLoop && eles) {
+  if (!isLoop && eles && !opts.keepDirection) {
     if ((eleBySeq.get(first.seq) ?? 0) - (eleBySeq.get(lastPt.seq) ?? 0) >= REVERSE_MIN_DROP_M) {
       stitched = reverseStitch(stitched);
       reversed = true;

@@ -2,7 +2,9 @@
 // + 산림청 명산등산로(15158915, 1콜) + 한국등산트레킹지원센터 봉우리·갈림길·교통 POI(B553662, 합 ~10콜) + 산림청 산정보
 // 사진(15058662, 산마다 1콜 + 사진 최대 3장). 5차부터 한국등산트레킹지원센터 전국 주요 봉우리 코스 zip(15108086, 봉우리 4,492)
 // + 산정보 전체(5콜, 봉우리 소개·높이·소재지) + 들머리 이름(DB 의 지하철역·버스 정류장·공영 주차장, 없으면 브이월드 역지오코딩
-// 리·동 — data/hiking-geocode-cache.json 에 영구 캐시). 키는 DATA_GO_KR_API_KEY·VWORLD_API_KEY. 사진은 긴 변 960px JPEG 로 줄여
+// 리·동 — data/hiking-geocode-cache.json 에 영구 캐시). 9차부터 행정안전부 산행안전지도(국립공원공단 공식 탐방로 199·국립공원 경계
+// 22·탐방지원센터·안내소·대피소 — 3콜, 원문은 data/hiking-park/ 에 두고 부르기에 실패하면 그것으로). 키는 DATA_GO_KR_API_KEY·
+// VWORLD_API_KEY·SAFETYDATA_COURSE_KEY·SAFETYDATA_PARK_KEY·SAFETYDATA_FACILITY_KEY. 사진은 긴 변 960px JPEG 로 줄여
 // data/hiking-images/<산 id>_<순번>.jpg 에 둔다(있으면 다시 받지 않음). → Hiking* 전량 교체.
 // docs/PLAN-hiking.md · 원본 보관은 docs/data-sources.md
 //
@@ -40,6 +42,16 @@ import {
 import { parseSigunguGeo } from '../src/modules/hiking/hiking-area.js';
 import { PointGrid } from '../src/modules/hiking/hiking-grid.js';
 import {
+  fetchSafetyRows,
+  normalizeParkBoundary,
+  normalizeParkCourse,
+  normalizeParkFacility,
+  type ParkBoundaryRow,
+  type ParkCourseRow,
+  type ParkFacilityRow,
+  type SafetyApi,
+} from '../src/modules/hiking/hiking-park.adapter.js';
+import {
   HIKING_IMAGE_DIR,
   buildHikingRows,
   hikingImageFileName,
@@ -72,6 +84,7 @@ const MAX_PEAK_IMAGES = 1;
 const PLACE_M = 300;
 const GEOCODE_FAIL_STREAK = 20;
 const GEOCODE_CACHE = 'data/hiking-geocode-cache.json';
+const PARK_CACHE_DIR = 'data/hiking-park';
 const PEAK_IMAGE_CHECKED = 'peak-checked.json';
 const IMAGE_LONG_EDGE = 960;
 const IMAGE_GAP_MS = 150;
@@ -142,6 +155,33 @@ const loadFacilities = async (): Promise<HikingFacility[]> => {
     ...lots.map((l): HikingFacility => ({ id: l.id, category: 'PARK', name: l.name, detail: l.feeType === 'free' ? '공영 · 무료' : '공영', lat: l.lat!, lng: l.lng! })),
   ];
 };
+
+// 9차 산행안전지도 — 데이터마다 키가 따로(공인 IP 묶임). 받은 원문은 data/hiking-park/<api>.json 에 두고, 키가 없거나 부르기에
+// 실패하면 그것을 쓴다(그것도 없으면 그 데이터 없이 — 국립공원 코스·경계·시설만 빠지고 나머지는 그대로 적재).
+const loadSafetyRows = async (api: SafetyApi, envKey: string): Promise<Record<string, unknown>[]> => {
+  const cachePath = resolve(process.cwd(), PARK_CACHE_DIR, `${api}.json`);
+  const cached = (): Record<string, unknown>[] => (existsSync(cachePath) ? (JSON.parse(readFileSync(cachePath, 'utf8')) as Record<string, unknown>[]) : []);
+  const key = process.env[envKey] ?? '';
+  if (!key) {
+    console.log(`산행안전지도 ${api}: ${envKey} 없음 — ${existsSync(cachePath) ? '받아 둔 원문으로' : '건너뜀'}`);
+    return cached();
+  }
+  try {
+    const rows = await fetchSafetyRows(api, key);
+    mkdirSync(resolve(cachePath, '..'), { recursive: true });
+    writeFileSync(cachePath, JSON.stringify(rows));
+    return rows;
+  } catch (e) {
+    console.warn(`산행안전지도 ${api} 실패 — ${existsSync(cachePath) ? '받아 둔 원문으로' : '이 데이터 없이'}: ${e instanceof Error ? e.message : String(e)}`);
+    return cached();
+  }
+};
+const nonNull = <T>(x: T | null): x is T => x !== null;
+const loadParkData = async (): Promise<{ courses: ParkCourseRow[]; parks: ParkBoundaryRow[]; facilities: ParkFacilityRow[] }> => ({
+  courses: (await loadSafetyRows('course', 'SAFETYDATA_COURSE_KEY')).map(normalizeParkCourse).filter(nonNull),
+  parks: (await loadSafetyRows('park', 'SAFETYDATA_PARK_KEY')).map(normalizeParkBoundary).filter(nonNull),
+  facilities: (await loadSafetyRows('facility', 'SAFETYDATA_FACILITY_KEY')).map(normalizeParkFacility).filter(nonNull),
+});
 
 // 들머리 리·동 — 300m 안에 역·정류장·주차장이 없는 끝만 역지오코딩(캐시 영구, 못 찾은 곳은 '' 로 기록).
 const collectVillages = async (ends: readonly { lat: number; lng: number }[], places: readonly PeakPlace[]): Promise<Map<string, string>> => {
@@ -323,6 +363,13 @@ const main = async (): Promise<void> => {
   const sigungu = existsSync(GEO_PATH) ? parseSigunguGeo(JSON.parse(readFileSync(GEO_PATH, 'utf8'))) : null;
   console.log(sigungu ? `시군구 경계 ${sigungu.length}곳 — ${GEO_PATH}` : `시군구 경계 없음(${GEO_PATH}) — 코스 시군구를 비운다`);
 
+  // 9차 산행안전지도 — 탐방지원센터·안내소는 봉우리 코스 들머리 이름 후보로도 쓴다(역·정류장·주차장보다 먼저).
+  const park = await loadParkData();
+  console.log(
+    `산행안전지도 공식 코스 ${park.courses.length} · 국립공원 경계 ${park.parks.length} · 탐방지원센터·안내소 ${park.facilities.filter((f) => f.category === 'ENTRY').length} · 대피소 ${park.facilities.filter((f) => f.category === 'SHELTER').length}`,
+  );
+  const parkPlaces: PeakPlace[] = park.facilities.filter((f) => f.category === 'ENTRY').map((f) => ({ category: 'ENTRY', name: f.name, lat: f.lat, lng: f.lng }));
+
   // 5차 전국 주요 봉우리 — zip 이 없으면 100대 명산만.
   const peakZip = findPeakZip();
   let peaks: PreparedPeak[] = [];
@@ -343,20 +390,39 @@ const main = async (): Promise<void> => {
       console.warn(`산정보 실패 — 봉우리 소개·높이 없이 간다: ${e.message} (${e.requestUrl})`);
     }
     const ends = peakCourseEnds(peaks);
-    places = await loadPlaces(ends);
-    console.log(`들머리 이름 후보(역·정류장·공영 주차장) ${places.length}곳`);
+    places = [...parkPlaces, ...(await loadPlaces(ends))];
+    console.log(`들머리 이름 후보(국립공원 탐방지원센터·역·정류장·공영 주차장) ${places.length}곳`);
     villages = await collectVillages(ends, places);
   } else console.log('전국 주요 봉우리 zip 없음 — 100대 명산만 적재(data.go.kr 15108086 zip 을 같은 폴더에 두면 같이 적재)');
 
-  const facilities = await loadFacilities();
-  console.log(`코스 지점 시설 후보(공중화장실·공영 주차장) ${facilities.length}곳`);
-  const rows = buildHikingRows({ files, gdTrails, pois, images, sigungu, loadedAt: new Date(), peaks, mountainInfos, places, villages, facilities });
+  const facilities: HikingFacility[] = [
+    ...(await loadFacilities()),
+    ...park.facilities.map(
+      (f): HikingFacility => ({ id: f.id, category: f.category, name: f.name, detail: f.phone ? `국립공원공단 · ${f.phone}` : '국립공원공단', lat: f.lat, lng: f.lng, ele: f.ele, source: 'park' }),
+    ),
+  ];
+  console.log(`코스 지점 시설 후보(공중화장실·공영 주차장·국립공원 탐방지원센터·대피소) ${facilities.length}곳`);
+  const rows = buildHikingRows({
+    files,
+    gdTrails,
+    pois,
+    images,
+    sigungu,
+    loadedAt: new Date(),
+    peaks,
+    mountainInfos,
+    places,
+    villages,
+    facilities,
+    parkCourses: park.courses,
+    parks: park.parks,
+  });
   if (rows.peakInfoIds.size > 0) {
     const peakImages = await collectPeakImages(rows.peakInfoIds, serviceKey);
     for (const m of rows.mountains) if (peakImages.has(m.id)) m.images = JSON.stringify(peakImages.get(m.id));
   }
   console.log('리포트', JSON.stringify({ ...rows.report, sigungu: { empty: rows.report.sigungu.empty.length, maxPerCourse: rows.report.sigungu.maxPerCourse } }, null, 1));
-  console.log(`산 ${rows.mountains.length} · 코스 ${rows.courses.length} · 지점 ${rows.pois.length} · 코스 지점 ${rows.coursePois.length}`);
+  console.log(`산 ${rows.mountains.length} · 코스 ${rows.courses.length} · 지점 ${rows.pois.length} · 코스 지점 ${rows.coursePois.length} · 국립공원 ${rows.parks.length}`);
   if (rows.mountains.length === 0) throw new Error('만든 산이 없습니다 — GPX 폴더와 명산등산로 이름을 확인하세요.');
   if (DRY_RUN) {
     console.log('--dry-run: DB 쓰기 없음');

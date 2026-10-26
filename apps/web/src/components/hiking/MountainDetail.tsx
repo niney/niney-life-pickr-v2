@@ -5,8 +5,9 @@ import { HIKING_DIFFICULTY_LABEL, HIKING_SHAPE_LABEL, formatHikingEle, formatHik
 import { cn } from '~/lib/utils';
 import { DIFFICULTY_CHIP_CLASS, courseOutingLabel, formatHikingDistance, officialCourseLines } from './hikingFormat';
 
-// 산 상세 패널 — 사진·높이·소재지·선정 이유·개관(접기)·산림청 공식 코스 문구·이 산의 봉우리·코스 카드(지도 선 색과 같은 점)·
-// 이어진 봉우리. 전국 주요 봉우리(kind peak)는 산정보 소개(맞을 때만)와 "선·고도만 있는 자료" 안내.
+// 산 상세 패널 — 사진·높이·소재지·국립공원·선정 이유·개관(접기)·산림청 공식 코스 문구·이 산의 봉우리·코스 카드(지도 선 색과 같은
+// 점, 국립공원 공식 코스가 먼저 — 안내 소요시간·난이도 원문)·이어진 봉우리. 전국 주요 봉우리(kind peak)는 산정보 소개(맞을 때만)와
+// "선·고도만 있는 자료" 안내.
 
 interface Props {
   mountain: HikingMountainDetailType;
@@ -64,6 +65,11 @@ export const MountainDetail = ({ mountain, onSelectCourse, onSelectMountain, onB
           {mountain.kind === 'top100' && (
             <span className="rounded bg-emerald-500/10 px-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">100대 명산</span>
           )}
+          {mountain.park && (
+            <span className="rounded bg-sky-500/10 px-1 text-[11px] font-medium text-sky-700 dark:text-sky-300" data-testid="hiking-mountain-park">
+              {mountain.park}
+            </span>
+          )}
         </h2>
         {mountain.subtitle && <p className="text-sm text-muted-foreground">{mountain.subtitle}</p>}
         {mountain.area && <p className="mt-0.5 text-xs text-muted-foreground">{mountain.area}</p>}
@@ -114,15 +120,28 @@ export const MountainDetail = ({ mountain, onSelectCourse, onSelectMountain, onB
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">
                     {c.name}
-                    {/* 100대 명산에 합친 봉우리 코스 — 이정표·노면이 없는 자료라 표시만 해 둔다. */}
-                    {!isPeak && c.source === 'peak' && (
-                      <span className="ml-1.5 rounded bg-muted px-1 align-middle text-[10px] font-normal text-muted-foreground">봉우리 자료</span>
-                    )}
-                    {c.source === 'network' && (
-                      <span className="ml-1.5 rounded bg-muted px-1 align-middle text-[10px] font-normal text-muted-foreground">이어 만든 길</span>
+                    {c.park ? (
+                      <span className="ml-1.5 rounded bg-sky-500/10 px-1 align-middle text-[10px] font-medium text-sky-700 dark:text-sky-300">국립공원 코스</span>
+                    ) : (
+                      <>
+                        {/* 100대 명산에 합친 봉우리 코스 — 이정표·노면이 없는 자료라 표시만 해 둔다. */}
+                        {!isPeak && c.source === 'peak' && (
+                          <span className="ml-1.5 rounded bg-muted px-1 align-middle text-[10px] font-normal text-muted-foreground">봉우리 자료</span>
+                        )}
+                        {c.source === 'network' && (
+                          <span className="ml-1.5 rounded bg-muted px-1 align-middle text-[10px] font-normal text-muted-foreground">이어 만든 길</span>
+                        )}
+                      </>
                     )}
                   </span>
                   <CourseFacts course={c} />
+                  {/* 국립공원 안내 문구는 원문 그대로(공공누리 변경금지). */}
+                  {c.park && (
+                    <span className="block text-[11px] text-sky-800 dark:text-sky-300">
+                      안내 {c.park.duration} · 난이도 {c.park.difficulty}
+                      {c.park.schedule && c.park.schedule !== '당일' && ` · ${c.park.schedule}`}
+                    </span>
+                  )}
                 </span>
               </button>
             </li>

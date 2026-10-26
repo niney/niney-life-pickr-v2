@@ -269,7 +269,8 @@ parking_data() {
 }
 
 # ── 등산(100대 명산 + 전국 주요 봉우리) ────────────────────────────────────────
-# status:hiking 은 "ok mountains=N courses=C pois=P images=I stale=S peaks=K" 한 줄(테이블 없으면 "missing", K = 봉우리 산 수).
+# status:hiking 은 "ok mountains=N courses=C pois=P images=I stale=S peaks=K parks=Q" 한 줄(테이블 없으면 "missing", K = 봉우리 산 수,
+# Q = 국립공원 경계 수 — 9차 행정안전부 산행안전지도).
 # stale = 새 열이 빈 코스 — 고도는 있는데 이동 분이 빔(2차) 또는 시군구가 빔(3차). 마이그레이션 뒤 아직 다시 적재 안 함.
 hiking_status() { pnpm --filter friendly status:hiking 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
 
@@ -278,6 +279,8 @@ hiking_status() { pnpm --filter friendly status:hiking 2>/dev/null | grep -E '^(
 # POI ~10콜 + 산정보 5콜 + 산 사진(산마다 1콜 + 최대 3장, 봉우리는 1장·한 번에 400곳씩, 받아 둔 사진은 다시 받지 않음) + 들머리
 # 리·동 역지오코딩(브이월드, 처음 1만 3천 곳 남짓을 차례로 — data/hiking-geocode-cache.json 에 남아 다음부터 0)이라 처음 30~40분
 # (캐시를 로컬에서 올려 두면 몇 분), 다시 돌리면 몇 분. Prisma 로 DB 에 직접 쓰므로 서버를 내리지 않아도 된다.
+# 9차 산행안전지도(국립공원 공식 코스·경계·시설)는 apps/friendly/.env 의 SAFETYDATA_*_KEY 세 개(데이터마다 따로, 서버 공인 IP 를
+# safetydata.go.kr 에 등록해야 한다). 키가 있는데 국립공원 경계가 아직 없으면 다시 적재.
 hiking_data() {
   local force="${1:-0}"
   local st; st="$(hiking_status)"
@@ -287,15 +290,19 @@ hiking_data() {
   local mountains; mountains="$(stat_val mountains "$st")"
   local stale; stale="$(stat_val stale "$st")"
   local peaks; peaks="$(stat_val peaks "$st")"
-  echo "  등산 현재: 산 ${mountains:-0}(봉우리 ${peaks:-0}) · 코스 $(stat_val courses "$st") · 사진 $(stat_val images "$st") · 다시 적재할 코스(새 열 빔) ${stale:-0}"
+  local parks; parks="$(stat_val parks "$st")"
+  echo "  등산 현재: 산 ${mountains:-0}(봉우리 ${peaks:-0}) · 코스 $(stat_val courses "$st") · 사진 $(stat_val images "$st") · 국립공원 경계 ${parks:-0} · 다시 적재할 코스(새 열 빔) ${stale:-0}"
   # 전국 주요 봉우리 zip(15108086, 5차)을 올렸는데 봉우리가 아직 없으면 다시 적재.
   local peak_pending=0
   if compgen -G "$ROOT/data/open/hiking/*봉우리*.zip" >/dev/null && [[ "${peaks:-0}" == 0 ]]; then peak_pending=1; fi
-  if [[ "$force" == 1 || "${mountains:-0}" == 0 || "${stale:-0}" != 0 || "$peak_pending" == 1 ]]; then
+  # 산행안전지도 키(9차)를 넣었는데 국립공원 경계가 아직 없으면 다시 적재.
+  local park_pending=0
+  if grep -Eq '^SAFETYDATA_COURSE_KEY=.+' "$ROOT/apps/friendly/.env" 2>/dev/null && [[ "${parks:-0}" == 0 ]]; then park_pending=1; fi
+  if [[ "$force" == 1 || "${mountains:-0}" == 0 || "${stale:-0}" != 0 || "$peak_pending" == 1 || "$park_pending" == 1 ]]; then
     if ! compgen -G "$ROOT/data/open/hiking/*.zip" >/dev/null; then
       echo "  (data/open/hiking/ 에 100대명산 GPX zip(data.go.kr 15098177)이 없어 건너뜁니다 — 올린 뒤 ./deploy.sh 10)"; return 0
     fi
-    step "등산 적재(100대명산·전국 주요 봉우리 GPX + 산림청 명산등산로·산정보·사진 + 등산트레킹 POI + 들머리 리·동 역지오코딩)"
+    step "등산 적재(100대명산·전국 주요 봉우리 GPX + 산림청 명산등산로·산정보·사진 + 등산트레킹 POI + 산행안전지도 국립공원 + 들머리 리·동 역지오코딩)"
     pnpm --filter friendly load:hiking \
       || echo "  (등산 적재 실패 — DATA_GO_KR_API_KEY 활용신청(명산등산로 15158915·산정보 15058662·등산트레킹 봉우리·갈림길·교통)·VWORLD_API_KEY 확인 뒤 ./deploy.sh 10)"
   fi

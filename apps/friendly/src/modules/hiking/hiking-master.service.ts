@@ -10,6 +10,7 @@ import { matchPeakInfo, type GdTrailRow, type MountainInfoRow, type TrekkingPoiR
 import { courseSigungu, sigunguArea, sigunguAt, type SigunguShape } from './hiking-area.js';
 import { LineGrid, PointGrid, overlapShare } from './hiking-grid.js';
 import { coursesFromNetwork } from './hiking-network.js';
+import type { LatLngPoint, ParkBoundaryRow, ParkCourseRow } from './hiking-park.adapter.js';
 import {
   COURSE_POI_M,
   LINE_TOLERANCE_M,
@@ -29,6 +30,7 @@ import {
   type BuiltCourse,
   type BuiltPoint,
   type CourseNames,
+  type GpxPoint,
   type GpxSignpost,
   type GpxWaypoint,
   type NamedPoint,
@@ -87,22 +89,32 @@ export interface HikingBuildInput {
   places?: readonly PeakPlace[];
   // 들머리 리·동 이름(역지오코딩 캐시) — villageKey(좌표) → 이름.
   villages?: ReadonlyMap<string, string>;
-  // 7차 — 코스 지점으로 붙일 시설(일상지도 공중화장실·공영 주차장). 스크립트가 DB 에서 준다.
+  // 7차 — 코스 지점으로 붙일 시설(일상지도 공중화장실·공영 주차장). 스크립트가 DB 에서 준다. 9차부터 국립공원 탐방지원센터·
+  // 안내소·대피소(산행안전지도)도.
   facilities?: readonly HikingFacility[];
+  // ── 9차 행정안전부 산행안전지도(국립공원공단) — 없으면 건너뛴다. ──
+  // 공식 탐방로 코스(DSSP-IF-00143) · 국립공원 경계(DSSP-IF-00145).
+  parkCourses?: readonly ParkCourseRow[];
+  parks?: readonly ParkBoundaryRow[];
 }
 
 export interface HikingFacility {
-  // 원천 id — 지점 id 는 'toilet:<id>' · 'lot:<id>'.
+  // 원천 id — 지점 id 는 'toilet:<id>' · 'lot:<id>' · 'knps:<관리번호>'(FACILITY_RULES).
   id: string;
-  category: 'TOILET' | 'PARK';
+  // TOILET 공중화장실 · PARK 공영 주차장 · ENTRY 국립공원 탐방지원센터·안내소 · SHELTER 국립공원 대피소.
+  category: 'TOILET' | 'PARK' | 'ENTRY' | 'SHELTER';
   name: string;
   detail: string | null;
   lat: number;
   lng: number;
+  ele?: number | null;
+  // 지점 원천 표기(HikingPoi.source) — 기본 'facility', 국립공원 시설은 'park'.
+  source?: 'facility' | 'park';
 }
 
 export interface PeakPlace {
-  category: 'TRANS' | 'PARK';
+  // ENTRY 국립공원 탐방지원센터·안내소(9차 — 들머리 이름 우선).
+  category: 'TRANS' | 'PARK' | 'ENTRY';
   name: string;
   lat: number;
   lng: number;
@@ -132,8 +144,26 @@ export interface HikingBuildReport {
   sigungu: { empty: string[]; maxPerCourse: number };
   // 5차 전국 주요 봉우리 — 넣지 않았으면 null.
   peaks: PeakBuildReport | null;
-  // 7차 — 코스에 붙인 공중화장실·공영 주차장 지점(새로 만든 것)과 연결 수.
-  facilities: { toilets: number; lots: number; links: number } | null;
+  // 7차 — 코스에 붙인 공중화장실·공영 주차장 지점(새로 만든 것)과 연결 수. 9차 국립공원 탐방지원센터·안내소·대피소.
+  facilities: { toilets: number; lots: number; centers: number; shelters: number; links: number } | null;
+  // 9차 국립공원(산행안전지도) — 넣지 않았으면 null.
+  park: ParkBuildReport | null;
+}
+
+export interface ParkBuildReport {
+  // 원천 공식 코스 · 같은 길 코스에 문구만 붙인 것 · 새 코스로 넣은 것(그중 근처 GPX 고도를 빌린 것) · 산을 못 정해 뺀 것.
+  courses: number;
+  enriched: number;
+  added: number;
+  withElevation: number;
+  // 방향을 시설 이름(구간 처음·끝)으로 정한 것 · 그래서 뒤집은 것 · 고도 검사로 다시 뒤집은 것.
+  oriented: number;
+  flipped: number;
+  eleFixed: number;
+  unassigned: string[];
+  // 경계 · 정상이 공원 안인 산.
+  parks: number;
+  mountainsInPark: number;
 }
 
 export interface PeakBuildReport {
@@ -177,6 +207,8 @@ export interface HikingRows {
   courses: Prisma.HikingCourseCreateManyInput[];
   pois: Prisma.HikingPoiCreateManyInput[];
   coursePois: Prisma.HikingCoursePoiCreateManyInput[];
+  // 9차 국립공원 경계.
+  parks: Prisma.HikingParkCreateManyInput[];
   report: HikingBuildReport;
   // 따로 산이 된 봉우리 id → 산정보 id(사진 받기용).
   peakInfoIds: Map<string, string>;
@@ -235,6 +267,7 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
     sigungu: { empty: [], maxPerCourse: 0 },
     peaks: null,
     facilities: null,
+    park: null,
   };
   const folders = new Set(input.files.map((f) => f.mountain));
   const gdByFolder = new Map<string, GdTrailRow & { id: string }>();
@@ -473,9 +506,11 @@ export const buildHikingRows = (input: HikingBuildInput): HikingRows => {
   // 원천 중복으로 빠진 지점을 가리키는 연결은 버린다(FK).
   const kept = coursePois.filter((cp) => seenPoiIds.has(cp.poiId));
   report.coursePoiLinks = kept.length;
-  const rows: HikingRows = { mountains, courses, pois, coursePois: kept, report, peakInfoIds: new Map() };
+  const rows: HikingRows = { mountains, courses, pois, coursePois: kept, parks: [], report, peakInfoIds: new Map() };
   const builtAll: Top100Course[] = [...top100Built];
   if (input.peaks && input.peaks.length > 0) builtAll.push(...appendPeaks(rows, top100Built, input));
+  if (input.parkCourses && input.parkCourses.length > 0) builtAll.push(...appendParkCourses(rows, builtAll, input));
+  if (input.parks && input.parks.length > 0) appendParkAreas(rows, input.parks, input.loadedAt);
   if (input.facilities && input.facilities.length > 0) appendFacilities(rows, builtAll, input.facilities);
   rows.report.coursePoiLinks = rows.coursePois.length;
   return rows;
@@ -489,7 +524,8 @@ const courseRow = (a: {
   names: CourseNames;
   course: BuiltCourse;
   sigungu: string[] | null;
-  source: 'top100' | 'peak' | 'network';
+  source: 'top100' | 'peak' | 'network' | 'park';
+  park?: ParkCourseInfo | null;
 }): Prisma.HikingCourseCreateManyInput => {
   const { course, names } = a;
   return {
@@ -520,6 +556,7 @@ const courseRow = (a: {
     steepPct: course.steepPct,
     sigungu: a.sigungu ? JSON.stringify(a.sigungu) : null,
     source: a.source,
+    park: a.park ? JSON.stringify(a.park) : null,
     pieceCount: course.pieces.length,
     gapCount: course.gaps.length,
     gapM: course.gaps.reduce((s, g) => s + g, 0),
@@ -1125,16 +1162,444 @@ const appendPeaks = (rows: HikingRows, top100: readonly Top100Course[], input: H
   return entries.map((e) => ({ id: e.id, mountainId: e.mountainId, course: e.course }));
 };
 
-// ── 코스 근처 시설(7차) ─────────────────────────────────────────────────────────
+// ── 국립공원 공식 탐방로(9차) ───────────────────────────────────────────────────
+// 행정안전부 산행안전지도 탐방로 코스(국립공원공단, 19개 공원 199) — 선은 있고 고도가 없다. docs/PLAN-hiking.md §9차
+//   - 이미 있는 코스와 같은 길(서로 80% 넘게 20m 안)이면 새로 넣지 않고 그 코스에 공식 문구를 붙이고 이름을 공식 코스명으로 바꾼다
+//     (GPX 의 지점·고도·노면을 잃지 않게).
+//   - 아니면 새 코스(source park). 고도는 근처(30m) GPX 선 점에서 빌린다 — 덮인 길이 70% 미만이거나 1km 넘게 비면 고도 없이.
+//   - 방향은 구간 처음·끝 이름이 국립공원 시설·등산 지점 이름과 맞으면 그 순서로(원천 선이 거꾸로 그려진 것이 있다 — 망월사·
+//     포대·회룡코스), 못 정하면 낮은 쪽에서.
+//   - 산은 같은 길인 코스의 산, 아니면 선이 가장 많이 겹치는(30% 이상) 산, 아니면 선 1km 안에 정상이 있는 산, 아니면 공원 이름의
+//     100대 명산(15km 안 — 정상을 지나지 않는 계곡·탐방로). 다 없으면 뺀다(섬·바닷가 길).
+//   공식 문구(이름·구간·소요시간·거리·난이도)는 공공누리 3유형(변경금지)이라 원문 그대로 둔다.
+//   실측(2026-10-26): 같은 길 32 · 우리 선들로 80% 넘게 덮이나 한 코스로는 아님 117 · 덜 덮임 50.
+
+export interface ParkCourseInfo {
+  parkName: string;
+  name: string;
+  sections: string[];
+  duration: string;
+  distance: string;
+  difficulty: string;
+  schedule: string;
+  contact: string | null;
+  // 공원 안 코스 순번 — 산 상세에서 공식 코스끼리 이 순서로.
+  seq: number;
+}
+
+const PARK_ELE_M = 30;
+// 고도를 물어볼 점 간격(선을 이 간격으로 나눠 점마다 묻는다).
+const PARK_ELE_STEP_M = 10;
+const PARK_ELE_MIN_SHARE = 0.7;
+const PARK_ELE_MAX_GAP_M = 1_000;
+const PARK_SAME_SHARE = 0.8;
+const PARK_SAME_M = 20;
+const PARK_HOST_SHARE = 0.3;
+const PARK_HOST_SUMMIT_M = 1_000;
+// 공원 이름의 산(오대산국립공원 → 오대산)으로 붙일 때 그 산 정상과 코스 들머리 거리 상한.
+const PARK_HOST_MAIN_M = 15_000;
+// 구간 처음·끝 이름과 맞춰 볼 자리 — 선 끝에서 이 안의 것만(같은 이름 다른 곳), 양 끝 거리 차이가 이만큼은 나야 방향으로 본다.
+const PARK_ORIENT_M = 2_000;
+const PARK_ORIENT_MARGIN_M = 50;
+// 이름으로 정한 방향의 고도 검사 — 끝 구간이 봉우리(…봉·…산·…대)인데 시작보다 이만큼 낮게 끝나면 거꾸로 본다.
+const PARK_SUMMIT_SECTION = /(봉|산|대)$/;
+const PARK_ORIENT_DROP_M = 100;
+// 새 공식 코스에 붙이는 등산 지점 — 같은 분류가 이 안에 여럿이면 하나만.
+const PARK_POI_SAME_M = 30;
+// 새 공식 코스 순번 — 100대 명산 GPX·합친 봉우리(100~)·망(1000~) 뒤. 산 상세는 공식 코스를 먼저 보인다(hiking.service).
+const PARK_NO_BASE = 3_000;
+// 공식 코스 둘레 기존 코스만 격자에 넣는다(전국 9천 코스를 다 넣지 않게) — ≈1km.
+const PARK_AREA_PAD_DEG = 0.01;
+// 원천 선(2m 간격) 정리.
+const PARK_LINE_TOLERANCE_M = 2;
+
+const parkReport = (rows: HikingRows): ParkBuildReport =>
+  (rows.report.park ??= { courses: 0, enriched: 0, added: 0, withElevation: 0, oriented: 0, flipped: 0, eleFixed: 0, unassigned: [], parks: 0, mountainsInPark: 0 });
+
+type Box = { minLat: number; minLng: number; maxLat: number; maxLng: number };
+const boxOfPoints = (pts: Iterable<LatLngPoint>, pad = 0): Box => {
+  const b = { minLat: Infinity, minLng: Infinity, maxLat: -Infinity, maxLng: -Infinity };
+  for (const p of pts) {
+    b.minLat = Math.min(b.minLat, p.lat);
+    b.maxLat = Math.max(b.maxLat, p.lat);
+    b.minLng = Math.min(b.minLng, p.lng);
+    b.maxLng = Math.max(b.maxLng, p.lng);
+  }
+  return { minLat: b.minLat - pad, minLng: b.minLng - pad, maxLat: b.maxLat + pad, maxLng: b.maxLng + pad };
+};
+const boxesOverlap = (a: Box, b: Box): boolean => a.minLat <= b.maxLat && a.maxLat >= b.minLat && a.minLng <= b.maxLng && a.maxLng >= b.minLng;
+const inBox = (b: Box, p: LatLngPoint): boolean => p.lat >= b.minLat && p.lat <= b.maxLat && p.lng >= b.minLng && p.lng <= b.maxLng;
+
+// 선을 stepM 안 간격으로 — 정리한 원천 선은 곧은 구간이 길게 남아 끝점만 물으면 사이가 덮였는지 모른다.
+const densifyLine = (line: readonly LatLngPoint[], stepM: number): LatLngPoint[] => {
+  const out: LatLngPoint[] = line.length > 0 ? [line[0]!] : [];
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const n = Math.max(1, Math.ceil(distM(a, b) / stepM));
+    for (let k = 1; k <= n; k++) out.push({ lat: a.lat + ((b.lat - a.lat) * k) / n, lng: a.lng + ((b.lng - a.lng) * k) / n });
+  }
+  return out;
+};
+
+// 근처 GPX 선 점의 고도를 빌린다(선을 PARK_ELE_STEP_M 간격으로 나눠 점마다). 덮인 길이가 모자라면 전부 null(고도 없는 코스).
+const borrowElevations = (lines: readonly (readonly LatLngPoint[])[], pool: PointGrid<number>): { segments: GpxPoint[][]; borrowed: boolean } => {
+  let seq = 0;
+  let total = 0;
+  let covered = 0;
+  let maxGap = 0;
+  const segments = lines.map((raw) => {
+    const line = densifyLine(raw, PARK_ELE_STEP_M);
+    let gap = 0;
+    return line.map((p, i): GpxPoint => {
+      seq += 1;
+      const step = i > 0 ? distM(line[i - 1]!, p) : 0;
+      let ele: number | null = null;
+      let bestD = PARK_ELE_M;
+      for (const q of pool.near(p.lat, p.lng, PARK_ELE_M)) {
+        const d = distM(q, p);
+        if (d <= bestD) [ele, bestD] = [q.value, d];
+      }
+      total += step;
+      if (ele !== null) {
+        covered += step;
+        gap = 0;
+      } else {
+        gap += step;
+        maxGap = Math.max(maxGap, gap);
+      }
+      return { lat: p.lat, lng: p.lng, ele, seq };
+    });
+  });
+  const borrowed = total > 0 && covered / total >= PARK_ELE_MIN_SHARE && maxGap <= PARK_ELE_MAX_GAP_M;
+  return { segments: borrowed ? segments : segments.map((s) => s.map((p) => ({ ...p, ele: null }))), borrowed };
+};
+
+// 구간 처음·끝 이름 → 원천 선 방향. 'keep' 그대로 · 'flip' 뒤집기 · null 못 정함(원점회귀이거나 이름이 안 맞음).
+const orientBySections = (row: ParkCourseRow, lines: readonly (readonly LatLngPoint[])[], places: ReadonlyMap<string, LatLngPoint[]>): 'keep' | 'flip' | null => {
+  const start = lines[0]![0]!;
+  const end = lines.at(-1)!.at(-1)!;
+  if (distM(start, end) <= PARK_ORIENT_MARGIN_M * 4) return null;
+  let vote = 0;
+  const judge = (name: string | undefined, sign: 1 | -1) => {
+    if (!name) return;
+    const spots = (places.get(compactName(name)) ?? []).filter((p) => Math.min(distM(p, start), distM(p, end)) <= PARK_ORIENT_M);
+    if (spots.length === 0) return;
+    const dS = Math.min(...spots.map((p) => distM(p, start)));
+    const dE = Math.min(...spots.map((p) => distM(p, end)));
+    if (dS + PARK_ORIENT_MARGIN_M < dE) vote += sign;
+    else if (dE + PARK_ORIENT_MARGIN_M < dS) vote -= sign;
+  };
+  judge(row.sections[0], 1);
+  if (row.sections.length > 1) judge(row.sections.at(-1), -1);
+  return vote > 0 ? 'keep' : vote < 0 ? 'flip' : null;
+};
+
+const parkInfoOf = (row: ParkCourseRow): ParkCourseInfo => ({
+  parkName: row.parkName,
+  name: row.name,
+  sections: row.sections,
+  duration: row.duration,
+  distance: row.distance,
+  difficulty: row.difficulty,
+  schedule: row.schedule,
+  contact: row.contact,
+  seq: row.seq,
+});
+
+// 새로 넣은 공식 코스(시설 지점 붙이기용)를 돌려준다.
+const appendParkCourses = (rows: HikingRows, existing: readonly Top100Course[], input: HikingBuildInput): Top100Course[] => {
+  const src = input.parkCourses ?? [];
+  const rep = parkReport(rows);
+  rep.courses = src.length;
+
+  // 공식 코스 둘레 기존 코스 — 겹침 격자(값 = near 순번)·고도 점(두 점에 하나).
+  const boxes = src.map((r) => boxOfPoints(r.lines.flat(), PARK_AREA_PAD_DEG));
+  const near = existing.filter((t) => boxes.some((b) => boxesOverlap(t.course.bbox, b)));
+  const lineGrid = new LineGrid<number>(10, 5);
+  const elePool = new PointGrid<number>(PARK_ELE_M);
+  near.forEach((t, i) => {
+    for (const piece of t.course.pieces) {
+      lineGrid.addLine(piece, i);
+      piece.forEach((p, k) => {
+        if (k % 2 === 0 && p.ele !== null) elePool.add(p.lat, p.lng, p.ele);
+      });
+    }
+  });
+  // 구간 이름과 맞춰 볼 이름난 자리 — 국립공원 시설 + 등산 지점.
+  const places = new Map<string, LatLngPoint[]>();
+  const addPlace = (name: string | null | undefined, p: LatLngPoint) => {
+    const k = name ? compactName(name) : '';
+    if (k.length >= 2) places.set(k, [...(places.get(k) ?? []), { lat: p.lat, lng: p.lng }]);
+  };
+  for (const f of input.facilities ?? []) if (f.source === 'park') addPlace(f.name, f);
+  for (const p of rows.pois) addPlace(p.name, p);
+
+  interface ParkBuilt {
+    row: ParkCourseRow;
+    course: BuiltCourse;
+    borrowed: boolean;
+    hitsByCourse: Map<number, number>;
+    hitsByMountain: Map<string, number>;
+    total: number;
+    grid: LineGrid<number>;
+  }
+  const built: ParkBuilt[] = [];
+  for (const row of src) {
+    const simplified = row.lines.map((l) => simplifyLine(l, PARK_LINE_TOLERANCE_M));
+    const build = (o: 'keep' | 'flip' | null) => {
+      const lines = o === 'flip' ? [...simplified].reverse().map((l) => [...l].reverse()) : simplified;
+      const { segments, borrowed } = borrowElevations(lines, elePool);
+      return { course: buildCourse({ waypoints: [], segments, surfaces: [] }, { keepDirection: o !== null }), borrowed };
+    };
+    let orient = orientBySections(row, simplified, places);
+    let { course, borrowed } = build(orient);
+    // 끝 구간이 봉우리인데 크게 내려가면 이름이 들머리 근처의 같은 이름 지점에 맞은 것 — 반대로(금수산 상천 코스).
+    const last = row.sections.at(-1) ?? '';
+    if (course && orient && course.hasElevation && !course.isLoop && PARK_SUMMIT_SECTION.test(last) && !/대피소$/.test(last) && course.end.ele! < course.start.ele! - PARK_ORIENT_DROP_M) {
+      orient = orient === 'flip' ? 'keep' : 'flip';
+      ({ course, borrowed } = build(orient));
+      rep.eleFixed += 1;
+    }
+    if (!course) {
+      rep.unassigned.push(`${row.parkName} ${row.name}(선 없음)`);
+      continue;
+    }
+    if (orient) rep.oriented += 1;
+    if (orient === 'flip') rep.flipped += 1;
+    const hitsByCourse = new Map<number, number>();
+    const hitsByMountain = new Map<string, number>();
+    let total = 0;
+    for (const piece of course.pieces) {
+      for (let i = 0; i < piece.length; i += 3) {
+        total += 1;
+        const ms = new Set<string>();
+        for (const v of lineGrid.valuesNear(piece[i]!.lat, piece[i]!.lng, PARK_SAME_M)) {
+          hitsByCourse.set(v, (hitsByCourse.get(v) ?? 0) + 1);
+          ms.add(near[v]!.mountainId);
+        }
+        for (const m of ms) hitsByMountain.set(m, (hitsByMountain.get(m) ?? 0) + 1);
+      }
+    }
+    const grid = new LineGrid<number>(10, 5);
+    for (const piece of course.pieces) grid.addLine(piece, 0);
+    built.push({ row, course, borrowed, hitsByCourse, hitsByMountain, total, grid });
+  }
+
+  // 같은 길 — 서로 80% 넘게 겹치는 쌍을 점수(둘 중 작은 겹침) 높은 순으로 하나씩 짝짓는다.
+  const pairs: { b: number; t: number; score: number }[] = [];
+  built.forEach((b, bi) => {
+    for (const [t, hits] of b.hitsByCourse) {
+      const there = hits / b.total;
+      if (there < PARK_SAME_SHARE) continue;
+      const back = overlapShare(near[t]!.course.pieces, b.grid, 0, PARK_SAME_M);
+      if (back >= PARK_SAME_SHARE) pairs.push({ b: bi, t, score: Math.min(there, back) });
+    }
+  });
+  pairs.sort((x, y) => y.score - x.score);
+  const sameOf = new Map<number, number>();
+  const taken = new Set<number>();
+  for (const p of pairs) {
+    if (sameOf.has(p.b) || taken.has(p.t)) continue;
+    sameOf.set(p.b, p.t);
+    taken.add(p.t);
+  }
+
+  // 새 코스 지점 — 선 30m 안의 등산 지점(이정표는 이 기록의 방향을 모른다 — sameFrame null).
+  const poiGrid = new PointGrid<PoiLite>(50);
+  for (const p of rows.pois) {
+    poiGrid.add(p.lat, p.lng, {
+      id: p.id,
+      mountainId: p.mountainId,
+      category: p.category,
+      name: p.name ?? null,
+      lat: p.lat,
+      lng: p.lng,
+      ele: p.ele ?? null,
+      signposts: p.signposts ? (JSON.parse(p.signposts) as GpxSignpost[]) : [],
+      source: p.source,
+    });
+  }
+  // 같은 분류가 PARK_POI_SAME_M 안에 여럿이면 하나만 — 100대 명산 GPX 여러 기록이 같은 갈림길을 따로 찍어 북한산 백운대코스에
+  // 갈림길이 23개 붙었다. 이정표가 많은 것·이름 있는 것·선에 가까운 것 먼저.
+  const linksNear = (course: BuiltCourse): { poi: PoiLite; atM: number }[] => {
+    const cand = new Map<string, PoiLite>();
+    for (const piece of course.pieces) for (let i = 0; i < piece.length; i += 2) for (const { value } of poiGrid.near(piece[i]!.lat, piece[i]!.lng, PEAK_LINK_M + 20)) cand.set(value.id, value);
+    const ranked = [...cand.values()]
+      .map((poi) => ({ poi, pr: projectOnCourse(course, poi) }))
+      .filter(({ pr }) => pr.offM <= PEAK_LINK_M)
+      .sort((a, b) => b.poi.signposts.length - a.poi.signposts.length || Number(!!b.poi.name) - Number(!!a.poi.name) || a.pr.offM - b.pr.offM);
+    const out: { poi: PoiLite; atM: number }[] = [];
+    for (const { poi, pr } of ranked) {
+      const sameM = poi.category === 'PEAK' ? PEAK_SAME_ON_COURSE_M : PARK_POI_SAME_M;
+      if (out.some((o) => o.poi.category === poi.category && distM(o.poi, poi) <= sameM)) continue;
+      out.push({ poi, atM: pr.atM });
+    }
+    return out.sort((a, b) => a.atM - b.atM);
+  };
+
+  const mountainById = new Map(rows.mountains.map((m) => [m.id, m]));
+  const courseRowById = new Map(rows.courses.map((c) => [c.id, c]));
+  const added: Top100Course[] = [];
+  built.forEach((b, bi) => {
+    const info = parkInfoOf(b.row);
+    const same = sameOf.get(bi);
+    const sameRow = same !== undefined ? courseRowById.get(near[same]!.id) : undefined;
+    if (sameRow) {
+      sameRow.park = JSON.stringify(info);
+      sameRow.name = b.row.name;
+      sameRow.nameSource = 'points';
+      rep.enriched += 1;
+      return;
+    }
+    let host: string | null = null;
+    let bestShare = PARK_HOST_SHARE;
+    for (const [m, hits] of b.hitsByMountain) {
+      const share = hits / b.total;
+      if (share >= bestShare) [host, bestShare] = [m, share];
+    }
+    if (!host) {
+      const { minLat, minLng, maxLat, maxLng } = b.course.bbox;
+      const box = { minLat: minLat - PARK_AREA_PAD_DEG, minLng: minLng - PARK_AREA_PAD_DEG, maxLat: maxLat + PARK_AREA_PAD_DEG, maxLng: maxLng + PARK_AREA_PAD_DEG };
+      let bestOff = PARK_HOST_SUMMIT_M;
+      for (const m of rows.mountains) {
+        if (m.summitLat == null || m.summitLng == null) continue;
+        const s = { lat: m.summitLat, lng: m.summitLng };
+        if (!inBox(box, s)) continue;
+        const off = projectOnCourse(b.course, s).offM;
+        if (off <= bestOff) [host, bestOff] = [m.id, off];
+      }
+    }
+    // 정상을 지나지 않는 길(선재길·불일폭포·권금성) — 공원 이름의 100대 명산(오대산국립공원 → 오대산)이 가까우면 그 산.
+    if (!host) {
+      const base = b.row.parkName.replace(/국립공원$/, '');
+      const main = rows.mountains.find(
+        (m) => (m.kind ?? 'top100') === 'top100' && baseName(m.name) === base && m.summitLat != null && m.summitLng != null && distM({ lat: m.summitLat, lng: m.summitLng }, b.course.start) <= PARK_HOST_MAIN_M,
+      );
+      if (main) host = main.id;
+    }
+    const m = host ? mountainById.get(host) : undefined;
+    if (!host || !m) {
+      rep.unassigned.push(`${b.row.parkName} ${b.row.name}`);
+      return;
+    }
+
+    // id 는 다른 코스처럼 `<산 id>-<번호>`(라우트 검사 — 번호 4자리 안). 공원 안 순번이 겹치면(두 공원 코스가 한 산에) 다음 번호.
+    let no = PARK_NO_BASE + b.row.seq;
+    while (courseRowById.has(`${host}-${no}`)) no += 1;
+    const id = `${host}-${no}`;
+    const links = linksNear(b.course);
+    const mountainName = m.kind === 'peak' ? (m.summitName ?? m.name) : baseName(m.name);
+    const auto = nameCourse(
+      b.course,
+      links.map(({ poi }) => ({ category: poi.category, name: poi.name, lat: poi.lat, lng: poi.lng, ele: poi.ele })),
+      mountainName,
+      no,
+    );
+    const first = b.row.sections[0] ?? null;
+    const last = b.row.sections.at(-1) ?? null;
+    const names: CourseNames = {
+      name: b.row.name,
+      source: 'points',
+      startName: first ?? auto.startName,
+      endName: b.course.isLoop ? (first ?? auto.startName) : (last ?? auto.endName),
+      peakName: auto.peakName,
+    };
+    const sigungu = input.sigungu ? courseSigungu(b.course, input.sigungu) : null;
+    const row = courseRow({ id, mountainId: host, no, names, course: b.course, sigungu, source: 'park', park: info });
+    rows.courses.push(row);
+    courseRowById.set(id, row);
+    rows.report.courses += 1;
+    if (b.course.isLoop) rows.report.loops += 1;
+    if (!b.course.hasElevation) rows.report.noElevation += 1;
+    rep.added += 1;
+    if (b.borrowed) rep.withElevation += 1;
+
+    m.minLat = Math.min(m.minLat, b.course.bbox.minLat);
+    m.minLng = Math.min(m.minLng, b.course.bbox.minLng);
+    m.maxLat = Math.max(m.maxLat, b.course.bbox.maxLat);
+    m.maxLng = Math.max(m.maxLng, b.course.bbox.maxLng);
+    m.courseCount += 1;
+    m.minLengthM = Math.min(m.minLengthM ?? Infinity, b.course.lengthM);
+    m.maxLengthM = Math.max(m.maxLengthM ?? 0, b.course.lengthM);
+
+    const named = links.filter((k) => k.poi.name && !isGenericPlaceName(cleanPlaceName(k.poi.name))).map((k) => ({ name: k.poi.name!, atM: k.atM }));
+    for (const k of links) {
+      const guide =
+        k.poi.signposts.length > 0
+          ? guideSignposts({ signposts: k.poi.signposts, atM: k.atM, named, mountainName, topAtM: b.course.top?.atM ?? null, sameFrame: null, turnDeg: turnAt(b.course, k.atM) })
+          : [];
+      rows.coursePois.push({ courseId: id, poiId: k.poi.id, atM: k.atM, guide: guide.length > 0 ? JSON.stringify(guide) : null });
+    }
+    added.push({ id, mountainId: host, course: b.course });
+  });
+  return added;
+};
+
+// ── 국립공원 경계(9차) ──────────────────────────────────────────────────────────
+// 다각형 고리를 30m 로 줄여 encoded polyline 으로(지도 면 칠). 정상이 공원 안인 산에 parkId — 정상은 밖이지만 공식 코스가 붙은 산은
+// 그 코스의 공원으로.
+const PARK_RING_TOLERANCE_M = 30;
+
+// 짝홀 규칙(평면 근사) — 다각형 하나의 고리들(바깥·구멍) 중 몇 개 안에 있는지.
+const inRing = (ring: readonly LatLngPoint[], p: LatLngPoint): boolean => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i]!;
+    const b = ring[j]!;
+    if (a.lat > p.lat !== b.lat > p.lat && p.lng < ((b.lng - a.lng) * (p.lat - a.lat)) / (b.lat - a.lat) + a.lng) inside = !inside;
+  }
+  return inside;
+};
+export const inParkPolygons = (polygons: readonly (readonly (readonly LatLngPoint[])[])[], p: LatLngPoint): boolean =>
+  polygons.some((poly) => poly.filter((ring) => inRing(ring, p)).length % 2 === 1);
+
+const appendParkAreas = (rows: HikingRows, parks: readonly ParkBoundaryRow[], loadedAt: Date): void => {
+  const rep = parkReport(rows);
+  rep.parks = parks.length;
+  const boxes = parks.map((p) => boxOfPoints(p.polygons.flat(2)));
+  parks.forEach((p, i) => {
+    rows.parks.push({
+      id: p.id,
+      name: p.name,
+      nameEn: p.nameEn,
+      designatedYear: p.designatedYear,
+      ...boxes[i]!,
+      polygons: JSON.stringify(p.polygons.map((poly) => poly.map((ring) => encodePolyline(simplifyLine(ring, PARK_RING_TOLERANCE_M))))),
+      loadedAt,
+    });
+  });
+  const parkIdByName = new Map(parks.map((p) => [p.name, p.id]));
+  const courseParkOf = new Map<string, string>();
+  for (const c of rows.courses) {
+    if (!c.park || courseParkOf.has(c.mountainId)) continue;
+    const id = parkIdByName.get((JSON.parse(c.park) as ParkCourseInfo).parkName);
+    if (id) courseParkOf.set(c.mountainId, id);
+  }
+  for (const m of rows.mountains) {
+    const s = m.summitLat != null && m.summitLng != null ? { lat: m.summitLat, lng: m.summitLng } : null;
+    const i = s ? parks.findIndex((park, k) => inBox(boxes[k]!, s) && inParkPolygons(park.polygons, s)) : -1;
+    m.parkId = i >= 0 ? parks[i]!.id : (courseParkOf.get(m.id) ?? null);
+    if (m.parkId) rep.mountainsInPark += 1;
+  }
+};
+
+// ── 코스 근처 시설(7차·9차) ─────────────────────────────────────────────────────
 // 일상지도 공중화장실(코스 선 50m 안)·공영 주차장(들머리·날머리 150m 안)을 코스 지점으로 — 지점이 없는 봉우리 코스에도 화장실·
-// 주차가 보이게. 같은 종류 지점이 이미 50m 안에 붙어 있으면(GPX 화장실·주차장) 건너뛴다. 코스마다 화장실 4·주차장 2까지(가까운 순).
-const FACILITY_TOILET_M = 50;
-const FACILITY_LOT_M = 150;
+// 주차가 보이게. 9차 국립공원 대피소(선 50m)·탐방지원센터·안내소(들머리·날머리 300m — 센터 앞 주차장에서 시작하는 기록이 많다)도.
+// 같은 종류 지점이 이미 50m 안에 붙어 있으면(GPX 화장실·주차장·대피소) 건너뛴다. 코스마다 종류별 상한(가까운 순).
+const FACILITY_RULES: Record<HikingFacility['category'], { prefix: string; lineM: number | null; endM: number | null; cap: number }> = {
+  TOILET: { prefix: 'toilet', lineM: 50, endM: null, cap: 4 },
+  PARK: { prefix: 'lot', lineM: null, endM: 150, cap: 2 },
+  SHELTER: { prefix: 'knps', lineM: 50, endM: null, cap: 4 },
+  ENTRY: { prefix: 'knps', lineM: null, endM: 300, cap: 2 },
+};
+const FACILITY_LINE_MAX_M = Math.max(...Object.values(FACILITY_RULES).map((r) => r.lineM ?? 0));
+const FACILITY_END_MAX_M = Math.max(...Object.values(FACILITY_RULES).map((r) => r.endM ?? 0));
 const FACILITY_SAME_M = 50;
-const FACILITY_CAP = { TOILET: 4, PARK: 2 } as const;
 
 const appendFacilities = (rows: HikingRows, courses: readonly Top100Course[], facilities: readonly HikingFacility[]): void => {
-  const rep = { toilets: 0, lots: 0, links: 0 };
+  const rep = { toilets: 0, lots: 0, centers: 0, shelters: 0, links: 0 };
   rows.report.facilities = rep;
   const grid = new PointGrid<HikingFacility>(100);
   for (const f of facilities) grid.add(f.lat, f.lng, f);
@@ -1147,41 +1612,57 @@ const appendFacilities = (rows: HikingRows, courses: readonly Top100Course[], fa
   }
   for (const { id, mountainId, course } of courses) {
     const have = [...(linked.get(id) ?? [])].map((pid) => poiById.get(pid)).filter((p): p is NonNullable<typeof p> => !!p);
+    // 원천 표가 달라 id 가 겹칠 수 있다 — 종류를 붙여 센다.
     const found = new Map<string, { f: HikingFacility; atM: number; offM: number }>();
-    // 화장실 — 선 위 점마다 근처를 모아 정확히 다시 잰다.
+    // 선 가까이(화장실·대피소) — 선 위 점마다 근처를 모아 정확히 다시 잰다.
     for (const piece of course.pieces) {
       for (let i = 0; i < piece.length; i += 2) {
-        for (const { value: f } of grid.near(piece[i]!.lat, piece[i]!.lng, FACILITY_TOILET_M + 50)) {
-          // 화장실·주차장 id 는 원천 표가 달라 겹칠 수 있다 — 종류를 붙여 센다.
-          const k = `T:${f.id}`;
-          if (f.category !== 'TOILET' || found.has(k)) continue;
+        for (const { value: f } of grid.near(piece[i]!.lat, piece[i]!.lng, FACILITY_LINE_MAX_M + 50)) {
+          const lineM = FACILITY_RULES[f.category].lineM;
+          const k = `${f.category}:${f.id}`;
+          if (lineM === null || found.has(k)) continue;
           const pr = projectOnCourse(course, f);
-          if (pr.offM <= FACILITY_TOILET_M) found.set(k, { f, atM: pr.atM, offM: pr.offM });
+          if (pr.offM <= lineM) found.set(k, { f, atM: pr.atM, offM: pr.offM });
         }
       }
     }
-    // 주차장 — 들머리·날머리 근처만(코스가 도심 공원을 지나며 길가 주차장을 줍지 않게).
+    // 들머리·날머리 근처(주차장·탐방지원센터) — 코스가 도심 공원을 지나며 길가 주차장을 줍지 않게.
     for (const end of course.isLoop ? [course.start] : [course.start, course.end]) {
-      for (const { value: f } of grid.near(end.lat, end.lng, FACILITY_LOT_M)) {
-        const k = `P:${f.id}`;
-        if (f.category !== 'PARK' || found.has(k)) continue;
+      for (const { value: f } of grid.near(end.lat, end.lng, FACILITY_END_MAX_M)) {
+        const endM = FACILITY_RULES[f.category].endM;
+        const k = `${f.category}:${f.id}`;
+        if (endM === null || found.has(k)) continue;
         const d = distM(f, end);
-        if (d <= FACILITY_LOT_M) found.set(k, { f, atM: end === course.start ? 0 : course.lengthM, offM: d });
+        if (d <= endM) found.set(k, { f, atM: end === course.start ? 0 : course.lengthM, offM: d });
       }
     }
-    for (const category of ['TOILET', 'PARK'] as const) {
+    for (const category of Object.keys(FACILITY_RULES) as HikingFacility['category'][]) {
+      const rule = FACILITY_RULES[category];
       const picks = [...found.values()].filter((x) => x.f.category === category).sort((a, b) => a.offM - b.offM);
       let n = 0;
       for (const { f, atM } of picks) {
-        if (n >= FACILITY_CAP[category]) break;
+        if (n >= rule.cap) break;
         if (have.some((p) => p.category === category && distM(p, f) <= FACILITY_SAME_M)) continue;
-        const poiId = `${category === 'TOILET' ? 'toilet' : 'lot'}:${f.id}`;
+        const poiId = `${rule.prefix}:${f.id}`;
         if (!poiById.has(poiId)) {
-          const row: Prisma.HikingPoiCreateManyInput = { id: poiId, mountainId, category, name: f.name, description: f.detail, lat: f.lat, lng: f.lng, ele: null, signposts: null, source: 'facility' };
+          const row: Prisma.HikingPoiCreateManyInput = {
+            id: poiId,
+            mountainId,
+            category,
+            name: f.name,
+            description: f.detail,
+            lat: f.lat,
+            lng: f.lng,
+            ele: f.ele ?? null,
+            signposts: null,
+            source: f.source ?? 'facility',
+          };
           rows.pois.push(row);
           poiById.set(poiId, row);
           if (category === 'TOILET') rep.toilets += 1;
-          else rep.lots += 1;
+          else if (category === 'PARK') rep.lots += 1;
+          else if (category === 'ENTRY') rep.centers += 1;
+          else rep.shelters += 1;
         }
         const row = poiById.get(poiId)!;
         have.push(row);
@@ -1208,6 +1689,8 @@ export const replaceHiking = async (prisma: PrismaClient, rows: HikingRows): Pro
       await tx.hikingCourse.deleteMany({});
       await tx.hikingPoi.deleteMany({});
       await tx.hikingMountain.deleteMany({});
+      await tx.hikingPark.deleteMany({});
+      for (const c of chunks(rows.parks)) await tx.hikingPark.createMany({ data: c });
       for (const c of chunks(rows.mountains)) await tx.hikingMountain.createMany({ data: c });
       for (const c of chunks(rows.courses)) await tx.hikingCourse.createMany({ data: c });
       for (const c of chunks(rows.pois)) await tx.hikingPoi.createMany({ data: c });

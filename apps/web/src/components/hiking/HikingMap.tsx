@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { HikingCourseSummaryType, HikingMountainSummaryType, HikingPoiType } from '@repo/api-contract';
+import Feature from 'ol/Feature';
+import Polygon from 'ol/geom/Polygon';
+import { fromLonLat } from 'ol/proj';
+import { Fill, Stroke, Style } from 'ol/style';
+import type { HikingCourseSummaryType, HikingMountainSummaryType, HikingParkAreaType, HikingPoiType } from '@repo/api-contract';
 import { ApiError, useMapPublicConfig } from '@repo/shared';
 import {
   HIKING_MAP_POI_CATEGORIES,
@@ -12,18 +16,20 @@ import {
   buildHikingPeakMarkerDataUrl,
   buildHikingPoiMarkerDataUrl,
   buildMyLocationMarkerDataUrl,
+  decodePolyline,
   hikingCourseColor,
   isHikingMapPoiCategory,
   lifeCellSizeDeg,
   type HikingMapPoiCategory,
   type LatLng,
 } from '@repo/utils';
-import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport, type WmsOverlay } from '~/components/restaurant/MapCanvas';
+import { MapCanvas, type MapAreas, type MapCanvasHandle, type MapMarker, type MapViewport, type WmsOverlay } from '~/components/restaurant/MapCanvas';
 import { cn } from '~/lib/utils';
 import { decodePieces } from './hikingFormat';
 
 // 등산 지도 — 산 마커(100대 명산 초록 산·전국 봉우리 연초록 산 — 줌 10 아래에선 봉우리를 셀 개수 버블로 묶는다) 위에, 산을 고르면 그 산 코스 선 전부(코스마다 색, 고른 코스는 빨강·맨 위), 코스를 고르면
-// 코스 지점(정상·갈림길·위험·화장실·주차·정류장 …)과 고도 그래프에서 가리킨 자리. 카메라는 산·코스 범위에 맞춘다.
+// 코스 지점(정상·갈림길·위험·화장실·주차·정류장 …)과 고도 그래프에서 가리킨 자리. 고른 산이 국립공원 안이면 공원 경계를 옅게 칠한다.
+// 카메라는 산·코스 범위에 맞춘다.
 
 const MOUNTAIN_ICON = { src: buildHikingMountainMarkerDataUrl(false), selectedSrc: buildHikingMountainMarkerDataUrl(true) };
 const PEAK_ICON = { src: buildHikingPeakMarkerDataUrl(false), selectedSrc: buildHikingPeakMarkerDataUrl(true) };
@@ -64,9 +70,22 @@ const trailWms = (apiKey: string): WmsOverlay => ({
   opacity: 0.6,
 });
 
+// 9차 — 고른 산이 든 국립공원 경계를 옅게 칠한다(맨 아래 면 레이어 — 코스 선·마커 아래).
+const PARK_AREA_STYLE = new Style({
+  fill: new Fill({ color: 'rgba(14, 116, 144, 0.07)' }),
+  stroke: new Stroke({ color: 'rgba(14, 116, 144, 0.75)', width: 1.5, lineDash: [6, 4] }),
+});
+const parkAreas = (park: HikingParkAreaType): MapAreas => ({
+  features: park.polygons.map((rings) => new Feature(new Polygon(rings.map((r) => decodePolyline(r).map((p) => fromLonLat([p.lng, p.lat])))))),
+  keyOf: () => park.id,
+  styleOf: () => PARK_AREA_STYLE,
+});
+
 interface Props {
   mountains: HikingMountainSummaryType[];
   selectedMountainId: string | null;
+  // 고른 산이 든 국립공원 경계(산 상세가 오기 전·공원 밖이면 null).
+  parkArea?: HikingParkAreaType | null;
   // 고른 산의 코스(상세가 오기 전엔 null).
   courses: HikingCourseSummaryType[] | null;
   selectedCourseId: string | null;
@@ -85,6 +104,7 @@ interface Props {
 export const HikingMap = ({
   mountains,
   selectedMountainId,
+  parkArea = null,
   courses,
   selectedCourseId,
   pois,
@@ -101,6 +121,7 @@ export const HikingMap = ({
   const keyMissing = config.isError && config.error instanceof ApiError && config.error.statusCode === 404;
   const handleRef = useRef<MapCanvasHandle>(null);
   const trailOverlay = useMemo(() => (apiKey ? trailWms(apiKey) : null), [apiKey]);
+  const areas = useMemo(() => (parkArea ? parkAreas(parkArea) : null), [parkArea]);
 
   // 화면 범위·줌 — 지도는 외부 시스템이라 콜백으로 받아 둔다. 줌 HIKING_PEAK_POINT_ZOOM 아래면 100대 명산은 마커, 봉우리는
   // 셀 버블(일상지도·주차와 같은 격자), 이상이면 화면 안(여유 20%) 산을 전부 마커로.
@@ -232,6 +253,7 @@ export const HikingMap = ({
         overlayMarkers={overlayMarkers}
         routeLine={routeLine}
         wmsOverlay={trailOverlay}
+        areas={areas}
         poolKey="hiking"
         className="h-full w-full"
       />

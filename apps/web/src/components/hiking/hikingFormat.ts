@@ -33,7 +33,7 @@ export const rankMountains = (
   const q = norm(opts.q);
   const out = items
     .filter((m) => !opts.group || hikingInRegionGroup(m.regions, opts.group))
-    .filter((m) => !q || norm(`${m.name}${m.subtitle ?? ''}${m.area ?? ''}${m.peaks.join('')}`).includes(q))
+    .filter((m) => !q || norm(`${m.name}${m.subtitle ?? ''}${m.area ?? ''}${m.peaks.join('')}${m.park ?? ''}`).includes(q))
     .map((m) => ({ mountain: m, distM: opts.origin ? haversineM(opts.origin, m) : null }));
   const byName = (a: RankedMountain, b: RankedMountain) => a.mountain.name.localeCompare(b.mountain.name, 'ko');
   if (opts.sort === 'height') out.sort((a, b) => (b.mountain.heightM ?? 0) - (a.mountain.heightM ?? 0) || byName(a, b));

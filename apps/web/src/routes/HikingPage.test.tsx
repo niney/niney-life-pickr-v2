@@ -43,11 +43,12 @@ const mountain = (p: Partial<HikingMountainSummaryType> & { id: string; name: st
   images: [],
   kind: 'top100',
   peaks: [],
+  park: null,
   ...p,
 });
 const GARI = mountain({ id: '421100101', name: '가리산', heightM: 1051, area: '강원도 춘천시 북산면', regions: ['gangwon'], courseCount: 2, images: [1] });
 const GWANAK = mountain({ id: '111100101', name: '관악산', heightM: 632, area: '서울특별시 관악구, 경기도 안양시', regions: ['seoul', 'gyeonggi'] });
-const HALLA = mountain({ id: '500000101', name: '한라산', heightM: 1947, area: '제주도 제주시', regions: ['jeju'], lat: 33.36, lng: 126.53, peaks: ['백록담'] });
+const HALLA = mountain({ id: '500000101', name: '한라산', heightM: 1947, area: '제주도 제주시', regions: ['jeju'], lat: 33.36, lng: 126.53, peaks: ['백록담'], park: '한라산국립공원' });
 // 전국 주요 봉우리(5차) — 서울 시청 가까이라 가까운순 맨 앞.
 const INWANG = mountain({ id: '1111020050', name: '인왕산', kind: 'peak', heightM: 338, area: '서울 종로구', regions: ['seoul'], lat: 37.585, lng: 126.958, minLengthM: 2100, maxLengthM: 2100 });
 const list: HikingMountainsResultType = { items: [HALLA, GARI, GWANAK, INWANG], loadedAt: '2026-10-25T00:00:00.000Z' };
@@ -79,6 +80,7 @@ const courseSummary = (p: Partial<HikingCourseSummaryType> & { id: string; no: n
   gapM: 0,
   roughSurfaces: [],
   source: 'top100',
+  park: null,
   bbox: { minLat: 37, minLng: 127, maxLat: 37.006, maxLng: 127 },
   pieces: [LINE],
   ...p,
@@ -109,6 +111,7 @@ const gariDetail: HikingMountainDetailType = {
   bbox: { minLat: 37, minLng: 127, maxLat: 37.006, maxLng: 127 },
   courses: [{ ...C1, source: 'network' as const }, { ...C2, source: 'peak' as const }],
   neighbors: [{ id: INWANG.id, name: '인왕산', kind: 'peak', heightM: 338, lat: INWANG.lat, lng: INWANG.lng, distM: 1_200 }],
+  parkArea: null,
 };
 const c2Detail: HikingCourseDetailType = {
   ...C2,
@@ -141,6 +144,55 @@ const c2Detail: HikingCourseDetailType = {
     },
     { id: 'gpx:3', category: 'SCENERY', name: '자연경관', description: null, lat: 37.004, lng: 127, ele: 800, signposts: [], guide: [], atM: 4000 },
     { id: 'gpx:4', category: 'PEAK', name: '가리산 정상', description: null, lat: 37.006, lng: 127, ele: 1040, signposts: [], guide: [], atM: 6474 },
+  ],
+};
+
+// 9차 국립공원 — 북한산(공원 안): 공식 코스(안내 문구 원문, 목록 맨 앞)·탐방지원센터 연락처.
+const BUKHAN = mountain({ id: '111100201', name: '북한산', heightM: 836, area: '서울특별시 강북구', regions: ['seoul'], lat: 37.659, lng: 126.978, park: '북한산국립공원' });
+const P1 = courseSummary({
+  id: '111100201-3008',
+  no: 3008,
+  name: '백운대코스',
+  source: 'park',
+  shape: 'summit',
+  lengthM: 1865,
+  timeMin: 63,
+  timeRevMin: 40,
+  roundTripMin: 103,
+  park: {
+    parkName: '북한산국립공원',
+    name: '백운대코스',
+    sections: ['백운대탐방지원센터', '하루재', '백운대피소', '백운대'],
+    duration: '01시간30분',
+    distance: '1.9km',
+    difficulty: '중',
+    schedule: '당일',
+    contact: '북한산국립공원사무소 (02)909-0497',
+  },
+});
+const bukhanDetail: HikingMountainDetailType = {
+  ...BUKHAN,
+  overview: null,
+  details: null,
+  reason: null,
+  officialCourses: null,
+  summitName: '백운대',
+  summitEle: 836,
+  bbox: { minLat: 37, minLng: 127, maxLat: 37.006, maxLng: 127 },
+  courses: [P1, C1],
+  neighbors: [],
+  parkArea: { id: '764', name: '북한산국립공원', designatedYear: 1983, polygons: [[LINE]] },
+};
+const p1Detail: HikingCourseDetailType = {
+  ...P1,
+  mountain: { id: BUKHAN.id, name: '북한산', heightM: 836 },
+  start: { lat: 37, lng: 127, ele: 250 },
+  end: { lat: 37.006, lng: 127, ele: 836 },
+  profile: { d: [0, 1865], e: [250, 836] },
+  surfaces: [],
+  pois: [
+    { id: 'knps:101', category: 'ENTRY', name: '백운대탐방지원센터', description: '국립공원공단 · 02-998-8365', lat: 37, lng: 127, ele: 250, signposts: [], guide: [], atM: 0 },
+    { id: 'knps:105', category: 'SHELTER', name: '백운대피소', description: '국립공원공단', lat: 37.004, lng: 127, ele: 650, signposts: [], guide: [], atM: 1500 },
   ],
 };
 
@@ -278,11 +330,12 @@ beforeEach(() => {
     http.get('/api/v1/hiking/mountains', () => HttpResponse.json(list)),
     http.get('/api/v1/hiking/mountains/:id', ({ params }) => {
       requested.push(`m:${String(params.id)}`);
+      if (params.id === BUKHAN.id) return HttpResponse.json(bukhanDetail);
       return params.id === GARI.id ? HttpResponse.json(gariDetail) : HttpResponse.json({ statusCode: 404, error: 'Not Found', message: 'x' }, { status: 404 });
     }),
     http.get('/api/v1/hiking/courses/:id', ({ params }) => {
       requested.push(`c:${String(params.id)}`);
-      return HttpResponse.json(c2Detail);
+      return HttpResponse.json(params.id === P1.id ? p1Detail : c2Detail);
     }),
   );
 });
@@ -339,6 +392,10 @@ describe('HikingPage', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: '산 검색' }), { target: { value: '안양' } });
     await waitFor(() => expect(rows()).toHaveLength(1));
     expect(rows()[0]).toContain('관악산');
+    // 9차 — 국립공원 이름으로도 찾는다.
+    fireEvent.change(screen.getByRole('searchbox', { name: '산 검색' }), { target: { value: '국립공원' } });
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toContain('한라산');
     fireEvent.change(screen.getByRole('searchbox', { name: '산 검색' }), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: '제주' }));
     await waitFor(() => expect(rows()).toHaveLength(1));
@@ -472,6 +529,29 @@ describe('HikingPage', () => {
     expect(href(/산채비빔밥집/)).toBe('/r/12345');
     // 등산 지점은 연결 화면이 없다.
     expect(within(around).queryByRole('link', { name: /휴양림 입구 정류장/ })).toBeNull();
+  });
+
+  it('국립공원(9차) — 산 배지, 공식 코스가 맨 앞(안내 문구 원문), 코스 상세 공식 문구·고도 안내·센터 연락처', async () => {
+    renderPage(`/hiking?m=${BUKHAN.id}`);
+    const m = await screen.findByTestId('hiking-mountain');
+    expect(within(m).getByTestId('hiking-mountain-park')).toHaveTextContent('북한산국립공원');
+    const cards = within(screen.getByTestId('hiking-courses')).getAllByRole('listitem');
+    expect(cards[0]).toHaveTextContent('백운대코스국립공원 코스');
+    expect(cards[0]).toHaveTextContent('안내 01시간30분 · 난이도 중');
+    expect(cards[1]).not.toHaveTextContent('국립공원 코스');
+
+    fireEvent.click(within(cards[0]!).getByRole('button'));
+    const c = await screen.findByTestId('hiking-course');
+    const box = within(c).getByTestId('hiking-course-park');
+    expect(box).toHaveTextContent('국립공원 공식 코스 · 북한산국립공원');
+    expect(box).toHaveTextContent('백운대탐방지원센터 → 하루재 → 백운대피소 → 백운대');
+    expect(box).toHaveTextContent('소요시간 01시간30분');
+    expect(box).toHaveTextContent('난이도 중');
+    expect(box).toHaveTextContent('문의 북한산국립공원사무소 (02)909-0497');
+    expect(within(c).getByTestId('hiking-course-peak-note')).toHaveTextContent('근처 등산 기록에서 가져와');
+    const pois = within(screen.getByTestId('hiking-pois')).getAllByRole('listitem');
+    expect(pois[0]).toHaveTextContent('백운대탐방지원센터');
+    expect(pois[0]).toHaveTextContent('국립공원공단 · 02-998-8365');
   });
 
   it('데스크톱 — [산 목록 | 상세 | 지도] 세 칸, 산을 골라도 목록은 남고 패널을 오른쪽으로 옮긴다', async () => {
