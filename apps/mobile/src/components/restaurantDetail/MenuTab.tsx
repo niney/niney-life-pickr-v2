@@ -5,6 +5,7 @@ import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
+import { MenuBoardSection } from './MenuBoardSection';
 import { MenuGrid } from './shared/MenuGrid';
 
 interface Props {
@@ -20,6 +21,9 @@ export const MenuTab = ({ detail, insights, onSelectMenu }: Props) => {
   // 메뉴 칼로리 — 지연 조회. 서버가 판정 중이면(llmPending) 훅이 잠시 폴링해 채운다.
   const nutrition = useRestaurantPublicMenuNutrition(detail.placeId, detail.menus.length > 0);
   const kcalByName = new Map((nutrition.data?.items ?? []).map((item) => [item.name, item]));
+  // 메뉴판 사진(네이버) — 등록 메뉴 아래 따로. 등록 가격과 다른 최신 사진 가격은 등록 메뉴 카드에 한 줄로.
+  const menuBoard = detail.menuBoard;
+  const boardPriceByName = new Map((menuBoard?.newerPrices ?? []).map((p) => [p.name, p]));
 
   const onSettlePress = () => {
     if (!token) {
@@ -54,16 +58,32 @@ export const MenuTab = ({ detail, insights, onSelectMenu }: Props) => {
       </Pressable>
 
       {detail.menus.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={{ color: theme.colors.textMuted }}>등록된 메뉴가 없습니다.</Text>
-        </View>
+        // 등록 메뉴가 없어도 메뉴판 사진이 있으면 그것만 보인다.
+        menuBoard ? (
+          <MenuBoardSection menuBoard={menuBoard} />
+        ) : (
+          <View style={styles.empty}>
+            <Text style={{ color: theme.colors.textMuted }}>등록된 메뉴가 없습니다.</Text>
+          </View>
+        )
       ) : (
         <>
-          <MenuGrid menus={detail.menus} insights={insights} kcalByName={kcalByName} onSelectMenu={onSelectMenu} />
+          <MenuGrid
+            menus={detail.menus}
+            insights={insights}
+            kcalByName={kcalByName}
+            onSelectMenu={onSelectMenu}
+            boardPriceByName={boardPriceByName}
+          />
           {kcalByName.size > 0 && nutrition.data && (
             <Text style={[styles.notice, { color: theme.colors.textMuted }]}>
               칼로리는 {nutrition.data.notice} 1인분 값이 없는 메뉴는 100g당으로, 나열형 세트는 구성별로 표시하며 애매한 메뉴는 표시하지 않습니다.
             </Text>
+          )}
+          {menuBoard && (
+            <View style={[styles.boardDivider, { borderTopColor: theme.colors.border }]}>
+              <MenuBoardSection menuBoard={menuBoard} />
+            </View>
           )}
         </>
       )}
@@ -88,4 +108,5 @@ const styles = StyleSheet.create({
   ctaChev: { fontSize: 24, fontWeight: '300' },
   empty: { paddingVertical: 48, alignItems: 'center' },
   notice: { fontSize: 11, lineHeight: 15 },
+  boardDivider: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16 },
 });

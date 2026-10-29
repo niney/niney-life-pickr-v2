@@ -20,7 +20,12 @@ interface Props {
   // 주어지면 멘션 통계가 있는 메뉴를 탭 가능하게 렌더해 리뷰 필터로 연결.
   // 멘션 없는(stats 없는) 메뉴는 결과가 비므로 정적 카드로 둔다.
   onSelectMenu?: (name: string) => void;
+  // 메뉴명 → 등록 가격과 다른 메뉴판 사진 가격(사진이 등록 메뉴 업데이트보다 최신일 때만 서버가 준다).
+  boardPriceByName?: ReadonlyMap<string, { price: string; uploadedOn: string }>;
 }
+
+// 메뉴판 사진 가격 줄 — 웹(shared.tsx)의 amber-700 / dark:amber-400.
+const BOARD_PRICE_COLORS = { light: '#b45309', dark: '#fbbf24' } as const;
 
 const KCAL_BASIS_LABEL: Record<RestaurantMenuKcalItemType['basis'], string> = {
   per_serving: '1인분',
@@ -85,7 +90,7 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
 };
 
 // 메뉴 리스트 — 이름·가격·설명·이미지 + (있으면) insights 의 긍/부 멘션 통계.
-export const MenuGrid = ({ menus, insights, kcalByName, onSelectMenu }: Props) => {
+export const MenuGrid = ({ menus, insights, kcalByName, onSelectMenu, boardPriceByName }: Props) => {
   const theme = useTheme();
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(
     null,
@@ -100,6 +105,7 @@ export const MenuGrid = ({ menus, insights, kcalByName, onSelectMenu }: Props) =
       {menus.map((m, idx) => {
         const stats = mentionByName.get(m.name);
         const kcal = kcalByName?.get(m.name);
+        const boardPrice = boardPriceByName?.get(m.name);
         const clickable = !!onSelectMenu && !!stats;
         const hasImage = !!m.imageUrls[0];
         const body = (
@@ -127,6 +133,14 @@ export const MenuGrid = ({ menus, insights, kcalByName, onSelectMenu }: Props) =
               </Text>
             )}
             {kcal && <MenuKcalChip item={kcal} />}
+            {boardPrice && (
+              <Text
+                style={[styles.boardPrice, { color: BOARD_PRICE_COLORS[theme.mode] }]}
+                accessibilityLabel={`가게가 올린 메뉴판 사진의 가격 ${formatWonPrice(boardPrice.price)}, ${boardPrice.uploadedOn} 사진 — 등록 메뉴보다 최근 사진이에요`}
+              >
+                메뉴판 사진 {formatWonPrice(boardPrice.price)} · {boardPrice.uploadedOn}
+              </Text>
+            )}
             {m.description && (
               <Text
                 style={[styles.desc, { color: theme.colors.textMuted }]}
@@ -238,6 +252,7 @@ const styles = StyleSheet.create({
   kcalChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   kcalText: { fontSize: 10, fontWeight: '500', fontVariant: ['tabular-nums'] },
   kcalParts: { fontSize: 10, flexShrink: 1, fontVariant: ['tabular-nums'] },
+  boardPrice: { fontSize: 11, fontVariant: ['tabular-nums'] },
   desc: { fontSize: 12 },
   statsRow: { flexDirection: 'row', gap: 4, marginTop: 2 },
   statText: { fontSize: 11, fontVariant: ['tabular-nums'] },
