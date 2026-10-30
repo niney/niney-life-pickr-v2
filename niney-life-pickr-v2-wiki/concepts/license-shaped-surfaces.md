@@ -1,7 +1,7 @@
 ---
 concept: 이용허락이 화면·API 모양을 정한다 — 출처표시만(1유형)·원문 그대로(3유형 변경금지)·집계만(제3자 제공 금지)
-last_compiled: 2026-10-26
-topics_connected: [hiking, tour, air-quality, weather, sea, api-docs, mobile, web]
+last_compiled: 2026-10-31
+topics_connected: [hiking, tour, air-quality, weather, sea, api-docs, mobile, web, api-contract]
 status: active
 ---
 
@@ -21,6 +21,7 @@ status: active
 
 ## Instances
 
+- **2026-10-24** in [tour](../topics/tour.md) / [api-contract](../topics/api-contract.md) (`a382e01c`, 15차): 한 화면에 이용 조건이 **둘** 겹쳤다 — 코스는 AI 허브 여행로그(집계만·좌표·식별자 비공개), 그 위의 이용 시간·쉬는 날은 한국관광공사 공공데이터(출처 표기). 둘을 섞지 않고 응답에 따로 싣는다: 운영 정보는 장소마다 문구(`info`)만, 출처·"방문 전 확인" 은 응답 한 줄(`infoNote` = utils `TOUR_INFO_NOTE`, 그 지역 프로필에 관광정보가 붙은 장소가 하나라도 있을 때만), 관광정보 콘텐츠 id·좌표는 싣지 않는다(여행로그 쪽 좌표 비공개 방침과 맞춤). **사진은 콘텐츠마다 저작권 유형이 달라 아예 받지 않는다** — 유형을 행마다 따지는 대신 표면에서 빼는 선택([docs/PLAN-tour-log.md](../../docs/PLAN-tour-log.md) 이용 조건 절).
 - **2026-10-26** in [hiking](../topics/hiking.md) (9차 `0e38c4ee` + 작업 트리): 행정안전부 산행안전지도(국립공원공단 원자료)는 공공누리 3유형. 공식 코스의 이름·구간·소요시간·거리·난이도는 원문 그대로 `HikingParkCourse` 에 담고, 우리 예상 시간·난이도는 코스 요약의 다른 필드로 둔다. 웹·앱 공식 칸은 "국립공원공단 안내 문구 그대로입니다(행정안전부 산행안전지도)" 를 붙인다. 같은 길 GPX 코스와 구간 순서가 반대인 3곳도 문구를 뒤집지 않고 `reversed` 로 "반대 방향 기준" 이라고만 알리고, 원문 오타("백무동탐방지원세터")도 그대로 둔다(방향 판정만 꼬리를 떼고 비교). 같은 화면의 지형 고도는 SRTM(공개 자료)이라 계산에 자유롭게 쓰고, 푸터와 GPX metadata 에 "SRTM data courtesy of the U.S. Geological Survey" 를 적는다. GPX 파일 desc 는 원천마다 출처·유형(공공누리 제3유형)을 문장으로 넣는다.
 - **2026-09-24** in [api-docs](../topics/api-docs.md) (`1b621c4`): 외부 API 문서의 수기 README 가 이용 조건 절을 따로 둔다 — 여행로그는 집계만·출처 표기, 원본 재구성·재배포 금지, 크롤 데이터 대량 재게시 금지. OpenAPI 자동 생성으로는 뽑을 수 없는 정보라 사람이 적는다.
 - **2026-09-13** in [tour](../topics/tour.md) (`99991da`): AI 허브 이용조건(원본 제3자 열람·제공 금지, 집계는 출처 표기로 자유, 국외 반출 금지)이 "한 DB, 두 출구" 구조를 만들었다 — 공개 API 는 식별자 없는 스키마 + 여행자 5명 미만 칸 억제, 원본·사진은 `TOUR_RAW_USER_IDS` allowlist. 공개 화면 운영 노출은 AI 허브 서면 회신 뒤로 걸어 뒀다.
@@ -43,3 +44,5 @@ status: active
 - [sea](../topics/sea.md)
 - [web](../topics/web.md)
 - [provenance-tagged-fill](provenance-tagged-fill.md)
+- [api-contract](../topics/api-contract.md) — 31차 `TourPlanPlaceInfo`·`infoNote`
+- [docs/PLAN-tour-log.md](../../docs/PLAN-tour-log.md) — 31차 관광정보 이용 조건 문단

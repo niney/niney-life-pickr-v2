@@ -1,6 +1,6 @@
 ---
 concept: canonical 축 외부 출처 사이드 테이블 매칭 — 합치지 않고 옆에 붙인다(거리+상호 점수, 1:1, 상태 전이)
-last_compiled: 2026-09-19
+last_compiled: 2026-10-31
 topics_connected: [canonical, life-map, tour, friendly, api-contract, shared, web]
 status: active
 ---
@@ -18,6 +18,7 @@ status: active
 
 ## Instances
 
+- **2026-10-24** in [tour](../topics/tour.md) (`a382e01c`, 15차 `TourPlaceKto`): 같은 골격이 canonical 축 밖으로 나갔다 — 여행로그 장소 ↔ 한국관광공사 콘텐츠. 이번엔 **우리 쪽 id 가 PK**(`placeId`)이고 `contentId` 는 unique 가 아니라 한 콘텐츠가 여러 장소에 붙을 수 있다(세트마다 같은 곳이 따로 잡힌 여행로그 쪽 사정). 점수는 이름 열쇠(괄호 설명 떼기·"해수욕장 = 해변"·괄호 속 별칭 통째 일치) + 포함 관계 + 글자쌍 Jaccard, 거리 구간은 점수에 따라 3km ~ 50m 로 계단식(볼거리)·식당은 300m / 품은 이름 50m, 유형이 엇갈리면 같은 이름 300m, 전국에 하나뿐인 이름은 더 멀리(볼거리 6km) — 1,746/2,649곳(66%). 상태 전이 없이 **맞출 때마다 통째 교체**한다(카탈로그를 로컬에 들고 있어 다시 맞추기가 공짜라 상태를 유지할 이유가 적다). 검수는 화면 대신 CLI(`sync:tour-kto --review`·`--misses`)다.
 - **2026-09-13** in [tour](../topics/tour.md) / [canonical](../topics/canonical.md) (`c777380`, `restaurant-tour-match.service.ts` + `scripts/match-restaurant-tour.ts`): 두 번째 인스턴스 — 반경 100m·점수 ≥0.5 또는 완전일치 300m, `TourPlace` 유형은 식당·상업·상점만(시장·상점으로 잘못 분류된 식당 때문), 장소 1:1(`tourPlaceId` unique), 상태 5종. 운영 첫 실측은 273곳 중 1건(제주 맛집이 1곳) — 매칭보다 **시드 발굴**(여행자가 많이 간 미등록 식당 → 어드민이 discover/register)이 본 용도가 됐고, 4권역 뒤 수도권(`6cae6b2`)에서야 로컬 dev 에도 실매칭이 생겼다(거리 0m·이름 1.0).
 - **2026-09-12** in [life-map](../topics/life-map.md) / [canonical](../topics/canonical.md) (`bc39a79`, `restaurant-store-match.service.ts` + `scripts/match-restaurant-stores.ts`): 첫 인스턴스 — 상가업소(음식·카페 업종만) 반경 80m·점수 ≥0.5, `RestaurantStoreMatch`(업소번호 unique), 분기 재적재 뒤 `deploy.sh` 가 매칭을 다시 돌려 사라진 업소를 `missing`(폐업 의심)으로. FK 는 다음 마이그레이션에서 바로 제거됐다 — 재적재가 FK 에 막히는 첫 함정.
 - **2026-09-13~19** in [web](../topics/web.md) / [api-contract](../topics/api-contract.md) / [shared](../topics/shared.md): 소비 쪽 형태 — `StoreInfoBadges`·`TourMatchBadge`·`TourSummaryBadge`·`TourTab`(매칭 있을 때만 탭), 목록 정렬 칩·골라줘 칩, 어드민 식당 상세의 "여행자 근거" 카드(`TourEvidencePanel`, allowlist). 계약은 `RestaurantDetail.store/tour` 를 nullable 로 두고 훅은 별도 조회 없이 상세 응답에 실려 온다.
@@ -42,3 +43,5 @@ status: active
 - [web](../topics/web.md)
 - [open-data-master-load](open-data-master-load.md)
 - [canonical-corpus-fanout](canonical-corpus-fanout.md)
+- [apps/friendly/src/modules/tour/tour-kto-info.ts](../../apps/friendly/src/modules/tour/tour-kto-info.ts) — 31차 `pickKtoMatch`·`matchKtoName`
+- [apps/friendly/src/modules/tour/tour-kto.service.ts](../../apps/friendly/src/modules/tour/tour-kto.service.ts) — 31차 `matchTourPlacesToKto`

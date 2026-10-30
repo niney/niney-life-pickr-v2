@@ -1,12 +1,14 @@
 ---
 topic: meal-nutrition
-last_compiled: 2026-10-26
-sources_count: 61
+last_compiled: 2026-10-31
+sources_count: 64
 status: active
-aliases: [perf-2-nutrition, 장벽-밖-LLM, mealDataGeneration, 데이터 세대, conflict 409, 조언 conflict, suggestionCandidates, loadSuggestionCandidates, SuggestionCandidate, suggestionCache, 한 끼 후보 메모, keepPrevious, 영양, 영양 탭, 영양소 점검, 영양소점검, 영양제, 영양제 조언, 영양제조언, 비타민제, 비타민제 추천, meal-nutrition, meal-nutrition-advice, meal-supplement, MealNutritionService, MealNutritionAdviceService, MealNutritionAdviceError, analyzeMealNutrition, assessNutrient, profileFrom, foodSuggestions, adviceCandidates, sanitizeAdvice, textProblem, allowedNumbersFor, fallbackAdviceItem, fallbackSummary, adviceHash, toAdvice, parseAdviceOutput, supplementAllowed, shortfallOf, buildMealNutritionAdviceUserPrompt, buildMealNutritionAdviceJsonSchema, MEAL_NUTRITION_ADVICE_SYSTEM_PROMPT, MEAL_NUTRITION_ADVICE_VERSION, NUTRIENT_DEFS, NOT_MEASURED_NUTRIENTS, NUTRITION_DISCLAIMER, KDRI, kdri.ts, 한국인 영양소 섭취기준, 2020 KDRI, 평균필요량, 권장섭취량, 충분섭취량, 상한섭취량, 만성질환위험감소섭취량, EAR, RNI, AI, UL, CDRR, 필요추정량, EER, nutrientReference, energyRequirement, ageGroupFor, KDRI_AGE_GROUPS, DEFAULT_AGE_GROUP, MIN_ANALYZED_DAYS, MIN_COVERAGE, supplementCandidate, produceGap, 과일·채소 공백, nutrientsPer100gJson, NUTRIENT_KEYS, pickNutrientsPer100g, parseNutrientsPer100g, serializeNutrientsPer100g, MFDS_NUTRIENT_API_FIELD, MFDS_NUTRIENT_CSV_HEADER, backfillBorrowedNutrients, CURATED_NUTRIENTS_LIKE, kcalPer100gOf, MealNutritionAdvice, meal_nutrition_advices, 20261004060205_add_meal_nutrition, MealPreference.sex, MealPreference.birthYear, 성별, 출생연도, MealSex, MealNutrientKey, MealNutrientStatus, MealNutrientResult, MealNutritionAnalysis, MealNutritionQuery, MealSupplementAdviceItem, CreateMealNutritionAdviceInput, LatestMealNutritionAdviceResult, Routes.Meal.nutrition, Routes.Meal.nutritionAdvice, /meals/nutrition, /meals/nutrition/advice, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, RATE.mealNutrition, RATE.mealSupplement, kimi-k3, probe:meal-nutrition, load:food-catalog --backfill-nutrition, mealNutrients.ts, MEAL_NUTRIENT_STATUS_LABEL, MEAL_NUTRIENT_REFERENCE_LABEL, formatNutrientAmount, nutrientBarWidth, MEAL_SEX_OPTIONS, parseMealBirthYear, mealNutrientProfileLabel, useMealNutrition, useLatestMealNutritionAdvice, useCreateMealNutritionAdvice, MealNutritionTab, MealNutritionView, tab=nutrition, deleted.nutritionAdvices, 원재료 DB 활용신청, 이름 추정 열량, 원재료 1회 분량, donor_estimate foodId null, coverage 하락, 빈 열량 보강]
+aliases: [perf-2-nutrition, 장벽-밖-LLM, mealDataGeneration, 데이터 세대, conflict 409, 조언 conflict, suggestionCandidates, loadSuggestionCandidates, SuggestionCandidate, suggestionCache, 한 끼 후보 메모, keepPrevious, 영양, 영양 탭, 영양소 점검, 영양소점검, 영양제, 영양제 조언, 영양제조언, 비타민제, 비타민제 추천, meal-nutrition, meal-nutrition-advice, meal-supplement, MealNutritionService, MealNutritionAdviceService, MealNutritionAdviceError, analyzeMealNutrition, assessNutrient, profileFrom, foodSuggestions, adviceCandidates, sanitizeAdvice, textProblem, allowedNumbersFor, fallbackAdviceItem, fallbackSummary, adviceHash, toAdvice, parseAdviceOutput, supplementAllowed, shortfallOf, buildMealNutritionAdviceUserPrompt, buildMealNutritionAdviceJsonSchema, MEAL_NUTRITION_ADVICE_SYSTEM_PROMPT, MEAL_NUTRITION_ADVICE_VERSION, NUTRIENT_DEFS, NOT_MEASURED_NUTRIENTS, NUTRITION_DISCLAIMER, KDRI, kdri.ts, 한국인 영양소 섭취기준, 2020 KDRI, 평균필요량, 권장섭취량, 충분섭취량, 상한섭취량, 만성질환위험감소섭취량, EAR, RNI, AI, UL, CDRR, 필요추정량, EER, nutrientReference, energyRequirement, ageGroupFor, KDRI_AGE_GROUPS, DEFAULT_AGE_GROUP, MIN_ANALYZED_DAYS, MIN_COVERAGE, supplementCandidate, produceGap, 과일·채소 공백, nutrientsPer100gJson, NUTRIENT_KEYS, pickNutrientsPer100g, parseNutrientsPer100g, serializeNutrientsPer100g, MFDS_NUTRIENT_API_FIELD, MFDS_NUTRIENT_CSV_HEADER, backfillBorrowedNutrients, CURATED_NUTRIENTS_LIKE, kcalPer100gOf, MealNutritionAdvice, meal_nutrition_advices, 20261004060205_add_meal_nutrition, MealPreference.sex, MealPreference.birthYear, 성별, 출생연도, MealSex, MealNutrientKey, MealNutrientStatus, MealNutrientResult, MealNutritionAnalysis, MealNutritionQuery, MealSupplementAdviceItem, CreateMealNutritionAdviceInput, LatestMealNutritionAdviceResult, Routes.Meal.nutrition, Routes.Meal.nutritionAdvice, /meals/nutrition, /meals/nutrition/advice, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, RATE.mealNutrition, RATE.mealSupplement, kimi-k3, probe:meal-nutrition, load:food-catalog --backfill-nutrition, mealNutrients.ts, MEAL_NUTRIENT_STATUS_LABEL, MEAL_NUTRIENT_REFERENCE_LABEL, formatNutrientAmount, nutrientBarWidth, MEAL_SEX_OPTIONS, parseMealBirthYear, mealNutrientProfileLabel, useMealNutrition, useLatestMealNutritionAdvice, useCreateMealNutritionAdvice, MealNutritionTab, MealNutritionView, tab=nutrition, deleted.nutritionAdvices, 원재료 DB 활용신청, 이름 추정 열량, 원재료 1회 분량, donor_estimate foodId null, coverage 하락, 빈 열량 보강, 분석 탭, 분석 탭의 영양소 점검, MealAnalysisView, MealNutritionCheck, MealNutritionPeriod, 영양 기간 세그먼트, 판단 보류 접기, showUnknown, 영양소 점검 기준, 추천 설정 저장, 앱 영양 탭 폐지]
 ---
 
 # meal-nutrition — 식단 기록 영양소 점검(2020 KDRI) · kimi-k3 영양제 조언(성분·형태만)
+
+**2026-10-24~10-29 변경 흡수 (31차) — 앱의 '영양' 탭이 '분석' 탭의 두 섹션(영양소 점검·영양제 조언)으로 옮겨졌다(`699761a1`, 화면 다듬기 `1c3e7bc7`·`6ae0a4c5`, 모두 2026-10-25). 서버·계약·shared 훅·웹은 그대로다**: 앱 식단 탭을 6 → 3(기록·분석·추천)으로 줄인 재구성의 일부다(정보 구조 전체는 [meal](meal.md), 화면 조각은 [mobile](mobile.md)). (1) **자리**. 앱 [MealNutritionView.tsx](../../apps/mobile/src/components/meal/MealNutritionView.tsx) 가 한 탭 화면에서 두 export 로 갈렸다 — `MealNutritionCheck`(영양소 점검)·`MealNutritionAdvice`(영양제 조언). [MealAnalysisView](../../apps/mobile/src/components/meal/MealAnalysisView.tsx) 가 통계 섹션과 섞어 "한눈에 → 주간 인사이트 → **영양소 점검** → 분포·자주 먹은 음식·추천 반응 → **영양제 조언**" 순으로 한 스크롤에 놓는다. 옛 주소 `/meal?tab=nutrition` 은 분석 탭으로 연다. (2) **기간 세그먼트를 통계와 따로**. 통계는 1주/1달/3달, 영양은 '최근 7일/14일/28일'(기본 14)이다. 커밋 본문의 이유는 "서버 계산이 달라서(영양은 두 끼 이상 기록한 날만)"다. 영양 기간은 `MealAnalysisView` 가 들고 두 섹션에 같은 `days` 를 내려 준다. 그래서 조언 버튼('최근 N일로 조언 받기')이 위 점검과 같은 기간을 보고, 두 섹션이 각자 부르는 `useMealNutrition(days)` 는 같은 쿼리 키라 요청이 한 번이다. 예전 앱 기간 칩('7일'·'14일'·'28일')은 shared `SegmentedControl` 로 바뀌었다. (3) **'판단 보류' 접기**. `status === 'unknown'` 영양소는 빈 막대만 늘어놓아 화면 절반을 차지했다. 이제 측정된 영양소 뒤에 "판단 보류 N개 보기/접기" 한 줄로 접어 두고(`accessibilityState.expanded`), 눌러야 편다. 기본은 접힘이다. 웹 [MealNutritionTab](../../apps/web/src/routes/meal/MealNutritionTab.tsx) 은 바뀌지 않아 그대로 다 펼친다. (4) **문구와 설정**. 설정 화면(이제 `/meal/settings`)의 '영양소 점검 기준'(성별·출생연도) 안내가 "영양 탭이 …"에서 "분석 탭의 영양소 점검이 성별·나이에 맞는 섭취기준으로 봐요…"로 바뀌었다. 웹 설정 탭은 여전히 "영양 탭이 …"다. 앱의 성별·출생연도는 '추천 설정 저장' 버튼(추천 설정 바로 아래로 옮겨짐)이 중요도·먹는 것과 함께 저장한다(같은 `PUT /meals/preference`) — 버튼 이름에 '추천'이 붙었지만 영양 기준도 이 버튼으로 저장된다. (5) **조언 버튼**(`6ae0a4c5`). '최근 N일로 조언 받기'(주 버튼, 만드는 동안 loading)·'다시 쓰기'(테두리 버튼 + 새로고침 아이콘 — 예전 `Chip`)가 추천 탭과 같은 `MealButton` 이다. 점검이 `ok` 가 아니면 둘 다 비활성이고 "기록이 더 쌓이면 조언을 받을 수 있어요."를 보인다. 만드는 동안에는 "AI가 기록을 읽고 있어요. 20초쯤 걸릴 수 있어요."다. (6) **그대로인 것**. 점검·조언 API·판정·LLM·저장은 바뀌지 않았다(2026-10-31 HEAD 에서 `modules/meal-nutrition` 을 고친 커밋은 30차 이후 없음). 앱은 여전히 `keepPrevious` 를 켜지 않아, 기간을 바꾸면 로딩을 보인다. 28차가 남긴 "한도를 provider 확인 전에 차감"도 그대로다(Gotchas). 검증은 iOS 26.5 시뮬레이터(DB 사본 + 예시 식단)에서 라이트·다크로 분석 탭·영양제 버튼을 본 것까지다. Android·실기기는 확인하지 않았다.
 
 **2026-10-10~10-26 변경 흡수 — 입력 쪽 변화만: 원재료 1회 분량·이름 추정으로 채운 식단 열량이 점검에 들어온다(`92e79e9a`, 2026-10-23)**: 이 모듈의 코드는 바뀌지 않았다. 바뀐 것은 점검이 읽는 식단 스냅샷이다. [meal](meal.md)·[food](food.md) 의 빈 열량 보강으로 (1) 원재료(`mfds-raw`) 항목은 반찬이어도 식품군 1회 분량(과일 100·채소 70·버섯 30·감자 140·곡류 90·견과 10·콩 20·달걀 60g)으로 `kcal` 을 갖고, (2) 카탈로그 밖 이름은 규칙·LLM·웹 추정으로 `donor_estimate` + `foodId` null 의 `kcal` 을 갖는다. 사용자 결정은 "추정값은 기존 빌린 영양처럼 합계·영양 점검에 넣는다"였다. [meal-nutrition.service.ts](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts) `analyzeMealNutrition` 은 `kcal === null` 만 건너뛰므로 두 종류 모두 `energyKcal` 에 더해진다. 비타민·무기질 쪽은 다르다. (1) 원재료 행은 `nutrientsPer100gJson` 이 없어 그 열량이 영양소 `coveredKcal` 에 안 들어가고, 과일·채소·버섯·해조류면 예전처럼 `produceGapCount` 로 센다(예전엔 `kcal === null` 분기에서, 이제는 값 있는 분기에서). (2) 이름 추정 항목은 `foodId` 가 없어 카탈로그 행을 못 찾으므로 g 환산이 없다(단백질·나트륨은 스냅샷이 있으면 들어간다 — 웹 추정은 둘 다 null). 그래서 열량 합(`energy.intakePerDay`·필요량 대비 %)은 올라가고, 영양소별 coverage(`coveredKcal ÷ energyKcal`)는 내려갈 수 있다. 0.6 아래로 떨어진 영양소는 '판단 보류'가 된다.
 
@@ -23,12 +25,14 @@ aliases: [perf-2-nutrition, 장벽-밖-LLM, mealDataGeneration, 데이터 세대
 - 진단이 아니라 "식단 기록으로 본 추정" 임을 화면·응답(`NUTRITION_DISCLAIMER`)·라우트 description 이 모두 밝힌다. 식약처 음식 데이터에 값이 없는 영양소(마그네슘·아연·엽산·B6·B12·E·K·오메가-3·요오드·셀레늄)는 `notMeasured` 로 목록만 보이고 부족하다고 말하지 않는다.
 - 만 12세 미만(출생연도 기준)은 판단하지 않고 소아청소년과 상담을 안내한다.
 
-## Architecture [coverage: high — 33 sources]
+## Architecture [coverage: high — 37 sources]
 
 ```
-웹 /me/meals?tab=nutrition (MealNutritionTab, lg 두 단)   앱 /meal '영양' 탭 (MealNutritionView)
+웹 /me/meals?tab=nutrition (MealNutritionTab, lg 두 단)   앱 /meal '분석' 탭의 두 섹션 (MealAnalysisView ← 2026-10-25, 예전 '영양' 탭)
+                                                          MealNutritionCheck(점검) … 통계 섹션 … MealNutritionAdvice(조언), 같은 days
    기간 7|14|28 · 영양소 막대(기준선 100%, 150% 에서 자름) · 조언 카드(요약·영양제 칩·이유/음식/영양제/주의·면책)
-   설정 탭: 성별(MEAL_SEX_OPTIONS) · 출생연도(parseMealBirthYear) — @repo/utils mealNutrients.ts 공유
+   (앱만: '판단 보류' 영양소는 접어 두고 "판단 보류 N개 보기")
+   설정: 웹 설정 탭 / 앱 /meal/settings — 성별(MEAL_SEX_OPTIONS) · 출생연도(parseMealBirthYear) — @repo/utils mealNutrients.ts 공유
      │  @repo/shared: mealApi.nutrition / latestNutritionAdvice / createNutritionAdvice
      │                useMealNutrition(days) · useLatestMealNutritionAdvice · useCreateMealNutritionAdvice
      │  ↕ @repo/api-contract: schemas/meal.ts(영양 스키마) · routes.ts(Routes.Meal.nutrition·nutritionAdvice)
@@ -104,11 +108,11 @@ friendly modules/meal-nutrition/meal-nutrition.route.ts (authenticate, GET 점�
 
 ### 웹·앱
 
-- 웹 [MealNutritionTab.tsx](../../apps/web/src/routes/meal/MealNutritionTab.tsx): `MealPage` 의 6번째 탭 `nutrition`(아이콘 `Pill`, [MealPage.tsx](../../apps/web/src/routes/meal/MealPage.tsx) — 탭 6개라 좁은 화면에서 아이콘을 숨기고 `overflow-x-auto` 로 가로로 민다). 점검 카드는 기간 버튼 7/14/28, 상태 배지 색(부족 빨강·조금 부족 호박·충분 초록·많음 주황·보류 회색), `nutrientBarWidth` 막대 + 100% 기준선(`NUTRIENT_BAR_MAX_PERCENT 150` 의 66.7% 위치), 모자라면 "한 끼로는 …· 많이 든 음식: …", 아니면 "주로 …에서", `notMeasured` 목록. 기록 부족이면 "기록하러 가기"(`/me/meals/new`). 조언 카드는 `최근 N일로 조언 받기`(점검 `ok` 일 때만 활성) · 저장본이 있으면 `다시 쓰기`(force) · 출처 라벨(AI 조언 / AI 없이 계산으로 쓴 조언 / 계산 결과 / 기록 부족) · 영양제로 채운다면 칩 · 영양소별 이유/음식으로/영양제로/주의 · 면책. `b09e0a4` 부터 `lg` 에서 두 단(`lg:grid-cols-2`) — 조언(이 탭의 결론)이 점검 목록 아래로 밀리지 않게. 차트 라이브러리 없이 div 폭으로 그린다. `03bc43f0`(2026-10-05) 부터 기간 버튼을 누르면 새 결과가 올 때까지 이전 기간 결과를 `opacity-60` 으로 둔다(`useMealNutrition(days, true, { keepPrevious: true })` → `NutritionAnalysisView dim={isPlaceholderData}`).
-- 앱 [MealNutritionView.tsx](../../apps/mobile/src/components/meal/MealNutritionView.tsx)(287줄): 웹과 같은 구성을 RN `View` 폭 계산으로. [app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) 탭 `nutrition`('영양'). `다시 쓰기` 는 `Chip`.
-- 설정: 웹 [MealPreferenceTab.tsx](../../apps/web/src/routes/meal/MealPreferenceTab.tsx)·앱 [MealPreferenceView.tsx](../../apps/mobile/src/components/meal/MealPreferenceView.tsx) 에 성별 칩(여성·남성·선택 안 함)과 출생연도 입력 — `parseMealBirthYear` 가 빈칸 null, 1900~올해 네 자리 아니면 undefined("출생연도는 1900년부터 올해까지 네 자리로 적어 주세요.").
+- 웹 [MealNutritionTab.tsx](../../apps/web/src/routes/meal/MealNutritionTab.tsx): `MealPage` 의 6번째 탭 `nutrition`(아이콘 `Pill`, [MealPage.tsx](../../apps/web/src/routes/meal/MealPage.tsx) — 탭 6개라 좁은 화면에서 아이콘을 숨기고 `overflow-x-auto` 로 가로로 민다). 점검 카드는 기간 버튼 7/14/28, 상태 배지 색(부족 빨강·조금 부족 호박·충분 초록·많음 주황·보류 회색), `nutrientBarWidth` 막대 + 100% 기준선(`NUTRIENT_BAR_MAX_PERCENT 150` 의 66.7% 위치), 모자라면 "한 끼로는 …· 많이 든 음식: …", 아니면 "주로 …에서", `notMeasured` 목록. 기록 부족이면 "기록하러 가기"(`/me/meals/new`). 조언 카드는 `최근 N일로 조언 받기`(점검 `ok` 일 때만 활성) · 저장본이 있으면 `다시 쓰기`(force) · 출처 라벨(AI 조언 / AI 없이 계산으로 쓴 조언 / 계산 결과 / 기록 부족) · 영양제로 채운다면 칩 · 영양소별 이유/음식으로/영양제로/주의 · 면책. `b09e0a4` 부터 `lg` 에서 두 단(`lg:grid-cols-2`) — 조언(이 탭의 결론)이 점검 목록 아래로 밀리지 않게. 차트 라이브러리 없이 div 폭으로 그린다. `03bc43f0`(2026-10-05) 부터 기간 버튼을 누르면 새 결과가 올 때까지 이전 기간 결과를 `opacity-60` 으로 둔다(`useMealNutrition(days, true, { keepPrevious: true })` → `NutritionAnalysisView dim={isPlaceholderData}`). 2026-10-25 앱 재구성 뒤에도 웹은 6탭 중 '영양' 탭 그대로이고, '판단 보류' 영양소도 접지 않는다.
+- 앱 [MealNutritionView.tsx](../../apps/mobile/src/components/meal/MealNutritionView.tsx)(~~287줄~~ → 331줄): 웹과 같은 구성을 RN `View` 폭 계산으로. ~~[app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) 탭 `nutrition`('영양'). `다시 쓰기` 는 `Chip`.~~ → 2026-10-25(`699761a1`) 부터 탭이 아니라 두 export 다. `MealNutritionCheck({ days, onChangeDays })` 는 '영양소 점검' 섹션이다(부제 "두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요.", `SegmentedControl` '최근 7/14/28일', 측정된 영양소 → '판단 보류 N개' 접기 → 판단하지 않는 영양소 목록). `MealNutritionAdvice({ days })` 는 '나에게 맞는 영양제' 섹션이다(점검 `status === 'ok'` 일 때만 버튼 활성). [MealAnalysisView.tsx](../../apps/mobile/src/components/meal/MealAnalysisView.tsx) 가 `nutritionDays`(기본 14) 상태를 들고 둘 사이에 통계 상세를 끼워 놓는다. `다시 쓰기` 는 `Chip` 에서 `MealButton`(테두리·새로고침 아이콘)으로 바뀌었다(`6ae0a4c5`). 옛 `/meal?tab=nutrition` 은 분석 탭으로 연다([app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) `initialFromParam`).
+- 설정: 웹 [MealPreferenceTab.tsx](../../apps/web/src/routes/meal/MealPreferenceTab.tsx)·앱 [MealPreferenceView.tsx](../../apps/mobile/src/components/meal/MealPreferenceView.tsx) 에 성별 칩(여성·남성·선택 안 함)과 출생연도 입력 — `parseMealBirthYear` 가 빈칸 null, 1900~올해 네 자리 아니면 undefined("출생연도는 1900년부터 올해까지 네 자리로 적어 주세요."). → 2026-10-25 앱 설정은 식단 화면 탭이 아니라 별도 화면 [app/meal/settings.tsx](../../apps/mobile/app/meal/settings.tsx) 이고, 섹션 '영양소 점검 기준'의 안내가 "분석 탭의 영양소 점검이 …"로 바뀌었다. 저장은 '추천 설정 저장'(추천 설정 바로 아래).
 
-## Talks To [coverage: high — 23 sources]
+## Talks To [coverage: high — 25 sources]
 
 - **[food](food.md)** — 카탈로그 `FoodItem.nutrientsPer100gJson`(적재 `food-import.service`·`food-nutrients.ts`, 빌린 행 복사 `backfillBorrowedNutrients`, `CURATED_NUTRIENTS_LIKE` 공기밥=쌀밥), `kcalPer100gOf`·`mealServingNutrition`(1인분 규칙, [food-serving.ts](../../apps/friendly/src/modules/food/food-serving.ts)), `loadLexicon`(어휘 portion·synonym), `parseJsonStringArray`. 원재료(`mfds-raw`) 행에는 비타민·무기질이 아직 없다([food-raw-import.ts](../../apps/friendly/src/modules/food/food-raw-import.ts)는 열량만 시드).
 - **[meal](meal.md)** — `mealEntry`·`mealItem` 의 저장 스냅샷(kcal·proteinG·sodiumMg·foodId·dishType), `MealPreferenceService`(성별·출생연도·알레르기·제외·덜 선호 — `null` 은 지움, `undefined` 는 그대로), `MealDailyQuotaService`(purpose `'supplement'`), `mealMutationBarrier`(2026-10-05 부터 저장 단계에만), `mealDataGeneration`(2026-10-05 — 전체 삭제가 장벽 안에서 올리는 `all` 세대, [meal-mutation-barrier.ts](../../apps/friendly/src/modules/meal/meal-mutation-barrier.ts)). 식단 전체 삭제([meal-data.service.ts](../../apps/friendly/src/modules/meal/meal-data.service.ts))가 `mealNutritionAdvice.deleteMany` 로 조언 이력도 지우고 응답 `deleted.nutritionAdvices` 를 싣는다. 백업 복원은 성별·출생연도를 되살린다(없던 백업은 null). 조언 이력은 백업 대상이 아니다.
@@ -119,7 +123,8 @@ friendly modules/meal-nutrition/meal-nutrition.route.ts (authenticate, GET 점�
 - **[shared](shared.md)** — `mealApi.nutrition(days?)`·`latestNutritionAdvice()`·`createNutritionAdvice(input)`, 훅 3개([useMeal.ts](../../packages/shared/src/hooks/useMeal.ts)). 식단 기록 변경(`invalidateEntries`)과 선호 변경이 `['meal','nutrition']` 를 무효화한다.
 - **[api-contract](api-contract.md)** — [schemas/meal.ts](../../packages/api-contract/src/schemas/meal.ts) 영양 절과 `MealSex`·선호의 `sex`·`birthYear`. [zod-ssot-buildless](../concepts/zod-ssot-buildless.md).
 - **[api-docs](api-docs.md)** — 세 라우트가 [endpoints.md](../../docs/api/endpoints.md)의 meal 절(로그인, 30/분 · 무표기 · 5/분)에 자동 생성된다.
-- **[web](web.md)·[mobile](mobile.md)** — 영양 탭·설정. [platform-ui-split](../concepts/platform-ui-split.md).
+- **[web](web.md)·[mobile](mobile.md)** — 영양 탭·설정. [platform-ui-split](../concepts/platform-ui-split.md). → 2026-10-25 앱은 영양 탭 대신 '분석' 탭의 두 섹션이고 설정은 별도 화면이다(웹은 그대로). 같은 shared 훅·utils 함수를 쓰므로 데이터는 같고, 기간 선택 위치·'판단 보류' 접기·안내 문구만 플랫폼마다 다르다.
+- **meal 통계**(meal 토픽 범위) — 2026-10-25 부터 앱에서 같은 화면을 나눠 쓴다. 통계 기간(1주/1달/3달, `GET /meals/stats`)과 영양 기간(7/14/28일)은 서로 독립이다.
 
 ## API Surface [coverage: high — 10 sources]
 
@@ -163,8 +168,10 @@ friendly modules/meal-nutrition/meal-nutrition.route.ts (authenticate, GET 점�
 
 **분석 스냅샷**: 조언 행은 근거 분석 전체를 JSON 으로 남겨, 나중에 기록이 바뀌어도 "그때 무엇을 보고 이렇게 말했는지" 를 보여 준다. `toAdvice` 가 읽을 때 `MealNutritionAnalysis` 로 재검증하고, 실패(계약 변경 전 행)면 null, 항목 JSON 이 깨졌으면 빈 항목으로 보인다.
 
-## Key Decisions [coverage: high — 17 sources]
+## Key Decisions [coverage: high — 20 sources]
 
+- **2026-10-25 (`699761a1`) — 앱에서 영양은 탭이 아니라 '분석'의 섹션, 기간은 통계와 따로** — 영양소 점검과 통계는 둘 다 "내 기록을 읽은 결과"라 한 화면에 모았다(앱 탭 6 → 3, [meal](meal.md)). 그러나 기간을 하나로 묶지는 않았다. 영양 점검은 두 끼 이상 기록한 날만 평균하고 7~28일만 받으며(`MealNutritionQuery`), 통계는 from~to 범위 전체를 센다. 한 세그먼트로 묶으면 어느 쪽 숫자의 뜻이 틀어진다. 조언 섹션은 점검 섹션과 같은 `days` 를 써서, 보고 있는 점검의 기간으로 조언을 받게 한다. 조언 섹션은 분석 화면 맨 아래다(커밋 본문의 순서).
+- **2026-10-25 (`699761a1`) — '판단 보류'는 앱에서 접어 둔다** — 커밋의 표현으로는 `unknown` 영양소가 "빈 막대만 늘어놓아 화면 절반을 차지"했다. 지우지 않고 접어서, 줄에 개수("판단 보류 N개 보기")를 밝히고 누르면 이유(note "이 영양소 정보가 있는 기록이 N%뿐이라 판단을 미뤄요.")와 함께 편다 — "모른다"를 숨기지는 않는다([unknown-vs-zero](../concepts/unknown-vs-zero.md)). 웹에는 적용하지 않았다.
 - **2026-10-05 (`7b060ca4`) — LLM 은 장벽 밖, 저장만 장벽 안 + 데이터 세대** — 아래 2026-10-04 결정("LLM 호출도 식단 쓰기 장벽 안에서")을 바꿨다. 경합을 막는 대가가 컸다: 조언을 쓰는 최대 90~180초 동안 같은 사용자의 기록 저장·사진·설정이 줄을 섰다(findings C-V2). 저장 직전에만 장벽을 잡고, 전체 삭제가 장벽 안에서 올린 세대가 계산 시작 때와 다르면 버린다. 이렇게 해도 "삭제 응답 뒤 지운 기록의 분석이 다시 생기지 않는다"는 원래 목적이 그대로 지켜진다. 끼니 추천과 같은 구조라 세대 객체는 meal 의 `mealDataGeneration` 을 같이 쓴다. [sqlite-write-lock-budget](../concepts/sqlite-write-lock-budget.md).
 - **2026-10-05 (`7b060ca4`) — 카탈로그 파생 목록은 어휘와 같은 10분 TTL 로 메모, 사용자 필터는 요청마다** — 한 끼 후보의 비싼 부분(카탈로그 1,238행 로드·영양 JSON 파싱·1인분 계산)은 카탈로그와 어휘로만 정해진다. 그래서 어휘 캐시와 같은 수명으로 묶었다. 알레르기·제외·나트륨처럼 사용자마다 다른 조건은 메모하지 않는다(findings C-7, LOW).
 - **2026-10-04 (`3d067a0`) — 판단은 서버, 문장만 LLM** — 부족·기준·부족분·상한·주의 문구·면책은 서버 값이고, 모델은 서버가 고른 후보(최대 6)의 이유·음식·영양제 칸만 쓴다. 모델 문장은 칸 단위로 검사해 걸린 칸만 서버 문장으로 바꾸고, LLM 이 없거나 실패하면 서버 문장만으로 답한다(`fallback`) — 기능이 LLM 가용성에 묶이지 않는다. [static-first-llm-enrichment](../concepts/static-first-llm-enrichment.md).
@@ -180,7 +187,11 @@ friendly modules/meal-nutrition/meal-nutrition.route.ts (authenticate, GET 점�
 - **2026-10-04 — LLM 호출도 식단 쓰기 장벽 안에서** — 끼니 추천과 같은 방식. 전체 삭제와 엇갈려 지운 기록의 분석이 다시 저장되는 경합을 막는 대가로, 조언을 쓰는 동안 그 사용자의 다른 식단 쓰기는 기다린다. → **2026-10-05 번복**(위 첫 항목 — 장벽 밖 + 데이터 세대).
 - **영양 점검·영양제 조언을 [meal](meal.md) 에서 떼어 별도 토픽으로**(위키 28차 사용자 결정) — 기준표·판정·LLM 검사·카탈로그 영양소 데이터가 한 묶음이라 meal(기록·인식·추천·통계)과 수명주기가 다르다.
 
-## Gotchas [coverage: high — 19 sources]
+## Gotchas [coverage: high — 23 sources]
+
+- **(2026-10-25) '판단 보류' 영양소가 모두 "값이 없는" 것은 아니다(코드 읽기).** 앱 [MealNutritionView.tsx](../../apps/mobile/src/components/meal/MealNutritionView.tsx) 주석은 접는 대상을 "판단 보류(값이 없는 영양소)"라 부르지만, `assessNutrient` 의 `unknown` 은 두 경우다([meal-nutrition.service.ts](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts)): 섭취량이 null(또는 점검 자체가 부족)이면 note 없이, **coverage 60% 미만이면 섭취량·퍼센트를 그대로 둔 채** note "…N%뿐이라 판단을 미뤄요." 로 낸다. 두 번째는 펼치면 막대가 정보 있는 일부 기록만으로 그려져 실제보다 짧다. 접힘 기본이 그 오독을 줄이지만, 펼친 화면의 퍼센트를 섭취량으로 읽으면 안 된다.
+- **(2026-10-25) 앱과 웹의 영양 화면이 갈렸다.** 앱은 분석 탭 섹션 + '판단 보류' 접기 + 설정 안내 "분석 탭의 영양소 점검"이고, 웹은 '영양' 탭 + 전부 펼침 + "영양 탭"이다. 서버·훅이 같으니 숫자는 같다. 사용자 안내·문서에서 "영양 탭"은 웹에만 맞다.
+- **(2026-10-25) 앱 분석 탭을 열면 점검 요청이 같이 나간다.** 통계만 보러 들어와도 `GET /meals/nutrition?days=14`·`GET /meals/nutrition/advice` 가 함께 나간다(예전엔 영양 탭을 열 때만). 점검은 LLM·일일 한도와 무관하고 분당 30·staleTime 60초라 비용 문제는 아니지만, 점검 쿼리 수가 늘어난다.
 
 - **운영 배포는 마이그레이션 + 카탈로그 백필 두 단계.** `20261004060205_add_meal_nutrition` 뒤 `load:food-catalog --source=nutrition --backfill-nutrition` 을 돌려야 `nutrientsPer100gJson` 이 찬다. 안 돌리면 오류 없이 모든 영양소가 coverage 0 → `unknown`(판단 보류)만 보인다. `.env` 는 새 값 없이도 기본(kimi-k3·한도 10)으로 동작한다([.env.example](../../apps/friendly/.env.example)). 재적재는 **빈 행만** 채우므로 열 매핑을 고친 뒤엔 `--refresh-nutrition`.
 - **원재료 DB(15100065) 행에는 비타민·무기질이 없다.** [food-raw-import.ts](../../apps/friendly/src/modules/food/food-raw-import.ts)는 열량만 시드하고, PLAN 기록상 원재료 API 는 활용신청 미등록(403)이다. 과일·채소(`mfds-raw` 의 과일류·채소류·버섯류·해조류) 기록이 하나라도 있으면 식이섬유·칼륨·비타민 A·비타민 C 는 조언에서 빠지고 notes 로 밝힌다 — 활용신청·적재 확장이 남은 일.
@@ -196,10 +207,10 @@ friendly modules/meal-nutrition/meal-nutrition.route.ts (authenticate, GET 점�
 - **옛 조언은 조용히 사라질 수 있다.** 계약(`MealNutritionAnalysis`)이 바뀌면 `toAdvice` 가 저장 스냅샷 재검증에 실패해 null — `GET advice` 가 `advice:null` 을 준다. `promptVersion` 을 올리면 같은 날 저장본도 캐시 miss 가 된다.
 - **니아신·비타민 A 는 음식으로 "많음" 이 안 뜬다.** `foodUpperLimit:false` — 상한이 보충제·레티놀 기준이라서. 상한 값은 영양제 조언 문장에만 쓰인다.
 - **`days` 를 바꾸면 최근 조언과 점검 기간이 다를 수 있다.** 조언 카드는 마지막 저장본(`advice.analysis.days` 기준)을 그대로 보이고, 새 기간으로 받으려면 버튼을 다시 눌러야 한다.
-- **화면 육안 확인이 남았다.** 커밋 검증은 RTL 테스트(웹 [MealPage.test.tsx](../../apps/web/src/routes/meal/MealPage.test.tsx))와 dev 계정 실제 경로(kimi-k3 10.3s 로 생성·저장, 같은 날 재요청은 저장본)뿐 — 이 환경 브라우저가 dev 서버에 닿지 않아 웹·앱 화면은 미확인이다.
-- **남은 것**(PLAN 기록): 원재료 DB 활용신청(과일·채소 비타민) · 점검 결과를 끼니 추천 점수에 반영(③) · 앱 실기기·웹 육안 확인.
+- **화면 육안 확인이 남았다.** 커밋 검증은 RTL 테스트(웹 [MealPage.test.tsx](../../apps/web/src/routes/meal/MealPage.test.tsx))와 dev 계정 실제 경로(kimi-k3 10.3s 로 생성·저장, 같은 날 재요청은 저장본)뿐 — 이 환경 브라우저가 dev 서버에 닿지 않아 웹·앱 화면은 미확인이다. → 2026-10-25 앱은 iOS 26.5 시뮬레이터(DB 사본 + 예시 식단 17건)에서 라이트·다크로 영양 화면(`1c3e7bc7`)·분석 탭(`699761a1`)·영양제 버튼(`6ae0a4c5`)을 육안 확인했다. 앱 Android·실기기와 웹 육안 확인은 여전히 남았다. 앱 영양 화면에는 자동 테스트가 없다.
+- **남은 것**(PLAN 기록): 원재료 DB 활용신청(과일·채소 비타민) · 점검 결과를 끼니 추천 점수에 반영(③) · 앱 실기기·웹 육안 확인. (2026-10-31 기준 PLAN-meal 에는 2026-10-25 앱 재구성 기록이 없다 — 근거는 커밋 본문.)
 
-## Sources [coverage: high — 59 sources]
+## Sources [coverage: high — 64 sources]
 
 - [apps/friendly/src/modules/meal-nutrition/kdri.ts](../../apps/friendly/src/modules/meal-nutrition/kdri.ts) — 2020 KDRI 요약표·필요추정량·연령 구간(183줄)
 - [apps/friendly/src/modules/meal-nutrition/meal-nutrition.defs.ts](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.defs.ts) — `NUTRIENT_DEFS` 12·`NOT_MEASURED_NUTRIENTS`·면책(194줄)
@@ -247,13 +258,22 @@ friendly modules/meal-nutrition/meal-nutrition.route.ts (authenticate, GET 점�
 - [apps/web/src/routes/meal/MealPreferenceTab.tsx](../../apps/web/src/routes/meal/MealPreferenceTab.tsx) — 성별·출생연도
 - [apps/web/src/routes/admin/AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) — `PURPOSE_META['meal-supplement']`
 - [apps/web/src/routes/admin/AdminLogsPage.tsx](../../apps/web/src/routes/admin/AdminLogsPage.tsx) — feature 라벨
-- [apps/mobile/src/components/meal/MealNutritionView.tsx](../../apps/mobile/src/components/meal/MealNutritionView.tsx) — 앱 영양 탭(287줄)
-- [apps/mobile/app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) — 탭 `nutrition`
-- [apps/mobile/src/components/meal/MealPreferenceView.tsx](../../apps/mobile/src/components/meal/MealPreferenceView.tsx) — 성별·출생연도
+- [apps/mobile/src/components/meal/MealNutritionView.tsx](../../apps/mobile/src/components/meal/MealNutritionView.tsx) — 앱 영양 탭(287줄) → 31차: `MealNutritionCheck`·`MealNutritionAdvice` 두 섹션, '판단 보류' 접기, `MealButton`(331줄)
+- [apps/mobile/app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) — 탭 `nutrition` → 31차: 탭 기록·분석·추천, 옛 `?tab=nutrition` → 분석
+- [apps/mobile/src/components/meal/MealPreferenceView.tsx](../../apps/mobile/src/components/meal/MealPreferenceView.tsx) — 성별·출생연도 → 31차: '영양소 점검 기준' 안내 "분석 탭의 영양소 점검…", '추천 설정 저장'
 - [apps/mobile/src/components/meal/MealDataManagementCard.tsx](../../apps/mobile/src/components/meal/MealDataManagementCard.tsx) — 전체 삭제 문구에 영양제 조언
 - [docs/PLAN-meal.md](../../docs/PLAN-meal.md) — purpose `meal-supplement` 절·2026-10-04 진행 기록(운영 배포·남은 것)
 - [docs/api/endpoints.md](../../docs/api/endpoints.md) — meal 절 3행(자동 생성)
 - [docs/data-sources.md](../../docs/data-sources.md) — 15100070·15100065 배포본
+
+### 31차 신규 — 앱 영양 화면이 분석 탭으로(2026-10-25 `699761a1`·`1c3e7bc7`·`6ae0a4c5`)
+- [apps/mobile/src/components/meal/MealAnalysisView.tsx](../../apps/mobile/src/components/meal/MealAnalysisView.tsx) — *통계·영양 섹션 순서, `nutritionDays` 기본 14·통계 기본 1달, 두 기간을 따로 든다*
+- [apps/mobile/src/components/meal/MealStatsView.tsx](../../apps/mobile/src/components/meal/MealStatsView.tsx) — *같은 화면의 통계 섹션(1주/1달/3달) — 영양 기간과 독립*
+- [apps/mobile/app/meal/settings.tsx](../../apps/mobile/app/meal/settings.tsx) — *성별·출생연도가 들어 있는 설정 화면(예전 여섯 번째 탭)*
+- [apps/mobile/src/components/meal/mealUi.tsx](../../apps/mobile/src/components/meal/mealUi.tsx) — *`MealButton`(조언 받기·다시 쓰기)·`MealSection`·`MealSectionTitle`*
+- [packages/shared/src/ui/SegmentedControl/SegmentedControl.native.tsx](../../packages/shared/src/ui/SegmentedControl/SegmentedControl.native.tsx) — *영양 기간 세그먼트(앱)*
+- [apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition.service.ts) — *대조: `unknown` 두 경우(섭취량 null / coverage 60% 미만은 퍼센트 유지 + note)*
+- [apps/web/src/routes/meal/MealNutritionTab.tsx](../../apps/web/src/routes/meal/MealNutritionTab.tsx) · [MealPreferenceTab.tsx](../../apps/web/src/routes/meal/MealPreferenceTab.tsx) — *대조: 웹은 '영양' 탭·전부 펼침·"영양 탭이 …" 그대로*
 
 **2026-10-23 라운드 (입력 쪽 — 빈 열량 보강)**
 - [apps/friendly/src/modules/meal/meal-nutrition-estimate.ts](../../apps/friendly/src/modules/meal/meal-nutrition-estimate.ts) — *이름 추정: `donor_estimate` + `foodId` null, 웹 추정은 단백질·나트륨 null(상세 [meal](meal.md))*

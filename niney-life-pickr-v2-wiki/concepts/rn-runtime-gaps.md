@@ -1,6 +1,6 @@
 ---
 concept: 웹 테스트를 통과한 공유 코드가 앱 런타임에서 조용히 틀린다 — Hermes·Fabric·EXGL·Metro 의 빈틈
-last_compiled: 2026-10-04
+last_compiled: 2026-10-31
 topics_connected: [shared, mobile, saju-c, tarot, meal]
 status: active
 ---
@@ -18,9 +18,12 @@ status: active
 - **GL(expo-gl EXGL)** — stb_image 로 이미지를 풀어 **WebP 를 못 읽는다**. 웹 카드 그림은 전부 webp 라, 서버가 JPEG 로 바꿔 주는 라우트 `GET /api/v1/tarot/cards/:cardId/texture.jpg`(384px, `bfce1f8`)와 번들 뒷면 JPEG 를 따로 둔다. R3F 네이티브 `Canvas` 는 모든 터치를 잡아 위에 터치 층을 얹어야 하고, JSX 로 만든 재질은 unmount 때 버려진다.
 - **번들러(Metro)** — R3F 앱판(CJS)의 `require('three')` 와 우리 ESM import 가 `three.cjs`·`three.module.js` 두 사본으로 풀리면 R3F 가 덧대는 텍스처 로더 폴리필이 한쪽에만 걸려 `document` 오류가 나고 번들이 1MB 넘게 는다 → `metro.config.js` 가 `three` 를 항상 require 조건(three.cjs)으로 한 벌만 푼다(`173af9c`). 선례로 24차의 Hermes `SharedArrayBuffer` 오류도 호이스팅된 `webidl-conversions@8` 선택이 원인이었다.
 - **반대 방향(Expo Web)** — RN 코드가 웹으로 갈 때도 빈틈이 있다: `Alert.alert` 확인창이 Expo Web 에선 뜨지 않아 식단 최근 추천 삭제·사주/타로 기록 삭제가 안 된다.
+- **(31차) JS 와 네이티브 바이너리의 판본 차** — 새 JS 만 받은 옛 개발 빌드에는 새 의존성의 네이티브 쪽이 없다. `@react-native-community/datetimepicker` 를 최상위에서 import 하면 Android 는 `TurboModuleRegistry.getEnforcing` 으로 **모듈 로드 자체가 터지고**, iOS 는 '구현 안 된 컴포넌트' 상자를 그린다. 그래서 [lib/nativeDateTimePicker.ts](../../apps/mobile/src/lib/nativeDateTimePicker.ts) 가 iOS `UIManager.hasViewManagerConfig('RNDateTimePicker')`·Android `TurboModuleRegistry.get('RNCDatePicker'/'RNCTimePicker')` 로 네이티브가 있는지 먼저 보고 그때만 `require` 한다(없으면 숫자 직접 입력으로 남음). `expo-haptics` 는 스스로 `requireOptionalNativeModule` 을 써 import 가 안전하고 호출만 실패하므로 [lib/haptics.ts](../../apps/mobile/src/lib/haptics.ts) 가 그 실패를 삼킨다. 같은 라운드에 라이브러리·레이아웃 엔진 쪽 빈틈 둘도 나왔다 — 연 적 없는 gorhom v5 `BottomSheetModal` 에 `dismiss()` 를 부르면 'DISMISSING' 에 갇혀 이후 `present()` 가 먹지 않고(`MealTimeSheet` 는 연 뒤에만 닫는다), 퍼센트 폭 + `aspectRatio` 칸으로 만든 달력 그리드는 Yoga 가 높이를 크게 잡아 아래에 빈 줄이 남는다(고정 높이로). 웹 쪽에는 이런 판본 차가 없다 — 배포가 곧 전체 교체이기 때문이다.
 
 ## Instances
 
+- **2026-10-25** in [mobile](../topics/mobile.md) / [meal](../topics/meal.md) (`39276581`): 식단 햅틱·네이티브 날짜·시각 피커를 더하며 "재빌드 전 앱(새 JS 만 받은 개발 빌드)에서도 죽지 않게" 를 설계 조건으로 삼았다 — 피커는 네이티브 유무를 먼저 보고 지연 `require`, 햅틱은 선택적 네이티브 모듈 + 실패 무시. 검증은 iOS Debug 재빌드본과 2026-09-26 빌드가 남은 iOS 27 시뮬레이터(새 JS 만 붙임 — 숫자 입력 대체·햅틱 칩 오류 없음) 두 갈래였고, Android 는 SDK 가 없는 머신이라 실행 확인을 못 했다. 빌드 문서([docs/mobile-ios-build.md](../../docs/mobile-ios-build.md))에 한 줄을 남겼다.
+- **2026-10-25** in [mobile](../topics/mobile.md) (`699761a1`·`1c3e7bc7`·`6ae0a4c5`): gorhom v5 모달 'DISMISSING' 고착(실측 — 연 뒤에만 닫는다), Yoga 달력 그리드 높이(고정 높이로), reanimated 공유 값을 `.value` 대입 대신 `.set()/.get()` 으로만 다뤄 React Compiler 가 컴포넌트 컴파일을 포기하지 않게(`MealScalePressable`). 그리고 Expo Web 의 `Alert.alert` 빈틈이 **다시 넓어졌다**(코드 읽기, 실행 확인 안 함) — 상세 헤더 '…' 는 iOS 면 액션 시트, 아니면 `Alert.alert` 버튼 목록이라([app/meal/[id].tsx](../../apps/mobile/app/meal/[id].tsx) 107~111행) Expo Web 에선 아무것도 뜨지 않는다. 예전엔 본문 버튼이던 '같은 메뉴로 새 기록'·'기록 삭제' 가 이 메뉴로만 남아, Expo Web 에서 닿을 길이 없어졌다.
 - **2026-09-26** in [shared](../topics/shared.md) / [saju-c](../topics/saju-c.md) / [tarot](../topics/tarot.md) (`974667d`): `URLSearchParams.size` — 시뮬레이터에서 "물어본 것" 탭이 엉뚱한 목록을 보여서야 발견. 웹 브라우저엔 `size` 가 있어 웹 테스트·웹 화면 모두 통과했다.
 - **2026-09-26** in [saju-c](../topics/saju-c.md) / [tarot](../topics/tarot.md) / [mobile](../topics/mobile.md) (`04f009e` → `9d565b3`): Fabric 마지막 줄 소실 — 사주 `sajuUi` 의 우회가 타로 전환 때 `common/Para` 로 승격.
 - **2026-09-26** in [tarot](../topics/tarot.md) / [mobile](../topics/mobile.md) (`6199215`·`bfce1f8`): EXGL WebP 불가 → 서버 JPEG 변환, R3F 터치 층, 재질 수명.
@@ -35,6 +38,7 @@ status: active
 1. **결함의 발견 경로가 사람 눈뿐이다** — 위 사례는 전부 시뮬레이터를 Hermes CDP 로 조작하다가 찾았다. 앱 자동 테스트 0건, Android 전부 미확인인 현재, 새 공유 코드를 쓸 때 "이 API 가 Hermes 에 있는가"를 리뷰 체크리스트로 묻는 것이 유일한 방어선이다. 웹 전용 API(`URLSearchParams.size`·`Intl` 시간대·`structuredClone`·`navigator.*`)는 shared 에서 쓰지 않거나 순수 계산으로 대체하는 편이 싸다.
 2. **우회는 코드 주석에만 산다** — `Para` 는 사주·타로에만 적용돼 식단·맛집 상세의 긴 본문은 같은 증상에 무방비이고, `size` 경고 주석은 그 두 파일에만 있다. 우회를 공용 부품으로 승격하고(Para 처럼) lint 규칙이나 공용 헬퍼(쿼리 빌더)로 바꿔야 다음 사람이 같은 함정을 다시 밟지 않는다.
 3. **WebView 임베드가 이 비용을 미뤄 주고 있었다** — 임베드 시절엔 앱이 웹 엔진을 빌려 써서 이 부류가 0건이었다. 네이티브 전환의 숨은 비용 중 가장 큰 것이 이것이고, 다음 네이티브 이식(예: 집값·여행 화면)도 같은 목록을 먼저 점검해야 한다.
+4. **(31차) 네이티브 의존성은 "없을 수도 있는 것" 으로 들인다** — 앱은 JS 와 바이너리가 따로 배포돼, 새 네이티브 모듈을 쓰는 JS 가 옛 바이너리 위에서 도는 순간이 반드시 생긴다 — 지금은 새 JS 만 받은 개발 빌드(Metro)가 그 자리다. 앱에 `expo-updates` 가 없어 운영 OTA 는 없지만(2026-10-31 `apps/mobile/package.json` 확인), 들이면 같은 일이 사용자 기기에서 일어난다. 장식(햅틱)은 실패를 삼키고, 기능(피커)은 유무를 먼저 보고 대체 입력을 남기는 두 등급이 생겼다. 다만 이 판정은 래퍼 두 파일에만 있어, 다음 네이티브 의존성이 최상위 import 로 들어오면 Android 에서 화면째 로드가 터진다 — 래퍼를 거치는지가 리뷰 질문이 된다.
 
 ## Sources
 
@@ -48,3 +52,7 @@ status: active
 - [../../apps/mobile/src/components/common/Para.tsx](../../apps/mobile/src/components/common/Para.tsx)
 - [../../apps/mobile/metro.config.js](../../apps/mobile/metro.config.js)
 - [../../docs/mobile-ios-build.md](../../docs/mobile-ios-build.md)
+- [../../apps/mobile/src/lib/nativeDateTimePicker.ts](../../apps/mobile/src/lib/nativeDateTimePicker.ts) — 31차
+- [../../apps/mobile/src/lib/haptics.ts](../../apps/mobile/src/lib/haptics.ts) — 31차
+- [../../apps/mobile/src/components/meal/MealTimeSheet.tsx](../../apps/mobile/src/components/meal/MealTimeSheet.tsx) — 31차
+- [../../apps/mobile/src/components/meal/mealUi.tsx](../../apps/mobile/src/components/meal/mealUi.tsx) — 31차

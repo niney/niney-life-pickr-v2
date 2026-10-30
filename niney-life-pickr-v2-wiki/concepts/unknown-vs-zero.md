@@ -1,7 +1,7 @@
 ---
 concept: 모름과 없음을 계약에서 가른다 — null(관측 안 됨·범위 밖)·0(관측된 없음)·억제(말하지 않음)
-last_compiled: 2026-10-10
-topics_connected: [housing, parking, sea, tour, air-quality, api-contract, web, life-map, meal, meal-nutrition]
+last_compiled: 2026-10-31
+topics_connected: [housing, parking, sea, tour, air-quality, api-contract, web, life-map, meal, meal-nutrition, mobile]
 status: active
 ---
 
@@ -24,6 +24,8 @@ status: active
 
 ## Instances
 
+- **2026-10-25** in [meal](../topics/meal.md) / [mobile](../topics/mobile.md) (`6ae0a4c5`): 앱 기록 목록의 고정 날짜 머리글 '3끼 · 2,148kcal' 은 **하한 표시 '+'** 라는 네 번째 인코딩을 들였다 — 열량을 보이는 기록(`mealNutritionLabel` 기준)만 더하고, 열량이 빠진 끼니가 있으면 `kcal+`, 다음 페이지에 같은 날이 더 있을 수 있는 마지막 날은 끼니 수에 `+`. 0 으로 채우지도 않고(열량 있는 기록이 하나도 없으면 열량 칸을 아예 안 씀) 합계를 숨기지도 않는다. 다만 하한이 새는 길이 둘 남았다 — ① 마지막 날의 '+' 는 끼니 수에만 붙어, 불러온 기록이 전부 열량을 가지면 다음 페이지 몫이 빠진 열량이 하한 표시 없이 나가고([app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) 479~493행) ② '+' 가 끼니 단위라 카드가 '일부 반영'인 끼니(항목 넷 중 셋만 값)는 모르는 항목을 뺀 채 '+' 없이 더해진다. 서버 달력 `days[].kcal`(값 있는 모든 항목 합)과도 규칙이 달라 같은 날 숫자가 어긋날 수 있다(코드 미수정, [meal](../topics/meal.md) Gotchas).
+- **2026-10-24** in [tour](../topics/tour.md) (`a382e01c`, 15차): 관광정보 쉬는 날 문구를 읽는 `parseKtoClosedDays` 가 세 값을 낸다 — `[]`(연중무휴 등 매주 쉬는 요일 없음) · `[요일…]` · `null`(읽지 못함: 시설마다 따로 적은 문구·격주·월 n회·철이 붙은 괄호). `null` 은 "쉬는 날 없음" 으로 다뤄지지 않고 일정에서 빼는 데만 안 쓰이며 **원문은 그대로 보여 준다**(받은 882건 중 요일 읽음 153 · 없음 647 · 읽지 않음 82). 공개 계약 `TourPlanPlaceInfo` 는 네 문구 각각 `null`(없는 항목)이고 넷 다 없으면 `info` 자체가 `null` — 관광정보와 못 맞춘 장소(맞추기 대상 2,649곳 중 903곳)도 `null` 이라 "정보 없음" 과 "운영 정보상 쉬는 날 없음" 이 응답에서 갈린다. 해석을 원문 저장 위에 얹은 덕분이다([raw-store-calibrate-on-read](raw-store-calibrate-on-read.md)).
 - **2026-10-04** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) / [api-contract](../topics/api-contract.md) (`186d2bc`·`3d067a0`): 식단 도메인으로 번졌다. 달력 `days[].kcal` 은 kcal 이 있는 항목만 더하고 하나도 없으면 `null`(0 으로 채우지 않음). 영양 점검은 영양소 상태에 `unknown` 을 두고(`MealNutrientStatus = low|borderline|ok|high|unknown`), 카탈로그에 그 영양소 값이 없으면 `notMeasured` 로 따로 보여 "부족"과 "모름"을 가른다. 기록이 적으면 판정 자체를 보류(`status: insufficient`) — 세 번째 종류인 **말하지 않음**이다. 음료·주류는 "0 으로 안다", 정보 없는 과일·채소는 "모른다"로 구분한다.
 - **2026-09-24** in [housing](../topics/housing.md) / [life-map](../topics/life-map.md) / [api-contract](../topics/api-contract.md) (`ad48f96`): 침수 흔적 — 계약 주석이 세 경우를 적는다(범위 밖·좌표 없음·미적재 → `null`). 웹은 `null` 이면 상세의 '침수 흔적' 섹션과 지도 물방울을 아예 그리지 않는다. **경계를 어디서 얻느냐가 약점으로 드러났다** — 커버리지 시도는 메타데이터가 아니라 **적재된 행의 시군구 코드 앞 두 자리**(`HousingFloodIndex.sidos`)에서 뽑는다. 로컬 적재에 잘못된 `ADM_CD` 4행(`10350` 3행·`12345` 1행)이 검증 없이 들어가 `sidos = {10, 11, 12}` 가 됐다(housing 토픽 Gotchas). 지금은 무해하지만, 오류 코드가 실제 시도 코드와 겹쳤다면 그 시도 전체가 "모름" 이 아니라 "0건(안전)" 으로 표시됐을 것이다. 적재 여부를 알려 주는 API 도 없어 범례는 적재와 무관하게 늘 보인다.
 - **2026-09-24** in [sea](../topics/sea.md) (`4a2bff1`): 지수 단계가 세 겹 — 1~5 정상 단계, **0 = 체험불가**(원천이 명시한 단계), `null` = 모름(원문 라벨은 `label` 에 그대로). D+3 이후 '일'(하루) 예보는 오전/오후 구분이 없어 `period` 가 `null` — "오후 없음" 이 아니라 "하루 단위라 구분 없음" 이다.
@@ -42,6 +44,8 @@ status: active
 
 5. **이상치는 모름으로 강등한다** (2026-10, 주차). 원천 값이 형식은 맞지만 상식 밖일 때(기본 0분 유료, 시간당 5만 원) 고칠 근거가 없으면 `null` 로 내린다 — 틀린 숫자는 "없음" 보다 해롭다. 강등은 원천 공통 함수 하나에서, 몇 행을 내렸는지 적재 리포트에 카운터로 남겨 다음 원천 갱신 때 비교할 수 있게 한다([open-data-master-load](open-data-master-load.md)).
 
+6. **(31차) 합계가 일부만 셌다면 하한임을 밝힌다.** 화면 합계(하루 열량)처럼 모름이 섞인 값을 더할 때는 0 으로 채우거나 합계를 숨기는 대신 '+' 로 "이상" 을 밝힐 수 있다. 다만 하한이 되는 원인이 둘 이상(열량 빠진 끼니·아직 안 불러온 페이지)이면 표시 조건이 원인마다 맞물려야 한다 — 앱 식단은 한 원인에만 열량 '+' 를 걸었다. 그리고 해석기가 "읽지 못함" 을 따로 낼 수 있어야 한다 — 관광정보 쉬는 날처럼 못 읽은 문구를 `[]` 로 떨어뜨리면 쉬는 곳이 일정에 그대로 들어간다.
+
 관련: [open-data-master-load](open-data-master-load.md) — "미적재" 가 모름의 흔한 원인이고, 이력 행이 그 판정의 진실이다. [quantile-graded-overlay](quantile-graded-overlay.md) — 소셀 억제. [external-api-proxy-fixture](external-api-proxy-fixture.md) — 원천이 비운 필드를 어댑터가 0 으로 채우지 않는 것이 이 구분의 입력단이다.
 
 ## Sources
@@ -57,7 +61,10 @@ status: active
 - [packages/api-contract/src/schemas/housing.ts](../../packages/api-contract/src/schemas/housing.ts) — `flood`·`HousingInfra.baseDate` 주석
 - [packages/api-contract/src/schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts) — `level` 0/`null`
 - [packages/api-contract/src/schemas/parking.ts](../../packages/api-contract/src/schemas/parking.ts) — 요금·무료 여부 `null`
-- [packages/api-contract/src/schemas/tour.ts](../../packages/api-contract/src/schemas/tour.ts) — `insufficient`·`'unknown'`
+- [packages/api-contract/src/schemas/tour.ts](../../packages/api-contract/src/schemas/tour.ts) — `insufficient`·`'unknown'` · 31차 `TourPlanPlaceInfo`(항목별 `null`, 넷 다 없으면 `info: null`)
+- [apps/friendly/src/modules/tour/tour-kto-info.ts](../../apps/friendly/src/modules/tour/tour-kto-info.ts) — 31차 `parseKtoClosedDays`(`[]`·요일·`null`)
+- [apps/mobile/app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) — 31차 하루 머리글 '+'
+- [meal](../topics/meal.md) · [mobile](../topics/mobile.md)
 - [apps/friendly/src/modules/housing/housing-flood.service.ts](../../apps/friendly/src/modules/housing/housing-flood.service.ts) — 커버리지 `sidos`
 - [apps/friendly/src/modules/housing/housing-trade-master.service.ts](../../apps/friendly/src/modules/housing/housing-trade-master.service.ts) — `replaceHousingTradePartition` 0건 장부
 - [open-data-master-load](open-data-master-load.md)

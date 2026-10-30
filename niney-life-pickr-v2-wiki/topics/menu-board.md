@@ -1,27 +1,29 @@
 ---
 topic: menu-board
-last_compiled: 2026-10-26
-sources_count: 53
+last_compiled: 2026-10-31
+sources_count: 60
 status: active
-aliases: [menu-board, 메뉴판 읽기, 메뉴판 사진, 메뉴판 사진 읽기, 메뉴판 이미지로 보기, placeDetail.menuImages, menuImages, MenuBoardService, MenuBoardError, prepareMenuBoardImage, MENU_BOARD_IMAGE_SIDE, MENU_BOARD_PROMPT, MENU_BOARD_PROMPT_VERSION, 프롬프트 v2, 크기별 가격, 규칙 보강, parseMenuBoardItems, MenuBoardItem, MenuBoardReadResult, MENU_BOARD_MAX_UPLOAD_MB, Routes.MenuBoard, /admin/menu-board, NaverMenuBoardReader, needsMenuBoardRead, NAVER_MENU_BOARD_MAX_READS, readMenuBoardsAfterCrawl, menu-board-read, buildMenuBoardMenus, carryMenuBoardReads, toPublicMenuBoard, menuMatchName, menuBoardPriceCheck, menuBoardImages, menuBoardMenus, menuUpdatedOn, NaverMenuBoardImage, NaverMenuBoardRead, promptVersion, MenuBoardMenu, MenuBoardMenuOrigin, origin, 구분값, 사진에만 있는 메뉴, registered, priceCheck, RestaurantPublicMenuBoard, addedMenus, newerPrices, findNaverMenuBoardState, saveNaverMenuBoardReads, findPreviousNaverSnapshot, extractNaverMenuBoardImages, extractNaverPlaceMenus, scoreBoard, pairTruth, nameScore, normalizeName, headName, parsePrice, summarize, MATCH 0.75, 표지 오인, 검수 정답, golden/menu-boards, eval:menu-boards, eval-report.json, collect:menu-boards, read:naver-menu-boards, probe:naver-menu-boards, data/menu-boards, OLLAMA_MENU_BOARD_MODEL, kimi-k3, gemma4:31b, PaddleOCR, OCR 비교, menu-board-ocr-probe, apps/smartly, smartly, dev:smartly, AI 허브 71553, 관광 음식메뉴판, 메뉴판 AI, AdminMenuBoardPage, ReadTab, EvalTab, ZoomableImage, AdminMenuBoardSection, MenuBoardSection, useReadMenuBoard, useMenuBoardSamples, useMenuBoardEvalReport, menuBoardApi]
+aliases: [menu-board, 메뉴판 읽기, 메뉴판 사진, 메뉴판 사진 읽기, 메뉴판 이미지로 보기, placeDetail.menuImages, menuImages, MenuBoardService, MenuBoardError, prepareMenuBoardImage, MENU_BOARD_IMAGE_SIDE, MENU_BOARD_PROMPT, MENU_BOARD_PROMPT_VERSION, 프롬프트 v2, 크기별 가격, 규칙 보강, parseMenuBoardItems, MenuBoardItem, MenuBoardReadResult, MENU_BOARD_MAX_UPLOAD_MB, Routes.MenuBoard, /admin/menu-board, NaverMenuBoardReader, needsMenuBoardRead, NAVER_MENU_BOARD_MAX_READS, readMenuBoardsAfterCrawl, menu-board-read, buildMenuBoardMenus, carryMenuBoardReads, toPublicMenuBoard, menuMatchName, menuBoardPriceCheck, menuBoardImages, menuBoardMenus, menuUpdatedOn, NaverMenuBoardImage, NaverMenuBoardRead, promptVersion, MenuBoardMenu, MenuBoardMenuOrigin, origin, 구분값, 사진에만 있는 메뉴, registered, priceCheck, RestaurantPublicMenuBoard, addedMenus, newerPrices, findNaverMenuBoardState, saveNaverMenuBoardReads, findPreviousNaverSnapshot, extractNaverMenuBoardImages, extractNaverPlaceMenus, scoreBoard, pairTruth, nameScore, normalizeName, headName, parsePrice, summarize, MATCH 0.75, 표지 오인, 검수 정답, golden/menu-boards, eval:menu-boards, eval-report.json, collect:menu-boards, read:naver-menu-boards, probe:naver-menu-boards, data/menu-boards, OLLAMA_MENU_BOARD_MODEL, kimi-k3, gemma4:31b, PaddleOCR, OCR 비교, menu-board-ocr-probe, apps/smartly, smartly, dev:smartly, AI 허브 71553, 관광 음식메뉴판, 메뉴판 AI, AdminMenuBoardPage, ReadTab, EvalTab, ZoomableImage, AdminMenuBoardSection, MenuBoardSection, useReadMenuBoard, useMenuBoardSamples, useMenuBoardEvalReport, menuBoardApi, 앱 메뉴판, 앱 메뉴판 사진, mobile MenuBoardSection, restaurantDetail/MenuBoardSection, boardPriceByName, BOARD_PRICE_COLORS, 메뉴판 사진 가격 줄, MenuGrid, thumbUrl, detail.menuBoard]
 ---
 
 # menu-board — 메뉴판 사진 읽기(kimi-k3 + 규칙 프롬프트, OCR 없이) · 네이버 메뉴판 사진 자동 읽기와 등록 메뉴 짝짓기
 
-**2026-10-10 신규 토픽 — 메뉴판 사진을 비전 LLM 한 번으로 메뉴·가격·설명 목록으로 읽는 friendly `menu-board` 모듈(`4597294b`), 어드민 '메뉴판 읽기' 화면(`9e4c598c`), 네이버 '메뉴판 이미지로 보기' 사진 수집·크롤 직후 자동 읽기·등록 메뉴와 짝짓기(`0408f2f2`), 공개 맛집 메뉴 탭 노출(`ee70bc2d`), 크기별 가격 프롬프트 v2(`faa12818`).** 같은 날 오전에 AI 허브 관광 음식메뉴판(71553) 모델을 돌리는 Python 체험 서버 `apps/smartly`(`96df0e70`)와 어드민 체험 페이지 `/admin/smartly-test`(`448b4cd4`)가 먼저 들어왔다. 그 뒤 통사진 비교([menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md) — OCR 3종·ollama cloud 비전 모델 9개·Claude·Codex, 검수 정답 20장)에서 kimi-k3 + 규칙 프롬프트가 F1 99.8% 로 골라졌고, AI 허브 모델은 쓸 곳이 없어 저녁에 서버째 폐기됐다(`63c7658a`, Key Decisions). 이번 라운드 이후 이 모듈을 고친 커밋은 없다(2026-10-26 기준, `faa12818` 가 마지막). 앱(`apps/mobile`)은 아직 메뉴판 필드를 쓰지 않는다. 화면 세부는 [web](web.md), 크롤 쪽 수집 세부는 [crawl](crawl.md), purpose 설정은 [ai](ai.md).
+**2026-10-24~10-29 변경 흡수 (31차) — 앱 공개 맛집 메뉴 탭에도 메뉴판 사진·사진에서 찾은 메뉴·최신 사진 가격 줄이 붙었다(`51596020`, 2026-10-29). 서버·계약·공용 훅은 그대로다**: 웹(`ee70bc2d`)에만 있던 공개 표면을 앱으로 옮겼다. 앱은 같은 공개 상세 응답(`GET /api/v1/restaurants/public/:placeId`)의 `detail.menuBoard` 를 받으면서도 그리지 않았다. 이번 커밋은 앱 화면 파일 셋만 바꿨다. (1) **신규 [MenuBoardSection](../../apps/mobile/src/components/restaurantDetail/MenuBoardSection.tsx)**. 등록 메뉴 아래에 '메뉴판 사진 · N장 · 날짜 범위' 머리를 둔다(`images[].uploadedOn` 중 아는 것의 최소~최대, 같으면 하나, 모두 모르면 생략). 그 아래 화면 끝까지 이어지는 112×84 썸네일 가로줄이 온다 — 메뉴판은 글자라 웹 96×72 보다 크게 했고, 썸네일은 [thumbUrl](../../apps/mobile/src/lib/thumbUrl.ts) 프록시 400 버킷이다. 누르면 공용 [Lightbox](../../apps/mobile/src/components/Lightbox.tsx) 로 원본(`images[].url`)을 본다. 이어서 '메뉴판 사진에서 찾은 메뉴 · N개'(`addedMenus`)를 처음 8개 + "N개 더 보기"/"접기"로 보인다. 안내는 웹과 같은 뜻이다: "등록 메뉴에 없는 것만 모았어요. 가게가 올린 메뉴판 사진을 AI 가 읽은 결과라 실제와 다를 수 있으니 사진으로 확인해 주세요." 목록은 등록 메뉴와 같은 `MenuGrid` 로 그리되 추천·사진·리뷰 언급 통계·칼로리 없이 이름·가격·설명만 넘긴다. 상세가 바텀시트 안이라 가로줄은 gesture-handler `ScrollView` 다. (2) **[MenuTab](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx)**. 등록 메뉴(+ 칼로리 안내) 아래 구분선 뒤에 섹션을 둔다. 등록 메뉴가 0개여도 `menuBoard` 가 있으면 "등록된 메뉴가 없습니다." 대신 섹션만 보인다 — 웹과 같은 규칙. (3) **[MenuGrid](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx)**. `newerPrices` 를 등록 메뉴 이름으로 찾아(`boardPriceByName` — `newerPrices[].name` 은 등록 메뉴 이름이라 `menus[].name` 과 정확히 같다), 등록 가격과 다른 최신 사진 가격을 '메뉴판 사진 7,000원 · 2026-…' 한 줄로 단다(웹 `amber-700`/`dark:amber-400` 와 같은 호박색, 스크린리더 "…등록 메뉴보다 최근 사진이에요"). 공개 표면의 규칙(두 갈래만, 날짜를 모르면 가격 차이를 안 보냄, 사진별 원문·짝은 어드민 전용)은 서버 `toPublicMenuBoard` 가 정하므로 앱도 그대로다. (4) **검증 한계**. 앱 타입체크·린트(새 경고 없음)와 iOS 시뮬레이터(DB 사본 + 검증용 API)에서 사진 줄·라이트박스·등록 메뉴 0개 가게까지 확인했다. **그 Mac 의 로컬 DB 에 메뉴판이 든 가게가 없어서**, '사진에서 찾은 메뉴'와 최신 가격 줄은 DB 사본에 넣은 시험값으로만 봤다. 실제 크롤·읽기 결과로는 앱 화면을 확인하지 않았고, Android·실기기도 확인하지 않았다. 앱 자동 테스트는 없다. 이로써 30차까지의 "앱은 메뉴판 필드를 쓰지 않는다"는 낡았다(아래 각 섹션 갱신). 메뉴판 모듈(friendly·계약·shared) 자체를 고친 커밋은 이번 라운드에도 없다.
 
-## Purpose [coverage: high — 8 sources]
+**2026-10-10 신규 토픽 — 메뉴판 사진을 비전 LLM 한 번으로 메뉴·가격·설명 목록으로 읽는 friendly `menu-board` 모듈(`4597294b`), 어드민 '메뉴판 읽기' 화면(`9e4c598c`), 네이버 '메뉴판 이미지로 보기' 사진 수집·크롤 직후 자동 읽기·등록 메뉴와 짝짓기(`0408f2f2`), 공개 맛집 메뉴 탭 노출(`ee70bc2d`), 크기별 가격 프롬프트 v2(`faa12818`).** 같은 날 오전에 AI 허브 관광 음식메뉴판(71553) 모델을 돌리는 Python 체험 서버 `apps/smartly`(`96df0e70`)와 어드민 체험 페이지 `/admin/smartly-test`(`448b4cd4`)가 먼저 들어왔다. 그 뒤 통사진 비교([menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md) — OCR 3종·ollama cloud 비전 모델 9개·Claude·Codex, 검수 정답 20장)에서 kimi-k3 + 규칙 프롬프트가 F1 99.8% 로 골라졌고, AI 허브 모델은 쓸 곳이 없어 저녁에 서버째 폐기됐다(`63c7658a`, Key Decisions). 이번 라운드 이후 이 모듈을 고친 커밋은 없다(2026-10-26 기준, `faa12818` 가 마지막 — 2026-10-31 에도 같음). ~~앱(`apps/mobile`)은 아직 메뉴판 필드를 쓰지 않는다.~~ → 2026-10-29 `51596020` 부터 앱 공개 메뉴 탭도 그린다(위 31차). 화면 세부는 [web](web.md), 크롤 쪽 수집 세부는 [crawl](crawl.md), purpose 설정은 [ai](ai.md).
+
+## Purpose [coverage: high — 9 sources]
 
 가게가 올린 **메뉴판 사진**(메뉴 안내판·메뉴책 사진 — 메뉴 항목마다 붙은 음식 사진과 다르다)을 읽어 메뉴 목록으로 바꾸는 도메인이다. 쓰임은 둘이다.
 
 1. **어드민 테스트 '메뉴판 읽기'**(`/admin/menu-board`) — 사진 한 장(업로드·끌어다 놓기·수집 샘플)을 읽어 메뉴·가격·설명 표로 보고, 회귀 평가 리포트(F1·정밀도·재현율·이름 정확·가격 일치·지어냄·표지 오인)를 본다. 모델·프롬프트를 바꿀 때의 확인대다.
-2. **네이버 맛집 메뉴판 사진 자동 읽기** — 네이버 플레이스의 '메뉴판 이미지로 보기' 사진(`placeDetail.menuImages`)을 크롤이 모으고, 크롤 직후 백그라운드에서 새 사진만 읽어 **등록 메뉴와 짝짓는다**. 결과의 구분값 `origin` 이 'menu-board'(사진에만 있는 메뉴) / 'registered'(등록 메뉴와 같은 메뉴)다. 공개 맛집 상세 메뉴 탭은 그중 "사진에서 찾은 등록 메뉴에 없는 메뉴"와 "사진이 등록 메뉴 업데이트보다 최신이면서 가격이 다른 메뉴"만 보인다.
+2. **네이버 맛집 메뉴판 사진 자동 읽기** — 네이버 플레이스의 '메뉴판 이미지로 보기' 사진(`placeDetail.menuImages`)을 크롤이 모으고, 크롤 직후 백그라운드에서 새 사진만 읽어 **등록 메뉴와 짝짓는다**. 결과의 구분값 `origin` 이 'menu-board'(사진에만 있는 메뉴) / 'registered'(등록 메뉴와 같은 메뉴)다. 공개 맛집 상세 메뉴 탭은 그중 "사진에서 찾은 등록 메뉴에 없는 메뉴"와 "사진이 등록 메뉴 업데이트보다 최신이면서 가격이 다른 메뉴"만 보인다. 웹(2026-10-10)과 앱(2026-10-29)이 같은 응답·같은 규칙으로 보인다.
 
 넣은 이유(`0408f2f2` 커밋 본문): 크롤러가 메뉴판 사진을 버리고 있었는데, 프리뷰(10곳·33장)에서 등록 메뉴 167개 대 사진에서 읽은 383개, **사진에만 있는 메뉴 264개**였다 — 주류·음료·사리·세트처럼 사장님이 네이버 메뉴에 올리지 않은 것들이다.
 
 사진 읽기는 OCR 없이 비전 LLM 호출 한 번(purpose `menu-board`, 기본 `kimi-k3`)이다. 판단 근거는 [menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md): 로컬 OCR 엔진(Paddle·EasyOCR·Surya)은 글자는 읽지만 메뉴명·설명·가격·가게 소개를 구분하지 못해 F1 25~64%, 메뉴 없는 사진 4장에서도 문구 21~37개를 메뉴로 잡았다. 비전 LLM 상위권은 표지 오인 0.
 
-## Architecture [coverage: high — 22 sources]
+## Architecture [coverage: high — 26 sources]
 
 ### 읽기 한 번 — `MenuBoardService.read(buffer, { model? })`
 
@@ -75,17 +77,18 @@ extractMenuUpdatedOn   ─ menuUpdatedOn   ─▶   carryMenuBoardReads(같은 �
 - **채점** [menu-board.score.ts](../../apps/friendly/src/modules/menu-board/menu-board.score.ts) — 비교 때의 Python 채점기를 옮긴 것(그때 29개 방식을 다시 매겨 지표가 모두 같았다). `normalizeName`(NFKC·소문자·앞 번호·기호 제거) / `coreName`(괄호 속 제거) / `headName`(괄호와 '|' 뒤 수식어 제거). `nameScore` = 다섯 조합의 편집거리 유사도·포함 관계(짧은 쪽이 2자 이상 들어 있으면 길이비 + 0.15, 3자 이상이 끝에 붙으면 `MATCH` — '바질쌈' ↔ '향긋한 바질쌈') 중 최대. `parsePrice` 는 '1만5천'·'4P 22,000'(쉼표 숫자 우선)·'11.0'·'25,9'(1,000 미만은 천 원 단위 → 25,900원) 등을 원 단위로, 100~500만 원 밖이면 null. `scoreBoard` 는 같은 이름 항목을 한 번만 세고 놓침·지어냄(`wrong` — 정답·optional·맞힌 메뉴의 alt 어디에도 없음)·오독(짝은 맞았는데 `headName` 다름)·가격 불일치를 나눈다. `summarize` 는 실패한 사진을 지표에서 빼고 `failed` 로 세며, 메뉴 없는 사진에서 뽑은 항목 수를 `coverFalseItems`(표지 오인)로, 장당 중앙 시간을 `medianMs` 로.
 - **실행** [menu-board.eval.ts](../../apps/friendly/src/modules/menu-board/menu-board.eval.ts) `runMenuBoardEval` — 사진 키마다 **동시 호출 없이 차례로**(ollama 계정 한도) 읽고 `buildMenuBoardReport` 로 `MenuBoardEvalReport{ createdAt, model, totals, boards[] }`. 스크립트가 `data/menu-boards/eval-report.json` 에 쓰고 어드민 '정확도' 탭이 그 파일을 읽는다.
 
-### 어드민·공개 화면 (요약 — 세부는 [web](web.md))
+### 어드민·공개 화면 (요약 — 세부는 [web](web.md)·[mobile](mobile.md))
 
 - **어드민 '메뉴판 읽기'**([AdminMenuBoardPage.tsx](../../apps/web/src/routes/admin/AdminMenuBoardPage.tsx), 어드민 테스트 메뉴, lazy 청크 17.1kB): 읽기 탭([ReadTab.tsx](../../apps/web/src/components/admin/menu-board/ReadTab.tsx) — 업로드·끌어다 놓기·샘플(검수 정답 있는 사진 먼저), 20MB·형식은 올리기 전에 거름, '메뉴 읽기' 를 눌러야 모델 호출, 결과 표 + 모델·시간·토큰·넘긴 사진 크기·응답 원문) + 크게 보기([ZoomableImage.tsx](../../apps/web/src/components/admin/menu-board/ZoomableImage.tsx) — 맞춤·100%·200%, 누른 지점 확대, 끌어 이동, 전체 화면) + 정확도 탭([EvalTab.tsx](../../apps/web/src/components/admin/menu-board/EvalTab.tsx) — 리포트 지표와 사진별 틀린 곳).
 - **어드민 맛집 상세 메뉴 탭** [AdminMenuBoardSection.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx) — `snapshot.menuBoardImages` 가 있을 때만: 사진·읽음 수, 사진에만 있는 메뉴, 가격이 다른 등록 메뉴와 어느 쪽 날짜가 최신인지.
 - **공개 맛집 메뉴 탭** [MenuBoardSection.tsx](../../apps/web/src/components/restaurant/detail/MenuBoardSection.tsx) — 등록 메뉴 아래 '메뉴판 사진' 섹션(썸네일 → 사진 탭과 같은 라이트박스, 사진 날짜 범위, `addedMenus` 처음 8개 + 더 보기, "AI 가 읽은 결과라 실제와 다를 수 있으니 사진으로 확인" 안내). 등록 메뉴가 없는 가게는 이 섹션만. 등록 메뉴 카드에는 `newerPrices` 에 이름이 있으면 '메뉴판 사진 14,000원 · 날짜' 한 줄([MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx)).
+- **앱 공개 맛집 메뉴 탭**(2026-10-29 `51596020`) — 웹과 같은 구성이다. [MenuBoardSection.tsx](../../apps/mobile/src/components/restaurantDetail/MenuBoardSection.tsx)(앱): 머리 '메뉴판 사진 · N장 · 날짜 범위', 112×84 썸네일 가로줄(프록시 400, 화면 끝까지) → 공용 Lightbox 원본, '메뉴판 사진에서 찾은 메뉴' 처음 8개(`FIRST_SHOWN`, 웹과 같은 값) + 더 보기, AI 안내 문구. [MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx)(앱): 등록 메뉴 아래 구분선 뒤에 섹션, 등록 메뉴 0개면 섹션만. [MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx): `boardPriceByName` 이 있으면 등록 메뉴 카드에 '메뉴판 사진 N원 · 날짜' 줄(가격은 `formatWonPrice`). 웹과 다른 점: 썸네일 크기(웹 96×72·프록시 폭 240, 앱 112×84·400 — 같은 friendly `/media/thumbnail` 프록시), 썸네일 실패 처리(웹 `ImgWithFallback` 은 원본으로 다시 받고, 앱 `expo-image` 는 폴백 없음 — 코드 읽기), 가로줄 스크롤 구현(바텀시트 안이라 gesture-handler), 머리의 `ScanText` 아이콘(웹만).
 
 ### `apps/smartly` 경위 (2026-10-10 오전 생성 → 저녁 폐기)
 
 `96df0e70` 이 AI 허브 71553 배포본의 두 모델 — 메뉴명 한 줄 OCR(deep-text-recognition-benchmark TPS-VGG-BiLSTM-Attn)과 4개 언어 번역(OpenNMT-py 2.2 포크 + 메뉴 사전 11.7만 개) — 을 도커 없이 윈도우에서 돌리는 Python 서버(uv·Python 3.10·FastAPI, `127.0.0.1:8700`, 로컬 전용, 루트 `dev:smartly`, turbo 공통 태스크엔 안 낌)로 넣었고, `448b4cd4` 가 Vite 개발 프록시(`/smartly-api`)로 부르는 6탭 체험 화면을 넣었다. 재측정은 문서와 같았다(OCR 5,000장 CER 2.97%, 번역 글자 BLEU en .721 등). 같은 날 `9e4c598c` 가 화면·프록시를, `63c7658a` 가 서버(onmt 포크·인식기·테스트·lockfile importer·CLAUDE.md 명령 줄)를 지웠다. 비교에 쓴 `probe/` 스크립트와 OCR 엔진 환경은 커밋한 적 없이 로컬에서 함께 지웠다 — 보고서의 OCR·하이브리드 숫자는 다시 돌릴 코드가 없는 기록이다. 검수 정답은 friendly `golden/menu-boards` 로 옮겼다.
 
-## Talks To [coverage: high — 18 sources]
+## Talks To [coverage: high — 20 sources]
 
 - **[ai](ai.md)** — 열 번째 purpose `menu-board`(비전). `AiConfigService.getResolved('ollama-cloud', 'menu-board')`·`adapterCache`·`thinkOptionForModel`(`@repo/utils`). 모델 폴백 `OLLAMA_MENU_BOARD_MODEL`(코드 기본값 kimi-k3, [env.ts](../../apps/friendly/src/config/env.ts)·[.env.example](../../apps/friendly/.env.example))이 [llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) `defaultModels['menu-board']` 로 들어간다. 키는 chat 계정 키를 상속 — 계정 게이트를 다른 LLM 기능과 나눈다. 어드민 AI 키 화면에 '메뉴판 읽기' 행([AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx), 아이콘 `ScanText`, 추론 선택 없음), 추천 모델은 [aiModel.ts](../../packages/utils/src/aiModel.ts) `recommendModelForPurpose` 가 kimi-k3 우선, 없으면 image 규칙(가장 작은 비전 모델).
 - **[crawl](crawl.md)** — 네이버 어댑터의 사진·`menuUpdatedOn` 추출, `CrawlService.readMenuBoardsAfterCrawl`(fire-and-forget), [plugins/crawl.ts](../../apps/friendly/src/plugins/crawl.ts) 의 리더 조립. 백필 [backfill-naver-menus.ts](../../apps/friendly/scripts/backfill-naver-menus.ts) 가 옛 스냅샷에 사진 목록을 채운다(그 뒤 `read:naver-menu-boards`). 프리뷰는 어댑터의 공개 함수 `extractNaverMenuBoardImages`·`extractNaverPlaceMenus` 를 쓴다. 샘플 수집은 캐치테이블 [catchtable-shop.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/catchtable-shop.playwright.adapter.ts) `fetchCatchtableShopMenus().menuBoards`(2026-05 부터 있던 필드)를 쓴다.
@@ -95,9 +98,9 @@ extractMenuUpdatedOn   ─ menuUpdatedOn   ─▶   carryMenuBoardReads(같은 �
 - **[shared](shared.md)** — [menu-board.api.ts](../../packages/shared/src/api/menu-board.api.ts) `menuBoardApi`(read = `FormData` `file` 필드, 웹 Blob 전용 / samples / sampleImage = 어드민 토큰을 직접 실은 `fetch` → Blob / evalReport), [useMenuBoard.ts](../../packages/shared/src/hooks/useMenuBoard.ts)(`useMenuBoardSamples`(staleTime 5분)·`useMenuBoardEvalReport`·`useReadMenuBoard`·`useMenuBoardSampleImage` — 키 `['admin','menu-board',…]`).
 - **[web](web.md)** — 어드민 '메뉴판 읽기' 페이지, 어드민 상세·공개 상세 메뉴 탭 섹션(위 요약).
 - **[api-docs](api-docs.md)** — 공개 상세 응답에 `menuBoard` 가 생겨 [openapi.json](../../docs/api/openapi.json) 을 재생성했다(`0408f2f2`). 메뉴판 읽기 라우트 4개는 어드민이라 문서 대상이 아니다.
-- **앱(`apps/mobile`)** — 없음. 공개 상세 `menuBoard` 필드는 공용 계약이라 앱도 받지만 그리지 않는다(`ee70bc2d` "앱은 아직").
+- **앱(`apps/mobile`)** — ~~없음. 공개 상세 `menuBoard` 필드는 공용 계약이라 앱도 받지만 그리지 않는다(`ee70bc2d` "앱은 아직").~~ → 2026-10-29 `51596020` 부터 공개 맛집 메뉴 탭이 `detail.menuBoard` 를 그린다(위 Architecture). 받는 길은 예전과 같은 공개 상세 응답이다 — 새 요청·새 훅·계약 변경이 없고, 앱은 사진을 `thumbUrl` 이미지 프록시로 줄여 받는다. 어드민 메뉴판 읽기·어드민 상세 섹션은 앱에 없다. [mobile](mobile.md)·[platform-ui-split](../concepts/platform-ui-split.md).
 
-## API Surface [coverage: high — 10 sources]
+## API Surface [coverage: high — 11 sources]
 
 ### HTTP (전부 어드민 — `authenticate + requireAdmin`, `tags: ['admin']`)
 
@@ -108,7 +111,7 @@ extractMenuUpdatedOn   ─ menuUpdatedOn   ─▶   carryMenuBoardReads(같은 �
 | `GET /api/v1/admin/menu-board/samples/:key/image` | `key` 1~80자 | 사진 바이너리 | 키는 정규식 `^([A-Za-z0-9_-]+)__(board-\d+)$` 만(경로 조립 전), jpg·jpeg·png·webp. `Cache-Control: private, max-age=3600`. 없으면 404 |
 | `GET /api/v1/admin/menu-board/eval` | — | `{ report: MenuBoardEvalReport \| null }` | 리포트 파일이 없거나 형식이 어긋나면 null |
 
-공개 쪽은 새 라우트 없이 기존 `GET /api/v1/restaurants/public/:placeId` 응답에 `menuBoard?: { images[{url, uploadedOn}], addedMenus[{name, price, description, uploadedOn}], newerPrices[{name, price, uploadedOn}] }` 가 더해졌다(네이버 메뉴판 사진이 있을 때만).
+공개 쪽은 새 라우트 없이 기존 `GET /api/v1/restaurants/public/:placeId` 응답에 `menuBoard?: { images[{url, uploadedOn}], addedMenus[{name, price, description, uploadedOn}], newerPrices[{name, price, uploadedOn}] }` 가 더해졌다(네이버 메뉴판 사진이 있을 때만). 2026-10-29 부터 웹·앱 둘 다 이 필드를 그린다(앱 쪽 변경은 화면뿐 — 응답 모양 그대로).
 
 ### CLI (`pnpm --filter friendly …`, [package.json](../../apps/friendly/package.json))
 
@@ -148,8 +151,9 @@ extractMenuUpdatedOn   ─ menuUpdatedOn   ─▶   carryMenuBoardReads(같은 �
 
 `totals{ boards, failed, required, matched, wrong, precision, recall, f1, exactName(짝 중 핵심 이름 그대로), priceAccuracy, coverFalseItems, medianMs }`, `boards[]{ key, shop, note, required, matched, missed[], wrong[], misread[{expected, got}], priceMismatch[{name, expected, got}], durationMs, error, items[] }`. 기준값: kimi-k3 F1 99.8%(308개 중 307개, 지어냄 0, 가격 일치 100% — v2), friendly 경로 첫 측정 99.7%·장당 중앙 5.5초([menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md)).
 
-## Key Decisions [coverage: high — 10 sources]
+## Key Decisions [coverage: high — 12 sources]
 
+- **2026-10-29 앱 공개 메뉴 탭은 웹과 같은 두 갈래를 그대로 옮긴다, 서버는 건드리지 않는다(`51596020`)** — 공개 표면의 규칙(등록 메뉴에 없는 메뉴 + 사진이 더 최신인 다른 가격, AI 안내, 사진으로 확인)은 서버 `toPublicMenuBoard` 가 이미 정해 응답에 실어 보내고 있었다. 앱이 그리기만 하면 되므로 계약·공용 훅을 바꾸지 않았다. 처음 8개 + 더 보기·안내 문구·호박색 가격 줄도 웹과 같게 해서, 플랫폼마다 메뉴판 정보의 무게가 달라지지 않게 했다. 썸네일만 더 크게(112×84) 했다 — 메뉴판은 글자를 읽어야 해서다(커밋 본문). [platform-ui-split](../concepts/platform-ui-split.md).
 - **kimi-k3 + 규칙 프롬프트, OCR 없이** (`4597294b`) — 비교에서 kimi-k3 는 단독 97.4% → Paddle 힌트 98.2% → 규칙 99.5% → 규칙 + 작은 사진 확대 99.8% 였고, 규칙 + 확대 위에 Paddle 힌트를 더해도 99.8% 그대로였다. 힌트가 더하는 게 없으니 GPU·Python·OCR 없이 friendly 의 기존 ollama 호출 하나로 끝난다. 더 빠른 대안 gemma4:31b + Paddle + 규칙(99.4%·장당 2.7초)은 OCR 이 필요하고, gemma4 는 힌트 없이 규칙만이면 89.6%(세로로 긴 3661×7205 메뉴판에서 38개를 지어냄). Claude Sonnet(99.2%)·Codex(98.0%)는 CLI 구독 호출이라 서비스엔 API 키가 따로 필요하다.
 - **사진 긴 변을 2,000px 로 "맞춘다"(작은 사진은 키운다)** — kimi-k3 는 해상도만큼 토큰을 써서, 420×596 손글씨 메뉴판을 키워 넘기자 '논알콜맥주' → '늦안콜백주' 오독이 사라졌다(99.5 → 99.8%, 그 사진 입력 토큰 약 740 → 4,240). gemma4 는 사진을 정해진 토큰으로 보므로 영향이 거의 없다. 처음 비교 표의 '규칙' 실행에 확대가 섞여 있던 것을 뒤에 찾아 보고서를 정정했다.
 - **생각 모드는 끈다** — gemma4 생각 켬은 정확도가 오르지 않고(같은 사진끼리 96.1 → 94.5% 등) 장당 3배 느리며 60번 중 7번 5분 넘게 무응답, kimi-k3 생각 켬은 97.9%·장당 중앙 71초. "첫 답을 사진과 대조해 고쳐라" 두 번째 호출도 20장 모두 초안을 그대로 돌려줬다. 남은 오류는 글자 모양 오독이라 추론으로 안 고쳐진다.
@@ -164,7 +168,12 @@ extractMenuUpdatedOn   ─ menuUpdatedOn   ─▶   carryMenuBoardReads(같은 �
 - **AI 허브 메뉴판 모델(apps/smartly) 폐기** (`63c7658a`) — 메뉴명 인식기는 LLM 이 골라 준 위치를 잘라 줘도 정답 161개 중 104개(65%)만 그대로 읽었고(LLM + Paddle 은 159개), 검출기를 붙인 통사진 F1 25~27%. 번역 모델 몫은 BLEU 0.03~0.12(점수 대부분이 사전 조회), 메뉴 사전은 실제 메뉴판 메뉴명의 37~52% 만 있고 흔한 메뉴일수록 다른 가게 번역이 붙어 있었다(비빔밥 → "Meat-free Gimbap"). 번역이 필요하면 kimi-k3 로 한다(보고서 다음 단계).
 - **어드민 화면은 모델을 버튼으로만 부른다** — 사진을 고르는 것만으로는 호출하지 않는다('메뉴 읽기'). 샘플 사진은 어드민 인증이 필요해 `<img src>` 대신 Blob → object URL 이고, 같은 Blob 을 읽기에 올린다.
 
-## Gotchas [coverage: high — 14 sources]
+## Gotchas [coverage: high — 18 sources]
+
+- **(2026-10-29) 앱 메뉴판 화면은 실제 데이터로 확인되지 않았다.** `51596020` 을 검증한 Mac 의 로컬 DB 에는 메뉴판이 든 가게가 없었다. 그래서 '사진에서 찾은 메뉴'와 최신 사진 가격 줄은 DB 사본에 넣은 시험값으로만 봤고, 사진 줄·라이트박스·등록 메뉴 0개 가게만 실제 경로로 봤다(iOS 시뮬레이터). 운영(또는 23곳 74장이 읽힌 다른 기기의 dev.db)의 실제 `menuBoardMenus` 로 앱 화면을 본 적은 없다. Android·실기기도 확인하지 않았고, 앱 자동 테스트는 없다.
+- **(2026-10-31 위키 점검, 웹·앱 공통) 네이버 등록 메뉴가 0개인 가게는 "등록 메뉴에 없는 메뉴"가 화면의 등록 메뉴와 겹칠 수 있다(코드 읽기, 실제 사례는 확인하지 않음).** 짝짓기 `buildMenuBoardMenus` 는 **네이버 스냅샷 메뉴**와만 견주는데, 공개 상세의 `menus` 는 [restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) `mergeMenus` 가 네이버 메뉴가 비면 테이블링 → 다이닝코드 메뉴로 채운다. 그래서 네이버 메뉴 0개 + 메뉴판 사진 있음 + 다른 출처 메뉴 있음이면, 메뉴 탭이 다른 출처 메뉴를 등록 메뉴로 보이면서 사진의 모든 항목을 "등록 메뉴에 없는 것만 모았어요"로 다시 보인다(같은 이름이 두 번). `newerPrices` 는 네이버 등록 메뉴가 있어야 생기므로 이 경우엔 비고, 네이버 메뉴가 있으면 공개 `menus` 도 네이버라 이름이 맞는다. 앱이 그리게 되면서 이 경우가 앱에서도 보인다.
+- **(2026-10-29) 앱 썸네일은 프록시 실패 때 원본으로 폴백하지 않는다(코드 읽기).** 웹은 `ImgWithFallback`(프록시 → 실패하면 원본), 앱은 `expo-image` 하나다. 프록시가 허용 호스트(`*.pstatic.net` 등) 밖이면 `thumbUrl` 이 원본을 그대로 쓰므로 문제는 프록시 자체가 실패할 때뿐이다. 라이트박스는 원본 주소라 영향이 없다.
+- **(2026-10-31 재확인) 아래 "계약·화면 주석이 공개 노출 전 상태로 남았다"는 여전히 미수정이다.** 이제 공개 표면이 웹·앱 둘이 되어 [crawl.ts](../../packages/api-contract/src/schemas/crawl.ts) 134행 "어드민 전용 — 공개 화면·칼로리·정산엔 아직 안 쓴다"는 더 멀어졌다.
 
 - **503·502 로 던져도 응답은 500** — 라우트 `throwAsHttp` 는 `no_provider` 503, `llm_failed`·`parse_failed` 502 를 던지지만 [error-handler.ts](../../apps/friendly/src/plugins/error-handler.ts) 가 5xx 를 500 으로 접는다(개발 모드에서만 메시지를 싣는다). [menu-board.route.test.ts](../../apps/friendly/src/modules/menu-board/menu-board.route.test.ts) 도 500 을 기대한다. 화면은 상태 코드로 원인을 가를 수 없다.
 - **`sharp` 정적 import 가 부팅 경로에 다시 들어왔다(미수정)** — [menu-board.service.ts](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) 는 `import sharp from 'sharp'` 인데, 2026-10-05 성능 감사 2차가 sharp·satori·playwright 를 "전 모듈에서 사용 시점 import(남은 것은 `import type` 뿐)" 로 바꿨다([PLAN-perf-2.md](../../docs/PLAN-perf-2.md) X-3·통합 완료 상태). 영수증·식단 사진은 `loadSharp()` 지연 import 다([settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts)·[meal-photo.service.ts](../../apps/friendly/src/modules/meal/meal-photo.service.ts)). [plugins/crawl.ts](../../apps/friendly/src/plugins/crawl.ts) 가 부팅 때 `MenuBoardService` 를 import 하고 라우트도 autoload 라, 메뉴판을 읽지 않는 프로세스도 sharp 를 올린다. [lazy-heavy-imports](../concepts/lazy-heavy-imports.md).
@@ -180,7 +189,7 @@ extractMenuUpdatedOn   ─ menuUpdatedOn   ─▶   carryMenuBoardReads(같은 �
 - **샘플 목록에 네이버 프리뷰 사진도 섞인다** — `probe:naver-menu-boards` 가 `data/menu-boards/naver-<placeId>/` 에 사진·meta 를 남겨 어드민 샘플에 그대로 뜬다(정답은 없음).
 - **경로가 실행 위치에 묶인다** — `MENU_BOARDS_DIR`·`MENU_BOARD_GOLDEN_DIR` 이 `process.cwd()` 기준이라 friendly 디렉터리가 아닌 곳에서 서버·스크립트를 띄우면 샘플·정답·리포트를 못 찾는다(빈 목록·null).
 
-## Sources [coverage: high — 53 sources]
+## Sources [coverage: high — 60 sources]
 
 - [apps/friendly/src/modules/menu-board/menu-board.route.ts](../../apps/friendly/src/modules/menu-board/menu-board.route.ts) (어드민 라우트 4개, 20MB 라우트 한도, 분당 20, 오류 → HTTP)
 - [apps/friendly/src/modules/menu-board/menu-board.service.ts](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) (`MenuBoardService.read`, `prepareMenuBoardImage` 2,000px 맞춤, 샘플·정답·리포트 파일, 정적 `sharp` import)
@@ -235,3 +244,12 @@ extractMenuUpdatedOn   ─ menuUpdatedOn   ─▶   carryMenuBoardReads(같은 �
 - [docs/menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md) (통사진 비교 보고서 — 결론·순위·생각 모드·규칙·최종 선택·v2·한계)
 - [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md) (X-3 — 무거운 의존성 사용 시점 import, 통합 완료 상태)
 - [docs/api/openapi.json](../../docs/api/openapi.json) (공개 상세 `menuBoard` 재생성)
+
+### 31차 신규 — 앱 공개 메뉴 탭의 메뉴판 사진(2026-10-29 `51596020`)
+- [apps/mobile/src/components/restaurantDetail/MenuBoardSection.tsx](../../apps/mobile/src/components/restaurantDetail/MenuBoardSection.tsx) (신규 — 머리 'N장 · 날짜 범위', 112×84 썸네일 줄(프록시 400), Lightbox, 찾은 메뉴 처음 8개 + 더 보기, AI 안내)
+- [apps/mobile/src/components/restaurantDetail/MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) (등록 메뉴 아래 구분선 + 섹션, 등록 메뉴 0개면 섹션만, `boardPriceByName`)
+- [apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx) ('메뉴판 사진 N원 · 날짜' 줄, `BOARD_PRICE_COLORS` = 웹 amber-700/400)
+- [apps/mobile/src/components/Lightbox.tsx](../../apps/mobile/src/components/Lightbox.tsx) (앱 공용 라이트박스 — 원본 보기)
+- [apps/mobile/src/lib/thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) (friendly `/media/thumbnail` 프록시 URL, 허용 호스트 밖은 원본)
+- [apps/web/src/components/restaurant/detail/shared.tsx](../../apps/web/src/components/restaurant/detail/shared.tsx) (대조 — 웹 `MenuGrid` 의 메뉴판 사진 가격 줄)
+- [apps/friendly/src/modules/restaurant/restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) (`mergeMenus` — 네이버 메뉴가 비면 테이블링 → 다이닝코드, 겹침 Gotcha 근거)
