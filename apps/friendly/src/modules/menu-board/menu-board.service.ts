@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
-import sharp from 'sharp';
+import type Sharp from 'sharp';
 import {
   MenuBoardEvalReport,
   type MenuBoardEvalReportType,
@@ -54,8 +54,14 @@ export interface PreparedMenuBoardImage {
   height: number;
 }
 
+// sharp 는 처음 쓸 때 불러온다 — 크롤 플러그인이 부팅 때 이 모듈을 불러오므로, 정적 import 면 메뉴판 사진을 한 장도
+// 읽지 않아도 기저 메모리(+10MB)·부팅 시간에 실린다(PLAN-perf-2 X-3, 다른 sharp 사용처와 같은 방식).
+let sharpModule: Promise<typeof Sharp> | null = null;
+const loadSharp = (): Promise<typeof Sharp> => (sharpModule ??= import('sharp').then((m) => m.default));
+
 // EXIF 방향을 바로잡고 긴 변을 2,000px 로 맞춘다. 투명 배경은 흰색으로.
 export const prepareMenuBoardImage = async (buffer: Buffer): Promise<PreparedMenuBoardImage> => {
+  const sharp = await loadSharp();
   try {
     const { data, info } = await sharp(buffer)
       .rotate()
