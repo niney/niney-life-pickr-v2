@@ -41,6 +41,13 @@ import {
   getPublicRestaurantBase,
   invalidatePublicRestaurantCache,
 } from './restaurant-public-base.js';
+import {
+  estimateInsightsBytes,
+  estimatePublicPlaceBytes,
+  publicInsightsCache,
+  publicPlaceCache,
+  type PublicPlaceEntry,
+} from './restaurant-public-place-cache.js';
 import type {
   AdminVisitorReviewType,
   CategoryTreeNodeType,
@@ -1460,6 +1467,20 @@ export class RestaurantService {
   }
 
   async getPublicDetail(placeId: string): Promise<RestaurantPublicDetailType | null> {
+    return (await this.getPublicPlace(placeId))?.detail ?? null;
+  }
+
+  // 공개 상세·리뷰 페이지가 함께 쓰는 가게 묶음(상세 + 세 출처 리뷰 최신순) — 가게마다 60초 캐시, 같은 가게 동시 요청은
+  // 한 번만 조립한다(restaurant-public-place-cache). 없는 가게는 null.
+  private getPublicPlace(placeId: string): Promise<PublicPlaceEntry | null> {
+    return publicPlaceCache.get(placeId, async () => {
+      const entry = await this.buildPublicPlace(placeId);
+      return entry ? { value: entry, bytes: estimatePublicPlaceBytes(entry, JSON.stringify(entry.detail).length) } : null;
+    });
+  }
+
+  // 캐시가 비었을 때 — 세 출처 리뷰를 조립하고 그것으로 공개 상세를 만든다.
+  private async buildPublicPlace(placeId: string): Promise<PublicPlaceEntry | null> {
     const assembled = await this.assemblePublicReviews(placeId);
     if (!assembled) return null;
 
@@ -1482,7 +1503,7 @@ export class RestaurantService {
     const tour = await getRestaurantTourSummary(this.prisma, naverRow.canonicalId);
     const menuBoard = toPublicMenuBoard(naverSnap);
 
-    return {
+    const detail: RestaurantPublicDetailType = {
       // placeId 로 findUnique 했으니 일치 행은 반드시 placeId 가 채워져 있다.
       placeId: naverRow.placeId!,
       name: mergeName(naverRow, dcSnap, tbSnap),
@@ -1531,6 +1552,7 @@ export class RestaurantService {
       store,
       tour,
     };
+    return { detail, reviews, naverRestaurantId: naverRow.id };
   }
 
   async getPublicSeoMeta(placeId: string): Promise<RestaurantPublicSeoMeta | null> {
@@ -1607,20 +1629,20 @@ export class RestaurantService {
 
   // 페이지네이션 방문자 리뷰. detail 과 같은 fetch + merge 경로를 공유.
   // 필터/정렬을 거친 후 offset/limit 슬라이스. 데이터셋이 식당당 수십~수백
-  // 수준이라 raw SQL UNION + LIMIT 대신 메모리 정렬로 충분.
+  // 수준이라 raw SQL UNION + LIMIT 대신 메모리 정렬로 충분. 조립한 목록은 상세와 같은
+  // 가게 묶음 캐시에서 꺼낸다 — 페이지를 넘길 때마다 전부 다시 조립하지 않는다.
   async getPublicReviews(
     placeId: string,
     query: RestaurantPublicReviewsQueryType,
   ): Promise<RestaurantPublicReviewsResultType | null> {
-    const assembled = await this.assemblePublicReviews(placeId);
-    if (!assembled) return null;
-    const { reviews } = assembled;
+    const place = await this.getPublicPlace(placeId);
+    if (!place) return null;
 
-    let filtered = reviews;
+    let filtered = place.reviews;
     if (query.sentiment !== 'all') {
       filtered = filtered.filter((r) => r.analysis?.sentiment === query.sentiment);
     }
-    filtered = await this.filterReviewsByTipMenu(filtered, assembled.naverRow.id, query);
+    filtered = await this.filterReviewsByTipMenu(filtered, place.naverRestaurantId, query);
 
     if (query.sort === 'rating') {
       // 별점 desc. 별점 null 은 0 으로 떨어져 뒤로 밀린다. 같은 별점에서는
@@ -2013,6 +2035,15 @@ export class RestaurantService {
 
     const total = sidos.reduce((n, s) => n + s.count, 0);
     return { total, unclassified, sidos, points };
+  }
+
+  // 공개 인사이트 — getInsights 를 가게마다 60초 캐시(restaurant-public-place-cache). 요청마다 그 가게 요약 전부(운영
+  // 평균 486건)를 다시 세던 것. 어드민 인사이트는 getInsights 를 그대로 쓴다.
+  getPublicInsights(placeId: string): Promise<RestaurantInsightsType | null> {
+    return publicInsightsCache.get(placeId, async () => {
+      const insights = await this.getInsights(placeId);
+      return insights ? { value: insights, bytes: estimateInsightsBytes(insights) } : null;
+    });
   }
 
   // 식당 단위 집계. 분석된(done) 행에서 메뉴/팁/키워드 빈도를 추출. 메뉴는

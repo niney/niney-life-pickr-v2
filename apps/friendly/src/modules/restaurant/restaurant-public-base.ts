@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 import { getPublicListTourMap } from '../tour/tour-public.service.js';
+import { invalidatePublicPlaceCaches } from './restaurant-public-place-cache.js';
 
 // 가게별 리뷰 요약 집계(상태·감정 분포)와 공개 맛집 베이스 캐시.
 //
@@ -285,6 +286,8 @@ export const invalidatePublicRestaurantCache = (): void => {
   baseGeneration += 1;
   baseCache = null;
   basePending = null;
+  // 가게 단위 공개 캐시(상세·리뷰·인사이트)도 같은 쓰기에 함께 비운다 — restaurant-public-place-cache.
+  invalidatePublicPlaceCaches();
 };
 
 const refreshPublicRestaurantBase = (prisma: PrismaClient): Promise<PublicRestaurantBase> => {

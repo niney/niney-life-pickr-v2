@@ -157,7 +157,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  // 공개 식당 인사이트 — 어드민 라우트와 동일한 응답 스키마, 가드만 빠짐.
+  // 공개 식당 인사이트 — 어드민 라우트와 동일한 응답 스키마, 가드만 빠짐. 공개 쪽만 가게마다 60초 캐시.
   typed.get(Routes.Restaurant.publicInsights(':placeId'), {
     schema: {
       tags: ['public'],
@@ -166,7 +166,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: RestaurantInsights },
     },
     handler: async (req, reply) => {
-      const insights = await service.getInsights(req.params.placeId);
+      const insights = await service.getPublicInsights(req.params.placeId);
       if (!insights) throw app.httpErrors.notFound('Restaurant not found');
       reply.header('Cache-Control', PUBLIC_DETAIL_CACHE);
       return insights;

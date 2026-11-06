@@ -1294,6 +1294,68 @@ describe('Public restaurant routes', () => {
     expect(body.reviewsFirstPage[0]?.visitedAt).toBe('8.15.토');
   });
 
+  it('공개 상세·리뷰 페이지·인사이트는 가게마다 들고 있다가(조립 한 번) 목록 무효화와 함께 비운다 — 어드민 인사이트는 늘 새로', async () => {
+    const { id, placeId } = await seedRestaurant({ name: '캐시집' });
+    const addReview = (n: number) =>
+      app.prisma.visitorReview.create({
+        data: {
+          restaurantId: id,
+          authorName: `익명${n}`,
+          rating: 4,
+          body: `리뷰 ${n}`,
+          visitedAt: null,
+          imageUrlsJson: '[]',
+          videosJson: '[]',
+          contentHash: `${placeId}-${n}`,
+        },
+        select: { id: true },
+      });
+    const first = await addReview(1);
+    const assemble = vi.spyOn(
+      RestaurantService.prototype as unknown as { assemblePublicReviews: (placeId: string) => Promise<unknown> },
+      'assemblePublicReviews',
+    );
+    const reviewsTotal = async () =>
+      (await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${placeId}/reviews` })).json<{ total: number }>().total;
+    const analyzed = async () =>
+      (await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${placeId}/insights` })).json<{ analyzedCount: number }>()
+        .analyzedCount;
+    try {
+      const detail = await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${placeId}` });
+      expect(detail.json<{ reviewCounts: { all: number } }>().reviewCounts.all).toBe(1);
+      expect(await reviewsTotal()).toBe(1);
+      expect(await reviewsTotal()).toBe(1);
+      expect(assemble).toHaveBeenCalledTimes(1);
+      expect(await analyzed()).toBe(0);
+
+      // 크롤 저장 없이 리뷰·요약만 늘면 들고 있는 동안은 지난 묶음 — 공개 응답의 max-age(60초)와 같다.
+      await addReview(2);
+      await app.prisma.reviewSummary.create({
+        data: {
+          reviewId: first.id,
+          status: 'done',
+          text: '요약',
+          sentiment: 'positive',
+          sentimentScore: 0.5,
+          satisfactionScore: 4,
+          finishedAt: new Date(),
+        },
+      });
+      expect(await reviewsTotal()).toBe(1);
+      expect(await analyzed()).toBe(0);
+      // 어드민 인사이트(getInsights)는 캐시를 거치지 않는다.
+      expect((await new RestaurantService(app.prisma).getInsights(placeId))!.analyzedCount).toBe(1);
+
+      // 크롤 저장·삭제·canonical 병합이 부르는 무효화와 함께 비운다.
+      invalidatePublicRestaurantCache();
+      expect(await reviewsTotal()).toBe(2);
+      expect(await analyzed()).toBe(1);
+      expect(assemble).toHaveBeenCalledTimes(2);
+    } finally {
+      assemble.mockRestore();
+    }
+  });
+
   it('GET /restaurants/public/:placeId/reviews — tip filter matches by normalized term', async () => {
     const { id, placeId } = await seedRestaurant({ name: '팁필터집' });
     // 팁이 다른 두 리뷰 + 분석 안 된 리뷰 하나.
