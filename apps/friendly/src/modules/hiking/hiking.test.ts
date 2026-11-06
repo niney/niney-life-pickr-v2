@@ -181,6 +181,21 @@ describe('hiking routes (격리 DB)', () => {
     expect(c.pois.find((p) => p.id === 'api:0000000999')!.guide).toEqual([]);
   });
 
+  it('산 목록 — 적재 이력이 같으면 지난 결과를 그대로, 새로 적재하면(이력 행) 다시 만든다', async () => {
+    const names = async () =>
+      (await app.inject({ method: 'GET', url: '/api/v1/hiking/mountains' })).json<HikingMountainsResultType>().items.map((m) => m.name);
+    expect(await names()).toEqual(['가리산']);
+    // 적재 없이 행만 바뀌면(실제로는 없는 일) 메모가 그대로 나간다 — 적재 이력 id 가 버전이다.
+    await app.prisma.hikingMountain.update({ where: { id: '421100101' }, data: { name: '가리산(바뀜)' } });
+    expect(await names()).toEqual(['가리산']);
+    const sync = await app.prisma.hikingSync.create({ data: { mountains: 1, courses: 2, pois: 0, images: 0 } });
+    expect(await names()).toEqual(['가리산(바뀜)']);
+    // 뒤 테스트를 위해 되돌린다(이력 행을 지우면 이전 적재 id 로 돌아가 다시 만든다).
+    await app.prisma.hikingMountain.update({ where: { id: '421100101' }, data: { name: '가리산' } });
+    await app.prisma.hikingSync.delete({ where: { id: sync.id } });
+    expect(await names()).toEqual(['가리산']);
+  });
+
   it('오늘의 조건 — 3일 해 시각, 가장 높은 곳 추정 기온, 가까운 측정소·예보 권역, 코스 시군구 산불 칸', async () => {
     const today = kmaTodayIsoDate(new Date());
     const ymd = today.replace(/-/g, '');

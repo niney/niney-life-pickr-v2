@@ -34,6 +34,8 @@ const TRUSTED_RESPONSE_ROUTES = new Set([
   `GET ${Routes.Parking.evPoints}`,
   `GET ${Routes.Parking.lotPoints}`,
   `GET ${Routes.Restaurant.publicList}`,
+  // 등산 산 목록 — 3,879곳 약 1MB, 서비스가 적재본마다 메모한 객체를 그대로 낸다(2026-11 검토).
+  `GET ${Routes.Hiking.mountains}`,
 ]);
 
 const sameJson = (a: string, b: string): boolean => {

@@ -2,7 +2,7 @@
 // 예상 시간·난이도는 저장된 이동 분·누적 상승·가파름으로 매번 계산한다(@repo/utils — 보정값을 바꿔도 다시 적재 안 함).
 // docs/PLAN-hiking.md
 
-import type { HikingCourse, HikingMountain, PrismaClient } from '@prisma/client';
+import type { HikingCourse, Prisma, PrismaClient } from '@prisma/client';
 import type {
   HikingCourseDetailType,
   HikingCourseSummaryType,
@@ -55,7 +55,31 @@ const parkCourseOf = (raw: string | null): StoredParkCourse | null => parseJson<
 // park id → 이름(산 요약의 국립공원 이름).
 type ParkNames = ReadonlyMap<string, string>;
 
-const toMountainSummary = (m: HikingMountain, parks: ParkNames): HikingMountainSummaryType => ({
+// 산 요약에 쓰는 열만 — 목록은 3,879행이라 소개 글(overview·details·officialCourses 등 약 41만 자)까지 읽지 않는다.
+const MOUNTAIN_SUMMARY_SELECT = {
+  id: true,
+  name: true,
+  kind: true,
+  subtitle: true,
+  heightM: true,
+  area: true,
+  regions: true,
+  summitLat: true,
+  summitLng: true,
+  minLat: true,
+  minLng: true,
+  maxLat: true,
+  maxLng: true,
+  courseCount: true,
+  minLengthM: true,
+  maxLengthM: true,
+  images: true,
+  peaks: true,
+  parkId: true,
+} satisfies Prisma.HikingMountainSelect;
+type MountainSummaryRow = Prisma.HikingMountainGetPayload<{ select: typeof MOUNTAIN_SUMMARY_SELECT }>;
+
+const toMountainSummary = (m: MountainSummaryRow, parks: ParkNames): HikingMountainSummaryType => ({
   id: m.id,
   name: m.name,
   kind: kindOf(m.kind),
@@ -136,6 +160,12 @@ const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
 };
 
 export class HikingService {
+  // 산 목록 메모 — 적재본은 load:hiking 한 트랜잭션에 통째로 바뀌고 그때 hiking_syncs 행이 생기므로, 마지막 적재 이력 id 가
+  // 같으면 지난 결과를 그대로 돌려준다. 예전엔 /hiking 첫 진입마다 3,879행을 전 열로 읽어 1MB 를 다시 만들었다(2026-11 검토).
+  // 같은 적재본을 동시에 만들면 하나로 합류한다. 결과 객체는 공유하니 고치지 말 것(라우트는 직렬화만 한다).
+  private mountainsMemo: { syncId: number; value: HikingMountainsResultType } | null = null;
+  private mountainsBuilding: { syncId: number; promise: Promise<HikingMountainsResultType> } | null = null;
+
   constructor(private readonly prisma: PrismaClient) {}
 
   private async parkNames(): Promise<ParkNames> {
@@ -144,7 +174,28 @@ export class HikingService {
   }
 
   async listMountains(): Promise<HikingMountainsResultType> {
-    const [rows, parks] = await Promise.all([this.prisma.hikingMountain.findMany({ orderBy: { name: 'asc' } }), this.parkNames()]);
+    const sync = await this.prisma.hikingSync.findFirst({ orderBy: { loadedAt: 'desc' }, select: { id: true } });
+    // 적재 이력이 없으면(적재 전·이력 없이 넣은 테스트 자료) 메모 없이 그때그때.
+    if (!sync) return this.buildMountains();
+    if (this.mountainsMemo?.syncId === sync.id) return this.mountainsMemo.value;
+    if (this.mountainsBuilding?.syncId === sync.id) return this.mountainsBuilding.promise;
+    const promise = this.buildMountains()
+      .then((value) => {
+        this.mountainsMemo = { syncId: sync.id, value };
+        return value;
+      })
+      .finally(() => {
+        if (this.mountainsBuilding?.promise === promise) this.mountainsBuilding = null;
+      });
+    this.mountainsBuilding = { syncId: sync.id, promise };
+    return promise;
+  }
+
+  private async buildMountains(): Promise<HikingMountainsResultType> {
+    const [rows, parks] = await Promise.all([
+      this.prisma.hikingMountain.findMany({ select: { ...MOUNTAIN_SUMMARY_SELECT, loadedAt: true }, orderBy: { name: 'asc' } }),
+      this.parkNames(),
+    ]);
     if (rows.length === 0) throw new HikingNotLoadedError();
     const loadedAt = rows.reduce((a, r) => (r.loadedAt > a ? r.loadedAt : a), rows[0]!.loadedAt);
     return { items: rows.map((r) => toMountainSummary(r, parks)), loadedAt: loadedAt.toISOString() };
