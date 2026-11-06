@@ -1,6 +1,7 @@
 // 등산 "오늘 어느 산" 추천(4차, 8차 전국) — ① 전 코스(100대 명산 + 전국 봉우리)를 조건 없이 점수(산행 시간·난이도·거리·해 지기 전 하산·이동 수단 접근·계절, @repo/utils
 // hikingRecommend) → 산마다 가장 좋은 코스 → 상위 max(12, limit)산 ② 그 코스만 오늘의 조건(3차 HikingConditionsService — 날씨 격자·
-// 대기·산불 캐시)을 받아 주의할 점까지 넣어 다시 점수 → 상위 limit. 항목마다 추천 이유 문장.
+// 대기·산불 캐시)을 받아 주의할 점까지 넣어 다시 점수 → 상위 limit. 항목마다 추천 이유 문장. 날씨는 캐시에 없는 격자를 요청마다
+// RECOMMEND_WEATHER_FETCH_MAX 곳까지만 새로 받는다(공용 단기예보 쿼터 — 2026-11 검토).
 // 접근(들머리 근처 주차·정류장)은 코스 색인을 만들 때 한 번 — 등산 지점(주차·교통 1km) 먼저, 없으면 주차장 1km·버스 500m·지하철
 // 1.5km(버스·지하철은 수도권만). 색인은 적재 이력 id 가 같은 동안 6시간 들고 있다. docs/PLAN-hiking.md §4차
 
@@ -19,6 +20,7 @@ import {
   kmaPtyLabel,
   kmaSkyLabel,
   kmaTodayIsoDate,
+  latLngToKmaGrid,
   summarizeHikingWeather,
   sunTimes,
   type AirGradeLevel,
@@ -28,10 +30,33 @@ import {
   type LatLng,
 } from '@repo/utils';
 import { trailPlaceName } from './hiking-around.service.js';
-import type { HikingConditionsService } from './hiking-conditions.service.js';
+import type { HikingConditionsService, HikingWeatherMode } from './hiking-conditions.service.js';
 import { HikingNotLoadedError, courseEffort } from './hiking.service.js';
 
 export const RECOMMEND_CHECK_TOP = 12;
+// 추천 1회가 날씨를 업스트림에서 새로 받는 격자 상한 — 점수 높은 후보부터 채우고, 나머지 후보는 캐시(만료분 포함)만 본다.
+// 상위 12~20코스가 모두 미스면 요청마다 격자 12~20개를 받아 공용 단기예보 쿼터를 태웠다(2026-11 검토). 받은 격자는 다음
+// 발표까지 캐시에 남아 같은 지역의 다음 추천부터는 그대로 쓴다.
+export const RECOMMEND_WEATHER_FETCH_MAX = 3;
+
+// 후보마다 날씨를 받는 방법 — 캐시에 새것이 있으면 peek(비용 없음), 없으면 앞에서부터 서로 다른 격자 max 개까지만 fetch.
+// 같은 격자를 쓰는 뒤 후보도 fetch(합류라 업스트림·등산 몫은 한 번)로 둔다.
+export const pickWeatherModes = (
+  starts: readonly LatLng[],
+  isFresh: (p: LatLng) => boolean,
+  max = RECOMMEND_WEATHER_FETCH_MAX,
+): HikingWeatherMode[] => {
+  const fetching = new Set<string>();
+  return starts.map((p): HikingWeatherMode => {
+    if (isFresh(p)) return 'peek';
+    const g = latLngToKmaGrid(p.lat, p.lng);
+    const key = `${g.nx},${g.ny}`;
+    if (fetching.has(key)) return 'fetch';
+    if (fetching.size >= max) return 'peek';
+    fetching.add(key);
+    return 'fetch';
+  });
+};
 const INDEX_TTL_MS = 6 * 60 * 60_000;
 const ACCESS_RADIUS = { trail: 1_000, lot: 1_000, bus: 500, subway: 1_500 } as const;
 const DAY_MS = 86_400_000;
@@ -125,7 +150,7 @@ const worstGrade = (...gs: (number | null | undefined)[]): AirGradeLevel | null 
 
 export interface HikingRecommendDeps {
   prisma: PrismaClient;
-  conditions: Pick<HikingConditionsService, 'get'>;
+  conditions: Pick<HikingConditionsService, 'get' | 'hasFreshWeather'>;
   now?: () => Date;
 }
 
@@ -310,10 +335,14 @@ export class HikingRecommendService {
     best.sort((a, b) => b.score - a.score);
     const checkTop = best.slice(0, Math.max(RECOMMEND_CHECK_TOP, q.limit));
 
-    // ② 상위만 오늘의 조건을 받아 다시 매긴다.
+    // ② 상위만 오늘의 조건을 받아 다시 매긴다. 날씨를 새로 받는 격자는 앞에서부터 RECOMMEND_WEATHER_FETCH_MAX 개까지.
+    const weatherModes = pickWeatherModes(
+      checkTop.map((cand) => cand.c.start),
+      (p) => this.deps.conditions.hasFreshWeather(p.lat, p.lng),
+    );
     const checked = await Promise.all(
-      checkTop.map(async (cand) => {
-        const cond = await this.deps.conditions.get(cand.c.id).catch(() => null);
+      checkTop.map(async (cand, i) => {
+        const cond = await this.deps.conditions.get(cand.c.id, { weather: weatherModes[i] }).catch(() => null);
         return this.toItem(cand, cond, { date, start, startAt, mode: q.mode, wants, isToday: date === dates[0] });
       }),
     );

@@ -5,6 +5,11 @@
 //   - 해: 들머리 좌표로 계산(업스트림 없음).
 // 세 업스트림은 따로 받아 하나가 실패하거나 늦어도(SECTION_BUDGET_MS) 나머지는 낸다. 늦은 호출은 끊지 않고 캐시를 채우게
 // 둔다(다음 요청부터 즉시). docs/PLAN-hiking.md §3차
+//
+// 날씨 쿼터 몫(2026-11 검토): 단기예보 쿼터(vilage 하루 7,500)와 캐시는 상단바 날씨·/weather·식단 추천과 같이 쓰는데, 들머리
+// 격자가 전국 약 2,470개라 추천(요청마다 코스 12~20개)·조건이 격자를 바꿔 가며 부르면 공용 쿼터를 혼자 태울 수 있었다(IP 하나로
+// 분당 30회 × 20격자 → 약 13분이면 하루치). 그래서 캐시에 새것이 있으면 그대로 쓰고, 업스트림으로 새로 받는 것만 등산 몫
+// (HIKING_WEATHER_DAILY_LIMIT)에서 센다. 몫을 다 쓰면 캐시(만료분 포함)만 보고, 없으면 그 날씨 칸만 빈다.
 
 import type { PrismaClient } from '@prisma/client';
 import type {
@@ -12,8 +17,10 @@ import type {
   HikingConditionDayType,
   HikingConditionsType,
   HikingFireAreaType,
+  WeatherForecastResultType,
 } from '@repo/api-contract';
 import { airGradeFromText, estimateTopTemp, kmaTodayIsoDate, latLngToKmaGrid, sunTimes } from '@repo/utils';
+import { DailyQuota } from '../../lib/upstream-guard.js';
 import type { AirQualityService } from '../air-quality/air-quality.service.js';
 import type { WeatherService } from '../weather/weather.service.js';
 import type { ForestFireService } from './forest-fire.service.js';
@@ -21,18 +28,25 @@ import { airRegionOf } from './hiking-area.js';
 
 export const CONDITION_DAYS = 3;
 export const SECTION_BUDGET_MS = 6_000;
+// 등산이 단기예보를 업스트림에서 새로 받는 하루 상한(격자 1개 = 1회, NO_DATA 폴백 콜은 날씨 서비스 쿼터에만 센다) — 공용 vilage
+// 7,500 의 20%. 캐시에 새것이 있는 격자는 세지 않는다.
+export const HIKING_WEATHER_DAILY_LIMIT = 1_500;
 // 가까운 측정소 — 들머리에서 이 안, 앞에서부터 측정값이 있는 첫 곳.
 const AIR_STATION_RADIUS_M = 30_000;
 const AIR_STATION_CANDIDATES = 3;
 const DAY_MS = 86_400_000;
 
+// 날씨를 받는 방법 — fetch: 캐시에 새것이 없으면 등산 몫 안에서 업스트림으로 받는다, peek: 캐시(만료분 포함)만 본다.
+export type HikingWeatherMode = 'fetch' | 'peek';
+
 export interface HikingConditionsDeps {
   prisma: PrismaClient;
-  weather: Pick<WeatherService, 'getForecast'>;
+  weather: Pick<WeatherService, 'getForecast' | 'peekForecast'>;
   air: Pick<AirQualityService, 'getNearbyStations' | 'getForecast'>;
   fire: Pick<ForestFireService, 'get'>;
   now?: () => Date;
   budgetMs?: number;
+  weatherDailyLimit?: number;
 }
 
 type Settled<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -89,9 +103,48 @@ export const airForecastByDate = (items: readonly AirForecastItemType[], regions
 };
 
 export class HikingConditionsService {
-  constructor(private readonly deps: HikingConditionsDeps) {}
+  private readonly weatherQuota: DailyQuota<'forecast'>;
+  // 등산 몫으로 받고 있는 격자 — 같은 격자를 동시에 부르면(추천 후보 여럿·같은 코스를 여는 사람 여럿) 몫을 한 번만 쓰고 합류한다.
+  private readonly weatherInflight = new Map<string, Promise<WeatherForecastResultType>>();
 
-  async get(courseId: string): Promise<HikingConditionsType | null> {
+  constructor(private readonly deps: HikingConditionsDeps) {
+    this.weatherQuota = new DailyQuota(
+      { forecast: deps.weatherDailyLimit ?? HIKING_WEATHER_DAILY_LIMIT },
+      () => new Error('등산 날씨 조회가 오늘 한도에 닿아 이 코스의 날씨를 받지 못했습니다. 내일 다시 열어 보세요.'),
+    );
+  }
+
+  // 들머리 격자의 단기예보가 캐시에 새것(다음 발표 전)으로 있는지 — 있으면 업스트림·등산 몫 없이 바로 낸다.
+  hasFreshWeather(lat: number, lng: number): boolean {
+    const grid = latLngToKmaGrid(lat, lng);
+    const hit = this.deps.weather.peekForecast(grid.nx, grid.ny);
+    return hit !== null && !hit.stale;
+  }
+
+  private async forecast(nx: number, ny: number, mode: HikingWeatherMode, now: Date): Promise<WeatherForecastResultType> {
+    const cached = this.deps.weather.peekForecast(nx, ny);
+    if (cached && !cached.stale) return cached;
+    if (mode === 'peek') {
+      if (cached) return cached;
+      throw new Error('이 코스의 날씨는 아직 받지 않았습니다. 코스를 열면 받습니다.');
+    }
+    const key = `${nx},${ny}`;
+    const pending = this.weatherInflight.get(key);
+    if (pending) return pending;
+    try {
+      this.weatherQuota.consume('forecast', now);
+    } catch (e) {
+      if (cached) return cached;
+      throw e;
+    }
+    const task = this.deps.weather.getForecast(nx, ny).finally(() => {
+      this.weatherInflight.delete(key);
+    });
+    this.weatherInflight.set(key, task);
+    return task;
+  }
+
+  async get(courseId: string, opts: { weather?: HikingWeatherMode } = {}): Promise<HikingConditionsType | null> {
     const c = await this.deps.prisma.hikingCourse.findUnique({
       where: { id: courseId },
       select: { id: true, startLat: true, startLng: true, startEle: true, maxEle: true, sigungu: true },
@@ -105,7 +158,7 @@ export class HikingConditionsService {
     const grid = latLngToKmaGrid(c.startLat, c.startLng);
 
     const [w, near, fc, f] = await Promise.all([
-      settle(this.deps.weather.getForecast(grid.nx, grid.ny), budget, '날씨'),
+      settle(this.forecast(grid.nx, grid.ny, opts.weather ?? 'fetch', now), budget, '날씨'),
       settle(this.deps.air.getNearbyStations(c.startLat, c.startLng, AIR_STATION_RADIUS_M, AIR_STATION_CANDIDATES), budget, '대기'),
       regions.length > 0 ? settle(this.deps.air.getForecast(), budget, '대기 예보') : Promise.resolve(null),
       keys && keys.length > 0 ? settle(this.deps.fire.get(), budget, '산불위험예보') : Promise.resolve(null),

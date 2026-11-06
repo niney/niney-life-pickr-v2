@@ -34,24 +34,37 @@ export interface HikingApiOptions {
   serviceKey: string;
   fetchImpl?: FetchLike;
   retryDelayMs?: number;
+  // 한 번 요청(본문까지)의 상한과 재시도 횟수 — 기본은 적재 스크립트용(20초·2회). 요청 경로(산불)는 짧게 준다.
+  timeoutMs?: number;
+  retries?: number;
+  // 재시도 1회마다 — 호출측이 일일 쿼터에 사후 가산한다(upstream-guard DailyQuota.record).
+  onRetry?: () => void;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// 게이트웨이 오류(`OpenAPI_ServiceResponse`·미신청 30 등)는 재시도하지 않는다. 네트워크·5xx 만 재시도.
+// 게이트웨이 오류(`OpenAPI_ServiceResponse`·미신청 30 등)는 재시도하지 않는다. 네트워크·5xx·본문 읽기 실패만 재시도.
 const getJson = async (url: string, maskedUrl: string, opts: HikingApiOptions): Promise<Record<string, unknown>> => {
-  const doFetch = opts.fetchImpl ?? ((u: string, init?: RequestInit) => fetchWithTimeout(u, init ?? {}, TIMEOUT_MS));
+  const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
+  const doFetch = opts.fetchImpl ?? ((u: string, init?: RequestInit) => fetchWithTimeout(u, init ?? {}, timeoutMs));
+  const retries = opts.retries ?? RETRIES;
   let lastErr: unknown = null;
-  for (let attempt = 0; attempt <= RETRIES; attempt++) {
-    if (attempt > 0) await sleep((opts.retryDelayMs ?? RETRY_DELAY_MS) * attempt);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      opts.onRetry?.();
+      await sleep((opts.retryDelayMs ?? RETRY_DELAY_MS) * attempt);
+    }
     let res: Response;
+    let text: string;
     try {
       res = await doFetch(url);
+      // 본문 읽기도 같은 시도 안 — 본문이 오다 끊기면(타임아웃 AbortError 포함) 네트워크 실패처럼 다시 시도하고,
+      // 끝내 실패하면 HikingApiError 로 내보낸다(호출측 쿨다운이 HikingApiError 만 센다).
+      text = await res.text();
     } catch (e) {
       lastErr = e;
       continue;
     }
-    const text = await res.text();
     if (res.status >= 500) {
       lastErr = new HikingApiError(`HTTP ${res.status}`, maskedUrl);
       continue;

@@ -308,6 +308,20 @@ describe('WeatherService — 슬롯 폴백·캐시·stale', () => {
     expect(mocks.getVilageFcst).toHaveBeenLastCalledWith({ baseDate: '20260821', baseTime: '1700', nx: 60, ny: 127 }, expect.anything());
   });
 
+  it('peekForecast — 업스트림 없이 캐시만: 없으면 null, 다음 발표 전 새것, 지나면 stale, stale 상한(6시간) 넘으면 null', async () => {
+    let now = AT_1605;
+    const svc = new WeatherService({ serviceKey: 'k', now: () => now });
+    expect(svc.peekForecast(60, 127)).toBeNull();
+    expect(mocks.getVilageFcst).not.toHaveBeenCalled();
+    await svc.getForecast(60, 127);
+    expect(svc.peekForecast(60, 127)).toMatchObject({ grid: { nx: 60, ny: 127 }, stale: false });
+    now = new Date('2026-08-21T17:10:30+09:00');
+    expect(svc.peekForecast(60, 127)).toMatchObject({ stale: true });
+    now = new Date('2026-08-21T22:06:00+09:00');
+    expect(svc.peekForecast(60, 127)).toBeNull();
+    expect(mocks.getVilageFcst).toHaveBeenCalledTimes(1);
+  });
+
   it('업스트림 실패 시 last-known 을 stale=true 로 서빙, 같은 키 동시 요청은 업스트림 1콜', async () => {
     let now = AT_1605;
     const svc = new WeatherService({ serviceKey: 'k', now: () => now });

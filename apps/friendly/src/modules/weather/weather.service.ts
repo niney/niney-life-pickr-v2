@@ -392,7 +392,9 @@ const versionToIso = (v: string | null): string | null => {
 
 type WeatherUpstream = WeatherQuotaBucket;
 type NowcastData = Omit<WeatherNowcastResultType, 'fetchedAt' | 'stale'>;
+type ForecastData = Omit<WeatherForecastResultType, 'fetchedAt' | 'stale'>;
 const nowcastKey = (nx: number, ny: number): string => `nowcast:${nx},${ny}`;
+const forecastKey = (nx: number, ny: number): string => `forecast:${nx},${ny}`;
 
 // stale 상한을 넘긴 엔트리 청소 — 만료 엔트리는 last-known 재료라 남기고, 상한을 넘긴 것만 지운다.
 const sweepStale = (cache: LRUCache<string, CacheEntry>, nowMs: number): void => {
@@ -611,8 +613,8 @@ export class WeatherService {
   async getForecast(nx: number, ny: number): Promise<WeatherForecastResultType> {
     this.requireKey();
     const fetchVilage = this.deps.adapter?.getVilageFcst ?? getVilageFcst;
-    const { data, fetchedAt, stale } = await this.cached(
-      `forecast:${nx},${ny}`,
+    const { data, fetchedAt, stale } = await this.cached<ForecastData>(
+      forecastKey(nx, ny),
       'vilage',
       WEATHER_FORECAST_STALE_MAX_MS,
       async (now) => {
@@ -633,6 +635,16 @@ export class WeatherService {
       },
     );
     return { ...data, fetchedAt: fetchedAt.toISOString(), stale };
+  }
+
+  // 업스트림을 부르지 않는 단기예보 조회 — 캐시(만료돼도 stale 상한 안)만 본다. 없으면 null, 만료분은 stale:true.
+  // 등산 추천·오늘의 조건이 격자마다 쿼터를 쓰기 전에 먼저 본다(peekNowcast 와 같은 규칙).
+  peekForecast(nx: number, ny: number): WeatherForecastResultType | null {
+    const hit = this.cache.get(forecastKey(nx, ny));
+    if (!hit) return null;
+    const nowMs = this.now().getTime();
+    if (nowMs - hit.fetchedAt.getTime() > hit.staleMaxMs) return null;
+    return { ...(hit.data as ForecastData), fetchedAt: hit.fetchedAt.toISOString(), stale: nowMs > hit.expiresAt };
   }
 
   // ── 예보 버전 ────────────────────────────────────────────────────────────
