@@ -2152,11 +2152,19 @@ export class RestaurantService {
     });
     if (!r) return null;
 
-    // 이 식당이 링크된, categoryPath 가 있는 전역 그룹 + 이 식당 쪽 링크만.
+    // 이 식당이 링크된, categoryPath 가 있는 전역 그룹 + 이 식당 쪽 링크만. 전역 그룹 id 는 링크(restaurantId 인덱스)에서
+    // 먼저 뽑는다 — `links: { some: { restaurantId } }` 는 SQLite 가 전역 그룹 전체(운영 9,864)를 훑으며 행마다 링크를
+    // 다시 찾아 한 번에 약 41ms 였고, 동시 요청이 몰리면 상세 화면 전체가 줄을 섰다. id IN 은 같은 결과에 약 2ms
+    // (2026-11 운영 DB 실측 — 가게 406곳 트리 동일).
+    const linkRows = await this.prisma.globalMenuCanonicalLink.findMany({
+      where: { restaurantId: r.id },
+      select: { globalCanonicalId: true },
+    });
+    if (linkRows.length === 0) return [];
     const linked = await this.prisma.globalMenuCanonical.findMany({
       where: {
         categoryPath: { not: null },
-        links: { some: { restaurantId: r.id } },
+        id: { in: [...new Set(linkRows.map((l) => l.globalCanonicalId))] },
       },
       select: {
         categoryPath: true,
