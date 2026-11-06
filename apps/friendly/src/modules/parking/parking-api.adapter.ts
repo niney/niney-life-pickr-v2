@@ -262,7 +262,8 @@ export const SEOUL_PARK_INFO = 'GetParkInfo';
 export const SEOUL_PARKING_LIVE = 'GetParkingInfo';
 
 // ── data.go.kr 엔드포인트 ────────────────────────────────────────────────────
-export const STD_PARKING_URL = 'http://api.data.go.kr/openapi/tn_pubr_prkplce_info_api';
+// 표준데이터도 https — 통합 키(DATA_GO_KR_API_KEY)를 평문으로 보내지 않는다(2026-11-06 https 응답 확인).
+export const STD_PARKING_URL = 'https://api.data.go.kr/openapi/tn_pubr_prkplce_info_api';
 export const STD_PARKING_PAGE_SIZE = 1000;
 export const KAC_PARKING_CONGESTION_URL = 'https://apis.data.go.kr/B551178/parking-congestion/info';
 export const IIAC_PARKING_URL = 'https://apis.data.go.kr/B551177/StatusOfParking/getTrackingParking';
