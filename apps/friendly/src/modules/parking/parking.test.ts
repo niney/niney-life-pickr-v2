@@ -324,6 +324,14 @@ describe('parking routes (격리 DB)', () => {
       { term: '건물 주차장 2시간 무료', count: 1 },
     ]);
     expect((await app.inject({ method: 'GET', url: '/api/v1/restaurants/public/NOPE-PLACE/parking-reviews' })).statusCode).toBe(404);
+
+    // 가게마다 60초 들고 있다 — 그사이 늘어난 분석은 다음 갱신에 보인다(맛집 공개 상세와 같은 길이).
+    const review = await app.prisma.visitorReview.create({
+      data: { restaurantId: rest.id, authorName: 'a', rating: 5, body: 'b', visitedAt: null, imageUrlsJson: '[]', contentHash: 'park-late' },
+    });
+    await app.prisma.reviewSummary.create({ data: { reviewId: review.id, status: 'done', aspectsJson: JSON.stringify({ 주차: 'pos' }), tipsJson: '[]' } });
+    const again = (await app.inject({ method: 'GET', url: `/api/v1/restaurants/public/${placeId}/parking-reviews` })).json<RestaurantParkingReviewsType>();
+    expect(again.analyzed).toBe(4);
   });
 
   it('실시간 폴러 — 서울·공항 값을 메모리에 두고 이력 칸에 누적(UPSERT), 4분 안 재기록은 건너뜀', async () => {

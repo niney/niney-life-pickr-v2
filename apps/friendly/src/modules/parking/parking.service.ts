@@ -20,6 +20,7 @@ import {
   type ParkingOwnership,
 } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
+import { KeyedCache } from '../../lib/keyed-cache.js';
 import { CELL_CACHE_MAX_UNITS, cellGrid, cellKeyOf, cellResultSize, pointsSpanOk } from '../../lib/map-cells.js';
 import { resolveCanonicalMembersByPlaceId } from '../restaurant/canonical-members.js';
 import { airportLotKey, buildAirportList, type ParkingLiveService, type ParkingLiveValue } from './parking-live.service.js';
@@ -40,6 +41,7 @@ export class ParkingServiceError extends Error {
 
 const CELL_CACHE_TTL_MS = 10 * 60_000;
 const CELL_CACHE_MAX = 300;
+const RESTAURANT_REVIEWS_TTL_MS = 60_000;
 const TIP_LIMIT = 5;
 const PARKING_ASPECT = '주차';
 
@@ -118,6 +120,12 @@ export class ParkingService {
     maxSize: CELL_CACHE_MAX_UNITS,
     sizeCalculation: cellResultSize,
     ttl: CELL_CACHE_TTL_MS,
+  });
+  // 맛집 리뷰의 주차 평가 — 가게마다 요약 전부(운영 평균 486건)를 읽어 세므로 60초 들고 있는다(맛집 공개 상세와 같은
+  // 길이, 2026-11 검토 — 큰 가게 7~16ms). 결과는 1KB 안팎.
+  private readonly restaurantReviewsCache = new KeyedCache<RestaurantParkingReviewsType>({
+    ttlMs: RESTAURANT_REVIEWS_TTL_MS,
+    maxBytes: 4 * 1024 * 1024,
   });
 
   constructor(private readonly deps: ParkingServiceDeps) {}
@@ -326,8 +334,15 @@ export class ParkingService {
     return { airports: buildAirportList(snap.lots, usual), fetchedAt: snap.at, stale: snap.stale };
   }
 
-  // 맛집 '가는 법' — 공개 멤버(네이버+다이닝코드+테이블링) 리뷰 분석의 '주차' 관점 극성 + 주차 팁 상위.
-  async getRestaurantReviews(placeId: string): Promise<RestaurantParkingReviewsType | null> {
+  // 맛집 '가는 법' — 공개 멤버(네이버+다이닝코드+테이블링) 리뷰 분석의 '주차' 관점 극성 + 주차 팁 상위. 가게마다 60초 캐시.
+  getRestaurantReviews(placeId: string): Promise<RestaurantParkingReviewsType | null> {
+    return this.restaurantReviewsCache.get(placeId, async () => {
+      const out = await this.loadRestaurantReviews(placeId);
+      return out ? { value: out, bytes: 2_000 + out.tips.reduce((n, t) => n + 80 + t.term.length * 2, 0) } : null;
+    });
+  }
+
+  private async loadRestaurantReviews(placeId: string): Promise<RestaurantParkingReviewsType | null> {
     const members = await resolveCanonicalMembersByPlaceId(this.deps.prisma, placeId);
     if (!members) return null;
     const rows = await this.deps.prisma.reviewSummary.findMany({
