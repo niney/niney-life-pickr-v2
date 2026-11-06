@@ -76,6 +76,22 @@ describe('buildMenuBoardMenus — 구분값 origin', () => {
     expect(buildMenuBoardMenus([{ name: 'a', price: null }], [image('https://x/a.png', null)])).toEqual([]);
   });
 
+  it('같은 입력은 기억한 짝을 쓰되, 돌려준 항목을 고쳐도 다음 결과는 그대로이고 입력이 바뀌면 다시 짝짓는다', () => {
+    const registered = [{ name: '쟁반국수', price: '7000' }];
+    const images = [image('https://x/a.png', '2026-01-01', [item('쟁반국수', '7,000'), item('고량주', '9,000')])];
+    const first = buildMenuBoardMenus(registered, images);
+    first[0]!.origin = 'menu-board';
+    // 크롤의 최종 저장처럼 스냅샷 JSON 을 거친 같은 값.
+    const again = buildMenuBoardMenus(JSON.parse(JSON.stringify(registered)), JSON.parse(JSON.stringify(images)));
+    expect(again.map((m) => [m.name, m.origin])).toEqual([
+      ['쟁반국수', 'registered'],
+      ['고량주', 'menu-board'],
+    ]);
+    // 등록 메뉴 가격이 바뀌면 다시 짝지어 가격 비교가 바뀐다.
+    const changed = buildMenuBoardMenus([{ name: '쟁반국수', price: '8000' }], images);
+    expect(changed[0]!.priceCheck).toBe('different');
+  });
+
   it('가격 비교 — 범위·없음·같음·다름', () => {
     expect(menuBoardPriceCheck('39,000~49,000원', '54,000')).toBe('range');
     expect(menuBoardPriceCheck(null, '5,000')).toBe('unknown');

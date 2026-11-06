@@ -73,29 +73,45 @@ const levenshtein = (a: string[], b: string[]): number => {
   return previous[short.length]!;
 };
 
-const similarity = (a: string, b: string): number => {
-  if (!a || !b) return 0;
-  const ca = Array.from(a);
-  const cb = Array.from(b);
-  return 1 - levenshtein(ca, cb) / Math.max(ca.length, cb.length);
+// nameScore 의 이름별 준비물 — 정규화 이름·괄호 뺀 이름·핵심 이름과 그 코드포인트 배열. 짝짓기는 같은 이름을 상대마다
+// 견주므로(등록 메뉴 × 읽은 항목) 한 번만 만들어 둔다. 예전엔 쌍마다 정규화 10번(NFKC·정규식)을 다시 해, 메뉴가 많은 가게는
+// 짝짓기 한 번에 이벤트 루프를 수백 ms~1초 막았다(크롤 한 번에 2~3번 — 2026-11 검토).
+export interface NameKeys {
+  norm: string;
+  normChars: string[];
+  core: string;
+  coreChars: string[];
+  head: string;
+  headChars: string[];
+}
+
+export const nameKeys = (text: string): NameKeys => {
+  const norm = normalizeName(text);
+  const core = coreName(text);
+  const head = headName(text);
+  return { norm, normChars: Array.from(norm), core, coreChars: Array.from(core), head, headChars: Array.from(head) };
 };
 
-// 정규화 이름·괄호 뺀 이름·핵심 이름의 편집거리 유사도와 포함 관계 중 가장 높은 값.
-export const nameScore = (truth: string, name: string): number => {
-  const pairs: [string, string][] = [
-    [normalizeName(truth), normalizeName(name)],
-    [coreName(truth), coreName(name)],
-    [coreName(truth), normalizeName(name)],
-    [normalizeName(truth), coreName(name)],
-    [headName(truth), headName(name)],
+// nameScore 와 같은 값 — 단, floor 를 주면 floor 미만으로 끝날 편집거리는 건너뛴다. 결과가 floor 이상이면 nameScore 와 정확히
+// 같고, 미만이면 nameScore 도 floor 미만이다(짝짓기는 MATCH 이상만 쓴다). 편집거리 ≥ 길이 차라 유사도의 상한은
+// 1 − (긴 길이 − 짧은 길이)/긴 길이 — 유사도와 같은 식이라 부동소수점에서도 상한이 유사도보다 작아지지 않는다. 상한이 지금
+// 최고값 이하이거나 floor 미만이면 계산해도 결과가 바뀌지 않는다.
+export const nameScoreKeys = (t: NameKeys, n: NameKeys, floor = 0): number => {
+  const pairs: [string, string[], string, string[]][] = [
+    [t.norm, t.normChars, n.norm, n.normChars],
+    [t.core, t.coreChars, n.core, n.coreChars],
+    [t.core, t.coreChars, n.norm, n.normChars],
+    [t.norm, t.normChars, n.core, n.coreChars],
+    [t.head, t.headChars, n.head, n.headChars],
   ];
   let best = 0;
-  for (const [a, b] of pairs) {
+  for (const [a, ca, b, cb] of pairs) {
     if (!a || !b) continue;
-    best = Math.max(best, similarity(a, b));
-    const [short, long] = Array.from(a).length <= Array.from(b).length ? [a, b] : [b, a];
-    const shortLen = Array.from(short).length;
-    const longLen = Array.from(long).length;
+    const shortLen = Math.min(ca.length, cb.length);
+    const longLen = Math.max(ca.length, cb.length);
+    const upper = 1 - (longLen - shortLen) / longLen;
+    if (upper > best && upper >= floor) best = Math.max(best, 1 - levenshtein(ca, cb) / longLen);
+    const [short, long] = ca.length <= cb.length ? [a, b] : [b, a];
     // 괄호 밖 수식어('통돼지') 정도의 차이는 같은 메뉴로.
     if (shortLen >= 2 && long.includes(short)) best = Math.max(best, shortLen / longLen + 0.15);
     // 한국어 메뉴명은 수식어가 앞에 붙는다 — '바질쌈' ↔ '향긋한 바질쌈'.
@@ -103,6 +119,9 @@ export const nameScore = (truth: string, name: string): number => {
   }
   return Math.min(best, 1);
 };
+
+// 정규화 이름·괄호 뺀 이름·핵심 이름의 편집거리 유사도와 포함 관계 중 가장 높은 값.
+export const nameScore = (truth: string, name: string): number => nameScoreKeys(nameKeys(truth), nameKeys(name));
 
 const PRICE = /(\d{1,3}(?:[,.]\d{3})+|\d+(?:[.,]\d)?)\s*(만\s*원|천\s*원|원|won|₩|k)?/iu;
 
@@ -144,22 +163,26 @@ export const dedupeItems = (items: MenuBoardItemType[]): MenuBoardItemType[] => 
 
 const namesOf = (item: TruthItem): string[] => [item.name, ...item.alt];
 
-// 정답 메뉴 번호 → 항목 번호(유사도 높은 순 1:1)와 지어낸 항목 이름. 이름 유사도가 같으면 가격이 맞는 쪽 —
-// '왕새우 후라이 (3p) 29,000'·사이드 '왕새우 후라이 (1p) 8,000' 처럼 같은 이름이 두 번 나오는 메뉴판.
-export const pairTruth = (
-  truth: BoardTruth,
-  items: MenuBoardItemType[],
-): { pairs: Map<number, number>; wrong: string[] } => {
+// 정답 메뉴 번호 → 항목 번호(유사도 높은 순 1:1). 이름 유사도가 같으면 가격이 맞는 쪽 — '왕새우 후라이 (3p) 29,000'·사이드
+// '왕새우 후라이 (1p) 8,000' 처럼 같은 이름이 두 번 나오는 메뉴판. 이름 준비물(정답 메뉴마다 [이름, ...alt])·가격(parsePrice)은
+// 호출측이 한 번 만들어 넘긴다 — 등록 메뉴 짝짓기(menu-board.naver-match)는 지어낸 항목을 셀 필요가 없어 이것만 쓴다.
+export const pairTruthKeyed = (
+  truthKeys: readonly (readonly NameKeys[])[],
+  truthPrices: readonly (number | null)[],
+  itemKeys: readonly NameKeys[],
+  itemPrices: readonly (number | null)[],
+): Map<number, number> => {
   const candidates: { score: number; priceHit: boolean; ti: number; ii: number }[] = [];
-  truth.items.forEach((t, ti) => {
-    const names = namesOf(t);
-    items.forEach((item, ii) => {
-      const score = Math.max(...names.map((n) => nameScore(n, item.name)));
-      if (score >= MATCH) {
-        candidates.push({ score, priceHit: parsePrice(t.price) === parsePrice(item.price), ti, ii });
+  for (let ti = 0; ti < truthKeys.length; ti += 1) {
+    for (let ii = 0; ii < itemKeys.length; ii += 1) {
+      let score = 0;
+      for (const k of truthKeys[ti]!) {
+        const s = nameScoreKeys(k, itemKeys[ii]!, MATCH);
+        if (s > score) score = s;
       }
-    });
-  });
+      if (score >= MATCH) candidates.push({ score, priceHit: truthPrices[ti] === itemPrices[ii], ti, ii });
+    }
+  }
   candidates.sort(
     (a, b) => b.score - a.score || Number(b.priceHit) - Number(a.priceHit) || a.ti - b.ti || a.ii - b.ii,
   );
@@ -170,10 +193,27 @@ export const pairTruth = (
     pairs.set(c.ti, c.ii);
     usedItems.add(c.ii);
   }
+  return pairs;
+};
+
+// 정답 메뉴 번호 → 항목 번호(pairTruthKeyed)와 지어낸 항목 이름.
+export const pairTruth = (
+  truth: BoardTruth,
+  items: MenuBoardItemType[],
+): { pairs: Map<number, number>; wrong: string[] } => {
+  const truthKeys = truth.items.map((t) => namesOf(t).map(nameKeys));
+  const itemKeys = items.map((item) => nameKeys(item.name));
+  const pairs = pairTruthKeyed(
+    truthKeys,
+    truth.items.map((t) => parsePrice(t.price)),
+    itemKeys,
+    items.map((item) => parsePrice(item.price)),
+  );
+  const usedItems = new Set(pairs.values());
   // 짝 못 지은 항목 중 선택지·번역(optional)이나 이미 맞힌 묶음의 낱개(alt)는 틀린 것으로 치지 않는다.
-  const spare = [...[...pairs.keys()].flatMap((ti) => namesOf(truth.items[ti]!)), ...truth.optional];
+  const spare = [...[...pairs.keys()].flatMap((ti) => truthKeys[ti]!), ...truth.optional.map(nameKeys)];
   const wrong = items
-    .filter((item, ii) => !usedItems.has(ii) && !spare.some((n) => nameScore(n, item.name) >= MATCH))
+    .filter((_, ii) => !usedItems.has(ii) && !spare.some((k) => nameScoreKeys(k, itemKeys[ii]!, MATCH) >= MATCH))
     .map((item) => item.name);
   return { pairs, wrong };
 };

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { LRUCache } from 'lru-cache';
 import type {
   MenuBoardItemType,
   MenuBoardMenuType,
@@ -7,7 +9,7 @@ import type {
   NaverPlaceDataType,
   RestaurantPublicMenuBoardType,
 } from '@repo/api-contract';
-import { MATCH, nameScore, normalizeName, pairTruth, parsePrice, parseTruth } from './menu-board.score.js';
+import { MATCH, nameKeys, nameScoreKeys, normalizeName, pairTruthKeyed, parsePrice } from './menu-board.score.js';
 
 // 네이버 메뉴판 사진에서 읽은 메뉴를 등록 메뉴와 짝짓는다(순수 함수 — 저장 때·자동 읽기 뒤·프리뷰가 같이 쓴다).
 // 짝짓기는 메뉴판 읽기 채점기와 같다(이름 유사도, 같으면 가격이 맞는 쪽). 결과의 origin 이 구분값:
@@ -40,7 +42,44 @@ const newestFirst = (images: NaverMenuBoardImageType[]): NaverMenuBoardImageType
     )
     .map(({ image }) => image);
 
+// 같은 입력의 짝은 다시 계산하지 않는다 — 크롤 한 번에 중간 저장(partial)·최종 저장이 같은 입력으로 짝짓는다(2026-11 검토).
+// 짝짓기는 순수 함수라 입력(등록 메뉴 이름·가격, 사진 주소·올린 날·읽은 항목)의 해시를 키로 최근 몇 개만 들고 있다.
+// 돌려줄 때는 항목을 복사한다(호출측이 고쳐도 기억한 값은 그대로).
+const MATCH_MEMO_MAX = 16;
+const matchMemo = new LRUCache<string, MenuBoardMenuType[]>({ max: MATCH_MEMO_MAX });
+
+// undefined 와 null 을 가른다(결과 항목이 값을 그대로 옮기므로) — JSON 배열은 undefined 를 null 로 바꾼다.
+const keyPart = (v: string | null | undefined): string | null => (v === undefined ? '\u0000undefined' : v);
+
+const matchInputKey = (registered: Pick<MenuItemType, 'name' | 'price'>[], images: NaverMenuBoardImageType[]): string =>
+  createHash('sha1')
+    .update(
+      JSON.stringify([
+        registered.map((m) => [m.name, keyPart(m.price)]),
+        images.map((im) => [
+          im.url,
+          keyPart(im.uploadedOn),
+          (im.read?.items ?? []).map((it) => [it.name, keyPart(it.price), keyPart(it.description)]),
+        ]),
+      ]),
+    )
+    .digest('base64');
+
 export const buildMenuBoardMenus = (
+  registered: Pick<MenuItemType, 'name' | 'price'>[],
+  images: NaverMenuBoardImageType[],
+): MenuBoardMenuType[] => {
+  if (!images.some((im) => (im.read?.items?.length ?? 0) > 0)) return [];
+  const key = matchInputKey(registered, images);
+  let menus = matchMemo.get(key);
+  if (!menus) {
+    menus = matchMenuBoardMenus(registered, images);
+    matchMemo.set(key, menus);
+  }
+  return menus.map((m) => ({ ...m }));
+};
+
+const matchMenuBoardMenus = (
   registered: Pick<MenuItemType, 'name' | 'price'>[],
   images: NaverMenuBoardImageType[],
 ): MenuBoardMenuType[] => {
@@ -56,25 +95,27 @@ export const buildMenuBoardMenus = (
   }
   if (read.length === 0) return [];
 
-  const truth = parseTruth({
-    items: registered.map((m) => [menuMatchName(m.name), m.price] as [string, string | null]),
-  });
-  const forMatch = read.map(({ item }) => ({ ...item, name: menuMatchName(item.name) }));
-  const { pairs } = pairTruth(truth, forMatch);
+  // 이름 준비물은 이름마다 한 번 — 등록 메뉴(짝짓기 정답이자 아래 변형 후보)와 읽은 항목. 짝짓기는 채점기(pairTruth)와 같고,
+  // 지어낸 항목(wrong)은 여기서 쓰지 않아 세지 않는다.
+  const regKeys = registered.map((m) => nameKeys(menuMatchName(m.name)));
+  const itemKeys = read.map(({ item }) => nameKeys(menuMatchName(item.name)));
+  const pairs = pairTruthKeyed(
+    regKeys.map((k) => [k]),
+    registered.map((m) => parsePrice(m.price)),
+    itemKeys,
+    read.map(({ item }) => parsePrice(item.price)),
+  );
   const registeredOf = new Map([...pairs].map(([ti, ii]) => [ii, registered[ti]!]));
+  // 변형 후보 — 이미 짝지은 등록 메뉴만, 등록 순서대로(첫 번째로 닮은 것을 쓴다).
+  const pairedMenus = new Set(registeredOf.values());
+  const variantOf = registered.flatMap((m, ti) => (pairedMenus.has(m) ? [{ m, keys: regKeys[ti]! }] : []));
 
   return read.map(({ item, image }, ii) => {
     // 짝을 못 찾았어도 이미 짝지은 등록 메뉴와 거의 같은 이름(크기·옵션 변형)이면 그 등록 메뉴로 본다 — 가격은
     // 1:1 로 짝지은 것만 견준다(변형은 가격이 다른 게 당연하다).
     const paired = registeredOf.get(ii);
     const reg =
-      paired ??
-      registered.find(
-        (m) =>
-          [...registeredOf.values()].includes(m) &&
-          nameScore(menuMatchName(m.name), forMatch[ii]!.name) >= MATCH,
-      ) ??
-      null;
+      paired ?? variantOf.find(({ keys }) => nameScoreKeys(keys, itemKeys[ii]!, MATCH) >= MATCH)?.m ?? null;
     return {
       name: item.name,
       price: item.price,
