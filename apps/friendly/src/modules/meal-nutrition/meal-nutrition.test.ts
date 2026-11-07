@@ -740,9 +740,14 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
       photos: app.mealPhotos,
       purgeRecognitionDebugForUser: vi.fn().mockResolvedValue(undefined),
     }).deleteAll('nut-conflict', { confirmation: MEAL_DATA_DELETE_CONFIRMATION });
+    // 삭제 뒤에 들어온 같은 요청은 삭제 전 계산(곧 conflict 로 버려질)에 합류하지 않고 새로 돈다 —
+    // 지운 뒤라 기록이 모자라 모델 없이 '기록 부족' 조언으로 끝난다.
+    const after = svc.create('nut-conflict', { days: 14, force: true }, '2026-08-22');
     release();
     await expect(pending).rejects.toMatchObject({ code: 'conflict' });
-    expect(await app.prisma.mealNutritionAdvice.count({ where: { userId: 'nut-conflict' } })).toBe(0);
+    await expect(after).resolves.toMatchObject({ cached: false, advice: { status: 'insufficient' } });
+    const saved = await app.prisma.mealNutritionAdvice.findMany({ where: { userId: 'nut-conflict' } });
+    expect(saved.map((a) => a.status)).toEqual(['insufficient']); // 삭제 전 계산의 조언은 저장되지 않았다
   });
 
   it('라우트 — 점검·조언 생성·최근 조언, 로그인 필요, 일일 한도 429', async () => {

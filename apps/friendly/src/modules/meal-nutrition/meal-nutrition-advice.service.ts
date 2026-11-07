@@ -129,7 +129,8 @@ export class MealNutritionAdviceService {
     // 연타는 첫 Promise 에 합류한다(LLM·한도 1회). 점검·LLM(최대 90~180초)은 사용자 쓰기 장벽 밖에서 하고
     // 저장할 때만 장벽을 잡는다 — 그동안 같은 사용자의 기록 저장이 막히지 않는다. 전체 삭제와의 경합은 데이터
     // 세대로 막는다(계산 전에 읽은 세대가 저장 시점에 바뀌었으면 버린다 — 지운 기록의 분석이 다시 생기지 않는다).
-    const key = JSON.stringify([userId, today, input.days, input.force]);
+    // 합류 키에도 세대를 넣어, 삭제 뒤에 들어온 요청이 삭제 전 계산(곧 conflict 로 버려질)에 합류하지 않게 한다.
+    const key = JSON.stringify([userId, mealDataGeneration.read(userId, 'all'), today, input.days, input.force]);
     const existing = this.inFlight.get(key);
     if (existing) return existing;
     const pending = this.createOnce(userId, input, today);

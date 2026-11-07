@@ -1220,6 +1220,25 @@ describe('MealRecommendationService (격리 DB)', () => {
       await expect(build().create('rec-barrier-del-u', input, TODAY)).resolves.toMatchObject({ cached: false });
       expect(await app.prisma.mealRecommendation.count({ where: { userId: 'rec-barrier-del-u' } })).toBe(1);
     });
+
+    it('삭제 뒤에 들어온 같은 요청은 삭제 전에 시작한 계산에 합류하지 않고 새로 돈다', async () => {
+      await seedAuthUsers(app, [{ id: 'rec-barrier-join-u', role: 'USER' }]);
+      const first = slowProvider();
+      const second = slowProvider();
+      let calls = 0;
+      const svc = buildWith({ complete: (opts) => (calls++ === 0 ? first.slow : second.slow).complete(opts) });
+      const before = svc.create('rec-barrier-join-u', input, TODAY);
+      await first.started;
+      await svc.removeAll('rec-barrier-join-u');
+      // 같은 키 — 예전엔 진행 중인 before 에 합류해 함께 conflict 로 끝났다.
+      const after = svc.create('rec-barrier-join-u', input, TODAY);
+      first.release();
+      second.release();
+      await expect(before).rejects.toMatchObject({ code: 'conflict' });
+      await expect(after).resolves.toMatchObject({ cached: false });
+      expect(calls).toBe(2);
+      expect(await app.prisma.mealRecommendation.count({ where: { userId: 'rec-barrier-join-u' } })).toBe(1);
+    });
   });
 
   describe('추천 삭제', () => {

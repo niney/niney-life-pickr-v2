@@ -203,9 +203,11 @@ export class MealRecommendationService {
     today: string,
   ): Promise<{ recommendation: MealRecommendationType; cached: boolean }> {
     // 동일 사용자의 같은 요청은 첫 Promise 에 합류한다. force 요청도 동시에 연타된 한 묶음은
-    // LLM·quota 를 한 번만 소비하되, 완료 뒤 다시 누르면 새 요청으로 처리한다.
+    // LLM·quota 를 한 번만 소비하되, 완료 뒤 다시 누르면 새 요청으로 처리한다. 키에 데이터 세대를 넣어,
+    // 삭제 뒤에 들어온 요청이 삭제 전에 시작한(그래서 저장 때 conflict 로 버려질) 계산에 합류하지 않게 한다.
     const inFlightKey = JSON.stringify([
       userId,
+      mealDataGeneration.read(userId, 'recommendations'),
       today,
       input.targetDate,
       input.targetSlot,
