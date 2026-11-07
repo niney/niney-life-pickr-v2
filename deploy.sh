@@ -102,6 +102,16 @@ pull() {
 }
 gen()        { step "prisma generate";      pnpm --filter friendly db:generate; }
 migrate()    { step "prisma migrate deploy"; pnpm --filter friendly exec prisma migrate deploy; }
+# 데이터 적재 케이스(6~10)는 코드만 받고 마이그레이션은 하지 않는다 — 받은 코드가 새 테이블·열을 쓰는데 DB 가 옛 스키마면
+# 적재가 중간에 깨진다(2026-11-08 ./deploy.sh 7: link:food-nutrients 가 "food_nutrient_refs 없음"으로 실패). 시작 전에 멈춘다.
+require_schema() {
+  step "DB 스키마 확인"
+  if ! pnpm --filter friendly exec prisma migrate status >/dev/null 2>&1; then
+    pnpm --filter friendly exec prisma migrate status || true
+    echo "  적용 안 된 마이그레이션이 있습니다 — ./deploy.sh 2(웹도 바뀌었으면 4)로 먼저 적용한 뒤 다시 실행하세요."
+    exit 1
+  fi
+}
 build_api()  { step "friendly 빌드";        pnpm --filter friendly build; }
 # 예전 `tsc -b` 가 흘린 apps/web/vite.config.js(gitignore 라 pull 로는 안 지워진다)가 남아 있으면 지운다.
 # Vite 는 .js 설정을 .ts 보다 먼저 읽어, 그 파일이 있으면 vite.config.ts 의 변경이 조용히 무시된다
@@ -391,23 +401,23 @@ case_5() {  # .env만
 }
 
 case_6() {  # 일상지도 데이터 적재/갱신 — CSV 를 data/open/ 에 올린 뒤 실행(코드 배포·재기동 없음)
-  pull; gen; life_map_data 1; analyze_db
+  pull; gen; require_schema; life_map_data 1; analyze_db
 }
 
 case_7() {  # 음식 카탈로그 적재/갱신 — 배포본을 data/open/food/ 에 올린 뒤 실행(코드 배포·재기동 없음)
-  pull; gen; food_catalog_data 1; analyze_db
+  pull; gen; require_schema; food_catalog_data 1; analyze_db
 }
 
 case_8() {  # 집값 데이터 적재/갱신 — 단지 CSV 를 data/open/housing/ 에 올린 뒤 실행. HOUSING_MONTHS=24 로 백필.
-  pull; gen; housing_data 1; analyze_db
+  pull; gen; require_schema; housing_data 1; analyze_db
 }
 
 case_9() {  # 주차 데이터 적재/갱신 — 표준데이터·서울 공영주차장·교통안전공단·전기차 충전소 API(코드 배포·재기동 없음)
-  pull; gen; parking_data 1; analyze_db
+  pull; gen; require_schema; parking_data 1; analyze_db
 }
 
 case_10() {  # 등산 데이터 적재/갱신 — data/open/hiking/ 의 100대명산·전국 주요 봉우리 GPX zip + 산림청·등산트레킹 API(코드 배포·재기동 없음)
-  pull; gen; hiking_data 1; analyze_db
+  pull; gen; require_schema; hiking_data 1; analyze_db
 }
 
 # ── 메뉴 ────────────────────────────────────────────────

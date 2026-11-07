@@ -75,6 +75,21 @@ scp data/open/food/mfds-nutrition-15100065.csv "data/open/food/20260828_음식DB
 pnpm --filter friendly status:food-catalog     # ok items=N classified=C nutrition=U meals=M
 ```
 
+**받은 코드에 새 마이그레이션이 있으면 7번보다 `./deploy.sh 2`(웹도 바뀌었으면 4)가 먼저다** — 7번은 코드만 받고 마이그레이션은
+하지 않는다. 2026-11-08 마이그레이션 전에 7번을 돌려 `link:food-nutrients` 가 "food_nutrient_refs 테이블 없음"으로 실패했다(지금은
+적용 안 된 마이그레이션이 있으면 6~10번이 시작 전에 멈춘다).
+
+영양소 점검 판(2026-11-07~08)을 **처음** 배포할 때의 순서 — 엑셀 2개·원재료 CSV 를 올린 뒤:
+
+```bash
+./deploy.sh 4                                                       # 마이그레이션 3건 + API·웹 빌드
+pnpm --filter friendly load:food-catalog --source=nutrition --refresh-nutrients --backfill-nutrition
+pnpm --filter friendly load:food-catalog --source=raw
+pnpm --filter friendly link:food-nutrients --llm                    # 영양 기준 음식 연결(규칙 → AI)
+pnpm --filter friendly backfill:meal-nutrition --estimate           # 열량이 빈 식단 항목(이름 추정)
+pm2 reload friendly                                                 # 어휘·제안 후보 메모 캐시 비우기
+```
+
 - 영양성분은 **파일이 기본**이고 `DATA_GO_KR_API_KEY`(data.go.kr 15100070)는 선택이다 — 같은 데이터를
   쿼터 써 가며 받을 뿐이다. 레시피만 `FOOD_RECIPE_API_KEY`(식품안전나라)가 필요하다.
 - **영양소 점검(마그네슘·아연·엽산·원재료 영양소)** 은 엑셀 2개가 더 있어야 한다 — `YYYYMMDD_음식DB_*.xlsx`(K-FIND 음식 DB)와
