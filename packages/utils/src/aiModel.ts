@@ -166,6 +166,31 @@ export const thinkOptionFor = (modelId: string, setting: LlmThinkingSetting | nu
   if (!isKimiModel(modelId) || !setting || setting === 'off') return thinkOptionForModel(modelId);
   return setting;
 };
+type ThinkLevel = 'low' | 'medium' | 'high' | 'max';
+const thinkLevelOf = (think: ThinkOption): ThinkLevel | null =>
+  think === true ? 'max' : think === false ? null : think;
+
+// 사고 토큰은 본문 길이와 상관없이 단계마다 대략 정해진 만큼 쓴다 — kimi-k3.1-pro 실측(2026-11-07, 식단 추천·영양제 조언,
+// 예산을 넉넉히 줬을 때 사고+본문 − 본문): 낮음 0.1~0.5천 · 보통 1~2.5천 · 높음 2.2~2.6천 · 최대 4.1~4.8천 토큰. 배수
+// (thinkTokenMult)만 쓰면 본문 예산이 작은 호출(식단 추천 1,200)에서 사고가 예산을 다 먹어 본문이 비었다(보통 3번 중 2번,
+// done_reason=length) — 배수와 '본문 + 단계별 여유' 중 큰 쪽을 준다.
+const THINK_EXTRA_TOKENS: Record<ThinkLevel, number> = { low: 2000, medium: 4000, high: 5000, max: 8000 };
+// 같은 실측의 소요: 끔 9~20초 → 보통 22~50초 · 높음 41~49초 · 최대 63~74초.
+const THINK_EXTRA_MS: Record<ThinkLevel, number> = { low: 30_000, medium: 60_000, high: 90_000, max: 150_000 };
+
+/** 추론 단계에 맞춘 출력 예산(num_predict) — 끄면 base 그대로. */
+export const thinkMaxTokens = (base: number, think: ThinkOption): number => {
+  const level = thinkLevelOf(think);
+  return level ? Math.max(Math.round(base * thinkTokenMult(think)), base + THINK_EXTRA_TOKENS[level]) : base;
+};
+
+/** 추론 단계에 맞춘 호출 대기 시간(상한 capMs) — 끄면 baseMs 그대로. LLM 어댑터에 timeoutMs 로 넘겨야 실제로 늘어난다. */
+export const thinkTimeoutMs = (baseMs: number, think: ThinkOption, capMs: number): number => {
+  const level = thinkLevelOf(think);
+  const ms = level ? Math.max(Math.round(baseMs * thinkTokenMult(think)), baseMs + THINK_EXTRA_MS[level]) : baseMs;
+  return Math.min(capMs, ms);
+};
+
 /** 사고 토큰이 num_predict 를 먹는 만큼 maxTokens 를 키우는 배수(사주 kimi-k3 실측: max 는 ×3 에서 2/12 잘림, ×5 에서 0). */
 export const thinkTokenMult = (think: ThinkOption): number => {
   switch (think) {

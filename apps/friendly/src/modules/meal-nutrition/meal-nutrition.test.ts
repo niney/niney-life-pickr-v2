@@ -829,7 +829,7 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
     await setPurposeRow({ enabled: true, thinking: 'high' });
     try {
       await build().create('nut-u', { days: 14, force: true }, '2026-08-22');
-      expect(provider.calls[0]).toMatchObject({ think: 'high', maxTokens: 6000 });
+      expect(provider.calls[0]).toMatchObject({ think: 'high', maxTokens: 7000, timeoutMs: 240_000 });
     } finally {
       await clearPurposeRow();
     }

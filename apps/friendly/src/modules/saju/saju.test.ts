@@ -369,7 +369,8 @@ describe('SajuService (격리 DB)', () => {
       expect(snap.done).toBe(true);
       const call = provider.calls.find((c) => c.prompt.includes('성격과 기질을 써라'));
       expect(call?.think).toBe('max');
-      expect(call?.maxTokens).toBe(900 * 5);
+      // 배수(×5 = 4,500)와 본문+최대 여유(900 + 8,000) 중 큰 쪽.
+      expect(call?.maxTokens).toBe(900 + 8000);
       expect(call?.model).toBe('kimi-k3');
     } finally {
       await app.prisma.llmProviderConfig.deleteMany({ where: { purpose: 'saju' } });

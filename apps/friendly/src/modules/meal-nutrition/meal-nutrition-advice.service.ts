@@ -18,7 +18,8 @@ import {
   MEAL_NUTRIENT_REFERENCE_LABEL,
   formatNutrientAmount,
   thinkOptionFor,
-  thinkTokenMult,
+  thinkMaxTokens,
+  thinkTimeoutMs,
   type ThinkOption,
 } from '@repo/utils';
 import { extractFirstJsonObject } from '../../lib/json.js';
@@ -45,8 +46,9 @@ import { MealNutritionService } from './meal-nutrition.service.js';
 // 같은 날·같은 점검 결과면 저장된 조언을 다시 준다(일일 한도 미차감, force 로만 새로).
 
 const LLM_TIMEOUT_MS = 90_000;
-// 어드민이 추론을 켜면 사고 토큰만큼 출력 예산·타임아웃을 배수로 키운다(상한).
-const LLM_TIMEOUT_MAX_MS = 180_000;
+// 어드민이 추론을 켜면 사고 토큰만큼 출력 예산·대기 시간을 늘린다(utils thinkMaxTokens·thinkTimeoutMs, 상한) —
+// kimi-k3.1-pro 실측: 사고+본문 보통 4천·최대 6.4천 토큰, 최대 70초(배수 ×2 예산 4,000 에 보통이 걸렸다).
+const LLM_TIMEOUT_MAX_MS = 240_000;
 const LLM_MAX_TOKENS = 2000;
 const LLM_NUM_CTX = 8192;
 const LLM_TEMPERATURE = 0.3;
@@ -96,7 +98,8 @@ interface ResolvedLlm {
   provider: LLMProvider;
   model: string;
   think: ThinkOption;
-  tokenMult: number;
+  maxTokens: number;
+  timeoutMs: number;
 }
 
 export class MealNutritionAdviceService {
@@ -166,7 +169,8 @@ export class MealNutritionAdviceService {
       provider: (this.deps.cache ?? adapterCache).get(resolved),
       model,
       think,
-      tokenMult: thinkTokenMult(think),
+      maxTokens: thinkMaxTokens(LLM_MAX_TOKENS, think),
+      timeoutMs: this.deps.llmTimeoutMs ?? thinkTimeoutMs(LLM_TIMEOUT_MS, think, LLM_TIMEOUT_MAX_MS),
     };
   }
 
@@ -243,24 +247,22 @@ export class MealNutritionAdviceService {
         sodiumHigh: analysis.nutrients.find((n) => n.key === 'sodium' && n.status === 'high') ?? null,
       });
       const ac = new AbortController();
-      const timer = setTimeout(
-        () => ac.abort(),
-        this.deps.llmTimeoutMs ??
-          Math.min(LLM_TIMEOUT_MAX_MS, Math.round(LLM_TIMEOUT_MS * resolved.tokenMult)),
-      );
+      const timer = setTimeout(() => ac.abort(), resolved.timeoutMs);
       try {
         const res = await resolved.provider.complete({
           prompt,
           systemPrompt: MEAL_NUTRITION_ADVICE_SYSTEM_PROMPT,
           model: resolved.model,
           temperature: LLM_TEMPERATURE,
-          maxTokens: Math.round(LLM_MAX_TOKENS * resolved.tokenMult),
+          maxTokens: resolved.maxTokens,
           numCtx: LLM_NUM_CTX,
           format: buildMealNutritionAdviceJsonSchema(candidates.map((c) => c.key)) as unknown as Record<
             string,
             unknown
           >,
           think: resolved.think,
+          // 어댑터 기본(60초)이 아니라 이 호출의 대기 시간으로 — 추론을 켜면 60초를 넘긴다.
+          timeoutMs: resolved.timeoutMs,
           signal: ac.signal,
         });
         const parsed = parseAdviceOutput(res.text);

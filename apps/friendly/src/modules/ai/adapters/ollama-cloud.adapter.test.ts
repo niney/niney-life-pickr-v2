@@ -192,6 +192,35 @@ describe('OllamaCloudAdapter', () => {
     ).rejects.toBeInstanceOf(LLMTimeoutError);
   });
 
+  it('호출이 timeoutMs 를 주면 어댑터 기본 대신 그 시간을 쓴다(추론을 켠 호출이 기본 60초에서 끊기지 않게)', async () => {
+    const hanging = (_u: unknown, init: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        });
+      });
+    // 기본 5초 어댑터라도 호출이 30ms 를 주면 30ms 에 끊긴다.
+    fetchMock.mockImplementationOnce(hanging);
+    const started = Date.now();
+    await expect(
+      buildAdapter({ timeoutMs: 5_000 }).complete({ prompt: 'x', model: 'm', timeoutMs: 30 }),
+    ).rejects.toBeInstanceOf(LLMTimeoutError);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    // 기본 30ms 어댑터라도 호출이 더 긴 시간을 주면 그 안에 온 응답을 받는다.
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) =>
+          setTimeout(
+            () => resolve(new Response(JSON.stringify({ message: { content: 'ok' }, done_reason: 'stop' }), { status: 200 })),
+            80,
+          ),
+        ),
+    );
+    await expect(
+      buildAdapter({ timeoutMs: 30 }).complete({ prompt: 'x', model: 'm', timeoutMs: 2_000 }),
+    ).resolves.toMatchObject({ text: 'ok' });
+  });
+
   it('본문이 오다 멈추면 본문 읽기도 자기 타임아웃에 끊긴다(LLMTimeoutError)', async () => {
     fetchMock.mockImplementationOnce(async (_u, init: RequestInit) => {
       const stream = new ReadableStream<Uint8Array>({

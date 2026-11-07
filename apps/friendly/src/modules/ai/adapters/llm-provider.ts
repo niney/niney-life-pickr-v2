@@ -32,6 +32,10 @@ export interface LLMCompleteOptions {
   // 호출자가 모델을 보고 설정 여부를 결정한다.
   think?: boolean | 'low' | 'medium' | 'high' | 'max';
   signal?: AbortSignal;
+  // 이 호출만의 대기 시간(ms) — 없으면 어댑터 기본(OLLAMA_CLOUD_TIMEOUT_MS, 60초). 추론을 켠 호출은 사고만큼 오래
+  // 걸려(kimi-k3.1-pro 최대 63~74초) 호출자가 늘린 값(utils thinkTimeoutMs)을 넘긴다. 예전엔 호출자 signal 만 늘려
+  // 어댑터 60초에서 먼저 끊겼다(2026-11-07 실측: 최대 추론 조언·추천이 정확히 60초에 실패).
+  timeoutMs?: number;
 }
 
 export interface LLMCompleteResult {
