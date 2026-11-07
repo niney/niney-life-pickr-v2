@@ -32,7 +32,9 @@ import {
   mealServingNutrition,
   type ServingCatalogRow,
 } from '../food/food-serving.js';
+import { NUTRIENT_KEYS, parseNutrientsPer100g, type NutrientsPer100g } from '../food/food-nutrients.js';
 import { MORNING_ONLY_MEALS, commonMealNorms } from './common-meals.js';
+import { nutritionFit, type NutritionSignals } from './nutrition-signals.js';
 import { parseMealRecommendationFeedback } from './meal-recommendation.feedback.js';
 
 // 추천의 "결정적" 절반 — 사용자 기록을 패턴 프로필로 집계하고, 후보 풀을 만들고, 가중치로
@@ -272,6 +274,8 @@ export interface CandidateInput {
   proteinG: number | null;
   // 100g당 열량(에너지 밀도) — 1인분 중량과 무관하게 무거운 음식을 가린다(health).
   kcalPer100g?: number | null;
+  // 1인분의 비타민·무기질 양(카탈로그 100g당 값 × 1인분 g) — 영양 보정(부족 영양소를 채우는 후보)에 쓴다. 모르면 없음.
+  servingNutrients?: NutrientsPer100g | null;
   nutritionFrom: string | null;
   nutritionBasis: MealNutritionBasisType;
   // 재료 수 — 간편함(집밥) 근거.
@@ -297,6 +301,8 @@ export interface ScoreContext {
   tempC?: number | null;
   rain?: boolean | null;
   today: string;
+  // 영양소 점검에서 뽑은 신호(나트륨 많음·부족 영양소) — 있으면 건강 점수를 그 사람에 맞게 고친다(nutrition-signals).
+  nutrition?: NutritionSignals | null;
 }
 
 export interface ScoredCandidate extends CandidateInput {
@@ -702,7 +708,12 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
   }
 
   const health = healthFit(c);
-  if (health.tag && health.score > 0.6) tags.push(health.tag);
+  // 그 사람의 영양 상태(나트륨 많음·부족 영양소)만큼 건강 점수를 고친다 — 건강 가중치만큼만 순위가 움직인다.
+  const personal = ctx.nutrition ? nutritionFit(c, ctx.nutrition) : null;
+  const healthScore = clamp01(health.score + (personal?.delta ?? 0));
+  // 보충 태그는 앞쪽(두 번째)에 — 태그는 3개로 잘리는데 뒤에 붙이면 겹침·취향 태그에 밀려 사라진다.
+  if (personal?.gapTag) tags.splice(Math.min(1, tags.length), 0, personal.gapTag);
+  else if (health.tag && healthScore > 0.6) tags.push(health.tag);
 
   const novelty = c.fromHistory || daysSince !== null ? 0 : 1;
   if (novelty === 1) tags.push('새로운 음식');
@@ -727,7 +738,7 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     variety,
     taste,
     balance,
-    health: health.score,
+    health: healthScore,
     novelty,
     weather: weather.score,
     convenience,
@@ -735,6 +746,8 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     slot: slot.factor,
     aversion,
     recent: recentFactor,
+    // 영양 보정의 근거 — 부족 영양소를 채우는 정도(0~1). 가중합에는 health 로만 들어간다.
+    ...(personal ? { nutrition: personal.coverage } : {}),
   };
 
   const w = ctx.preference.weights;
@@ -744,7 +757,7 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     w.variety * variety +
     w.taste * taste +
     w.balance * balance +
-    w.health * health.score +
+    w.health * healthScore +
     w.novelty * novelty +
     w.weather * weather.score +
     w.convenience * convenience;
@@ -922,14 +935,16 @@ export class MealPatternService {
     // 그대로 쓰면 거의 모든 음식이 '500kcal 이하' 가점을 받아 건강 요소가 변별력을 잃었다(2026-10-04).
     const lex = await this.servingLexicon();
     const perMeal = (
-      row: ServingCatalogRow | null,
-    ): Pick<CandidateInput, 'kcal' | 'proteinG' | 'sodiumMg' | 'kcalPer100g'> => {
+      row: (ServingCatalogRow & { nutrientsPer100gJson?: string | null }) | null,
+    ): Pick<CandidateInput, 'kcal' | 'proteinG' | 'sodiumMg' | 'kcalPer100g' | 'servingNutrients'> => {
       const n = mealServingNutrition(row, { isMain: true }, lex);
+      const kcal100 = row ? kcalPer100gOf(row) : null;
       return {
         kcal: n.kcal,
         proteinG: n.proteinG,
         sodiumMg: n.sodiumMg,
-        kcalPer100g: row ? kcalPer100gOf(row) : null,
+        kcalPer100g: kcal100,
+        servingNutrients: servingNutrientsOf(row?.nutrientsPer100gJson, n.kcal, kcal100),
       };
     };
 
@@ -948,6 +963,7 @@ export class MealPatternService {
         existing.sodiumMg ??= c.sodiumMg;
         existing.proteinG ??= c.proteinG;
         existing.kcalPer100g ??= c.kcalPer100g;
+        existing.servingNutrients ??= c.servingNutrients;
         existing.nutritionFrom ??= c.nutritionFrom;
         if (existing.nutritionBasis === 'missing') existing.nutritionBasis = c.nutritionBasis;
         existing.ingredientCount ??= c.ingredientCount;
@@ -1129,6 +1145,23 @@ export class MealPatternService {
     return out.slice(0, CANDIDATE_POOL_SIZE);
   }
 }
+
+/** 1인분의 비타민·무기질 — 100g당 값 × (1인분 열량 ÷ 100g당 열량 × 100g). 열량이나 영양소를 모르면 null. */
+const servingNutrientsOf = (
+  json: string | null | undefined,
+  servingKcal: number | null,
+  kcal100: number | null,
+): NutrientsPer100g | null => {
+  if (!json || servingKcal === null || servingKcal <= 0 || !kcal100 || kcal100 <= 0) return null;
+  const per100 = parseNutrientsPer100g(json);
+  const factor = servingKcal / kcal100;
+  const out: NutrientsPer100g = {};
+  for (const key of NUTRIENT_KEYS) {
+    const v = per100[key];
+    if (v !== undefined) out[key] = Math.round(v * factor * 1000) / 1000;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+};
 
 const toCandidate = (row: {
   id: string;

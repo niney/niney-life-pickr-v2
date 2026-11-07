@@ -7,6 +7,7 @@ import {
   type MealWeightsType,
 } from '@repo/api-contract';
 import { focusWeightKeys, summaryDishLabel, type ScoredCandidate } from './meal-pattern.service.js';
+import type { NutritionSignals } from './nutrition-signals.js';
 
 // 다음 끼니 추천 프롬프트(purpose meal-recommend, 텍스트).
 //
@@ -26,13 +27,16 @@ import { focusWeightKeys, summaryDishLabel, type ScoredCandidate } from './meal-
 //     주고, 안 먹었다는 말은 그 줄·태그에 있는 것만 쓰게 하고, 예시를 부재 주장이 아닌 것으로 바꿨다. 후보 줄마다
 //     그 조리형태를 2주에 몇 번 먹었는지('볶음 2주 3번')도 붙인다 — 태그 '2주간 안 먹은 해산물'을 오징어볶음의
 //     볶음까지 넓혀 "볶음 형태가 없다"고 썼다(붙인 뒤 72회: 틀린 주장 3/70 → 3/91, 세트 안 조리형태 겹침 7% → 2%).
+// v6(2026-11-07): [영양 점검] — 영양소 점검(14일)의 나트륨 많음·부족 영양소를 한 줄로 주고, 후보 줄에 나트륨(많은 사람만)과
+//     '○○ 보충' 태그를 붙인다. 국물·짠 음식은 많아야 하나, 보충 후보는 하나쯤, 이유엔 한 마디만(훈계 금지). 화면 검토에서
+//     나트륨 152% 인 사람에게 된장찌개를 권하고 이유가 전부 다양성뿐이었다.
 //
 // 설계 근거(docs/PLAN-meal.md 결정 E):
 //  - 원시 기록을 주지 않는다. 서버가 집계한 프로필 요약 + 코드가 점수를 매긴 후보 풀만 넘긴다.
 //  - LLM 은 "고르고 설명하는" 역할이다. 후보 밖 이름은 서버가 버린다 — 없는 음식을 추천하면
 //    사용자가 검색해도 안 나오고 통계도 안 잡힌다.
 //  - 건강보다 "패턴 분석 → 겹치지 않게·골고루 + 취향"이 기본 목표라는 걸 프롬프트에 명시한다.
-export const MEAL_RECOMMENDATION_VERSION = 5;
+export const MEAL_RECOMMENDATION_VERSION = 6;
 
 export const MEAL_RECOMMENDATION_SYSTEM_PROMPT = `너는 한 사람의 식사 기록을 보고 다음 끼니를 골라 주는 도우미다.
 
@@ -52,6 +56,9 @@ export const MEAL_RECOMMENDATION_SYSTEM_PROMPT = `너는 한 사람의 식사 �
 - 각 항목마다 왜 지금 이걸 권하는지 1~2문장. 기록에 근거해 구체적으로("요즘 면 요리를 많이 드셔서 밥 요리로 균형을 맞춰요").
 - 없는 사실을 지어내지 말 것. 기록이 적으면 "아직 기록이 적어 취향을 배우는 중"이라고 솔직하게 쓴다.
 - 안 드셨다·없었다고 쓸 땐 [내 식사 패턴]의 '안 먹은' 줄이나 후보 태그에 있는 것만, 그 기간(2주) 그대로 쓴다. 개수가 적힌 조리형태·주재료는 적게 드셨다고 할 수는 있어도 안 드셨다고 하지 않는다.
+- [영양 점검]이 있으면: 나트륨이 많다고 적혀 있으면 국물·찌개·짠 음식(후보 줄의 나트륨이 큰 것)은 많아야 하나만 고른다. 부족하다고 적힌 영양소를 채우는 후보(태그 '○○ 보충')가 있으면 하나쯤 넣고, 그 이유에 한 마디만 덧붙인다(예: "비타민 D 도 채울 수 있어요"). 겹침 피하기·취향이 여전히 먼저다. 훈계·질병·진단 표현은 쓰지 않는다.
+- 영양소(비타민·칼슘·철·칼륨·엽산·식이섬유 등)는 그 후보 태그의 '○○ 보충'에 적힌 것만, 그 후보의 이유에서만 말한다. 태그에 없는 영양소를 그 음식에 많다고 지어내지 않는다(서버가 그런 문장은 지운다). 나트륨은 후보 줄의 숫자대로만.
+- '태그'·'score'·'후보 목록'·'건강 점수' 같은 내부 말은 문장에 쓰지 않는다 — 사용자에게 바로 보이는 문장이다(예: "비타민 D 보충 태그가 있어" 대신 "비타민 D 도 채울 수 있어요").
 - 마지막에 한 줄 총평(summary)을 쓴다.
 
 [출력 - 절대 위반하지 말 것]
@@ -111,6 +118,8 @@ export interface RecommendationPromptInput {
   entryCount: number;
   // 최근 2주 조리형태별 주메뉴 수(recentDishTypeCounts) — 후보 줄마다 그 조리형태를 몇 번 먹었는지 붙인다.
   recentDishCounts?: Record<string, number> | null;
+  // 영양소 점검 신호 — 있으면 [영양 점검] 줄과 후보 줄 나트륨(많은 사람만)을 붙인다.
+  nutrition?: NutritionSignals | null;
 }
 
 export const buildMealRecommendationUserPrompt = (input: RecommendationPromptInput): string => {
@@ -140,6 +149,19 @@ export const buildMealRecommendationUserPrompt = (input: RecommendationPromptInp
     lines.push(`[못 먹는 것 — 절대 제외] ${input.excludedFoods.join(', ')}`);
   if (input.dislikedFoods.length > 0)
     lines.push(`[가능하면 피할 것] ${input.dislikedFoods.join(', ')}`);
+  const nutrition = input.nutrition ?? null;
+  if (nutrition) {
+    const parts: string[] = [];
+    if (nutrition.sodiumHigh) {
+      parts.push(`나트륨 많음${nutrition.sodiumPercent !== null ? `(기준의 ${nutrition.sodiumPercent}%)` : ''} — 국물·짠 음식은 줄이기`);
+    }
+    if (nutrition.gaps.length > 0) {
+      parts.push(
+        `부족: ${nutrition.gaps.map((g) => (g.percent !== null ? `${g.label}(${g.percent}%)` : g.label)).join('·')}`,
+      );
+    }
+    lines.push(`[영양 점검 — 최근 ${nutrition.days}일 기록 기준, 참고] ${parts.join(' / ')}`);
+  }
   lines.push('');
   lines.push('[내 식사 패턴]');
   lines.push(input.entryCount === 0 ? '기록이 아직 없습니다.' : input.profileText);
@@ -154,6 +176,8 @@ export const buildMealRecommendationUserPrompt = (input: RecommendationPromptInp
     else parts.push('먹은 적 없음');
     if (counts && c.dishType)
       parts.push(`${summaryDishLabel(c.dishType)} 2주 ${counts[c.dishType] ?? 0}번`);
+    if (nutrition?.sodiumHigh && c.sodiumMg !== null)
+      parts.push(`나트륨 ${Math.round(c.sodiumMg).toLocaleString('en-US')}mg`);
     if (c.tags.length > 0) parts.push(c.tags.join('/'));
     lines.push(parts.join(' | '));
   }

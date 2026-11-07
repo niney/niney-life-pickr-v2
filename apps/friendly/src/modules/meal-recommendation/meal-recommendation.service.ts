@@ -28,6 +28,7 @@ import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
+import type { MealNutritionService } from '../meal-nutrition/meal-nutrition.service.js';
 import { MealPreferenceService } from '../meal/meal-preference.service.js';
 import { mealDataGeneration, mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
 import {
@@ -53,6 +54,15 @@ import {
   buildMealRecommendationUserPrompt,
   fallbackReason,
 } from './meal-recommendation.prompts.js';
+import {
+  NUTRITION_SIGNAL_DAYS,
+  isSoupLike,
+  nutritionSignalsFrom,
+  nutritionSignalsKey,
+  stripUnsupportedNutrientClaims,
+  supportedGapKeys,
+  type NutritionSignals,
+} from './nutrition-signals.js';
 
 // 다음 끼니 추천 — 결정적 점수(패턴 서비스) 위에 LLM 이 고르고 이유를 붙인다.
 // LLM 이 없거나 실패하면 점수 상위 + 템플릿 이유로 폴백한다(status='fallback').
@@ -102,6 +112,9 @@ export interface MealRecommendationDeps {
   ) => Promise<{ tempC: number | null; rain: boolean | null } | null>;
   // 캐시 miss 에서만, LLM 가능 경로에 들어가기 전에 호출한다. false 면 호출·저장을 모두 막는다.
   consumeQuota?: (userId: string) => boolean | Promise<boolean>;
+  // 영양소 점검(최근 14일) — 있으면 나트륨 많음·부족 영양소로 건강 점수를 고치고 프롬프트에 한 줄 알린다(nutrition-signals).
+  // 없으면(옛 호출부·테스트) 예전 추천 그대로. 점검이 실패해도 추천은 신호 없이 나온다.
+  nutrition?: Pick<MealNutritionService, 'analyze'>;
 }
 
 export class MealRecommendationService {
@@ -148,6 +161,17 @@ export class MealRecommendationService {
       maxTokens: byRule ? LLM_MAX_TOKENS : thinkMaxTokens(LLM_MAX_TOKENS, think),
       timeoutMs: byRule ? LLM_TIMEOUT_MS : thinkTimeoutMs(LLM_TIMEOUT_MS, think, LLM_TIMEOUT_MAX_MS),
     };
+  }
+
+  /** 영양소 점검 → 추천 신호. 점검 의존이 없거나 실패하면 null(신호 없이 예전처럼 추천). */
+  private async nutritionSignals(userId: string, today: string): Promise<NutritionSignals | null> {
+    if (!this.deps.nutrition) return null;
+    try {
+      return nutritionSignalsFrom(await this.deps.nutrition.analyze(userId, today, NUTRITION_SIGNAL_DAYS));
+    } catch (e) {
+      this.log?.warn({ err: e }, '[meal-recommendation] 영양소 점검 실패 — 영양 보정 없이 추천');
+      return null;
+    }
   }
 
   // 추천 화면 진입용 — 기록 수·최근 음식·선호·직전 추천을 한 번에.
@@ -282,6 +306,7 @@ export class MealRecommendationService {
       `${userId}|${today}`,
     );
 
+    const nutrition = await this.nutritionSignals(userId, today);
     const month = Number(input.targetDate.slice(5, 7)) || new Date().getMonth() + 1;
     // 날씨는 있으면 쓰고 없으면 계절로 — 어느 쪽이든 추천은 나온다.
     const weather =
@@ -306,6 +331,7 @@ export class MealRecommendationService {
               tempC: weather?.tempC ?? null,
               rain: weather?.rain ?? null,
               today,
+              nutrition,
             }),
           )
           .sort((a, b) => b.score - a.score),
@@ -331,6 +357,8 @@ export class MealRecommendationService {
           ? Math.round(weather.tempC / 5)
           : null,
       rain: weather?.rain ?? null,
+      // 영양 판정이 바뀌면(나트륨 많음·부족 영양소) 같은 날·끼니여도 다시 고른다.
+      nutrition: nutritionSignalsKey(nutrition),
       candidateNames: scored.slice(0, PROMPT_CANDIDATES).map((c) => c.name),
     });
     if (!input.force) {
@@ -405,6 +433,7 @@ export class MealRecommendationService {
         note: input.note ?? null,
         entryCount: profile.entryCount,
         recentDishCounts: recentDishTypeCounts(profile),
+        nutrition,
       });
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), resolved.timeoutMs);
@@ -424,9 +453,10 @@ export class MealRecommendationService {
         });
         const parsed = parseRecommendationOutput(res.text);
         if (parsed) {
-          items = mapLlmItems(parsed.items, scored);
-          summary = parsed.summary.trim();
+          items = mapLlmItems(parsed.items, scored, nutrition);
+          summary = summaryWithoutUnsupportedClaims(parsed.summary.trim(), items, scored, nutrition);
           if (items.length > 0) status = 'done';
+          if (items.length > 0 && !summary) summary = '최근 식단과 겹치지 않는 쪽으로 골랐어요.';
         }
         if (oplog && opRunId) {
           oplog.log({
@@ -457,10 +487,12 @@ export class MealRecommendationService {
     // 부족분(또는 전량)은 점수 상위로 채운다 — LLM 이 없어도 추천은 나온다.
     if (items.length < PICK_MIN) {
       const taken = new Set(items.map((i) => normalizeTerm(i.name)));
-      for (const c of scored) {
-        if (items.length >= PICK_MIN) break;
-        if (taken.has(c.nameNorm)) continue;
-        taken.add(c.nameNorm);
+      const chosen = scored.filter((c) => taken.has(c.nameNorm));
+      // 나트륨이 많은 사람에겐 대안이 있으면 국물·짠 음식(1인분 1,500mg 이상)을 고르지 않는다.
+      const avoid = nutrition?.sodiumHigh
+        ? (c: ScoredCandidate): boolean => isSoupLike(c) || (c.sodiumMg ?? 0) >= 1500
+        : undefined;
+      for (const c of pickFallback(scored, profile.recentFoods, PICK_MIN - items.length, chosen, avoid)) {
         items.push(toItem(c, fallbackReason(c)));
       }
       if (!summary) {
@@ -782,6 +814,7 @@ export const parseRecommendationOutput = (text: string): z.infer<typeof LlmOutpu
 export const mapLlmItems = (
   llmItems: { name: string; reason: string }[],
   pool: ScoredCandidate[],
+  nutrition: NutritionSignals | null = null,
 ): MealRecommendationItemType[] => {
   const byNorm = new Map(pool.map((c) => [c.nameNorm, c]));
   const out: MealRecommendationItemType[] = [];
@@ -791,10 +824,46 @@ export const mapLlmItems = (
     const match = byNorm.get(norm);
     if (!match || used.has(norm)) continue;
     used.add(norm);
-    out.push(toItem(match, it.reason.trim() || fallbackReason(match)));
+    // 그 후보가 실제로 채우는 부족 영양소(태그 '○○ 보충') 밖의 영양소를 말한 문장은 뺀다 — 다 빠지면 서버 문장.
+    const raw = tidyLlmKorean(it.reason.trim());
+    const reason = raw ? stripUnsupportedNutrientClaims(raw, supportedGapKeys(match, nutrition)) : null;
+    out.push(toItem(match, reason ?? fallbackReason(match)));
     if (out.length >= PICK_MAX) break;
   }
   return out;
+};
+
+/**
+ * 모델이 자주 내는 말실수·내부 용어만 고친다(사용자에게 바로 보이는 문장). 프롬프트로 막아도 남았다(2026-11-07 프로빙 —
+ * 고른 음식 3개 중 1~3개 이유에 "비타민 D 보충 태그가 있어", "건강 점수를 고려했어요"; "최근와 겹치지 않게"는 gpt-oss·kimi 둘 다).
+ */
+// 받침 없는 말('태그'·'점수') 자리에 받침 있는 말('보충'·'건강')을 넣을 때 조사도 바꾼다.
+const FINAL_CONSONANT_PARTICLE: Record<string, string> = { 를: '을', 가: '이', 와: '과', 는: '은', 로: '으로' };
+const withParticle = (word: string, p?: string): string => `${word}${p ? (FINAL_CONSONANT_PARTICLE[p] ?? p) : ''}`;
+export const tidyLlmKorean = (text: string): string =>
+  text
+    .replace(/(비타민\s?[A-Za-z]\d?|[가-힣]+(?:\([^)]*\))?) 보충 태그가 (?:있어서|있어|있고|있으며|붙어 있어)/g, '$1 보충에 좋아')
+    // 그 밖의 '○○ 보충 태그와·를·로·도…' — '태그'만 걷어낸다(비타민 D 보충 태그와 → 비타민 D 보충과, 화면 실측).
+    .replace(/ 보충 태그(를|가|와|는|로|도)?/g, (_m, p?: string) => ` ${withParticle('보충', p)}`)
+    .replace(/건강 점수(를|가|와|는|로)?/g, (_m, p?: string) => withParticle('건강', p))
+    .replace(/최근와/g, '최근 식사와');
+
+/** 총평의 영양 주장도 고른 음식들이 실제로 채우는 부족 영양소 안에서만 — 근거 없는 문장은 빼고, 다 빠지면 빈 문자열. */
+export const summaryWithoutUnsupportedClaims = (
+  summary: string,
+  items: readonly { name: string }[],
+  pool: readonly ScoredCandidate[],
+  nutrition: NutritionSignals | null,
+): string => {
+  if (!summary) return summary;
+  summary = tidyLlmKorean(summary);
+  const byNorm = new Map(pool.map((c) => [c.nameNorm, c]));
+  const supported = new Set<string>();
+  for (const it of items) {
+    const c = byNorm.get(normalizeTerm(it.name));
+    if (c) for (const key of supportedGapKeys(c, nutrition)) supported.add(key);
+  }
+  return stripUnsupportedNutrientClaims(summary, supported) ?? '';
 };
 
 // 카드에 보여 줄 주재료 수 — 재료 문자열이 길어(레시피 원문) 앞쪽 몇 개만 쓴다.
@@ -823,6 +892,48 @@ const toItem = (c: ScoredCandidate, reason: string): MealRecommendationItemType 
   nutritionBasis: c.nutritionBasis ?? (c.nutritionFrom ? 'donor_estimate' : 'missing'),
   nutritionFrom: c.nutritionFrom ?? null,
 });
+
+/**
+ * LLM 없이 고를 때(미설정·실패·모자람) — 점수 순으로 고르되, 최근 7일에 먹은 음식과 이미 고른 것과 조리형태·주재료가 겹치는
+ * 후보는 대안이 있으면 건너뛴다(조건을 하나씩 풀며 채운다). 점수 상위만 자르면 취향(자주 먹음) 점수가 큰 단골이 위로 와,
+ * LLM 이 실패하자 나흘 전에 먹은 치킨·최근 최다 제육볶음·국물 요리를 그대로 골랐다(2026-11-07 실측).
+ */
+export const pickFallback = <T extends Pick<ScoredCandidate, 'nameNorm' | 'dishType' | 'mainIngredient'>>(
+  scored: readonly T[],
+  recentFoods: readonly string[],
+  count: number,
+  alreadyPicked: readonly T[] = [],
+  // 대안이 있으면 피할 후보(나트륨이 많은 사람의 국물·짠 음식) — 앞 단계에서만 거르고, 모자라면 다시 넣는다.
+  avoid?: (c: T) => boolean,
+): T[] => {
+  const recent = new Set(recentFoods.map((n) => normalizeTerm(n)));
+  const picked: T[] = [];
+  const names = new Set(alreadyPicked.map((c) => c.nameNorm));
+  const dishes = new Set(alreadyPicked.flatMap((c) => (c.dishType ? [c.dishType] : [])));
+  const ingredients = new Set(alreadyPicked.flatMap((c) => (c.mainIngredient ? [c.mainIngredient] : [])));
+  const fresh = (c: T): boolean => !recent.has(c.nameNorm);
+  const newDish = (c: T): boolean => !c.dishType || !dishes.has(c.dishType);
+  const newIngredient = (c: T): boolean => !c.mainIngredient || !ingredients.has(c.mainIngredient);
+  const wanted = (c: T): boolean => !avoid?.(c);
+  const passes: ((c: T) => boolean)[] = [
+    (c) => wanted(c) && fresh(c) && newDish(c) && newIngredient(c),
+    (c) => wanted(c) && fresh(c) && newDish(c),
+    (c) => wanted(c) && fresh(c),
+    fresh,
+    () => true,
+  ];
+  for (const ok of passes) {
+    for (const c of scored) {
+      if (picked.length >= count) return picked;
+      if (names.has(c.nameNorm) || !ok(c)) continue;
+      picked.push(c);
+      names.add(c.nameNorm);
+      if (c.dishType) dishes.add(c.dishType);
+      if (c.mainIngredient) ingredients.add(c.mainIngredient);
+    }
+  }
+  return picked;
+};
 
 const profileHash = (input: unknown): string =>
   createHash('sha1').update(JSON.stringify(input)).digest('hex').slice(0, 16);

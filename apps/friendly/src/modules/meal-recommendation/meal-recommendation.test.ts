@@ -4,6 +4,8 @@ import {
   MEAL_DATA_DELETE_CONFIRMATION,
   MEAL_DEFAULT_WEIGHTS,
   MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
+  type MealNutrientResultType,
+  type MealNutritionAnalysisType,
   type MealPreferenceType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
@@ -42,10 +44,14 @@ import {
   MealRecommendationService,
   mapLlmItems,
   parseRecommendationOutput,
+  pickFallback,
+  summaryWithoutUnsupportedClaims,
+  tidyLlmKorean,
   type MealRecommendationDeps,
 } from './meal-recommendation.service.js';
 import { MORNING_ONLY_MEALS, commonMealNorms } from './common-meals.js';
 import { buildMealRecommendationUserPrompt } from './meal-recommendation.prompts.js';
+import type { NutritionSignals } from './nutrition-signals.js';
 
 // 추천 — 결정적 절반(프로필·점수·후보 매핑)은 순수 함수로, LLM 절반은 FakeProvider 로 검증한다.
 
@@ -729,6 +735,139 @@ const envBlock = (recommendModel: string): LlmProviderEnv => ({
   },
 });
 
+describe('영양 보정·폴백(2026-11-07)', () => {
+  const profile = buildProfile(
+    [
+      item('김치찌개', '2026-08-21', { slot: 'dinner', dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean' }),
+      item('치킨', '2026-08-19', { slot: 'dinner', dishType: 'fried', mainIngredient: 'chicken', cuisine: 'korean' }),
+    ],
+    'dinner',
+    TODAY,
+  );
+  const ctx = {
+    profile,
+    preference: prefs(),
+    targetSlot: 'dinner' as const,
+    mealType: null,
+    month: 8,
+    tempC: null,
+    rain: null,
+    today: TODAY,
+  };
+  const signals: NutritionSignals = {
+    days: 14,
+    sodiumHigh: true,
+    sodiumPercent: 152,
+    gaps: [{ key: 'vitaminD', label: '비타민 D', per100: 'vitaminDUg', reference: 10, percent: 7, weight: 1 }],
+  };
+  const fish = candidate('삼치구이', {
+    dishType: 'grill',
+    mainIngredient: 'fish',
+    sodiumMg: 434,
+    kcal: 356,
+    servingNutrients: { vitaminDUg: 6 },
+  });
+  const stew = candidate('된장찌개', { dishType: 'stew', mainIngredient: 'tofu_bean', sodiumMg: 1600, kcal: 200 });
+
+  it('신호가 있으면 건강 점수만 고친다 — 부족 영양소를 채우면 가점·보충 태그(앞쪽), 짠 국물은 감점, 없으면 예전 그대로', () => {
+    const plainFish = scoreCandidate(fish, ctx);
+    const nutriFish = scoreCandidate(fish, { ...ctx, nutrition: signals });
+    expect(nutriFish.features.health).toBeGreaterThan(plainFish.features.health!);
+    expect(nutriFish.score).toBeGreaterThan(plainFish.score);
+    expect(nutriFish.features.nutrition).toBe(1);
+    // 태그는 3개로 잘린다 — 보충 태그는 두 번째 안에 둔다.
+    expect(nutriFish.tags.indexOf('비타민 D 보충')).toBeGreaterThanOrEqual(0);
+    expect(nutriFish.tags.indexOf('비타민 D 보충')).toBeLessThanOrEqual(1);
+    expect(scoreCandidate(stew, { ...ctx, nutrition: signals }).features.health).toBeLessThan(
+      scoreCandidate(stew, ctx).features.health!,
+    );
+    expect(scoreCandidate(fish, { ...ctx, nutrition: null })).toEqual(plainFish);
+  });
+
+  it('프롬프트 v6 — [영양 점검] 한 줄과 나트륨 많은 사람의 후보 줄 나트륨, 신호가 없으면 둘 다 없다', () => {
+    const base = {
+      profileText: '요약',
+      candidates: [scoreCandidate(stew, { ...ctx, nutrition: signals })],
+      targetSlot: 'dinner' as const,
+      targetDate: TODAY,
+      mealType: null,
+      weights: MEAL_DEFAULT_WEIGHTS,
+      excludedFoods: [],
+      dislikedFoods: [],
+      allergens: [],
+      note: null,
+      entryCount: 10,
+    };
+    const prompt = buildMealRecommendationUserPrompt({ ...base, nutrition: signals });
+    expect(prompt).toContain(
+      '[영양 점검 — 최근 14일 기록 기준, 참고] 나트륨 많음(기준의 152%) — 국물·짠 음식은 줄이기 / 부족: 비타민 D(7%)',
+    );
+    expect(prompt).toContain('나트륨 1,600mg');
+    const plain = buildMealRecommendationUserPrompt({ ...base, nutrition: null });
+    expect(plain).not.toContain('[영양 점검');
+    expect(plain).not.toContain('나트륨 1,600mg');
+  });
+
+  it('LLM 이유·총평 — 그 후보가 채우는 부족 영양소 밖의 영양소를 말한 문장은 빼고, 말실수·내부 용어는 다듬는다', () => {
+    const pool = [
+      scoreCandidate(fish, { ...ctx, nutrition: signals }),
+      scoreCandidate(stew, { ...ctx, nutrition: signals }),
+    ];
+    const items = mapLlmItems(
+      [
+        {
+          name: '삼치구이',
+          reason: '구이를 2주간 안 드셨어요. 비타민 D 보충 태그가 있어 부족한 비타민 D를 채워요. 칼슘도 풍부해요.',
+        },
+        { name: '된장찌개', reason: '비타민 C 가 많아요.' },
+      ],
+      pool,
+      signals,
+    );
+    expect(items[0]!.reason).toBe('구이를 2주간 안 드셨어요. 비타민 D 보충에 좋아 부족한 비타민 D를 채워요.');
+    // 다 빠지면 서버 문장.
+    expect(items[1]!.reason).not.toContain('비타민 C');
+    expect(items[1]!.reason.length).toBeGreaterThan(0);
+    expect(
+      summaryWithoutUnsupportedClaims('최근와 겹치지 않게 골랐어요. 비타민 D 와 칼슘을 채웠어요.', items, pool, signals),
+    ).toBe('최근 식사와 겹치지 않게 골랐어요.');
+    expect(tidyLlmKorean('나트륨이 낮아 건강 점수를 고려했어요.')).toBe('나트륨이 낮아 건강을 고려했어요.');
+    // 화면 실측에서 나온 꼴 — 조사도 받침에 맞게.
+    expect(tidyLlmKorean('비타민 D 보충 태그와 적당한 나트륨으로 균형 잡힌 한 끼예요.')).toBe(
+      '비타민 D 보충과 적당한 나트륨으로 균형 잡힌 한 끼예요.',
+    );
+    expect(tidyLlmKorean('엽산 보충 태그로 영양을 맞춰요.')).toBe('엽산 보충으로 영양을 맞춰요.');
+  });
+
+  it('폴백 — 최근 7일에 먹은 음식·이미 고른 것과 같은 조리형태·주재료는 대안이 있으면 건너뛰고, 피할 것은 앞 단계에서만 거른다', () => {
+    const c = (
+      nameNorm: string,
+      dishType: CandidateInput['dishType'],
+      mainIngredient: CandidateInput['mainIngredient'],
+    ) => ({ nameNorm, dishType, mainIngredient });
+    const scored = [
+      c('치킨', 'fried', 'chicken'),
+      c('제육볶음', 'stir_fry', 'pork'),
+      c('오징어볶음', 'stir_fry', 'seafood'),
+      c('순두부찌개', 'stew', 'tofu_bean'),
+      c('삼치구이', 'grill', 'fish'),
+      c('비빔밥', 'rice', 'vegetable'),
+    ];
+    expect(pickFallback(scored, ['치킨'], 3).map((x) => x.nameNorm)).toEqual(['제육볶음', '순두부찌개', '삼치구이']);
+    expect(pickFallback(scored, ['치킨'], 3, [], (x) => x.dishType === 'stew').map((x) => x.nameNorm)).toEqual([
+      '제육볶음',
+      '삼치구이',
+      '비빔밥',
+    ]);
+    // LLM 이 이미 고른 것과도 겹치지 않게(돼지고기·구이를 이미 골랐으면 제육볶음·삼치구이는 건너뜀).
+    expect(
+      pickFallback(scored, ['치킨'], 1, [c('돼지불고기', 'grill', 'pork')]).map((x) => x.nameNorm),
+    ).toEqual(['오징어볶음']);
+    // 대안이 모자라면 조건을 하나씩 풀어 채운다.
+    expect(pickFallback(scored.slice(0, 2), ['치킨'], 3).map((x) => x.nameNorm)).toEqual(['제육볶음', '치킨']);
+  });
+});
+
 describe('MealRecommendationService (격리 DB)', () => {
   let app: FastifyInstance;
   let isolated: IsolatedDatabase;
@@ -870,6 +1009,77 @@ describe('MealRecommendationService (격리 DB)', () => {
     } finally {
       await app.prisma.llmProviderConfig.deleteMany({ where: { purpose: 'meal-recommend' } });
     }
+  });
+
+  it('영양 점검 신호 — 프롬프트에 한 줄, 판정이 바뀌면 같은 날·끼니여도 다시 고르고, 점검이 실패해도 추천은 나온다', async () => {
+    const nutrient = (over: Partial<MealNutrientResultType>): MealNutrientResultType => ({
+      key: 'vitaminD',
+      label: '비타민 D',
+      unit: 'μg',
+      intakePerDay: 0.7,
+      reference: { kind: 'ai', amount: 10, ear: null },
+      upperLimit: 100,
+      percent: 7,
+      coverage: 1,
+      status: 'low',
+      supplementCandidate: true,
+      recordGap: false,
+      topSources: [],
+      foodSuggestions: [],
+      sideSuggestions: [],
+      typicalFoods: [],
+      note: null,
+      ...over,
+    });
+    const analysisWith = (sodiumHigh: boolean): MealNutritionAnalysisType => ({
+      from: '2026-08-09',
+      to: TODAY,
+      days: 14,
+      analyzedDays: 7,
+      mealCount: 14,
+      profile: { sex: null, ageGroup: '30-49', basis: 'default' },
+      energy: { intakePerDay: 1500, requirement: 1900, percent: 79 },
+      coverage: 1,
+      status: 'ok',
+      insufficientReason: null,
+      nutrients: [
+        nutrient({
+          key: 'sodium',
+          label: '나트륨',
+          unit: 'mg',
+          status: sodiumHigh ? 'high' : 'ok',
+          percent: sodiumHigh ? 150 : 90,
+          reference: { kind: 'cdrr', amount: 2300, ear: null },
+          supplementCandidate: false,
+        }),
+        nutrient({}),
+      ],
+      notMeasured: [],
+      notes: [],
+    });
+    let analysis = analysisWith(true);
+    const analyze = vi.fn(async () => analysis);
+    const svc = build('gpt-oss:120b', { nutrition: { analyze } });
+    const opts = { targetDate: '2026-08-25', targetSlot: 'dinner' as const, force: false };
+    await svc.create('rec-u', opts, TODAY);
+    expect(analyze).toHaveBeenCalledWith('rec-u', TODAY, 14);
+    expect(provider.calls.at(-1)!.prompt).toContain('나트륨 많음(기준의 150%)');
+    expect((await svc.create('rec-u', opts, TODAY)).cached).toBe(true);
+    // 나트륨이 '많음'에서 벗어나면 같은 날·끼니여도 다시 고른다.
+    analysis = analysisWith(false);
+    expect((await svc.create('rec-u', opts, TODAY)).cached).toBe(false);
+    expect(provider.calls.at(-1)!.prompt).not.toContain('나트륨 많음');
+    // 점검이 실패하면 신호 없이 예전처럼 추천한다.
+    const broken = build('gpt-oss:120b', {
+      nutrition: {
+        analyze: vi.fn(async () => {
+          throw new Error('boom');
+        }),
+      },
+    });
+    const res = await broken.create('rec-u', { ...opts, force: true }, TODAY);
+    expect(res.recommendation.items.length).toBeGreaterThan(0);
+    expect(provider.calls.at(-1)!.prompt).not.toContain('[영양 점검');
   });
 
   it('같은 날·끼니·프로필이면 캐시를 돌려주고 LLM 을 다시 안 부른다', async () => {

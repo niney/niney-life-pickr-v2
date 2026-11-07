@@ -20,6 +20,7 @@ import { RATE } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { MealDailyQuotaService } from '../meal/meal-daily-quota.service.js';
+import { MealNutritionService } from '../meal-nutrition/meal-nutrition.service.js';
 import { MealRecommendationError, MealRecommendationService } from './meal-recommendation.service.js';
 
 // 다음 끼니 추천 — 로그인 사용자 본인 것만. 캐시(같은 날·끼니·프로필)는 일일 한도를 소비하지
@@ -38,6 +39,8 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
     operationLog: app.operationLog,
     consumeQuota: (userId) =>
       dailyQuota.consume(userId, kstToday(), 'recommendation', env.MEAL_RECOMMEND_DAILY_LIMIT),
+    // 영양소 점검(최근 14일) — 나트륨 많음·부족 영양소만큼 건강 점수를 고치고 프롬프트에 한 줄(영양 탭과 같은 계산).
+    nutrition: new MealNutritionService(app.prisma, { refs: app.foodNutrientRefs }),
     // 날씨는 선택 보강 — 키가 없거나 업스트림이 죽어도 추천은 계절 추정으로 나온다. 날씨 라우트와 같은
     // app.weather 싱글톤의 캐시(stale 포함)를 먼저 보고, 없을 때만 업스트림을 1.5초까지 기다린다(C-5: 따로
     // 만든 인스턴스가 쿼터를 이중으로 쓰고, 캐시 히트 추천도 업스트림 지연을 그대로 기다렸다).
