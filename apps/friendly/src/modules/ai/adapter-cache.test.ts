@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AdapterCache } from './adapter-cache.js';
+import { AccountGateRegistry } from './concurrency-gate.js';
+import { llmTelemetry } from './llm-telemetry.js';
 import type { ResolvedProviderConfig } from './ai.config.service.js';
 
 const resolved = (
@@ -80,5 +82,22 @@ describe('AdapterCache', () => {
     ] as const;
     const first = purposes.map((purpose) => cache.get(resolved({ purpose })));
     purposes.forEach((purpose, i) => expect(cache.get(resolved({ purpose }))).toBe(first[i]));
+  });
+});
+
+describe('AdapterCache 갈래(lane)', () => {
+  it('같은 용도의 갈래는 용도 게이트를 따로 두고, 계정 게이트·한도는 같이 쓴다', () => {
+    const registry = new AccountGateRegistry(1);
+    const cache = new AdapterCache(registry);
+    const bulk = cache.get(resolved({ maxConcurrent: 3 }));
+    const qa = cache.get(resolved({ maxConcurrent: 3 }), { lane: 'review-qa' });
+    expect(qa).not.toBe(bulk);
+    expect(cache.get(resolved({ maxConcurrent: 3 }), { lane: 'review-qa' })).toBe(qa);
+    // 계정(키) 게이트는 하나 — 갈래가 늘어도 계정 cap 은 용도 한도의 최대(3) 그대로.
+    expect(registry.snapshots()).toHaveLength(1);
+    expect(registry.snapshots()[0]!.limit).toBe(3);
+    // 사용량 패널에는 'chat:review-qa' 로 따로 보인다.
+    const gates = llmTelemetry.snapshot().gates.purposes.map((g) => g.purpose);
+    expect(gates).toEqual(expect.arrayContaining(['chat', 'chat:review-qa']));
   });
 });

@@ -25,8 +25,12 @@ export class AdapterCache {
   // 레지스트리도 프로세스에 하나여야 한다.
   constructor(private readonly gates: AccountGateRegistry = accountGateRegistry) {}
 
-  get(resolved: ResolvedProviderConfig): LLMProvider {
-    const key = `${resolved.provider}|${resolved.purpose}|${resolved.apiKey}|${resolved.baseUrl}|${resolved.maxConcurrent}|${resolved.timeoutMs}`;
+  // lane — 같은 용도 설정(키·모델·한도)을 쓰되 용도 게이트·텔레메트리 라벨만 따로 두는 갈래('chat:review-qa').
+  // 공개 질문처럼 기다리면 안 되는 호출이 같은 용도의 일괄 작업(요약·enrich) 대기열 뒤에 줄 서지 않게 한다.
+  // 계정 게이트는 그대로 같이 써서 계정 합산 동시성은 늘지 않는다(한도가 같아 계정 cap 도 그대로).
+  get(resolved: ResolvedProviderConfig, opts: { lane?: string } = {}): LLMProvider {
+    const label = opts.lane ? `${resolved.purpose}:${opts.lane}` : resolved.purpose;
+    const key = `${resolved.provider}|${label}|${resolved.apiKey}|${resolved.baseUrl}|${resolved.maxConcurrent}|${resolved.timeoutMs}`;
     const hit = this.cached.get(key);
     if (hit) return hit;
     const adapter = new OllamaCloudAdapter({
@@ -41,14 +45,14 @@ export class AdapterCache {
       accountGate: this.gates.get(
         resolved.apiKey,
         resolved.baseUrl,
-        resolved.purpose,
+        label,
         resolved.maxConcurrent,
       ),
-      // 모든 LLM 호출이 이 한 곳을 지나므로 여기서 purpose 를 라벨링해
+      // 모든 LLM 호출이 이 한 곳을 지나므로 여기서 purpose(갈래면 'purpose:lane')를 라벨링해
       // 텔레메트리로 흘리면 호출부 수정 없이 전 지점이 계측된다.
-      onEvent: (e) => llmTelemetry.record(resolved.purpose, e),
+      onEvent: (e) => llmTelemetry.record(label, e),
     });
-    llmTelemetry.registerPurposeGate(resolved.purpose, () => adapter.gateSnapshot());
+    llmTelemetry.registerPurposeGate(label, () => adapter.gateSnapshot());
     if (this.cached.size >= MAX_ENTRIES) {
       // 삽입 순서 기준 가장 오래된 엔트리 제거 (Map 순회 = 삽입 순).
       const oldest = this.cached.keys().next().value;

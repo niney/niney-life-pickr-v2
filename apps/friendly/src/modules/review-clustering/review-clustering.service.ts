@@ -11,7 +11,7 @@ import type {
   ReviewClusterStatusQueryType,
   ReviewClustersResultType,
 } from '@repo/api-contract';
-import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
+import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import {
   listPublicPlaces,
@@ -122,6 +122,8 @@ export class ReviewClusteringService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
+    // 테스트가 격리된 어댑터 캐시를 넣는다. 기본은 앱 공용(계정 게이트·사용량 텔레메트리 공유).
+    private readonly deps: { cache?: AdapterCache } = {},
   ) {}
 
   // 가게(canonical) 의 공개 멤버 행 전체에서 검색가능(임베딩 있는) 리뷰를 코퍼스로
@@ -219,25 +221,12 @@ export class ReviewClusteringService {
     try {
       // gpt-oss 등은 Ollama format 스키마를 무시하고 마크다운+최상위 배열로 답하므로,
       // format 을 강제하지 않고 review-search.chatJson 과 같은 견고 파싱을 쓴다.
-      const res = await fetchWithTimeout(
-        `${resolved.baseUrl}/api/chat`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${resolved.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: resolved.defaultModel,
-            stream: false,
-            messages: [{ role: 'user', content: prompt }],
-          }),
-        },
-        60_000, // 군집 라벨링 LLM 타임아웃 60s — 배치가 업스트림에 무기한 블록되지 않게.
-      );
-      if (!res.ok) return new Map();
-      const json = (await res.json().catch(() => null)) as { message?: { content?: string } } | null;
-      const content = (json?.message?.content ?? '').replace(/```(?:json)?/gi, '').trim();
+      // 다른 LLM 기능과 같은 어댑터(chat 용도 게이트·계정 게이트·429 재시도·사용량 텔레메트리)로 부른다. 타임아웃은
+      // 어댑터 설정(OLLAMA_CLOUD_TIMEOUT_MS, 기본 60초 — 예전 직접 호출과 같다), 실패는 아래 catch 가 빈 맵으로.
+      const result = await (this.deps.cache ?? adapterCache)
+        .get(resolved)
+        .complete({ prompt, model: resolved.defaultModel });
+      const content = result.text.replace(/```(?:json)?/gi, '').trim();
       // 배열([) 또는 객체({) 어느 쪽으로 와도 첫 구조를 통째로 잡는다.
       const m = content.match(/[[{][\s\S]*[\]}]/);
       const parsed = JSON.parse(m ? m[0] : content) as unknown;

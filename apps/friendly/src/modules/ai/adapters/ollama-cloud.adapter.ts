@@ -255,39 +255,47 @@ export class OllamaCloudAdapter implements LLMProvider {
       ac.abort();
     }, this.opts.timeoutMs);
 
-    let res: Response;
+    // 타이머는 본문을 다 읽을 때까지 둔다 — 헤더에서 풀면 본문이 오다 멈출 때 undici 기본 본문 타임아웃(300초)까지
+    // 매달린다(lib/fetch-timeout 과 같은 원칙). 본문 읽다 끊기면 그 원인(호출자 취소·우리 타임아웃)으로 던진다.
+    let json: OllamaChatResponse | null;
     try {
-      res = await fetch(`${this.opts.baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.opts.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal: ac.signal,
-      });
-    } catch (e) {
-      if (isAbortError(e)) {
-        // Caller-initiated abort wins over our own timeout when both fire.
-        if (opts.signal?.aborted) throw new LLMCancelledError();
-        if (timedOut) throw new LLMTimeoutError();
-        throw new LLMCancelledError();
+      let res: Response;
+      try {
+        res = await fetch(`${this.opts.baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.opts.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: ac.signal,
+        });
+      } catch (e) {
+        if (isAbortError(e)) {
+          // Caller-initiated abort wins over our own timeout when both fire.
+          if (opts.signal?.aborted) throw new LLMCancelledError();
+          if (timedOut) throw new LLMTimeoutError();
+          throw new LLMCancelledError();
+        }
+        throw new LLMUpstreamError(
+          0,
+          e instanceof Error ? e.message : 'fetch failed',
+        );
       }
-      throw new LLMUpstreamError(
-        0,
-        e instanceof Error ? e.message : 'fetch failed',
-      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new LLMUpstreamError(res.status, text || res.statusText);
+      }
+
+      json = (await res.json().catch(() => null)) as OllamaChatResponse | null;
+      if (opts.signal?.aborted) throw new LLMCancelledError();
+      if (timedOut) throw new LLMTimeoutError();
     } finally {
       clearTimeout(timer);
       opts.signal?.removeEventListener('abort', onCallerAbort);
     }
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new LLMUpstreamError(res.status, text || res.statusText);
-    }
-
-    const json = (await res.json().catch(() => null)) as OllamaChatResponse | null;
     const content = json?.message?.content;
     if (!json || typeof content !== 'string') {
       throw new LLMInvalidResponseError();

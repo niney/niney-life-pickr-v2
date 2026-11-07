@@ -192,6 +192,24 @@ describe('OllamaCloudAdapter', () => {
     ).rejects.toBeInstanceOf(LLMTimeoutError);
   });
 
+  it('본문이 오다 멈추면 본문 읽기도 자기 타임아웃에 끊긴다(LLMTimeoutError)', async () => {
+    fetchMock.mockImplementationOnce(async (_u, init: RequestInit) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"message":')); // 헤더와 본문 일부만 오고 멈춘다
+          init.signal?.addEventListener('abort', () =>
+            controller.error(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const adapter = buildAdapter({ timeoutMs: 50 });
+    const started = Date.now();
+    await expect(adapter.complete({ prompt: 'x', model: 'm' })).rejects.toBeInstanceOf(LLMTimeoutError);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
   it('caps concurrent in-flight requests at maxConcurrent', async () => {
     let inflight = 0;
     let peak = 0;

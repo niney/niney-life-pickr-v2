@@ -10,6 +10,7 @@ import {
 import { ASPECTS, Bm25, RRF_K, cosine, isJunk, type Aspect, type Polarity } from './retrieval.js';
 import { cachedEnrichedCounts, countEnrichedByRestaurant, invalidateEnrichedCounts } from './enriched-counts.js';
 import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
+import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { ConcurrencyGate } from '../ai/concurrency-gate.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,10 +41,13 @@ const CORPUS_ITEM_OVERHEAD_BYTES = 400;
 // 임베딩 1 + LLM 3콜을 건너뛴다. 코퍼스가 바뀌면(enrich) 키가 달라져 자연 무효.
 const ASK_CACHE_TTL_MS = 20 * 60_000;
 const ASK_CACHE_MAX = 500;
-// 질문 경로(리랭크·답변·검증) LLM 동시 호출 상한 — chatJson 은 어댑터의 계정 게이트를 거치지
-// 않으므로, 몰리는 공개 질문이 요약·enrich 의 계정 동시성을 잠식하지 않게 로컬에서 묶는다.
-// (enrich 는 자체 동시성 ENRICH_CONCURRENCY 로 따로 돈다 — 같이 묶으면 질문이 enrich 뒤에 줄 선다.)
+// 질문 경로(리랭크·답변·검증) LLM 동시 호출 상한 — 몰리는 공개 질문이 계정 슬롯을 다 차지해 요약·enrich 를
+// 굶기지 않게 로컬에서 한 번 더 묶는다(enrich 는 자체 동시성 ENRICH_CONCURRENCY 로 따로 돈다).
 const ASK_CHAT_CONCURRENCY = 4;
+// LLM 은 다른 기능과 같은 어댑터(계정 게이트·429 재시도·사용량 텔레메트리)로 부른다. 질문 경로는 chat 설정을
+// 그대로 쓰는 'chat:review-qa' 갈래라, 같은 chat 용도 대기열의 요약·enrich 뒤에 줄 서지 않고 계정 슬롯만 함께 다툰다.
+// enrich 는 일괄 작업이라 chat 용도 대기열에 그대로 선다.
+const ASK_LANE = 'review-qa';
 
 export type SearchMode = 'dense' | 'hybrid' | 'rerank';
 
@@ -171,6 +175,8 @@ export class ReviewSearchService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
+    // 테스트가 격리된 어댑터 캐시(계정 게이트 레지스트리)를 넣는다. 기본은 앱 공용.
+    private readonly deps: { cache?: AdapterCache } = {},
   ) {}
 
   // 리뷰가 있는 식당 — 리뷰 많은 순. 드롭다운용.
@@ -642,11 +648,12 @@ export class ReviewSearchService {
 
     const cached = this.askCache.get(key);
     if (cached) return cached;
-    const joined = this.askInflight.get(key);
-    if (joined) {
+    // 진행 중인 같은 질문에 합류한다. 그 질문이 그 사람 한도로 거부됐을 뿐이면, 함께 기다리던 다른 사람이 이미 다시
+    // 돌리기 시작했을 수 있어 진행 중을 다시 본다(끝난 run 은 대기자가 깨기 전에 지워져 같은 run 을 다시 보지 않는다).
+    // 아무도 없으면 아래에서 내 한도로 직접 돈다.
+    for (let joined = this.askInflight.get(key); joined; joined = this.askInflight.get(key)) {
       const outcome = await joined;
       if (!outcome.denied) return outcome.result;
-      // 앞선 같은 질문이 그 사람 한도로 거부됐을 뿐 — 아래에서 내 한도로 직접 돈다.
       const after = this.askCache.get(key);
       if (after) return after;
     }
@@ -777,7 +784,7 @@ export class ReviewSearchService {
   }
 
   // ollama-cloud chat 호출 — JSON 본문만 견고 파싱(코드펜스 제거). 실패 시 null.
-  // gate 를 주면 그 동시성 안에서만 호출한다(질문 경로 — ASK_CHAT_CONCURRENCY).
+  // gate 를 주면 질문 경로다 — 그 동시성(ASK_CHAT_CONCURRENCY) 안에서 질문 갈래(ASK_LANE)로 부른다.
   private async chatJson<T>(
     prompt: string,
     schema?: Record<string, unknown>,
@@ -786,38 +793,28 @@ export class ReviewSearchService {
     if (!gate) return this.chatJsonUngated<T>(prompt, schema);
     await gate.acquire();
     try {
-      return await this.chatJsonUngated<T>(prompt, schema);
+      return await this.chatJsonUngated<T>(prompt, schema, ASK_LANE);
     } finally {
       gate.release();
     }
   }
 
-  private async chatJsonUngated<T>(prompt: string, schema?: Record<string, unknown>): Promise<T | null> {
+  // 타임아웃은 어댑터 설정(OLLAMA_CLOUD_TIMEOUT_MS, 기본 60초 — 예전 직접 호출과 같다), 429 는 어댑터가 재시도한다.
+  private async chatJsonUngated<T>(
+    prompt: string,
+    schema?: Record<string, unknown>,
+    lane?: string,
+  ): Promise<T | null> {
     const resolved = await this.aiConfig.getResolved('ollama-cloud', 'chat');
     if (!resolved?.defaultModel) return null;
     try {
-      const res = await fetchWithTimeout(
-        `${resolved.baseUrl}/api/chat`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${resolved.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: resolved.defaultModel,
-            stream: false,
-            messages: [{ role: 'user', content: prompt }],
-            ...(schema ? { format: schema } : {}),
-          }),
-        },
-        60_000, // LLM chat 타임아웃 60s.
-      );
-      if (!res.ok) return null;
-      const json = (await res.json().catch(() => null)) as {
-        message?: { content?: string };
-      } | null;
-      const content = (json?.message?.content ?? '').replace(/```(?:json)?/gi, '').trim();
+      const provider = (this.deps.cache ?? adapterCache).get(resolved, lane ? { lane } : {});
+      const result = await provider.complete({
+        prompt,
+        model: resolved.defaultModel,
+        ...(schema ? { format: schema } : {}),
+      });
+      const content = result.text.replace(/```(?:json)?/gi, '').trim();
       const m = content.match(/[[{][\s\S]*[\]}]/);
       return JSON.parse(m ? m[0] : content) as T;
     } catch {

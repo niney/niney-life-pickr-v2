@@ -5,6 +5,9 @@ import type { ReviewAskResultType } from '@repo/api-contract';
 import sensiblePlugin from '../../plugins/sensible.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
+import { AdapterCache } from '../ai/adapter-cache.js';
+import { AccountGateRegistry } from '../ai/concurrency-gate.js';
+import { llmTelemetry } from '../ai/llm-telemetry.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { ReviewSearchService, estimateCorpusBytes, normalizeAskQuery } from './review-search.service.js';
 import { buildApp as buildFullApp } from '../../app.js';
@@ -75,9 +78,19 @@ const fakeFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit
   return json({ error: 'not stubbed' }, 404);
 });
 
-const fakeAiConfig = {
-  getResolved: async () => ({ baseUrl: 'http://llm.test', apiKey: 'k', defaultModel: 'm' }),
-} as unknown as AiConfigService;
+// 어댑터(계정 게이트·텔레메트리)를 거치므로 실제 해석 결과와 같은 모양으로 — maxConcurrent 가 계정 cap 이 된다.
+const resolvedChat = (maxConcurrent = 15) => ({
+  provider: 'ollama-cloud' as const,
+  purpose: 'chat' as const,
+  baseUrl: 'http://llm.test',
+  apiKey: 'k',
+  defaultModel: 'm',
+  timeoutMs: 5_000,
+  maxConcurrent,
+  enabled: true,
+  thinking: 'off' as const,
+});
+const fakeAiConfig = { getResolved: async () => resolvedChat() } as unknown as AiConfigService;
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -226,6 +239,51 @@ describe('ReviewSearchService 공개 질문 (B-4) · 코퍼스 캐시 (B-8)', ()
     const r2 = await svc.askByPlaceId(place.placeId, '가격 어때요?');
     expect(r2?.confidence).toBe('high');
     expect(stub.chatCalls).toBeGreaterThan(before);
+  });
+
+  it('거부된 같은 질문을 함께 기다리던 사람들은, 먼저 다시 돈 사람의 진행에 합류한다(파이프라인 1회)', async () => {
+    const svc = new ReviewSearchService(app.prisma, fakeAiConfig);
+    const denied: ReviewAskResultType = {
+      answer: '오늘 질문할 수 있는 횟수를 모두 썼어요.',
+      confidence: 'none',
+      hyde: null,
+      citations: [],
+      verification: null,
+    };
+    let releaseFirst!: () => void;
+    const firstAdmit = new Promise<void>((r) => {
+      releaseFirst = r;
+    });
+    const first = svc.askByPlaceId(place.placeId, '포장 돼요?', {
+      admit: async () => {
+        await firstAdmit;
+        return denied;
+      },
+    });
+    await new Promise((r) => setTimeout(r, 30)); // 첫 질문이 진행 중으로 등록된 뒤
+    const admit = vi.fn(async () => null);
+    const others = [1, 2, 3].map(() => svc.askByPlaceId(place.placeId, '포장 돼요?', { admit }));
+    await new Promise((r) => setTimeout(r, 10));
+    releaseFirst();
+    expect(await first).toEqual(denied);
+    const results = await Promise.all(others);
+    expect(admit).toHaveBeenCalledTimes(1); // 기다리던 셋 중 한 명만 자기 한도로 돌고 나머지는 합류
+    expect(stub.chatCalls).toBe(3);
+    for (const r of results) expect(r).toEqual(results[0]);
+  });
+
+  it('질문 경로는 공용 어댑터의 질문 갈래(chat:review-qa)로 — 계정 동시 한도를 다른 기능과 함께 지키고 사용량이 잡힌다', async () => {
+    const config = { getResolved: async () => resolvedChat(2) } as unknown as AiConfigService;
+    const svc = new ReviewSearchService(app.prisma, config, { cache: new AdapterCache(new AccountGateRegistry(2)) });
+    const before = llmTelemetry.snapshot().byPurpose.find((p) => p.purpose === 'chat:review-qa')?.requests ?? 0;
+    stub.chatDelayMs = 15;
+    await Promise.all(
+      Array.from({ length: 6 }, (_, i) => svc.askByPlaceId(place.placeId, `계정 질문 ${i} 맛 어때요`)),
+    );
+    expect(stub.chatCalls).toBe(18);
+    expect(stub.chatMaxInFlight).toBeLessThanOrEqual(2); // 질문 경로 자체 상한(4)보다 계정 한도(2)가 먼저 묶는다
+    const after = llmTelemetry.snapshot().byPurpose.find((p) => p.purpose === 'chat:review-qa')?.requests ?? 0;
+    expect(after - before).toBe(18);
   });
 
   it('질문 경로 LLM 동시 호출은 4 이하로 묶인다', async () => {
