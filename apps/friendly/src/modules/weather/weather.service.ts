@@ -512,7 +512,7 @@ export class WeatherService {
       // 업스트림 실패만 쿨다운 — 쿼터 소진(우리 카운터)은 업스트림 탓이 아니다. 인증·일일한도(게이트웨이
       // 20~33)는 어떤 키로 불러도 같은 답이라 그 서비스 전체를 막는다.
       if (e instanceof KmaApiError) {
-        this.cooldown.failure(upstream, key, nowMs, e instanceof KmaApiAuthError);
+        this.cooldown.failure(upstream, key, this.now().getTime(), e instanceof KmaApiAuthError);
       }
       const lastKnown = this.cache.get(key);
       if (lastKnown && nowMs - lastKnown.fetchedAt.getTime() <= lastKnown.staleMaxMs) {

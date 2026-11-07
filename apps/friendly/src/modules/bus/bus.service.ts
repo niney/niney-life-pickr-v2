@@ -319,8 +319,10 @@ export class BusService {
   }
 
   // 업스트림 실패만 쿨다운 — 인증·한도 오류(BusApiAuthError)는 그 서비스 전체를, 나머지는 그 키만 쉰다.
-  private recordFailure(upstream: BusUpstream, key: string, nowMs: number, e: unknown): void {
-    if (e instanceof BusApiError) this.cooldown.failure(upstream, key, nowMs, e instanceof BusApiAuthError);
+  // 쿨다운은 실패한 시각부터 잰다 — 조회 시작 시각으로 재면 오래 걸려 실패한 호출은 기록하는 순간 이미 풀려 있다.
+  private recordFailure(upstream: BusUpstream, key: string, e: unknown): void {
+    const failedAtMs = (this.deps.now?.() ?? new Date()).getTime();
+    if (e instanceof BusApiError) this.cooldown.failure(upstream, key, failedAtMs, e instanceof BusApiAuthError);
   }
 
   async searchStations(q: string, force: boolean): Promise<BusStationSearchResultType> {
@@ -385,7 +387,7 @@ export class BusService {
       raw = await fetchStations(keyword, { serviceKey: this.deps.serviceKey });
       this.cooldown.success('stationinfo', cooldownKey);
     } catch (e) {
-      this.recordFailure('stationinfo', cooldownKey, now.getTime(), e);
+      this.recordFailure('stationinfo', cooldownKey, e);
       // 만료된 캐시라도 있으면 stale 로 반환 — 업스트림 장애에 검색이 통째로
       // 죽는 것보다 오래된 정류소 목록이 낫다.
       if (cached) return toResult(cached, 'stale');
@@ -520,7 +522,7 @@ export class BusService {
       });
       return { data, fetchedAt: now, stale: false };
     } catch (e) {
-      this.recordFailure(upstream, key, nowMs, e);
+      this.recordFailure(upstream, key, e);
       // 업스트림 실패(서울시 장애)·쿼터 소진·쿨다운 — 상한(10분) 내 last-known 이 있으면
       // stale 로 서빙(가용성 우선, 검색의 stale 정책과 동일 정신). 없으면 그대로
       // 던져 라우트가 502/503 을 내린다.
@@ -723,7 +725,7 @@ export class BusService {
       if (e instanceof BusRouteNotFoundError) {
         this.routeNotFound.set(busRouteId, nowMs + BUS_ROUTE_NOT_FOUND_TTL_MS);
       } else {
-        this.recordFailure('busRouteInfo', cooldownKey, nowMs, e);
+        this.recordFailure('busRouteInfo', cooldownKey, e);
       }
       // 업스트림/정규화 실패 — 만료 캐시라도 있으면 stale 로 가용성 우선.
       if (cached) return toRouteResult(busRouteId, cached, 'stale');

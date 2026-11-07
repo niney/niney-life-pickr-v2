@@ -404,6 +404,19 @@ describe('WeatherService — 슬롯 폴백·캐시·stale', () => {
     expect(mocks.getVilageFcst.mock.calls.length).toBe(before);
   });
 
+  it('실패 쿨다운은 실패한 시각부터 — 40초 매달리다 실패해도 끝난 뒤 30초는 다시 묻지 않는다', async () => {
+    let now = AT_1605;
+    const svc = new WeatherService({ serviceKey: 'k', now: () => now });
+    mocks.getVilageFcst.mockImplementation(async () => {
+      now = new Date(now.getTime() + 40_000); // 업스트림이 40초 매달리다 실패
+      throw new KmaApiError('down', { code: '05' });
+    });
+    await expect(svc.getForecast(55, 120)).rejects.toBeInstanceOf(KmaApiError);
+    now = new Date(now.getTime() + 20_000); // 시작에서 60초, 실패에서 20초
+    await expect(svc.getForecast(55, 120)).rejects.toMatchObject({ statusCode: 503 });
+    expect(mocks.getVilageFcst).toHaveBeenCalledTimes(1);
+  });
+
   it('실패 쿨다운(E-V2) — 실패한 키는 30초 동안 업스트림·쿼터 없이 stale/503, 인증 오류는 그 서비스만 막는다', async () => {
     let now = AT_1605;
     const svc = new WeatherService({ serviceKey: 'k', now: () => now });

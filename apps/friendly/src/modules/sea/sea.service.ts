@@ -320,7 +320,7 @@ export class SeaService {
         return { data, fetchedAt: now, stale: false };
       } catch (e) {
         // 업스트림 실패만 쿨다운 — 카운터 소진은 업스트림 탓이 아니다. 503 은 게이트웨이 인증·한도(20~33).
-        if (e instanceof KhoaApiError) this.cooldown.failure(upstream, key, nowMs, e.statusCode === 503);
+        if (e instanceof KhoaApiError) this.cooldown.failure(upstream, key, this.now().getTime(), e.statusCode === 503);
         if (lastKnown) return { data: lastKnown.data, fetchedAt: lastKnown.fetchedAt, stale: true };
         throw e;
       }

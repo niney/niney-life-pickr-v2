@@ -264,6 +264,20 @@ describe('AwsService', () => {
     expect(r.items[0]?.ta).toBe(27.4);
   });
 
+  it('실패 쿨다운은 실패한 시각부터 — 40초 매달리다 실패해도 끝난 뒤 30초는 다시 묻지 않는다', async () => {
+    let now = AT_1812;
+    const svc = new AwsService({ authKey: 'k', now: () => now });
+    mocks.getAwsMinute.mockImplementation(async () => {
+      now = new Date(now.getTime() + 40_000); // 업스트림이 40초 매달리다 실패
+      throw new KmaApiHubError('기상청 API허브 HTTP 502');
+    });
+    await expect(svc.getNearby(37.523, 126.859, 15_000, 1)).rejects.toMatchObject({ statusCode: 502 });
+    const calls = mocks.getAwsMinute.mock.calls.length;
+    now = new Date(now.getTime() + 20_000); // 실패에서 20초
+    await expect(svc.getNearby(37.523, 126.859, 15_000, 1)).rejects.toMatchObject({ statusCode: 503 });
+    expect(mocks.getAwsMinute.mock.calls.length).toBe(calls);
+  });
+
   it('실패 쿨다운(E-V2) — 업스트림 502 뒤 30초는 다시 묻지 않고(502→503), 지나면 재시도·성공하면 정상', async () => {
     let now = AT_1812;
     const svc = new AwsService({ authKey: 'k', now: () => now });

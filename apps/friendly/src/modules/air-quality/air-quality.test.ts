@@ -748,6 +748,23 @@ describe('AirQualityService — 캐시·stale·쿼터·폴백', () => {
     expect(svc.quotaUsed('realtime')).toBe(2);
   });
 
+  it('실패 쿨다운은 실패한 시각부터 — 40초 매달리다 실패해도 끝난 뒤 30초는 다시 부르지 않는다', async () => {
+    let nowMs = T0.getTime();
+    const sido = vi.fn(async () => {
+      nowMs += 40_000; // 업스트림이 40초 매달리다 실패
+      throw new AirKoreaApiError('down', { code: '05' });
+    });
+    const svc = new AirQualityService({
+      serviceKey: 'k',
+      now: () => new Date(nowMs),
+      adapter: { getSidoRealtime: sido, getStationList: vi.fn(async () => stationList()) },
+    });
+    await expect(svc.getSidoRealtime('서울')).rejects.toBeInstanceOf(AirKoreaApiError);
+    nowMs += 20_000; // 시작에서 60초, 실패에서 20초 — 예전엔 시작부터 재 쿨다운이 이미 풀려 다시 불렀다
+    await expect(svc.getSidoRealtime('서울')).rejects.toMatchObject({ statusCode: 503 });
+    expect(sido).toHaveBeenCalledTimes(1);
+  });
+
   it('실패 쿨다운(E-V2) — 키는 30초→1분 백오프, 성공하면 리셋 / 인증·한도(22)는 그 API 전체를 막고 다른 API 는 산다', async () => {
     let nowMs = T0.getTime();
     const sido = vi.fn(async () => {

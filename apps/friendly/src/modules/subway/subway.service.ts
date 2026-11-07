@@ -325,9 +325,11 @@ export class SubwayService {
   }
 
   // 업스트림 실패만 쿨다운 — 인증(INFO-100)·일일 트래픽 초과(ERROR-337)는 그 포털 전체, 나머지는 그 키만.
-  private recordFailure(upstream: SubwayUpstream, key: string, nowMs: number, e: unknown): void {
+  // 쿨다운은 실패한 시각부터 잰다 — 조회 시작 시각으로 재면 오래 걸려 실패한 호출은 기록하는 순간 이미 풀려 있다.
+  private recordFailure(upstream: SubwayUpstream, key: string, e: unknown): void {
+    const failedAtMs = (this.deps.now?.() ?? new Date()).getTime();
     if (e instanceof SubwayApiError) {
-      this.cooldown.failure(upstream, key, nowMs, e instanceof SubwayApiAuthError || e.code === DAILY_LIMIT_CODE);
+      this.cooldown.failure(upstream, key, failedAtMs, e instanceof SubwayApiAuthError || e.code === DAILY_LIMIT_CODE);
     }
   }
 
@@ -952,7 +954,7 @@ export class SubwayService {
       ]);
       this.cooldown.success('openapi', cacheKey);
     } catch (e) {
-      this.recordFailure('openapi', cacheKey, nowMs, e);
+      this.recordFailure('openapi', cacheKey, e);
       throw e;
     }
 
@@ -1016,7 +1018,7 @@ export class SubwayService {
       data = await load();
       this.cooldown.success('swopen', key);
     } catch (e) {
-      this.recordFailure('swopen', key, nowMs, e);
+      this.recordFailure('swopen', key, e);
       throw e;
     }
     const ttl = this.deps.microCacheTtlMs ?? ARRIVALS_MICRO_CACHE_TTL_MS;

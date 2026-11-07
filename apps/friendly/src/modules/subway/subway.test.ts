@@ -510,6 +510,32 @@ describe('SubwayService — 실시간 인프라 (직접 주입)', () => {
     expect(adapter.getRealtimeArrivals).toHaveBeenCalledTimes(4);
   });
 
+  it('⑪-1 실패 쿨다운은 실패한 시각부터 — 40초 매달리다 실패해도 끝난 뒤 30초는 다시 부르지 않는다', async () => {
+    const name = `${NAME_PREFIX}늦은실패${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0 }]);
+    let nowMs = Date.now();
+    const adapter = {
+      getRealtimeArrivals: vi.fn(async () => {
+        nowMs += 40_000; // 업스트림이 40초 매달리다 실패
+        throw new SubwayApiError('지하철 api 오류(ERROR-500)', { code: 'ERROR-500' });
+      }),
+      getRealtimePositions: vi.fn().mockResolvedValue([rawPosition()]),
+      getStationTimetable: vi.fn().mockResolvedValue([rawTimetableRow()]),
+    };
+    const svc = new SubwayService({
+      prisma: app.prisma,
+      serviceKey: 'k',
+      seoulKey: 'k2',
+      adapter,
+      now: () => new Date(nowMs),
+      dailyLimit: 100,
+    });
+    await expect(svc.getStationArrivals(`1002:${name}`)).rejects.toMatchObject({ statusCode: 502 });
+    nowMs += 20_000; // 시작에서 60초, 실패에서 20초
+    await expect(svc.getStationArrivals(`1002:${name}`)).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getRealtimeArrivals).toHaveBeenCalledTimes(1);
+  });
+
   it('⑪ 실패 쿨다운(E-V2) — 실패한 조회역명은 30초간 업스트림·쿼터 없이 503, 인증 오류는 실시간 전체를 막고 시간표는 산다', async () => {
     const nameA = `${NAME_PREFIX}쿨다운가${stamp()}`;
     const nameB = `${NAME_PREFIX}쿨다운나${stamp()}`;

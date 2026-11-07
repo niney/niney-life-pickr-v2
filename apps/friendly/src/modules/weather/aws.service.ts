@@ -149,7 +149,7 @@ export class AwsService {
       } catch (e) {
         // 인증·활용신청 오류는 어느 자료로 불러도 같아 API허브 전체를, 그 밖의 업스트림 실패는 그 자료만 쉰다.
         if (e instanceof KmaApiHubError) {
-          this.cooldown.failure('apihub', slot, nowMs, e instanceof KmaApiHubAuthError);
+          this.cooldown.failure('apihub', slot, this.now().getTime(), e instanceof KmaApiHubAuthError);
         }
         if (lastKnown) return { data: lastKnown.data, fetchedAt: lastKnown.fetchedAt, stale: true };
         throw e;

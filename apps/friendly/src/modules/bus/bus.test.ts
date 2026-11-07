@@ -877,6 +877,22 @@ describe('BusService — 도착/위치 쿼터·키 가드 (서비스 직접 생�
     await app.prisma.busRouteShape.deleteMany({ where: { busRouteId: id } });
   });
 
+  it('실패 쿨다운은 실패한 시각부터 — 40초 매달리다 실패해도 끝난 뒤 30초는 다시 부르지 않는다', async () => {
+    let t = Date.parse('2026-07-13T09:00:00Z');
+    const adapter = {
+      getStationsByName: vi.fn(),
+      getStationArrivals: vi.fn(async () => {
+        t += 40_000; // 업스트림이 40초 매달리다 실패
+        throw new BusApiError('bus api status 503');
+      }),
+    };
+    const svc = new BusService(app.prisma, { serviceKey: 'k', adapter, now: () => new Date(t), dailyLimit: 10 });
+    await expect(svc.getArrivals('23009')).rejects.toMatchObject({ statusCode: 502 });
+    t += 20_000; // 시작에서 60초, 실패에서 20초
+    await expect(svc.getArrivals('23009')).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getStationArrivals).toHaveBeenCalledTimes(1);
+  });
+
   it('실패 쿨다운(E-V2) — 도착 업스트림 실패 뒤 30초는 업스트림·쿼터 없이 last-known(없으면 503), 지나면 재시도', async () => {
     const adapter = { getStationsByName: vi.fn(), getStationArrivals: vi.fn() };
     let t = Date.parse('2026-07-13T09:00:00Z');

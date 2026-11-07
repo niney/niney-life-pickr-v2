@@ -237,6 +237,24 @@ describe('SeaService', () => {
     expect(svc.tideCacheSize()).toBe(SEA_TIDE_CACHE_MAX);
   });
 
+  it('실패 쿨다운은 실패한 시각부터 — 40초 매달리다 실패해도 끝난 뒤 30초는 다시 부르지 않는다', async () => {
+    let nowMs = Date.parse('2026-10-10T00:00:00Z');
+    let calls = 0;
+    const svc = new SeaService({
+      serviceKey: 'k',
+      now: () => new Date(nowMs),
+      callPage: async (): Promise<KhoaPage> => {
+        calls += 1;
+        nowMs += 40_000; // 업스트림이 40초 매달리다 실패
+        throw new KhoaApiError('down', { statusCode: 502 });
+      },
+    });
+    await expect(svc.getForecast('surf')).rejects.toMatchObject({ statusCode: 502 });
+    nowMs += 20_000; // 시작에서 60초, 실패에서 20초
+    await expect(svc.getForecast('surf')).rejects.toMatchObject({ statusCode: 503 });
+    expect(calls).toBe(1);
+  });
+
   it('실패 쿨다운(E-V2) — 실패한 키는 30초 동안 다시 부르지 않고 last-known(없으면 503), 재시도도 센다', async () => {
     let nowMs = Date.parse('2026-10-10T00:00:00Z');
     let mode: 'ok' | 'down' | 'retry' = 'ok';
