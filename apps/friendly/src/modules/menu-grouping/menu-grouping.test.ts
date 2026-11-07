@@ -640,6 +640,41 @@ describe('MenuGroupingService', () => {
     expect(ranking.items[0].global).toBeNull();
   });
 
+  it('전역 비교 통계는 서비스마다 60초 들고 있다 — 그사이 늘어난 언급은 다음 갱신(새로 센 서비스)에 보인다', async () => {
+    const a = await seedRestaurantWithMentions(app, [{ name: '부대찌개', nameNorm: '부대찌개', sentiment: 'positive' }], { name: '식당 A' });
+    const b = await seedRestaurantWithMentions(app, [{ name: '부대찌개', nameNorm: '부대찌개', sentiment: 'negative' }], { name: '식당 B' });
+    const global = await app.prisma.globalMenuCanonical.create({
+      data: { globalKey: `gk-${stamp()}-budae`, displayName: '부대찌개', version: 1, model: 'seed' },
+    });
+    for (const r of [a, b]) {
+      const mc = await app.prisma.menuCanonical.create({
+        data: { restaurantId: r.restaurantId, nameNorm: '부대찌개', canonicalName: '부대찌개', canonicalNorm: '부대찌개', version: 1, model: 'seed' },
+      });
+      await app.prisma.globalMenuCanonicalLink.create({
+        data: { menuCanonicalId: mc.id, restaurantId: r.restaurantId, localCanonicalNorm: '부대찌개', globalCanonicalId: global.id },
+      });
+    }
+    const service = new MenuGroupingService(app.prisma, aiConfig, { resolveOverride: async () => null });
+    const totalOf = async (svc: MenuGroupingService, placeId: string) =>
+      (await svc.getRanking(placeId, { sort: 'mentions', minMentions: 1 })).items.find((i) => i.canonicalKey === '부대찌개')!.global!
+        .totalMentions;
+    try {
+      expect(await totalOf(service, a.placeId)).toBe(2);
+      // B 에 언급이 하나 늘어도, 같은 서비스로 B 순위를 열면 A 때 센 전역 통계를 그대로 쓴다.
+      const review = await app.prisma.visitorReview.create({
+        data: { restaurantId: b.restaurantId, authorName: 'a', rating: 5, body: 'b', visitedAt: null, imageUrlsJson: '[]', contentHash: stamp() },
+      });
+      const summary = await app.prisma.reviewSummary.create({ data: { reviewId: review.id, status: 'done', sentiment: 'positive' } });
+      await app.prisma.menuMention.create({
+        data: { restaurantId: b.restaurantId, summaryId: summary.id, name: '부대찌개', nameNorm: '부대찌개', sentiment: 'positive' },
+      });
+      expect(await totalOf(service, b.placeId)).toBe(2);
+      expect(await totalOf(new MenuGroupingService(app.prisma, aiConfig, { resolveOverride: async () => null }), b.placeId)).toBe(3);
+    } finally {
+      await app.prisma.globalMenuCanonical.delete({ where: { id: global.id } });
+    }
+  });
+
   it('reports restaurant status with distinct/mapped/unmapped counts', async () => {
     const { placeId } = await seedRestaurantWithMentions(app, [
       { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },

@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
+import { LRUCache } from 'lru-cache';
 import type {
   MenuGroupRunResultType,
   MenuGroupingRestaurantStatusListType,
@@ -80,7 +81,26 @@ export interface GroupForRestaurantOpts {
 // 결과에 합류한다(결과는 어차피 통째 교체라 마지막 쓰기가 이기던 중복 비용만 사라진다).
 const groupingInFlight = new Map<string, Promise<MenuGroupRunResultType>>();
 
+// 가게 메뉴 순위의 전역 비교 통계(같은 전역 메뉴에 링크된 전국 가게의 언급 합) — 인기 메뉴는 수백 가게에 걸쳐 운영 DB 로
+// 순위 한 번에 약 93ms 였다(2026-11). 전역마다 60초 들고 있어 다른 가게 순위에서도 쓴다. 언급은 요약이 끝날 때마다 늘어
+// 최대 60초 늦을 수 있다.
+const GLOBAL_AGG_TTL_MS = 60_000;
+const GLOBAL_AGG_CACHE_MAX = 50_000;
+
+interface GlobalAgg {
+  totalMentions: number;
+  positive: number;
+  negative: number;
+  restaurantCount: number;
+}
+
 export class MenuGroupingService {
+  // agg null = 그 전역에 언급이 없다(행 없음).
+  private readonly globalAggCache = new LRUCache<string, { agg: GlobalAgg | null }>({
+    max: GLOBAL_AGG_CACHE_MAX,
+    ttl: GLOBAL_AGG_TTL_MS,
+  });
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
@@ -677,15 +697,16 @@ export class MenuGroupingService {
       ),
     ];
 
-    interface GlobalAgg {
-      totalMentions: number;
-      positive: number;
-      negative: number;
-      restaurantCount: number;
-    }
     const globalAggById = new Map<string, GlobalAgg>();
+    // 전역 통계는 60초 들고 있다(globalAggCache) — 들고 있지 않은 전역만 센다.
+    const missingGlobalIds: string[] = [];
+    for (const id of targetGlobalIds) {
+      const hit = this.globalAggCache.get(id);
+      if (hit === undefined) missingGlobalIds.push(id);
+      else if (hit.agg) globalAggById.set(id, hit.agg);
+    }
 
-    if (targetGlobalIds.length > 0) {
+    if (missingGlobalIds.length > 0) {
       const rows = await this.prisma.$queryRaw<
         Array<{
           globalId: string;
@@ -703,18 +724,24 @@ export class MenuGroupingService {
         FROM global_menu_canonical_links l
         JOIN menu_canonicals mc ON mc.id = l.menuCanonicalId
         JOIN menu_mentions m ON m.restaurantId = mc.restaurantId AND m.nameNorm = mc.nameNorm
-        WHERE l.globalCanonicalId IN (${Prisma.join(targetGlobalIds)})
+        WHERE l.globalCanonicalId IN (${Prisma.join(missingGlobalIds)})
         GROUP BY l.globalCanonicalId
       `;
+      const found = new Set<string>();
       for (const r of rows) {
-        globalAggById.set(r.globalId, {
+        const agg: GlobalAgg = {
           totalMentions: Number(r.total),
           positive: Number(r.positive ?? 0),
           // neutral 은 totalMentions 에만 들어가고 별도 트랙 안 함 — UI 가 안 씀.
           negative: Number(r.negative ?? 0),
           restaurantCount: Number(r.restaurants),
-        });
+        };
+        globalAggById.set(r.globalId, agg);
+        this.globalAggCache.set(r.globalId, { agg });
+        found.add(r.globalId);
       }
+      // 언급이 없는 전역(행 없음)도 기억한다 — 아래 '0 채움' 분기는 그대로.
+      for (const id of missingGlobalIds) if (!found.has(id)) this.globalAggCache.set(id, { agg: null });
     }
     interface Bucket {
       canonicalName: string;
