@@ -175,15 +175,28 @@ export class HikingRecommendService {
     return this.deps.now?.() ?? new Date();
   }
 
+  // 추천 색인 — 산·코스와 들머리 주변 접근(등산로 입구·주차장·버스·지하철). 산 적재본(sync)이 바뀌면 새로 만들 때까지
+  // 기다리고(옛 색인은 지워진 코스를 가리킬 수 있다), 같은 적재본에서 TTL(주변 접근 표의 재적재를 따라가는 주기)만
+  // 지났으면 이전 색인으로 바로 답하고 뒤에서 다시 만든다 — 다시 만드는 동안(전국 산 3,879·코스 9,273) 추천이 줄 서지 않게.
   private async mountains(): Promise<IndexedMountain[]> {
     const sync = await this.deps.prisma.hikingSync.findFirst({ orderBy: { loadedAt: 'desc' }, select: { id: true } });
     if (!sync) throw new HikingNotLoadedError();
     const nowMs = this.now().getTime();
-    if (this.index && this.index.syncId === sync.id && nowMs - this.index.at < INDEX_TTL_MS) return this.index.mountains;
+    const current = this.index && this.index.syncId === sync.id ? this.index : null;
+    if (current && nowMs - current.at < INDEX_TTL_MS) return current.mountains;
+    const rebuilt = this.rebuild(sync.id, nowMs);
+    if (current) {
+      rebuilt.catch(() => undefined); // 뒤에서 다시 만들다 실패하면 이전 색인을 계속 쓰고 다음 요청이 다시 시도한다
+      return current.mountains;
+    }
+    return rebuilt;
+  }
+
+  private rebuild(syncId: number, nowMs: number): Promise<IndexedMountain[]> {
     if (!this.building) {
       this.building = this.build()
         .then((mountains) => {
-          this.index = { syncId: sync.id, at: nowMs, mountains };
+          this.index = { syncId, at: nowMs, mountains };
           return mountains;
         })
         .finally(() => {
