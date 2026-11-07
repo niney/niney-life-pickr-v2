@@ -6,7 +6,7 @@
 //
 // 단계:
 //   (1) 엔진(규칙, menu-nutrition.ts) — 동기. 결합 기호 세트는 구성요소까지 나눠 준다.
-//   (2) 규칙이 못 잡은 이름(세트 구성요소 포함) → LLM 매칭 캐시(menu-llm-match.service). 캐시에 없으면
+//   (2) 규칙이 못 잡은 이름(영양 없는 행에서 끝난 이름·세트 구성요소 포함) → LLM 매칭 캐시(menu-llm-match.service). 캐시에 없으면
 //       백그라운드로 묻는다. LLM 표준명은 엔진에 다시 넣어 수식어·접미 규칙을 적용한다.
 //   (3) LLM 도 카탈로그에서 못 찾은 이름 → 웹 실측 추정 캐시(food-web-estimate.service).
 //   (4) 구성이 이름에 없는 세트("모듬회") → LLM 분해 캐시(menu-llm-decompose.service) → 구성요소를 (1)~(2)로.
@@ -152,7 +152,9 @@ export class MenuNutritionService {
         } else {
           opaqueSets.push(name);
         }
-      } else if (r.reason === 'no_match' || r.reason === 'fuzzy_rejected') {
+      } else if (r.reason === 'no_match' || r.reason === 'fuzzy_rejected' || r.reason === 'no_kcal') {
+        // no_kcal = 카탈로그에 이름은 있는데 영양이 빈 행(외식 메뉴 어휘)에서 끝남 — 예전엔 여기서 멈춰 운영 사본 메뉴 이름의
+        // 23.5%(1,426종: 칠리새우·청국장·후라이드치킨·편육…)가 칼로리를 못 받았다. LLM·웹 단계로 보낸다(2026-11-08).
         unresolved.add(name);
       }
     }

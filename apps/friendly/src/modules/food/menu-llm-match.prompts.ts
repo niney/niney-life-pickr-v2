@@ -1,9 +1,13 @@
 // 메뉴명 → 카탈로그 LLM 매칭 프롬프트(제약 선택 + 자유형 표준명).
 //
-// MENU_LLM_MATCH_VERSION 변경 시 menu_llm_matches 캐시가 stale(version < current 행은 다시 묻는다).
+// MENU_LLM_MATCH_VERSION 변경 시 menu_llm_matches 캐시가 stale(version < current 행은 다시 묻는다 — 예외는
+// menu-llm-match.service 의 KEEP_OLD_KCAL_HITS_FROM 참고).
 // v1: 최초 — 후보 15개 중 하나 또는 null + canonical(표준 음식명) + confidence. 골든셋 84건 실측(2026-09-02):
 //     gemma4:31b 88%(high 신뢰도만 29/30, p50 1.2s) / qwen3.5:397b 77% / deepseek-v4-flash 75% / gpt-oss:120b 68%.
-export const MENU_LLM_MATCH_VERSION = 1;
+// v2(2026-11-08): 후보·표준명 조회에서 100g당 열량이 없는 행(외식 메뉴 어휘가 이름만 차지한 행)을 뺀다. 운영 사본
+//     v1 판정 260건 중 음식을 고른 162건의 79건(49%)이 그런 행이라 칼로리를 못 냈다(칠리새우 → 칠리새우(영양 없음)).
+//     프롬프트 글은 그대로 — v1 에서 열량 있는 행을 고른 판정은 그대로 쓴다.
+export const MENU_LLM_MATCH_VERSION = 2;
 
 export const MENU_LLM_MATCH_SYSTEM_PROMPT = `너는 한국 식당 메뉴명을 식약처 영양성분 카탈로그의 음식에 연결하는 매칭기다.
 메뉴명과 후보 목록을 주면, 후보 중 **같은 음식**이거나 **주재료와 조리법이 같아 100g당 칼로리를 대신 써도 되는** 음식 하나를 고른다.

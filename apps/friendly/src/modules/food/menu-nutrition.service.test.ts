@@ -101,6 +101,41 @@ describe('MenuNutritionService', () => {
     expect(asked).toHaveLength(1);
   });
 
+  it('카탈로그에 이름만 있고 영양이 빈 메뉴(no_kcal)도 LLM 단계로 보낸다', async () => {
+    const asked: string[][] = [];
+    type Lookup = { hit: { foodId: string; foodName: string; kcalPer100g: number | null; nutritionFrom: string | null } | null; canonical: string | null };
+    let cachedNames = new Map<string, Lookup>();
+    const withVocab = new MenuNutritionEngine(
+      buildCatalogIndex([
+        catalogRow('김치찌개', { kcal: 244, servingG: 300, kcalPer100g: 81 }),
+        catalogRow('칠리새우', { source: 'menu-canonical', dishType: 'fried' }),
+      ]),
+    );
+    const svc = new MenuNutritionService({
+      prisma: fakePrisma,
+      engine: withVocab,
+      loadMenuNames: async () => ['김치찌개', '칠리새우'],
+      llm: {
+        lookupCached: async (names) => new Map(names.filter((n) => cachedNames.has(n)).map((n) => [n, cachedNames.get(n)!])),
+        matchMany: async (names) => {
+          asked.push(names);
+          cachedNames = new Map([['칠리새우', { hit: { foodId: 'f4', foodName: '깐쇼새우', kcalPer100g: 170, nutritionFrom: null }, canonical: '칠리새우' }]]);
+          return new Map([['칠리새우', cachedNames.get('칠리새우')!]]);
+        },
+      },
+    });
+
+    const first = await svc.forPlace('p-vocab');
+    expect(first!.llmPending).toBe(true);
+    expect(asked).toEqual([['칠리새우']]);
+    await svc.waitForLlm('p-vocab');
+    const second = await svc.forPlace('p-vocab');
+    expect(second!.items.map((i) => [i.name, i.matchedBy, i.foodName, i.kcal])).toEqual([
+      ['김치찌개', 'exact', '김치찌개', 244],
+      ['칠리새우', 'llm', '깐쇼새우', 170],
+    ]);
+  });
+
   it('LLM 이 카탈로그에서 못 찾은 이름은 표준명으로 웹 추정을 조회하고, 캐시에 없으면 백그라운드 뒤 채운다', async () => {
     const webAsked: string[][] = [];
     let webCache = new Map<string, { kcalPer100g: number; agreeing: number; basis: 'multi' | 'single'; source: string } | null>();

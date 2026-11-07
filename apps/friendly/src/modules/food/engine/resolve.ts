@@ -367,8 +367,10 @@ export const resolveMenuName = (name: string, index: CatalogIndex, lex: Lexicon 
 
   const norm = normalizeTerm(parsed.cleaned);
   const match = matchNorm(norm, parsed.hints, index, lex, trace);
-  if (parsed.quantifier) trace.push(`quantifier:${parsed.quantifier}${match ? '' : ' → set'}`);
-  // 한판·반판은 부위를 못 찾으면 모듬(세트)이다.
-  if (!match && parsed.quantifier) return { ...none(parsed.raw, 'set', trace), components: [] };
+  // 한판·반판은 부위를 못 찾으면 모듬(세트)이다 — 영양 없는 어휘 행('돼지')만 걸린 것도 부위를 못 찾은 것이다(그대로 두면
+  // no_kcal 로 LLM 에 넘어가 '돼지한판(600g)'이 돼지고기 100g당으로 붙었다).
+  const partFound = match !== null && rowHasKcal(match);
+  if (parsed.quantifier) trace.push(`quantifier:${parsed.quantifier}${partFound ? '' : ' → set'}`);
+  if (!partFound && parsed.quantifier) return { ...none(parsed.raw, 'set', trace), components: [] };
   return decideMenuKcal(parsed, match, null, trace, lex);
 };

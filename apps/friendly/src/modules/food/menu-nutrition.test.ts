@@ -375,8 +375,15 @@ describe('영양 없는 어휘 행', () => {
       catalogRow('짬뽕', { kcal: 464, servingG: 800, kcalPer100g: 58, dishType: 'noodle' }),
       catalogRow('어향가지', { ...mc, dishType: 'other' }),
       catalogRow('가지', { ...mc, kcalPer100g: 19, dishType: 'other' }),
+      catalogRow('돼지', { ...mc, dishType: 'other' }),
     ]),
   );
+
+  it('수량어(한판)는 영양 없는 행만 걸리면 부위를 못 찾은 것 — 모듬(세트)', () => {
+    const r = engine.resolve('돼지한판(600g)');
+    expect(r.reason).toBe('set');
+    expect(r.trace).toContain('quantifier:한판 → set');
+  });
 
   it('같은 키에 별칭으로 이어진 영양 있는 행을 쓴다 — 닭가슴살 → 닭가슴(생것) 100g당 + 고기 통상 1인분', () => {
     const r = engine.resolve('닭가슴살');

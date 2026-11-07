@@ -54,6 +54,13 @@ const makeFakes = () => {
   const catalog = [
     { id: 'f1', name: '짜장면', nameNorm: '짜장면', aliasNormsJson: '["자장면"]', kcalPer100g: 150, nutritionFrom: null, active: true },
     { id: 'f2', name: '돼지고기덮밥', nameNorm: '돼지고기덮밥', aliasNormsJson: '[]', kcalPer100g: 130, nutritionFrom: null, active: true },
+    // 외식 메뉴 어휘 — 이름만 있고 영양이 빈 행.
+    { id: 'f3', name: '칠리새우', nameNorm: '칠리새우', aliasNormsJson: '[]', kcalPer100g: null, nutritionFrom: null, active: true },
+    { id: 'f4', name: '깐쇼새우', nameNorm: '깐쇼새우', aliasNormsJson: '[]', kcalPer100g: 170, nutritionFrom: null, active: true },
+    { id: 'f5', name: '닭가슴살', nameNorm: '닭가슴살', aliasNormsJson: '[]', kcalPer100g: null, nutritionFrom: null, active: true },
+    { id: 'f6', name: '닭가슴', nameNorm: '닭가슴', aliasNormsJson: '["닭가슴살"]', kcalPer100g: 106, nutritionFrom: null, active: true },
+    // 범주어 행 — 다른 음료의 값을 빌려 열량이 있다.
+    { id: 'f7', name: '음료', nameNorm: '음료', aliasNormsJson: '[]', kcalPer100g: 128, nutritionFrom: '미숫가루음료 외 2종 중앙값', active: true },
   ];
   const store = new Map<string, { nameNorm: string; foodId: string | null; canonical: string | null; version: number }>();
   const calls: string[] = [];
@@ -79,6 +86,15 @@ const makeFakes = () => {
       }
       if (prompt.includes('메뉴명: 부타동')) {
         return { text: '{"choice":null,"canonical":"돼지고기덮밥","confidence":"medium","reason":"일본식 덮밥"}', model: 'm', promptTokens: null, completionTokens: null };
+      }
+      if (prompt.includes('메뉴명: 칠리새우')) {
+        return { text: '{"choice":"깐쇼새우","canonical":"칠리새우","confidence":"high","reason":"같은 새우 튀김 요리"}', model: 'm', promptTokens: null, completionTokens: null };
+      }
+      if (prompt.includes('메뉴명: 음료수')) {
+        return { text: '{"choice":"음료","canonical":"음료","confidence":"high","reason":"음료"}', model: 'm', promptTokens: null, completionTokens: null };
+      }
+      if (prompt.includes('메뉴명: 닭가슴살 스테이크')) {
+        return { text: '{"choice":null,"canonical":"닭가슴살","confidence":"medium","reason":"닭가슴살"}', model: 'm', promptTokens: null, completionTokens: null };
       }
       return { text: '{"choice":null,"canonical":null,"confidence":"low","reason":"모름"}', model: 'm', promptTokens: null, completionTokens: null };
     },
@@ -186,5 +202,46 @@ describe('MenuLlmMatchService', () => {
     }
     expect(calls).toBe(4);
     expect(f.store.has('장애메뉴')).toBe(false);
+  });
+});
+
+// v2(2026-11-08) — 운영 사본 v1 판정 162건 중 79건이 영양 없는 외식 어휘 행을 골라 칼로리를 못 냈다.
+describe('MenuLlmMatchService — 영양 없는 행', () => {
+  it('후보와 표준명 조회는 100g당 열량이 있는 행이 먼저', async () => {
+    const f = makeFakes();
+    const svc = new MenuLlmMatchService(f.prisma, f.aiConfig, { model: 'gemma4:31b', cache: f.cache });
+    const out = await svc.matchMany(['칠리새우', '닭가슴살 스테이크']);
+    // 영양 없는 '칠리새우' 행은 후보에 없고, 가까운 영양 있는 음식을 고른다.
+    const chiliPrompt = f.calls.find((c) => c.includes('메뉴명: 칠리새우'))!;
+    expect(chiliPrompt).toMatch(/^\d+\. 깐쇼새우$/m);
+    expect(chiliPrompt).not.toMatch(/^\d+\. 칠리새우$/m);
+    expect(out.get('칠리새우')?.hit).toMatchObject({ foodId: 'f4', kcalPer100g: 170 });
+    // 표준명 '닭가슴살'은 이름을 차지한 영양 없는 행 대신 별칭으로 이어진 닭가슴.
+    expect(out.get('닭가슴살 스테이크')?.hit).toMatchObject({ foodId: 'f6', foodName: '닭가슴' });
+  });
+
+  it('옛 버전 판정은 열량 있는 행을 가리킬 때만 쓰고, 영양 없는 행·매칭 없음이던 것은 다시 묻는다', async () => {
+    const f = makeFakes();
+    const old = MENU_LLM_MATCH_VERSION - 1;
+    f.store.set('북경간짜장', { nameNorm: '북경간짜장', foodId: 'f1', canonical: '짜장면', version: old });
+    f.store.set('칠리새우', { nameNorm: '칠리새우', foodId: 'f3', canonical: '칠리새우', version: old });
+    f.store.set('부타동', { nameNorm: '부타동', foodId: null, canonical: null, version: old });
+    const svc = new MenuLlmMatchService(f.prisma, f.aiConfig, { model: 'gemma4:31b', cache: f.cache });
+    const cached = await svc.lookupCached(['북경간짜장', '칠리새우', '부타동']);
+    expect([...cached.keys()]).toEqual(['북경간짜장']);
+    await svc.matchMany(['북경간짜장', '칠리새우', '부타동']);
+    expect(f.calls).toHaveLength(2);
+    expect(f.store.get('칠리새우')).toMatchObject({ foodId: 'f4', version: MENU_LLM_MATCH_VERSION });
+    expect(f.store.get('부타동')).toMatchObject({ foodId: 'f2', version: MENU_LLM_MATCH_VERSION });
+  });
+
+  it('범주어 행(음료·고기·술…)은 후보에도 답에도 쓰지 않는다 — 이미 저장된 판정도 매칭 없음으로 읽는다', async () => {
+    const f = makeFakes();
+    const svc = new MenuLlmMatchService(f.prisma, f.aiConfig, { model: 'gemma4:31b', cache: f.cache });
+    const out = await svc.matchMany(['음료수']);
+    expect(f.calls[0]).not.toMatch(/^\d+\. 음료$/m);
+    expect(out.get('음료수')).toEqual({ hit: null, canonical: '음료' });
+    f.store.set('탄산음료', { nameNorm: '탄산음료', foodId: 'f7', canonical: '음료', version: MENU_LLM_MATCH_VERSION });
+    expect((await svc.lookupCached(['탄산음료'])).get('탄산음료')).toEqual({ hit: null, canonical: '음료' });
   });
 });

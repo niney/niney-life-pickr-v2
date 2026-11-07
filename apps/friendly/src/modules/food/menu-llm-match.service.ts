@@ -8,7 +8,9 @@
 //   2) 아니면 자유형 표준명이 카탈로그 이름/별칭과 정확히 같으면 → 그 행 (후보 검색으로 못 닿는
 //      지식형: 부타동→돼지고기덮밥). 단 후보를 골랐는데 low 면 표준명도 버린다.
 //   3) 그 외 → 매칭 없음(저장은 한다).
-// 표시는 항상 100g당(1인분 아님) — 소비처(menu-nutrition.service)가 그렇게 쓴다.
+// 표시는 항상 100g당(1인분 아님) — 소비처(menu-nutrition.service)가 그렇게 쓴다. 그래서 후보와 표준명 조회는 100g당 열량이
+// 있는 행이 먼저다(v2, 2026-11-08) — 외식 메뉴 어휘는 이름만 있고 영양이 빈 행이 많아, LLM 이 그런 행을 '완전 일치'로 골라
+// 칼로리를 못 냈다.
 
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
@@ -26,12 +28,19 @@ import {
 } from './menu-llm-match.prompts.js';
 import { FailureBackoff, MENU_FAILURE_GIVE_UP_AFTER } from './menu-failure-backoff.js';
 import { pickMenuCandidates } from './menu-nutrition-candidates.js';
-import { synonymVariants } from './menu-nutrition.js';
+import { DEFAULT_LEXICON, synonymVariants } from './menu-nutrition.js';
 
 const LLM_TIMEOUT_MS = 30_000;
 const LLM_CONCURRENCY = 4;
 // 한 번의 matchMany 에서 LLM 에 묻는 최대 이름 수(식당 하나 메뉴판 상한).
 const MAX_ASK_PER_CALL = 60;
+// 이 버전부터의 옛 판정은 지금도 열량 있는 행을 가리키면 그대로 쓴다(v2 는 후보만 좁혔다 — 그 판정은 v2 로 물어도
+// 같은 행을 골랐을 것). 영양 없는 행을 골랐거나 매칭 없음이던 옛 판정만 다시 묻는다.
+const KEEP_OLD_KCAL_HITS_FROM = 1;
+
+// 범주어 행(음료·고기·술·소스·샐러드…, 어휘 suffixBlock)은 특정 음식이 아니다 — 웹 질의어(webQueryFor)와 같은 기준으로 LLM
+// 답에서도 뺀다. 운영 사본에서 '음료수'가 '음료'(미숫가루 음료 등을 빌린 100g당 128kcal)로 high 판정됐다.
+const isCategoryRow = (row: { nameNorm: string }): boolean => DEFAULT_LEXICON.suffixBlock.has(row.nameNorm);
 
 export interface MenuLlmMatchServiceOptions {
   // 비우면 chat 용도 기본 모델. 운영은 OLLAMA_MENU_MATCH_MODEL(gemma4:31b) 을 넘긴다.
@@ -120,9 +129,17 @@ export const decideLlmMatch = <T extends { name: string }>(
   return null;
 };
 
+interface LoadedCatalog {
+  // LLM 에 보여 줄 후보 — 100g당 열량이 있는 행만(v2). 영양 없는 외식 어휘 행을 '완전 일치'로 골라 칼로리를 못 냈다.
+  candidates: CatalogRow[];
+  // 표준명 조회 — 열량 있는 행을 먼저(같은 키를 별칭으로 가진 영양 있는 행), 없으면 전체.
+  byNormWithKcal: Map<string, CatalogRow>;
+  byNorm: Map<string, CatalogRow>;
+  loadedAt: number;
+}
+
 export class MenuLlmMatchService {
-  private catalogCache: { rows: CatalogRow[]; byNorm: Map<string, CatalogRow>; loadedAt: number } | null =
-    null;
+  private catalogCache: LoadedCatalog | null = null;
   private readonly failures: FailureBackoff;
 
   constructor(
@@ -155,19 +172,21 @@ export class MenuLlmMatchService {
       normToNames.set(norm, [...(normToNames.get(norm) ?? []), n]);
     }
     const rows = await this.prisma.menuLlmMatch.findMany({
-      where: { nameNorm: { in: [...normToNames.keys()] }, version: { gte: MENU_LLM_MATCH_VERSION } },
-      select: { nameNorm: true, foodId: true, canonical: true },
+      where: { nameNorm: { in: [...normToNames.keys()] }, version: { gte: KEEP_OLD_KCAL_HITS_FROM } },
+      select: { nameNorm: true, foodId: true, canonical: true, version: true },
     });
     const foodIds = [...new Set(rows.map((r) => r.foodId).filter((v): v is string => !!v))];
     const foods = foodIds.length
       ? await this.prisma.foodItem.findMany({
           where: { id: { in: foodIds }, active: true },
-          select: { id: true, name: true, kcalPer100g: true, nutritionFrom: true, dishType: true },
+          select: { id: true, name: true, nameNorm: true, kcalPer100g: true, nutritionFrom: true, dishType: true },
         })
       : [];
-    const foodById = new Map(foods.map((f) => [f.id, f]));
+    const foodById = new Map(foods.filter((f) => !isCategoryRow(f)).map((f) => [f.id, f]));
     for (const r of rows) {
       const food = r.foodId ? foodById.get(r.foodId) : undefined;
+      // 옛 판정은 열량 있는 행을 가리킬 때만 — 나머지는 "아직 안 물어봄"으로 두어 지금 규칙으로 다시 묻는다.
+      if (r.version < MENU_LLM_MATCH_VERSION && (!food || food.kcalPer100g === null)) continue;
       const hit: MenuLlmMatchHit | null = food
         ? { foodId: food.id, foodName: food.name, kcalPer100g: food.kcalPer100g, nutritionFrom: food.nutritionFrom, dishType: food.dishType }
         : null;
@@ -226,11 +245,11 @@ export class MenuLlmMatchService {
   private async askOne(
     provider: LLMProvider,
     model: string,
-    catalog: { rows: CatalogRow[]; byNorm: Map<string, CatalogRow> },
+    catalog: LoadedCatalog,
     name: string,
     outerSignal?: AbortSignal,
   ): Promise<MenuLlmMatchLookup | undefined> {
-    const candidates = pickMenuCandidates(name, catalog.rows);
+    const candidates = pickMenuCandidates(name, catalog.candidates);
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), LLM_TIMEOUT_MS);
     const onOuterAbort = (): void => ac.abort();
@@ -261,11 +280,15 @@ export class MenuLlmMatchService {
         this.failures.clear(normalizeTerm(name));
         return NO_MATCH;
       }
+      const lookupIn = (map: Map<string, CatalogRow>, norm: string): CatalogRow | null => {
+        if (map.has(norm)) return map.get(norm)!;
+        for (const v of synonymVariants(norm)) if (map.has(v)) return map.get(v)!;
+        return null;
+      };
       const lookupByName = (n: string): CatalogRow | null => {
         const norm = normalizeTerm(n);
-        if (catalog.byNorm.has(norm)) return catalog.byNorm.get(norm)!;
-        for (const v of synonymVariants(norm)) if (catalog.byNorm.has(v)) return catalog.byNorm.get(v)!;
-        return null;
+        const row = lookupIn(catalog.byNormWithKcal, norm) ?? lookupIn(catalog.byNorm, norm);
+        return row && !isCategoryRow(row) ? row : null;
       };
       const row = decideLlmMatch(parsed, candidates, lookupByName);
       await this.saveVerdict(name, model, row, parsed);
@@ -312,22 +335,31 @@ export class MenuLlmMatchService {
   }
 
   // 카탈로그 전수(이름·별칭) — 후보 검색과 표준명 조회에 쓴다. 5분 캐시(적재는 월 1회).
-  private async loadCatalog(): Promise<{ rows: CatalogRow[]; byNorm: Map<string, CatalogRow> }> {
+  private async loadCatalog(): Promise<LoadedCatalog> {
     if (this.catalogCache && Date.now() - this.catalogCache.loadedAt < 5 * 60_000) return this.catalogCache;
     const rows = await this.prisma.foodItem.findMany({
       where: { active: true },
       select: { id: true, name: true, nameNorm: true, aliasNormsJson: true, kcalPer100g: true, nutritionFrom: true, dishType: true },
     });
-    const byNorm = new Map<string, CatalogRow>();
-    for (const row of rows) {
-      byNorm.set(row.nameNorm, row);
-      try {
-        for (const a of JSON.parse(row.aliasNormsJson) as string[]) if (!byNorm.has(a)) byNorm.set(a, row);
-      } catch {
-        // 별칭 JSON 손상은 무시
+    const keyMap = (list: CatalogRow[]): Map<string, CatalogRow> => {
+      const byNorm = new Map<string, CatalogRow>();
+      for (const row of list) {
+        byNorm.set(row.nameNorm, row);
+        try {
+          for (const a of JSON.parse(row.aliasNormsJson) as string[]) if (!byNorm.has(a)) byNorm.set(a, row);
+        } catch {
+          // 별칭 JSON 손상은 무시
+        }
       }
-    }
-    this.catalogCache = { rows, byNorm, loadedAt: Date.now() };
+      return byNorm;
+    };
+    const candidates = rows.filter((r) => r.kcalPer100g !== null && !isCategoryRow(r));
+    this.catalogCache = {
+      candidates,
+      byNormWithKcal: keyMap(candidates),
+      byNorm: keyMap(rows),
+      loadedAt: Date.now(),
+    };
     return this.catalogCache;
   }
 }
