@@ -1,6 +1,6 @@
 import type { MealNutritionAnalysisType } from '@repo/api-contract';
 import type { NutrientKey, NutrientsPer100g } from '../food/food-nutrients.js';
-import { NUTRIENT_DEFS } from '../meal-nutrition/meal-nutrition.defs.js';
+import { NUTRIENT_DEFS, isAdditiveNutrientSource } from '../meal-nutrition/meal-nutrition.defs.js';
 
 // 식단 추천의 영양 보정(2026-11-07) — 영양소 점검(최근 14일)이 이미 내린 판정에서 '나트륨 많음'과 '부족한 비타민·무기질'만
 // 뽑아, 추천 점수의 건강 항목을 그 사람에 맞게 조금 고치고 프롬프트에 한 줄로 알린다. 화면 검토에서 추천 이유가 전부 조리형태·
@@ -118,7 +118,8 @@ export const nutritionFit = (
     let weights = 0;
     let best = 0;
     for (const g of s.gaps) {
-      const amount = c.servingNutrients[g.per100];
+      // 가공육의 비타민 C(첨가물일 수 있는 값)는 보충 근거로 세지 않는다 — 훈제오리 '비타민 C 보충'.
+      const amount = isAdditiveNutrientSource(g.key, c.nameNorm) ? undefined : c.servingNutrients[g.per100];
       const share = amount !== undefined && g.reference > 0 ? amount / g.reference : 0;
       sum += g.weight * Math.min(1, share / SERVING_TARGET_SHARE);
       weights += g.weight;
@@ -153,14 +154,15 @@ const NUTRIENT_MENTIONS: ReadonlyArray<[key: string, re: RegExp]> = [
   ['fiber', /식이섬유|섬유질/],
 ];
 
-/** 이 후보가 한 끼로 기준의 25% 이상 채우는 부족 영양소 key — 이유에서 말해도 되는 영양소. */
+/** 이 후보가 한 끼로 기준의 25% 이상 채우는 부족 영양소 key — 이유에서 말해도 되는 영양소(가공육의 비타민 C 는 뺀다). */
 export const supportedGapKeys = (
-  c: { servingNutrients?: NutrientsPer100g | null },
+  c: { servingNutrients?: NutrientsPer100g | null; nameNorm?: string },
   s: NutritionSignals | null,
 ): Set<string> => {
   const out = new Set<string>();
   if (!s || !c.servingNutrients) return out;
   for (const g of s.gaps) {
+    if (c.nameNorm !== undefined && isAdditiveNutrientSource(g.key, c.nameNorm)) continue;
     const v = c.servingNutrients[g.per100];
     if (v !== undefined && g.reference > 0 && v / g.reference >= SERVING_TARGET_SHARE) out.add(g.key);
   }

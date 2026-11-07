@@ -36,7 +36,7 @@ import {
   type NutrientReference,
 } from './kdri.js';
 import { COMMON_SIDE_PORTION_G, commonSideNorms } from './common-sides.js';
-import { NOT_MEASURED_NUTRIENTS, NUTRIENT_DEFS, type NutrientDef } from './meal-nutrition.defs.js';
+import { NOT_MEASURED_NUTRIENTS, NUTRIENT_DEFS, isAdditiveNutrientSource, type NutrientDef } from './meal-nutrition.defs.js';
 
 // 영양소 점검 — 최근 N일 식단 기록의 하루 평균 섭취를 2020 한국인 영양소 섭취기준과 견준다(결정적, LLM 없음).
 // 영양제 조언(meal-nutrition-advice)은 이 결과만 근거로 쓴다.
@@ -502,8 +502,10 @@ const rankSuggestions = (
     const def = NUTRIENT_DEFS.find((d) => d.key === key)!;
     if (def.key === 'sodium') continue;
     const scored = pool
-      .map(({ name, serving, grams, per100 }) => {
+      .map(({ name, nameNorm, serving, grams, per100 }) => {
         let amount = 0;
+        // 가공육의 비타민 C(첨가물일 수 있는 값)로는 권하지 않는다.
+        if (isAdditiveNutrientSource(key, nameNorm)) return { name, amount: 0, density: 0 };
         if ('snapshot' in def.from) {
           // 원재료 행은 1인분 단백질이 없다 — 100g당 값 × 1회 분량.
           const p100 = per100[def.from.snapshot];

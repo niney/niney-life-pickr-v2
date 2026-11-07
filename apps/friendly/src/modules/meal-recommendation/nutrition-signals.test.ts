@@ -151,3 +151,22 @@ describe('이유 문장의 영양 주장', () => {
     expect(stripUnsupportedNutrientClaims('칼륨 보충으로 비타민 C 부족을 보완해요.', new Set())).toBeNull();
   });
 });
+
+// 2026-11-07 흔한 한 끼 중 한 끼로 비타민 C 25%를 채우는 유일한 음식이 훈제오리(1인분 51mg — 첨가물일 수 있는 값)였다.
+describe('가공육의 비타민 C', () => {
+  const vitaminC: NutritionSignals = {
+    days: 14,
+    sodiumHigh: false,
+    sodiumPercent: 80,
+    gaps: [{ key: 'vitaminC', label: '비타민 C', per100: 'vitaminCMg', reference: 100, percent: 19, weight: 1 }],
+  };
+  const duck = { dishType: 'grill', nameNorm: '훈제오리', sodiumMg: 1220, servingNutrients: { vitaminCMg: 51 } };
+
+  it('보충 가점·태그·이유에서 말할 근거로 세지 않는다', () => {
+    expect(nutritionFit(duck, vitaminC)).toEqual({ delta: 0, coverage: 0, gapTag: null });
+    expect([...supportedGapKeys(duck, vitaminC)]).toEqual([]);
+    // 같은 값이라도 가공육이 아니면 그대로 — 햄버거는 가공육 이름이 아니다.
+    expect(nutritionFit({ ...duck, nameNorm: '햄버거' }, vitaminC).gapTag).toBe('비타민 C 보충');
+    expect([...supportedGapKeys({ ...duck, nameNorm: '파프리카볶음' }, vitaminC)]).toEqual(['vitaminC']);
+  });
+});

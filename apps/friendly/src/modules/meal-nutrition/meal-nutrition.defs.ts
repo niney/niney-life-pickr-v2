@@ -236,5 +236,15 @@ export const NOT_MEASURED_NUTRIENTS: readonly string[] = [
   '셀레늄',
 ];
 
+// 가공육(햄·소시지·베이컨·훈제)의 비타민 C 는 발색·산화 방지 첨가물(아스코브산나트륨 등)에서 온 값일 수 있다 — 먹은
+// 양에는 그대로 세되, "비타민 C 보충"처럼 음식을 권하는 근거(추천 가점·태그·이유 문장·영양 탭 제안)로는 쓰지 않는다.
+// 2026-11-07 흔한 한 끼 174개 중 한 끼로 비타민 C 기준의 25%를 채우는 음식이 훈제오리(식약처 100g 20.4mg) 하나뿐이었다.
+// '햄버거·햄버그'는 가공육 이름이 아니다.
+const PROCESSED_MEAT_RE = /(훈제|햄(?!버)|소시지|소세지|베이컨|스팸|런천미트|살라미|페퍼로니|육포|비엔나|프랑크)/;
+
+/** 이 음식의 이 영양소가 음식을 권하는 근거가 될 수 없는지(가공육의 비타민 C). */
+export const isAdditiveNutrientSource = (nutrient: string, foodName: string): boolean =>
+  nutrient === 'vitaminC' && PROCESSED_MEAT_RE.test(foodName);
+
 export const NUTRITION_DISCLAIMER =
   '식단 기록으로 본 추정이며 진단이 아니에요. 약을 먹고 있거나 임신·수유 중이거나 질환이 있다면 영양제를 먹기 전에 의사·약사와 상의하세요.';
