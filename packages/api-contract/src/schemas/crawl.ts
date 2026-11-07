@@ -122,11 +122,23 @@ export const NaverMenuBoardRead = z.object({
 });
 export type NaverMenuBoardReadType = z.infer<typeof NaverMenuBoardRead>;
 
+// 읽기 실패 기록 — 같은 프롬프트 버전으로 정해 둔 횟수(friendly NAVER_MENU_BOARD_MAX_FAILURES)만큼 실패한 사진은
+// 더 읽지 않는다(크롤마다 같은 사진을 다시 보내 LLM 비용만 쓰지 않게). 프롬프트 버전이 오르면 다시 센다.
+export const NaverMenuBoardReadFailure = z.object({
+  count: z.number().int().positive(),
+  lastError: z.string(),
+  lastAt: z.string(),
+  promptVersion: z.number().int().positive(),
+});
+export type NaverMenuBoardReadFailureType = z.infer<typeof NaverMenuBoardReadFailure>;
+
 export const NaverMenuBoardImage = z.object({
   url: z.string().url(),
   uploadedOn: z.string().nullable(),
   // 아직 안 읽었거나 읽기에 실패했으면 없다(다음 크롤에서 다시 읽는다).
   read: NaverMenuBoardRead.optional(),
+  // 지금 프롬프트로 읽다 실패한 기록(성공하면 지운다). 옛 버전으로 읽은 read 와 함께 있을 수 있다.
+  failure: NaverMenuBoardReadFailure.optional(),
 });
 export type NaverMenuBoardImageType = z.infer<typeof NaverMenuBoardImage>;
 

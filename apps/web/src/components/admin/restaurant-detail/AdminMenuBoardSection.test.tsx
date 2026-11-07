@@ -67,6 +67,24 @@ describe('AdminMenuBoardSection', () => {
     expect(screen.getByText(/사진에서도 확인된 등록 메뉴 2개/)).toBeInTheDocument();
   });
 
+  it('읽다 실패한 사진은 실패 횟수와 마지막 오류를 보여 준다', () => {
+    render(
+      <AdminMenuBoardSection
+        snapshot={{
+          menuBoardImages: [
+            {
+              url: 'https://ldb-phinf.pstatic.net/20250429_145/a.png',
+              uploadedOn: '2025-04-29',
+              failure: { count: 3, lastError: '사진 HTTP 404', lastAt: '2026-11-07T00:00:00.000Z', promptVersion: 2 },
+            },
+          ],
+          menuBoardMenus: [],
+        }}
+      />,
+    );
+    expect(screen.getByText('읽기 실패 3회')).toHaveAttribute('title', '사진 HTTP 404');
+  });
+
   it('사진이 하나도 없으면 안내만', () => {
     render(<AdminMenuBoardSection snapshot={{ menuBoardImages: [], menuBoardMenus: [] }} />);
     expect(screen.getByText('네이버에 올라온 메뉴판 사진이 없습니다.')).toBeInTheDocument();

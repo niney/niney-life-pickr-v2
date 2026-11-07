@@ -32,6 +32,7 @@ import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-
 import {
   buildMenuBoardMenus,
   carryMenuBoardReads,
+  nextMenuBoardFailure,
   toPublicMenuBoard,
 } from '../menu-board/menu-board.naver-match.js';
 import {
@@ -344,31 +345,44 @@ export class RestaurantService {
   }
 
   // 읽은 결과를 주소로 붙여 저장하고 짝을 다시 계산한다. 읽는 동안 재크롤이 사진 목록을 바꿨을 수 있어
-  // 저장 직전 스냅샷에 붙인다(목록에서 빠진 사진의 결과는 버린다). 붙인 장수와 다시 계산한 짝을 돌려준다.
+  // 저장 직전 스냅샷에 붙인다(목록에서 빠진 사진의 결과는 버린다). 실패한 사진(failures: 주소 → 오류)은 실패
+  // 기록에 한 번을 더하고, 읽은 사진은 실패 기록을 지운다. 붙인 장수와 다시 계산한 짝, 저장한 사진 목록을 돌려준다.
   async saveNaverMenuBoardReads(
     placeId: string,
     reads: Map<string, NonNullable<NonNullable<NaverPlaceDataType['menuBoardImages']>[number]['read']>>,
-  ): Promise<{ attached: number; menuBoardMenus: NonNullable<NaverPlaceDataType['menuBoardMenus']> }> {
+    failures: ReadonlyMap<string, string> = new Map(),
+  ): Promise<{
+    attached: number;
+    menuBoardMenus: NonNullable<NaverPlaceDataType['menuBoardMenus']>;
+    menuBoardImages: NonNullable<NaverPlaceDataType['menuBoardImages']>;
+  }> {
     const row = await this.prisma.restaurant.findUnique({
       where: { source_sourceId: { source: 'naver', sourceId: placeId } },
       select: { id: true, snapshotJson: true },
     });
-    if (!row) return { attached: 0, menuBoardMenus: [] };
+    if (!row) return { attached: 0, menuBoardMenus: [], menuBoardImages: [] };
     const snap = JSON.parse(row.snapshotJson) as NaverPlaceDataType;
-    if (!Array.isArray(snap.menuBoardImages)) return { attached: 0, menuBoardMenus: snap.menuBoardMenus ?? [] };
+    if (!Array.isArray(snap.menuBoardImages)) {
+      return { attached: 0, menuBoardMenus: snap.menuBoardMenus ?? [], menuBoardImages: [] };
+    }
     let attached = 0;
+    const failedAt = new Date().toISOString();
     const images = snap.menuBoardImages.map((image) => {
       const read = reads.get(image.url);
-      if (!read) return image;
-      attached += 1;
-      return { ...image, read };
+      if (read) {
+        attached += 1;
+        const { failure: _cleared, ...rest } = image;
+        return { ...rest, read };
+      }
+      const error = failures.get(image.url);
+      return error === undefined ? image : { ...image, failure: nextMenuBoardFailure(image.failure, error, failedAt) };
     });
     const boards = this.menuBoardFields(snap.menus ?? [], images);
     await this.prisma.restaurant.update({
       where: { id: row.id },
       data: { snapshotJson: JSON.stringify({ ...snap, ...boards }) },
     });
-    return { attached, menuBoardMenus: boards.menuBoardMenus ?? [] };
+    return { attached, menuBoardMenus: boards.menuBoardMenus ?? [], menuBoardImages: images };
   }
 
   // 직전 스냅샷. 없거나 파손이면 null.

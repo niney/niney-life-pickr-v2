@@ -121,6 +121,9 @@ export class CrawlService {
   // 운영 라우트는 항상 app.operationLog 를 주입한다.
   private readonly operationLog: OperationLogService | null;
   private readonly menuBoardReader: NaverMenuBoardReader | null;
+  // placeId → 진행 중인 메뉴판 자동 읽기. 같은 가게 크롤이 겹쳐 끝나도 같은 사진을 두 번 읽지 않게 한 줄로 세우고,
+  // 읽는 동안 끝난 크롤이 있으면(rerun) 끝난 뒤 한 번 더 돌아 그 크롤이 새로 가져온 사진만 읽는다.
+  private readonly menuBoardReads = new Map<string, { rerun: boolean; done: Promise<void> }>();
   // jobId → OperationRun id. startCrawl 에서 등록, 종료 경로에서 정리 —
   // runJob/cancel 이 같은 run 에 스텝과 마감을 연결하기 위한 매핑.
   private readonly runIdsByJob = new Map<string, string>();
@@ -210,24 +213,39 @@ export class CrawlService {
     }
   }
 
-  // Naver 크롤 종료 직후 자동 DC 매칭. 같은 가게의 다이닝코드 행이 존재하면
-  // DB 에 저장하고 같은 canonical 로 묶는다(=풀 자동 머지, C안).
-  //
-  // 호출 전 단계 검증:
-  //   1) this.canonical 주입 여부
-  //   2) canonical 에 DC source 가 아직 없음 (이미 있으면 duplicate)
-  //   3) canonical 좌표 보유 (50m 컷이 좌표 없이는 무의미)
-  // 임계 통과 못 하면 silent skip — ProposalService 가 별도 채널로 후보 큐 적재.
-  //
-  // 실패해도 Naver 흐름은 막지 않음 (fire-and-forget 호출 + try/catch).
-  private async readMenuBoardsAfterCrawl(placeId: string): Promise<void> {
+  // 크롤 뒤 메뉴판 자동 읽기 — 같은 가게는 한 번에 하나만 돈다. 읽는 중에 같은 가게 크롤이 또 끝나면 새로 읽지 않고
+  // 한 번 더 돌 표시만 해 둔다(끝난 뒤 그 크롤이 가져온 새 사진만 읽는다 — 이미 읽은 사진은 저장돼 있어 건너뛴다).
+  // 실패는 run 으로 남기고 던지지 않는다(fire-and-forget 호출).
+  private readMenuBoardsAfterCrawl(placeId: string): Promise<void> {
+    if (!this.menuBoardReader) return Promise.resolve();
+    const running = this.menuBoardReads.get(placeId);
+    if (running) {
+      running.rerun = true;
+      return running.done;
+    }
+    const entry = { rerun: false, done: Promise.resolve() };
+    entry.done = (async () => {
+      try {
+        do {
+          entry.rerun = false;
+          await this.readMenuBoardsOnce(placeId);
+        } while (entry.rerun);
+      } finally {
+        this.menuBoardReads.delete(placeId);
+      }
+    })();
+    this.menuBoardReads.set(placeId, entry);
+    return entry.done;
+  }
+
+  private async readMenuBoardsOnce(placeId: string): Promise<void> {
     const reader = this.menuBoardReader;
     if (!reader) return;
     const oplog = this.operationLog;
     let runId: string | null = null;
     try {
       const pending = await reader.pendingCount(placeId);
-      if (pending === 0) return; // 읽을 사진이 없으면 run 도 만들지 않는다
+      if (pending === 0) return; // 읽을 사진이 없으면(실패 횟수가 찬 사진뿐이어도) run 도 만들지 않는다
       runId = oplog
         ? await oplog.startRun({ feature: 'menu-board-read', subjectId: placeId, trigger: 'crawl', meta: { pending } })
         : null;
@@ -243,7 +261,8 @@ export class CrawlService {
           message: summary.noProvider
             ? '메뉴판 읽기 모델·키가 없어 건너뜀'
             : `메뉴판 사진 ${summary.read}장 읽음(전체 ${summary.total}장) · 사진에만 있는 메뉴 ${summary.added}개` +
-              (summary.failed.length > 0 ? ` · 실패 ${summary.failed.length}장` : ''),
+              (summary.failed.length > 0 ? ` · 실패 ${summary.failed.length}장` : '') +
+              (summary.gaveUp > 0 ? ` · 실패가 쌓여 더 읽지 않는 사진 ${summary.gaveUp}장` : ''),
           meta,
         });
         await oplog.finishRun(runId, {
@@ -264,6 +283,16 @@ export class CrawlService {
     }
   }
 
+  // Naver 크롤 종료 직후 자동 DC 매칭. 같은 가게의 다이닝코드 행이 존재하면
+  // DB 에 저장하고 같은 canonical 로 묶는다(=풀 자동 머지, C안).
+  //
+  // 호출 전 단계 검증:
+  //   1) this.canonical 주입 여부
+  //   2) canonical 에 DC source 가 아직 없음 (이미 있으면 duplicate)
+  //   3) canonical 좌표 보유 (50m 컷이 좌표 없이는 무의미)
+  // 임계 통과 못 하면 silent skip — ProposalService 가 별도 채널로 후보 큐 적재.
+  //
+  // 실패해도 Naver 흐름은 막지 않음 (fire-and-forget 호출 + try/catch).
   private async tryAutoMatchDiningcode(canonicalId: string): Promise<void> {
     if (!this.canonical) return;
     try {

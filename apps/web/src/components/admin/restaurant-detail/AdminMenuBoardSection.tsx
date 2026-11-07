@@ -60,7 +60,14 @@ export const AdminMenuBoardSection = ({ snapshot }: { snapshot: Snapshot }) => {
                 />
               </a>
               <div>{image.uploadedOn ?? '날짜 모름'}</div>
-              <div>{image.read ? `${image.read.items.length}개 읽음` : '안 읽음'}</div>
+              {/* 실패 기록은 안 읽은 사진에만 — 같은 프롬프트로 여러 번 실패하면 서버가 더 읽지 않는다. */}
+              <div title={image.read ? undefined : image.failure?.lastError}>
+                {image.read
+                  ? `${image.read.items.length}개 읽음`
+                  : image.failure
+                    ? `읽기 실패 ${image.failure.count}회`
+                    : '안 읽음'}
+              </div>
             </li>
           ))}
         </ul>

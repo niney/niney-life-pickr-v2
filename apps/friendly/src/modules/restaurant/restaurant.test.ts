@@ -20,6 +20,7 @@ import {
 } from './restaurant.service.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
+import { MENU_BOARD_PROMPT_VERSION } from '../menu-board/menu-board.prompt.js';
 
 const buildTestApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -215,6 +216,32 @@ describe('RestaurantService', () => {
       ['짬뽕', 'registered'],
       ['고량주', 'registered'],
     ]);
+  });
+
+  it('메뉴판 사진 읽기 실패는 사진에 횟수를 쌓고, 재크롤에도 이어지며, 읽으면 지운다', async () => {
+    const url = 'https://ldb-phinf.pstatic.net/20250429_145/fail.png';
+    const base = placeData({ menuBoardImages: [{ url, uploadedOn: '2025-04-29' }] });
+    await service.upsertRestaurantFromCrawl(base);
+    const imageOf = async () => (await service.findNaverMenuBoardState(base.placeId))?.menuBoardImages?.[0];
+
+    await service.saveNaverMenuBoardReads(base.placeId, new Map(), new Map([[url, '사진 HTTP 404']]));
+    expect((await imageOf())?.failure).toMatchObject({
+      count: 1,
+      lastError: '사진 HTTP 404',
+      promptVersion: MENU_BOARD_PROMPT_VERSION,
+    });
+
+    await service.upsertRestaurantFromCrawl(base); // 재크롤 — 사진 목록을 새로 받아도 실패 기록은 이어진다
+    const saved = await service.saveNaverMenuBoardReads(base.placeId, new Map(), new Map([[url, 'parse']]));
+    expect(saved.attached).toBe(0);
+    expect(saved.menuBoardImages[0]?.failure).toMatchObject({ count: 2, lastError: 'parse' });
+    expect((await imageOf())?.failure?.count).toBe(2);
+
+    const read = { items: [], model: 'kimi-k3', readAt: '2026-11-07T00:00:00.000Z', promptVersion: MENU_BOARD_PROMPT_VERSION };
+    await service.saveNaverMenuBoardReads(base.placeId, new Map([[url, read]]));
+    const after = await imageOf();
+    expect(after?.read).toEqual(read);
+    expect(after?.failure).toBeUndefined();
   });
 
   it('updateNaverMenus: 메뉴판 사진을 주면 같이 바꾸고, 안 주면 그대로 둔다', async () => {

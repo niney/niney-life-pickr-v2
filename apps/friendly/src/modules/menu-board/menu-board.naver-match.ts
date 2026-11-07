@@ -6,9 +6,11 @@ import type {
   MenuBoardPriceCheckType,
   MenuItemType,
   NaverMenuBoardImageType,
+  NaverMenuBoardReadFailureType,
   NaverPlaceDataType,
   RestaurantPublicMenuBoardType,
 } from '@repo/api-contract';
+import { MENU_BOARD_PROMPT_VERSION } from './menu-board.prompt.js';
 import { MATCH, nameKeys, nameScoreKeys, normalizeName, pairTruthKeyed, parsePrice } from './menu-board.score.js';
 
 // 네이버 메뉴판 사진에서 읽은 메뉴를 등록 메뉴와 짝짓는다(순수 함수 — 저장 때·자동 읽기 뒤·프리뷰가 같이 쓴다).
@@ -130,17 +132,42 @@ const matchMenuBoardMenus = (
   });
 };
 
-// 새로 받은 사진 목록에 직전 스냅샷의 읽기 결과를 주소로 이어 붙인다 — 같은 사진은 다시 읽지 않는다.
+// 새로 받은 사진 목록에 직전 스냅샷의 읽기 결과·실패 기록을 주소로 이어 붙인다 — 같은 사진은 다시 읽지 않고,
+// 실패 횟수도 재크롤로 지워지지 않는다.
 export const carryMenuBoardReads = (
   next: NaverMenuBoardImageType[],
   previous: NaverMenuBoardImageType[] | undefined,
 ): NaverMenuBoardImageType[] => {
-  const readOf = new Map((previous ?? []).filter((p) => p.read).map((p) => [p.url, p.read!]));
+  const previousOf = new Map((previous ?? []).map((p) => [p.url, p]));
   return next.map((image) => {
-    const read = image.read ?? readOf.get(image.url);
-    return read ? { ...image, read } : image;
+    const prev = previousOf.get(image.url);
+    const read = image.read ?? prev?.read;
+    const failure = image.failure ?? prev?.failure;
+    return read || failure ? { ...image, ...(read ? { read } : {}), ...(failure ? { failure } : {}) } : image;
   });
 };
+
+// ── 읽기 실패 기록 ──────────────────────────────────────────────────────────
+// 같은 프롬프트 버전으로 이만큼 실패한 사진은 더 읽지 않는다 — 깨진 사진·모델이 못 읽는 사진을 재크롤마다 다시 보내
+// LLM 비용만 쓰지 않게. 프롬프트 버전이 오르면 다시 센다(read:naver-menu-boards --retry-failed 는 무시하고 읽는다).
+export const NAVER_MENU_BOARD_MAX_FAILURES = 3;
+
+export const gaveUpMenuBoardRead = (image: NaverMenuBoardImageType): boolean =>
+  image.failure !== undefined &&
+  image.failure.promptVersion >= MENU_BOARD_PROMPT_VERSION &&
+  image.failure.count >= NAVER_MENU_BOARD_MAX_FAILURES;
+
+// 실패 한 번을 더한 기록 — 옛 프롬프트 버전의 기록은 1 부터 다시 센다.
+export const nextMenuBoardFailure = (
+  prev: NaverMenuBoardReadFailureType | undefined,
+  error: string,
+  at: string,
+): NaverMenuBoardReadFailureType => ({
+  count: prev && prev.promptVersion === MENU_BOARD_PROMPT_VERSION ? prev.count + 1 : 1,
+  lastError: error,
+  lastAt: at,
+  promptVersion: MENU_BOARD_PROMPT_VERSION,
+});
 
 // 공개 상세용 — 메뉴판 사진과 '등록 메뉴에 없는 메뉴'만 내보낸다(사진별 읽기 원문·짝 정보는 어드민 전용).
 // 사진 가격이 등록 가격과 다른 메뉴는 사진이 등록 메뉴 업데이트보다 최신일 때만(날짜를 모르면 내보내지 않는다).

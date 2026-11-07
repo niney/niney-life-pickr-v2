@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MenuBoardItemType, NaverMenuBoardImageType } from '@repo/api-contract';
-import { NaverMenuBoardReader } from './menu-board.naver.js';
+import { NaverMenuBoardReader, needsMenuBoardRead } from './menu-board.naver.js';
 import {
   buildMenuBoardMenus,
   carryMenuBoardReads,
   menuBoardPriceCheck,
+  NAVER_MENU_BOARD_MAX_FAILURES,
+  nextMenuBoardFailure,
   toPublicMenuBoard,
 } from './menu-board.naver-match.js';
 import { MENU_BOARD_PROMPT_VERSION } from './menu-board.prompt.js';
@@ -99,11 +101,21 @@ describe('buildMenuBoardMenus — 구분값 origin', () => {
     expect(menuBoardPriceCheck('18900', '17,9')).toBe('different');
   });
 
-  it('새 사진 목록에 같은 주소의 직전 읽기 결과를 이어 붙인다', () => {
-    const previous = [image('https://x/a.png', null, [item('a')]), image('https://x/gone.png', null, [item('b')])];
-    const next = carryMenuBoardReads([image('https://x/a.png', null), image('https://x/new.png', null)], previous);
+  it('새 사진 목록에 같은 주소의 직전 읽기 결과·실패 기록을 이어 붙인다', () => {
+    const failure = { count: 2, lastError: 'x', lastAt: 'x', promptVersion: MENU_BOARD_PROMPT_VERSION };
+    const previous = [
+      image('https://x/a.png', null, [item('a')]),
+      image('https://x/gone.png', null, [item('b')]),
+      { ...image('https://x/bad.png', null), failure },
+    ];
+    const next = carryMenuBoardReads(
+      [image('https://x/a.png', null), image('https://x/new.png', null), image('https://x/bad.png', null)],
+      previous,
+    );
     expect(next[0]!.read?.items).toEqual([item('a')]);
-    expect(next[1]!.read).toBeUndefined();
+    expect(next[0]!.failure).toBeUndefined();
+    expect(next[1]).toEqual(image('https://x/new.png', null));
+    expect(next[2]).toEqual({ ...image('https://x/bad.png', null), failure });
   });
 });
 
@@ -142,22 +154,28 @@ describe('toPublicMenuBoard — 공개 상세', () => {
 
 describe('NaverMenuBoardReader', () => {
   const setup = (images: NaverMenuBoardImageType[] | undefined, read: ReturnType<typeof vi.fn>) => {
-    const saveNaverMenuBoardReads = vi.fn(async (_placeId: string, reads: Map<string, unknown>) => ({
-      attached: reads.size,
-      menuBoardMenus: [
-        {
-          name: 'x',
-          price: null,
-          description: null,
-          origin: 'menu-board' as const,
-          registeredName: null,
-          registeredPrice: null,
-          priceCheck: null,
-          imageUrl: 'https://x/a.png',
-          uploadedOn: null,
-        },
-      ],
-    }));
+    const saveNaverMenuBoardReads = vi.fn(
+      async (_placeId: string, reads: Map<string, unknown>, failures: ReadonlyMap<string, string>) => ({
+        attached: reads.size,
+        menuBoardMenus: [
+          {
+            name: 'x',
+            price: null,
+            description: null,
+            origin: 'menu-board' as const,
+            registeredName: null,
+            registeredPrice: null,
+            priceCheck: null,
+            imageUrl: 'https://x/a.png',
+            uploadedOn: null,
+          },
+        ],
+        // 저장소처럼 실패 횟수를 한 번 더한 목록을 돌려준다.
+        menuBoardImages: (images ?? []).map((i) =>
+          failures.has(i.url) ? { ...i, failure: nextMenuBoardFailure(i.failure, failures.get(i.url)!, 'now') } : i,
+        ),
+      }),
+    );
     const restaurants = {
       findNaverMenuBoardState: vi.fn(async () => (images === undefined ? null : { menus: [], menuBoardImages: images })),
       saveNaverMenuBoardReads,
@@ -208,6 +226,59 @@ describe('NaverMenuBoardReader', () => {
     expect(await b.reader.readPending('p')).toMatchObject({
       read: 1,
       failed: [{ url: 'https://x/a.png', error: '사진 HTTP 404' }],
+      gaveUp: 0,
+    });
+    // 실패한 사진은 저장소에 실패로 넘긴다(읽은 사진과 따로).
+    const [, reads, failures] = b.saveNaverMenuBoardReads.mock.calls[0]!;
+    expect([...reads.keys()]).toEqual(['https://x/b.png']);
+    expect([...failures]).toEqual([['https://x/a.png', '사진 HTTP 404']]);
+  });
+
+  it('지금 프롬프트로 정해 둔 횟수만큼 실패한 사진은 더 읽지 않고, 프롬프트가 오르거나 --retry-failed 면 다시 읽는다', async () => {
+    const failure = (count: number, promptVersion = MENU_BOARD_PROMPT_VERSION) => ({
+      count,
+      lastError: 'parse',
+      lastAt: 'x',
+      promptVersion,
+    });
+    const broken = { ...image('https://x/broken.png', null), failure: failure(NAVER_MENU_BOARD_MAX_FAILURES) };
+    const twice = { ...image('https://x/twice.png', null), failure: failure(NAVER_MENU_BOARD_MAX_FAILURES - 1) };
+    const oldPrompt = {
+      ...image('https://x/old.png', null),
+      failure: failure(NAVER_MENU_BOARD_MAX_FAILURES, MENU_BOARD_PROMPT_VERSION - 1),
+    };
+    expect(needsMenuBoardRead(broken)).toBe(false);
+    expect(needsMenuBoardRead(broken, { retryFailed: true })).toBe(true);
+    expect(needsMenuBoardRead(twice)).toBe(true);
+    expect(needsMenuBoardRead(oldPrompt)).toBe(true);
+
+    const fails = vi.fn(async () => {
+      throw new MenuBoardError('parse_failed', '응답에서 메뉴 목록(JSON)을 찾지 못했습니다');
+    });
+    const { reader, fetchImage } = setup([broken, twice, oldPrompt], fails);
+    expect(await reader.pendingCount('p')).toBe(2);
+    // 포기한 사진은 받지도 않는다. 이번 실패로 횟수가 찬 사진(twice)은 다음부터 건너뛴다고 센다.
+    expect(await reader.readPending('p')).toMatchObject({ read: 0, gaveUp: 2, alreadyRead: 0 });
+    expect(fetchImage.mock.calls.map((c) => c[0])).toEqual(['https://x/twice.png', 'https://x/old.png']);
+
+    fetchImage.mockClear();
+    await reader.readPending('p', { retryFailed: true });
+    expect(fetchImage.mock.calls.map((c) => c[0])).toEqual(['https://x/broken.png', 'https://x/twice.png']); // 상한 2
+  });
+
+  it('실패 기록 — 같은 프롬프트면 한 번 더하고, 옛 프롬프트 기록은 1 부터 다시 센다', () => {
+    const at = '2026-11-07T00:00:00.000Z';
+    expect(nextMenuBoardFailure(undefined, 'a', at)).toEqual({
+      count: 1,
+      lastError: 'a',
+      lastAt: at,
+      promptVersion: MENU_BOARD_PROMPT_VERSION,
+    });
+    const once = nextMenuBoardFailure(undefined, 'a', at);
+    expect(nextMenuBoardFailure(once, 'b', at)).toMatchObject({ count: 2, lastError: 'b' });
+    expect(nextMenuBoardFailure({ ...once, count: 5, promptVersion: MENU_BOARD_PROMPT_VERSION - 1 }, 'c', at)).toMatchObject({
+      count: 1,
+      promptVersion: MENU_BOARD_PROMPT_VERSION,
     });
   });
 

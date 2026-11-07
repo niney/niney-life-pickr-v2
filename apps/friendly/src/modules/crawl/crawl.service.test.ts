@@ -183,4 +183,37 @@ describe('CrawlService 메뉴판 사진 자동 읽기', () => {
     await vi.waitFor(() => expect(reader.pendingCount).toHaveBeenCalledWith('778'));
     expect(reader.readPending).not.toHaveBeenCalled();
   });
+
+  it('같은 가게 읽기가 겹치면 한 줄로 세우고, 읽는 동안 끝난 크롤 몫은 끝난 뒤 한 번만 더 읽는다', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const summary = { total: 1, alreadyRead: 0, read: 1, failed: [], gaveUp: 0, added: 0, noProvider: false };
+    const reader = {
+      pendingCount: vi.fn(async () => 1),
+      readPending: vi.fn(async (placeId: string) => {
+        if (placeId === '900') await gate;
+        return summary;
+      }),
+    };
+    const svc = new CrawlService(fakeRestaurants, fakeSummaries, new JobRegistry(), null, null, null, reader as never);
+    const trigger = (placeId: string): Promise<void> =>
+      (svc as unknown as { readMenuBoardsAfterCrawl(p: string): Promise<void> }).readMenuBoardsAfterCrawl(placeId);
+
+    const first = trigger('900');
+    await vi.waitFor(() => expect(reader.readPending).toHaveBeenCalledTimes(1));
+    const second = trigger('900');
+    const third = trigger('900');
+    await trigger('901'); // 다른 가게는 기다리지 않고 따로 돈다
+    expect(reader.readPending.mock.calls.map((c) => c[0])).toEqual(['900', '901']);
+
+    release();
+    await Promise.all([first, second, third]);
+    // 읽는 동안 두 번 겹쳤어도 한 번만 더 읽는다(그 크롤들이 가져온 새 사진만 — 이미 읽은 사진은 저장돼 건너뛴다).
+    expect(reader.readPending.mock.calls.map((c) => c[0])).toEqual(['900', '901', '900']);
+
+    await trigger('900'); // 끝난 뒤의 크롤은 새로 읽는다
+    expect(reader.readPending).toHaveBeenCalledTimes(4);
+  });
 });
