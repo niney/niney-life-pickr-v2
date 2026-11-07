@@ -8,6 +8,7 @@ import {
   resolveCanonicalMembersByRestaurantId,
 } from '../restaurant/canonical-members.js';
 import { ASPECTS, Bm25, RRF_K, cosine, isJunk, type Aspect, type Polarity } from './retrieval.js';
+import { cachedEnrichedCounts, countEnrichedByRestaurant, invalidateEnrichedCounts } from './enriched-counts.js';
 import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
 import { ConcurrencyGate } from '../ai/concurrency-gate.js';
 
@@ -241,8 +242,13 @@ export class ReviewSearchService {
       enriched += batch.length;
       onProgress?.(enriched, targets.length); // 배치 완료마다 진행률 보고(SSE/상태용)
     };
-    for (let i = 0; i < batches.length; i += ENRICH_CONCURRENCY) {
-      await Promise.all(batches.slice(i, i + ENRICH_CONCURRENCY).map((b) => runBatch(b)));
+    try {
+      for (let i = 0; i < batches.length; i += ENRICH_CONCURRENCY) {
+        await Promise.all(batches.slice(i, i + ENRICH_CONCURRENCY).map((b) => runBatch(b)));
+      }
+    } finally {
+      // 임베딩을 하나라도 썼으면 상태 목록의 검색 가능 수 캐시를 비운다(중간에 실패해도 쓴 만큼은 반영).
+      if (enriched > 0) invalidateEnrichedCounts();
     }
 
     this.corpusCache.delete(key); // 무효화(대표 키)
@@ -277,7 +283,8 @@ export class ReviewSearchService {
   // (listPublicPlaces) — 부수 행 중복 없이 통합 코퍼스 기준.
   async enrichStatus(query: ReviewEnrichStatusQueryType): Promise<ReviewEnrichStatusListType> {
     const places = await listPublicPlaces(this.prisma);
-    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
+    // 검색 가능 수는 30초 캐시(enriched-counts) — 요약 19.8만 건을 매번 다시 세던 것.
+    const enrichedBy = await cachedEnrichedCounts(this.prisma);
 
     let rows = places.map((p) => {
       const enriched = p.memberIds.reduce((s, id) => s + (enrichedBy.get(id) ?? 0), 0);
@@ -330,7 +337,8 @@ export class ReviewSearchService {
   // canonical 단위 — 통합 멤버 enrich 수가 0 인 가게의 primary 를 큐잉.
   async enrichAllPendingInBackground(): Promise<{ queued: number }> {
     const places = await listPublicPlaces(this.prisma);
-    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
+    // 고를 때는 캐시가 아니라 지금 값으로.
+    const enrichedBy = await countEnrichedByRestaurant(this.prisma, places.flatMap((p) => p.memberIds));
     const pending = places
       .filter((p) => p.memberIds.reduce((s, id) => s + (enrichedBy.get(id) ?? 0), 0) === 0)
       .map((p) => p.primaryId);
@@ -376,22 +384,7 @@ export class ReviewSearchService {
     }
   }
 
-  // restaurantId → 검색가능(embeddingJson 채워진) 리뷰 수. ids 미지정 시 전체.
-  // ReviewSummary.reviewId 가 @unique(1:1)라, 전체 행을 로드해 메모리 집계하는 대신
-  // DB GROUP BY(groupBy) 로 카운트만 받아온다 — 카운트를 위한 과다로드 제거.
-  private async countEnrichedByRestaurant(ids?: string[]): Promise<Map<string, number>> {
-    const grouped = await this.prisma.visitorReview.groupBy({
-      by: ['restaurantId'],
-      where: {
-        summary: { is: { embeddingJson: { not: null } } },
-        ...(ids ? { restaurantId: { in: ids } } : {}),
-      },
-      _count: { _all: true },
-    });
-    const by = new Map<string, number>();
-    for (const g of grouped) by.set(g.restaurantId, g._count._all);
-    return by;
-  }
+  // restaurantId → 검색가능(embeddingJson 채워진) 리뷰 수는 enriched-counts(리뷰 군집과 공용).
 
   // 배치 리뷰 → 각 {aspects, context} 추출(LLM 1콜).
   private async extractMeta(

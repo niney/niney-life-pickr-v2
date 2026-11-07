@@ -18,6 +18,7 @@ import {
   resolveCanonicalMembersByPlaceId,
   resolveCanonicalMembersByRestaurantId,
 } from '../restaurant/canonical-members.js';
+import { cachedEnrichedCounts, countEnrichedByRestaurant } from '../review-search/enriched-counts.js';
 import { isJunk } from '../review-search/retrieval.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -407,7 +408,8 @@ export class ReviewClusteringService {
   // 군집화 가능(통합 enrich≥MIN_REVIEWS)하나 현재 버전 군집이 없는 가게 일괄(순차).
   async clusterAllEligibleInBackground(): Promise<ReviewClusterPendingResultType> {
     const places = await listPublicPlaces(this.prisma);
-    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
+    // 고를 때는 캐시가 아니라 지금 값으로.
+    const enrichedBy = await countEnrichedByRestaurant(this.prisma, places.flatMap((p) => p.memberIds));
     const done = await this.prisma.reviewCluster.groupBy({
       by: ['restaurantId'],
       where: { clusterVersion: CLUSTERING_VERSION },
@@ -464,7 +466,8 @@ export class ReviewClusteringService {
   // (listPublicPlaces) — enrichStatus 와 동일 척도. 군집은 primary 키로 영속.
   async clusterStatus(query: ReviewClusterStatusQueryType): Promise<ReviewClusterStatusListType> {
     const places = await listPublicPlaces(this.prisma);
-    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
+    // 검색 가능 수는 리뷰 검색 상태와 같은 30초 캐시(enriched-counts).
+    const enrichedBy = await cachedEnrichedCounts(this.prisma);
     const clusterRows = await this.prisma.reviewCluster.groupBy({
       by: ['restaurantId'],
       where: { clusterVersion: CLUSTERING_VERSION },
@@ -524,22 +527,8 @@ export class ReviewClusteringService {
     });
   }
 
-  // restaurantId → 검색가능 리뷰 수 맵. ids 미지정 시 전체. (status·pending 용)
-  // review-search 의 같은 이름 메서드처럼 DB GROUP BY 로 카운트만 받는다 — 전 행을 관계 select 로
-  // 읽으면 임베딩 6만 행에서 1.1초·RSS +165MB 였다(docs/PLAN-perf-2.md B-6).
-  private async countEnrichedByRestaurant(ids?: string[]): Promise<Map<string, number>> {
-    const grouped = await this.prisma.visitorReview.groupBy({
-      by: ['restaurantId'],
-      where: {
-        summary: { is: { embeddingJson: { not: null } } },
-        ...(ids ? { restaurantId: { in: ids } } : {}),
-      },
-      _count: { _all: true },
-    });
-    const by = new Map<string, number>();
-    for (const g of grouped) by.set(g.restaurantId, g._count._all);
-    return by;
-  }
+  // restaurantId → 검색가능 리뷰 수 맵은 review-search/enriched-counts(리뷰 검색과 공용) — DB GROUP BY 로 카운트만 받는다
+  // (전 행을 관계 select 로 읽으면 임베딩 6만 행에서 1.1초·RSS +165MB 였다, docs/PLAN-perf-2.md B-6).
 
   // 관점별 집계(폴백용) — 통합 멤버의 aspectsJson 을 관점→긍/부/중립 카운트로. 언급 많은 순.
   private async aggregateAspects(
