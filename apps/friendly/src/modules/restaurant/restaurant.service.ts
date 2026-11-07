@@ -371,8 +371,9 @@ export class RestaurantService {
       const read = reads.get(image.url);
       if (read) {
         attached += 1;
-        const { failure: _cleared, ...rest } = image;
-        return { ...rest, read };
+        const next = { ...image, read };
+        delete next.failure; // 읽었으면 실패 기록은 지운다
+        return next;
       }
       const error = failures.get(image.url);
       return error === undefined ? image : { ...image, failure: nextMenuBoardFailure(image.failure, error, failedAt) };
