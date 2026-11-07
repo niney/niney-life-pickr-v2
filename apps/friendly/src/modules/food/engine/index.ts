@@ -4,6 +4,7 @@ export {
   buildCatalogIndex,
   catalogRow,
   loadCatalogIndex,
+  rowHasKcal,
   type CatalogIndex,
   type CatalogRow,
   type IndexHit,

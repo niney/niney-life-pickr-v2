@@ -360,3 +360,43 @@ describe('MenuNutritionEngine', () => {
     expect(out.size).toBe(2);
   });
 });
+
+// 외식 메뉴 어휘(menu-canonical)는 이름만 있고 영양이 빈 행이 많다 — 그런 행이 이름을 차지해도 판정이 막히지 않게
+// (2026-11-07 식단 이름 추정에서 닭가슴살·참치·돼지국밥이 비었다).
+describe('영양 없는 어휘 행', () => {
+  const mc = { source: 'menu-canonical' } as const;
+  const engine = new MenuNutritionEngine(
+    buildCatalogIndex([
+      catalogRow('닭가슴살', { ...mc, dishType: 'other' }),
+      catalogRow('닭가슴', { kcalPer100g: 106, source: 'mfds-raw', aliases: ['닭가슴살'] }),
+      catalogRow('돼지국밥', { ...mc, dishType: 'rice' }),
+      catalogRow('국밥', { kcal: 416, servingG: 800, kcalPer100g: 52, dishType: 'rice' }),
+      catalogRow('해물볶음짬뽕', { ...mc, dishType: 'stir_fry' }),
+      catalogRow('짬뽕', { kcal: 464, servingG: 800, kcalPer100g: 58, dishType: 'noodle' }),
+      catalogRow('어향가지', { ...mc, dishType: 'other' }),
+      catalogRow('가지', { ...mc, kcalPer100g: 19, dishType: 'other' }),
+    ]),
+  );
+
+  it('같은 키에 별칭으로 이어진 영양 있는 행을 쓴다 — 닭가슴살 → 닭가슴(생것) 100g당 + 고기 통상 1인분', () => {
+    const r = engine.resolve('닭가슴살');
+    expect(r).toMatchObject({ foodName: '닭가슴', matchedBy: 'alias', basis: 'per_100g', kcal: 106 });
+    expect(r.portion).toEqual({ grams: 150, kcal: 159, basis: 'typical' });
+    expect(r.trace[0]).toBe('direct:닭가슴살 ○닭가슴살(영양 없음) ✓닭가슴');
+  });
+
+  it('없으면 조리형태가 같은 핵심어 접미로 — 돼지국밥(밥) → 국밥 1인분 환산', () => {
+    const r = engine.resolve('돼지국밥');
+    expect(r).toMatchObject({ foodName: '국밥', matchedBy: 'suffix', basis: 'per_100g' });
+    expect(r.portion).toEqual({ grams: 800, kcal: 416, basis: 'typical' });
+  });
+
+  it('조리형태가 다르거나 기타인 어휘는 접미로 다른 음식을 붙이지 않고 예전처럼 no_kcal', () => {
+    const fried = engine.resolve('해물볶음짬뽕');
+    expect(fried.reason).toBe('no_kcal');
+    expect(fried.trace).toContain('suffix:해물볶음짬뽕 ✗dish(짬뽕)');
+    expect(engine.resolve('어향가지').reason).toBe('no_kcal');
+    // 이름을 차지한 행이 없으면 접미는 예전 그대로(조리형태를 보지 않는다).
+    expect(engine.resolve('마늘가지')).toMatchObject({ foodName: '가지', matchedBy: 'suffix' });
+  });
+});

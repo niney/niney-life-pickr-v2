@@ -11,7 +11,7 @@
 | `lexicon-db.ts` | `menu_lexicon` 테이블(어드민 편집)을 기본 어휘 위에 얹는다. 종류: modifier·size·synonym·set·option·suffix_block·raw_suffix·quantifier·alias. |
 | `parse.ts` | 메뉴명 전처리 — 태그·장식(한자·★·"72시간 숙성")·중량·인분·수량·크기·옵션 슬래시·수량어(한판) 분리, 결합 기호 세트의 구성요소 분해. |
 | `catalog-index.ts` | 카탈로그 2천 행의 메모리 인덱스(이름·별칭 exact, 접미 조회). 부팅 시 만들고 10분마다 다시 읽는다. |
-| `resolve.ts` | 캐스케이드 exact/alias → synonym → modifier → variant(부위+구이 / 조리접미→원재료) → suffix → hint(생재료 제외). 등급 판정과 트레이스. |
+| `resolve.ts` | 캐스케이드 exact/alias → synonym → modifier → variant(부위+구이 / 조리접미→원재료) → suffix → hint(생재료 제외). 등급 판정과 트레이스. 영양 없는 행(외식 어휘가 이름만 차지)에 걸리면 끝내지 않는다 — 같은 키의 영양 있는 별칭 행(`exactWithKcal`: 닭가슴살 → 닭가슴·공깃밥 → 공기밥) → 남은 같은 음식 단계 → **조리형태가 같은** 접미(돼지국밥(밥) → 국밥, 기타·미분류 어휘는 접미 안 봄), 끝까지 없으면 예전처럼 no_kcal. |
 | `engine.ts` | `MenuNutritionEngine` — 인덱스·어휘를 들고 동기로 판정. DB·LLM·웹 의존 없음. |
 
 `menu-nutrition.ts` 는 호환 파사드(re-export + Prisma 로 인덱스·어휘를 읽는 `MenuNutritionResolver`).
@@ -40,6 +40,10 @@ LLM 매칭·웹 실측은 엔진 **뒤** 계층이고, LLM 표준명은 다시 �
 - `pnpm --filter friendly measure:menu-golden` — 계층별 **정밀도**(표시한 것 중 정답)와 재현율. LLM·웹은 캐시만 읽으니
   먼저 `probe:menu-coverage --ask=N --web=N` 으로 채운다. 척도는 정밀도다 — 표시율을 올리는 규칙이 정밀도를 깎으면 거부.
 - 2026-09-03 기준: 정밀도 99.5%(383건 중 381), 재현율 99.0%. 엔진 전환 전 기준선 97.6% / 93.5%.
+- 2026-11-08 영양 없는 행 처리(위 `resolve.ts`): 운영 사본 카탈로그(영양 없는 행 1,506 중 외식 어휘 1,160, 영양 없는 이름 행이 가린
+  별칭 94개)에서 정밀도 93.9 → **95.1%**(214건 중 201 → 266건 중 253)·재현율 51.0 → **64.2%**, 새 오답 0. dev.db 는 99.5% / 98.5%
+  그대로. 버린 변형: 영양 없는 더 긴 접미 키를 건너뛰기(왕갈비 → 갈비 3건 오답 — 93.8%), 접미에서 별칭으로 바꿔치기(칠리새우 →
+  대하 5건), 조리형태를 안 보는 접미(어향가지 → 가지).
 - 단위 테스트 `menu-nutrition.test.ts`(엔진 인메모리 인덱스), `menu-nutrition.service.test.ts`(LLM·웹·세트 흐름).
 - 스팟체크 `pnpm --filter friendly probe:menu-resolve "항정살 150g" "生生生연어사시미"` — 트레이스로 어느 단계에서 붙었는지 본다.
 

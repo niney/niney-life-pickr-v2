@@ -13,7 +13,7 @@
 //   - 트레이스(trace)에 시도한 단계를 남긴다 — 골든셋에서 어느 단계가 틀렸는지 바로 본다.
 
 import { normalizeTerm } from '../../../lib/text.js';
-import type { CatalogIndex, CatalogRow, IndexHit } from './catalog-index.js';
+import { BASE_SERVING_G, rowHasKcal, type CatalogIndex, type CatalogRow, type IndexHit } from './catalog-index.js';
 import { DEFAULT_LEXICON, type Lexicon } from './lexicon.js';
 import { parseMenuName, stripLeadingModifiers, synonymVariants, type ParsedMenuName } from './parse.js';
 
@@ -23,9 +23,7 @@ export type MenuKcalReason = 'per_serving' | 'per_100g' | 'set' | 'empty' | 'no_
 
 // 1인분 표시를 허용하는 매칭 방식 — 이름이 같은 음식이라고 볼 수 있는 경우만.
 const PER_SERVING_MATCHES: ReadonlySet<MenuKcalMatchedBy> = new Set(['exact', 'alias', 'synonym', 'modifier']);
-// 표준데이터의 기준량. 1인분 중량이 이 값이면 "1인분"이 아니라 기준량을 그대로 둔 행이다.
-// 식약처 '식품중량'은 분석 시료·급식 1회 제공량이라(제육볶음 100ml 등) 이 이하는 한 끼 양으로 보지 않는다.
-export const BASE_SERVING_G = 100;
+export { BASE_SERVING_G };
 const RAW_SOURCE = 'mfds-raw';
 const RAW_MEAT_CATEGORY = '육류';
 // "와규꽃살 2인 세트"·"가브리 보쌈 정식" — 세트어가 이것뿐이고 나머지가 한 음식이면 그 음식의 100g당(찬·양은 모른다).
@@ -230,7 +228,17 @@ const isRaw = (row: CatalogRow): boolean => row.source === RAW_SOURCE;
 // 접미로 붙어도 되는 생재료는 고기 부위뿐 — "망고목살"은 목살이지만 "칠리새우"는 새우(생것)가 아니라 요리다.
 const rawSuffixOk = (row: CatalogRow): boolean => !isRaw(row) || row.sourceCategory === RAW_MEAT_CATEGORY;
 
-/** 정규화된 한 이름을 캐스케이드로 찾는다. 세트·표식은 보지 않는다(호출자가 parsed 로 판정). */
+/**
+ * 정규화된 한 이름을 캐스케이드로 찾는다. 세트·표식은 보지 않는다(호출자가 parsed 로 판정).
+ *
+ * 영양 없는 행(외식 메뉴 어휘가 이름만 차지한 행)에 걸리면 거기서 끝내지 않는다 — 같은 키에 별칭으로 이어진 영양 있는
+ * 행(닭가슴살 → 닭가슴·참치 → 참다랑어·공깃밥 → 공기밥)을 보고, 없으면 같은 음식 단계(동의어·수식어·부위)를 마저 본 뒤
+ * 조리형태가 같은 핵심어 접미로 간다(돼지국밥(밥) → 국밥·해물짬뽕(면) → 짬뽕). 조리형태가 '기타'·미분류인 어휘
+ * (어향가지 → 가지)나 조리형태가 다른 접미는 다른 음식이라 붙이지 않는다. 끝까지 못 찾으면 처음 걸린 영양 없는 행을
+ * 돌려준다(판정은 예전처럼 no_kcal). 2026-11-07 식단 이름 추정에서 닭가슴살·참치가 이 막힘으로 비었고, 운영 사본
+ * 카탈로그에 이렇게 가려진 키가 94개(공깃밥·카스·장어·광어…)였다. 골든셋(운영 사본) 정밀도 93.9 → 95.1%·재현율
+ * 51.0 → 64.2%. 영양 없는 더 긴 접미 키를 건너뛰는 규칙은 왕갈비 → 갈비처럼 틀려 넣지 않았다.
+ */
 export const matchNorm = (
   norm: string,
   hints: string[],
@@ -238,11 +246,26 @@ export const matchNorm = (
   lex: Lexicon,
   trace: string[],
 ): MatchInput | null => {
+  // 닫힘(tryExact) 안에서 바뀌므로 null 로 좁혀지지 않게 단언으로 선언한다.
+  let firstNoKcal = null as MatchInput | null;
+  let noKcalDishType = null as string | null;
+  const by = (hit: IndexHit, as: MenuKcalMatchedBy | 'direct'): MenuKcalMatchedBy =>
+    as === 'direct' ? (hit.alias ? 'alias' : 'exact') : as;
   const tryExact = (key: string, as: MenuKcalMatchedBy | 'direct'): MatchInput | null => {
     const hit = index.exact(key);
+    if (hit && !rowHasKcal(hit.row)) {
+      const alt = index.exactWithKcal(key);
+      trace.push(`${as}:${key} ○${hit.row.name}(영양 없음)${alt ? ` ✓${alt.row.name}` : ''}`);
+      if (alt) return toInput(alt, by(alt, as));
+      if (!firstNoKcal) {
+        firstNoKcal = toInput(hit, by(hit, as));
+        noKcalDishType = hit.row.dishType;
+      }
+      return null;
+    }
     trace.push(`${as}:${key}${hit ? ` ✓${hit.row.name}` : ' ✗'}`);
     if (!hit) return null;
-    return toInput(hit, as === 'direct' ? (hit.alias ? 'alias' : 'exact') : as);
+    return toInput(hit, by(hit, as));
   };
 
   // 1) exact/alias
@@ -282,11 +305,16 @@ export const matchNorm = (
     }
   }
 
-  // 5) 핵심어 접미
-  for (const base of bases) {
+  // 5) 핵심어 접미 — 같은 음식 단계에서 영양 없는 행만 찾았으면 그 행과 조리형태가 같은 접미만(기타·미분류면 안 본다).
+  const knownDish = firstNoKcal !== null;
+  const suffixOpen = !knownDish || (noKcalDishType !== null && noKcalDishType !== 'other');
+  for (const base of suffixOpen ? bases : []) {
     const hit = index.suffix(base, lex.suffixBlock);
-    const ok = hit ? rawSuffixOk(hit.row) : false;
-    trace.push(`suffix:${base}${hit ? (ok ? ` ✓${hit.row.name}` : ` ✗raw(${hit.row.name})`) : ' ✗'}`);
+    const sameDish = !knownDish || hit?.row.dishType === noKcalDishType;
+    const ok = hit ? rawSuffixOk(hit.row) && sameDish : false;
+    trace.push(
+      `suffix:${base}${hit ? (ok ? ` ✓${hit.row.name}` : sameDish ? ` ✗raw(${hit.row.name})` : ` ✗dish(${hit.row.name})`) : ' ✗'}`,
+    );
     if (hit && ok) return toInput(hit, 'suffix');
   }
 
@@ -295,9 +323,13 @@ export const matchNorm = (
     const key = normalizeTerm(hint);
     const hit = index.exact(key);
     trace.push(`hint:${key}${hit ? (isRaw(hit.row) ? ` ✗raw(${hit.row.name})` : ` ✓${hit.row.name}`) : ' ✗'}`);
-    if (hit && !isRaw(hit.row)) return toInput(hit, 'hint');
+    if (!hit || isRaw(hit.row)) continue;
+    if (rowHasKcal(hit.row)) return toInput(hit, 'hint');
+    const alt = index.exactWithKcal(key);
+    if (alt && !isRaw(alt.row)) return toInput(alt, 'hint');
+    firstNoKcal ??= toInput(hit, 'hint');
   }
-  return null;
+  return firstNoKcal;
 };
 
 /** 메뉴명 하나를 판정한다. 동기·순수(인덱스·어휘만 읽는다). */
