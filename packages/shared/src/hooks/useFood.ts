@@ -3,6 +3,7 @@ import type { MenuLexiconCreateInputType, MenuLexiconKindType } from '@repo/api-
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   FoodAdminCreateInputType,
+  FoodAdminNutrientRefSetInputType,
   FoodAdminUpdateInputType,
   FoodImportConfigInputType,
   FoodImportProgressEventType,
@@ -73,6 +74,45 @@ export const useMenuLexiconDelete = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['food', 'admin', 'menu-lexicon'] }),
   });
 };
+
+// 영양 기준 음식 — 지정·해제는 바로 목록을 다시 읽고, 다시 연결(AI)은 백그라운드라 끝난 뒤 '새로 불러오기'로 본다.
+const NUTRIENT_REFS_KEY = ['food', 'admin', 'nutrient-refs'] as const;
+
+export const useNutrientRefs = () =>
+  useQuery({ queryKey: NUTRIENT_REFS_KEY, queryFn: foodApi.nutrientRefs });
+
+export const useSetNutrientRef = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: FoodAdminNutrientRefSetInputType) => foodApi.setNutrientRef(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: NUTRIENT_REFS_KEY }),
+  });
+};
+
+export const useClearNutrientRef = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => foodApi.clearNutrientRef(name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: NUTRIENT_REFS_KEY }),
+  });
+};
+
+export const useRelinkNutrientRefs = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (names?: string[]) => foodApi.relinkNutrientRefs(names),
+    onSuccess: () => qc.invalidateQueries({ queryKey: NUTRIENT_REFS_KEY }),
+  });
+};
+
+/** 기준으로 고를 수 있는 음식 검색(두 글자 이상일 때만). */
+export const useNutrientRefCandidates = (q: string) =>
+  useQuery({
+    queryKey: ['food', 'admin', 'nutrient-ref-candidates', q],
+    queryFn: () => foodApi.nutrientRefCandidates(q),
+    enabled: q.trim().length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
 // 열량 빈 식단 이름 — 다시 돌리면 캐시로 채운 항목이 바로 빠지고, 백그라운드로 보낸 이름은 끝난 뒤 다시 조회하면 빠진다.
 export const useMealNutritionGaps = () =>

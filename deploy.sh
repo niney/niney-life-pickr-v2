@@ -351,6 +351,11 @@ food_catalog_data() {
   step "식단 기록 영양 스냅샷 채우기"
   pnpm --filter friendly backfill:meal-nutrition
 
+  # 영양 기준 음식 — 비타민·무기질이 없는 외식 어휘·식단 이름을 표준 음식에 잇는다(규칙 → AI, 이미 물어본 이름은 그대로).
+  # 카탈로그가 바뀌면 규칙 판정이 새 후보로 갱신된다. AI(chat 모델)가 없으면 규칙만 저장한다.
+  step "영양 기준 음식 연결"
+  pnpm --filter friendly link:food-nutrients --llm
+
   echo "  적재 후: $(food_status)"
 }
 

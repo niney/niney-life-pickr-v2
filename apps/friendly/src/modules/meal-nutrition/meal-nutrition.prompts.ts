@@ -4,13 +4,14 @@ import { NUTRIENT_DEFS } from './meal-nutrition.defs.js';
 
 // 영양제 조언 프롬프트 — 판단(부족·기준·부족분·상한)은 서버가 끝낸 뒤 문장만 모델이 쓴다.
 // v1(2026-10-04): kimi-k3 기본. 숫자는 프롬프트에 있는 것만(서버가 검사), 영양소는 후보 key 만, 제품명·효능 주장 금지.
-export const MEAL_NUTRITION_ADVICE_VERSION = 1;
+// v2(2026-11-07): 마그네슘·아연·엽산이 점검 영양소가 됐다 — 목록 밖 예시를 오메가-3·유산균·비타민 B12 로 바꿈.
+export const MEAL_NUTRITION_ADVICE_VERSION = 2;
 
 export const MEAL_NUTRITION_ADVICE_SYSTEM_PROMPT = `너는 한 사람의 식단 기록을 보고 모자란 영양소를 음식과 영양제로 채우는 법을 알려 주는 영양 코치다.
 의사·약사가 아니며 진단하지 않는다. 판단(무엇이 얼마나 모자란지)은 이미 끝나 있다 — 너는 그 결과를 알기 쉽게 풀어 쓴다.
 
 [쓰는 규칙 - 절대 위반하지 말 것]
-- [조언할 영양소]에 있는 영양소만, 적힌 key 그대로 쓴다. 목록에 없는 영양소·영양제(마그네슘·아연·오메가-3·유산균 등)는 말하지 않는다.
+- [조언할 영양소]에 있는 영양소만, 적힌 key 그대로 쓴다. 목록에 없는 영양소·영양제(오메가-3·유산균·비타민 B12 등)는 말하지 않는다.
 - 숫자는 프롬프트에 적힌 숫자만 쓴다. 새 용량(mg·μg·IU)을 지어내지 않는다. 영양제 양은 '하루 부족분'과 '상한'만 말한다.
 - 제품명·브랜드·가격·구매처는 쓰지 않는다. 성분·형태·먹는 때만, 적힌 '형태' 안에서 말한다.
 - 병을 고치거나 막는다는 말(치료·예방·완치)과 효능 과장은 쓰지 않는다.
@@ -70,6 +71,14 @@ const withIu = (key: string, v: number): string =>
 const amountText = (n: MealNutrientResultType, v: number): string =>
   withIu(n.key, v) || `${formatNutrientAmount(v)}${n.unit}`;
 
+/** 상한 표기 — 형태가 정해진 상한(엽산·마그네슘·니아신)은 기준과 단위를 밝힌다. 조언 프롬프트와 서버 대체 문장이 같이 쓴다. */
+export const upperLimitText = (n: MealNutrientResultType): string | null => {
+  if (n.upperLimit === null) return null;
+  const def = NUTRIENT_DEFS.find((d) => d.key === n.key);
+  const amount = def?.upperLimitUnit ? `${formatNutrientAmount(n.upperLimit)}${def.upperLimitUnit}` : amountText(n, n.upperLimit);
+  return def?.upperLimitBasis ? `${amount}(${def.upperLimitBasis} 기준)` : amount;
+};
+
 const statusText = (n: MealNutrientResultType): string => {
   if (n.status === 'low') {
     return n.reference.kind === 'rni' && n.reference.ear !== null
@@ -111,7 +120,7 @@ export const buildMealNutritionAdviceUserPrompt = (input: {
       `${i + 1}. ${n.key} ${n.label} — 하루 평균 ${amountText(n, n.intakePerDay ?? 0)}, ` +
       `${MEAL_NUTRIENT_REFERENCE_LABEL[n.reference.kind]} ${amountText(n, n.reference.amount)}의 ${n.percent}%(${statusText(n)}).` +
       (shortfall !== null && shortfall > 0 ? ` 하루 부족분 약 ${amountText(n, shortfall)}.` : '') +
-      (n.upperLimit !== null ? ` 상한 ${amountText(n, n.upperLimit)}.` : '');
+      (n.upperLimit !== null ? ` 상한 ${upperLimitText(n)}.` : '');
     lines.push(head);
     if (n.topSources.length > 0) lines.push(`   - 주로 얻은 음식: ${n.topSources.join('·')}`);
     if (n.foodSuggestions.length > 0) lines.push(`   - 한 끼 후보: ${n.foodSuggestions.join('·')}`);

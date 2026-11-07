@@ -11,6 +11,10 @@ import {
   type FoodAdminListResultType,
   type FoodAdminMealNutritionEstimateResultType,
   type FoodAdminMealNutritionGapsResultType,
+  type FoodAdminNutrientRefCandidatesResultType,
+  type FoodAdminNutrientRefLinkResultType,
+  type FoodAdminNutrientRefSetInputType,
+  type FoodAdminNutrientRefsResultType,
   type FoodAdminStatsType,
   type FoodAdminUpdateInputType,
   type FoodImportConfigInputType,
@@ -142,6 +146,22 @@ export const foodApi = {
     }),
   menuLexiconDelete: (id: string) =>
     apiFetch<null>(Routes.Food.adminMenuLexiconEntry(id), { method: 'DELETE' }),
+
+  // ── 영양 기준 음식 ──
+  nutrientRefs: () => apiFetch<FoodAdminNutrientRefsResultType>(Routes.Food.adminNutrientRefs),
+  setNutrientRef: (input: FoodAdminNutrientRefSetInputType) =>
+    apiFetch<null>(Routes.Food.adminNutrientRefs, { method: 'PUT', body: JSON.stringify(input) }),
+  clearNutrientRef: (name: string) =>
+    apiFetch<null>(`${Routes.Food.adminNutrientRefs}?${new URLSearchParams({ name }).toString()}`, { method: 'DELETE' }),
+  relinkNutrientRefs: (names?: string[]) =>
+    apiFetch<FoodAdminNutrientRefLinkResultType>(Routes.Food.adminNutrientRefsLink, {
+      method: 'POST',
+      body: JSON.stringify(names && names.length > 0 ? { names } : {}),
+    }),
+  nutrientRefCandidates: (q: string) =>
+    apiFetch<FoodAdminNutrientRefCandidatesResultType>(
+      `${Routes.Food.adminNutrientRefCandidates}?${new URLSearchParams({ q }).toString()}`,
+    ),
 
   // ── 열량 빈 식단 이름 ──
   mealNutritionGaps: () => apiFetch<FoodAdminMealNutritionGapsResultType>(Routes.Food.adminMealNutritionGaps),

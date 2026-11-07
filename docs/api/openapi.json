@@ -18474,7 +18474,10 @@
                               "riboflavin",
                               "niacin",
                               "vitaminC",
-                              "sodium"
+                              "sodium",
+                              "magnesium",
+                              "zinc",
+                              "folate"
                             ]
                           },
                           "label": {
@@ -18679,7 +18682,10 @@
                                   "riboflavin",
                                   "niacin",
                                   "vitaminC",
-                                  "sodium"
+                                  "sodium",
+                                  "magnesium",
+                                  "zinc",
+                                  "folate"
                                 ]
                               },
                               "label": {
@@ -18831,7 +18837,10 @@
                                       "riboflavin",
                                       "niacin",
                                       "vitaminC",
-                                      "sodium"
+                                      "sodium",
+                                      "magnesium",
+                                      "zinc",
+                                      "folate"
                                     ]
                                   },
                                   "label": {
@@ -19083,7 +19092,10 @@
                               "riboflavin",
                               "niacin",
                               "vitaminC",
-                              "sodium"
+                              "sodium",
+                              "magnesium",
+                              "zinc",
+                              "folate"
                             ]
                           },
                           "label": {
@@ -19235,7 +19247,10 @@
                                   "riboflavin",
                                   "niacin",
                                   "vitaminC",
-                                  "sodium"
+                                  "sodium",
+                                  "magnesium",
+                                  "zinc",
+                                  "folate"
                                 ]
                               },
                               "label": {

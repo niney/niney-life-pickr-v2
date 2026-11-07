@@ -26,6 +26,7 @@ import {
   buildMealNutritionAdviceJsonSchema,
   buildMealNutritionAdviceUserPrompt,
 } from '../src/modules/meal-nutrition/meal-nutrition.prompts.js';
+import { FoodNutrientRefService } from '../src/modules/food/food-nutrient-ref.service.js';
 import { MealNutritionService } from '../src/modules/meal-nutrition/meal-nutrition.service.js';
 
 const args = process.argv.slice(2);
@@ -85,7 +86,8 @@ const main = async (): Promise<void> => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
     const me = await prisma.user.findFirst({ where: { email: EMAIL }, select: { id: true } });
     const users = [...USERS, ...(me ? [{ id: me.id, label: `내 계정(${EMAIL.split('@')[0]})` }] : [])];
-    const nutrition = new MealNutritionService(prisma);
+    // 서비스와 같게 영양 기준 음식 연결(규칙 + 저장 판정)을 쓴다(2026-11-07).
+    const nutrition = new MealNutritionService(prisma, { refs: new FoodNutrientRefService(prisma) });
     const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
     const resolved = await aiConfig.getResolved('ollama-cloud', 'meal-supplement');
     if (!resolved) throw new Error('meal-supplement 용 ollama-cloud 설정이 없습니다(키 확인).');

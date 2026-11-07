@@ -43,6 +43,8 @@
     "probe:meal-settings": "tsx --env-file=.env scripts/probe-meal-settings.ts",
     "probe:meal-models": "tsx --env-file=.env scripts/probe-meal-models.ts",
     "probe:meal-nutrition": "tsx --env-file=.env scripts/probe-meal-nutrition.ts",
+    "probe:nutrition-coverage": "tsx --env-file=.env scripts/probe-nutrition-coverage.ts",
+    "link:food-nutrients": "tsx --env-file=.env scripts/link-food-nutrients.ts",
     "check:common-meals": "tsx --env-file=.env scripts/check-common-meals.ts",
     "e2e:tour": "tsx scripts/e2e-tour.ts",
     "probe:tour-plan": "tsx --env-file=.env scripts/probe-tour-plan.ts",

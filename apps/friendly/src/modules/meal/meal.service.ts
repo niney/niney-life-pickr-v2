@@ -49,6 +49,7 @@ import { normalizeTerm } from '../../lib/text.js';
 import { FoodService } from '../food/food.service.js';
 import { mealServingNutrition, type ServingCatalogRow } from '../food/food-serving.js';
 import type { MealNutritionEstimator } from './meal-nutrition-estimate.js';
+import type { FoodNutrientRefService } from '../food/food-nutrient-ref.service.js';
 import {
   findMealRecommendationCandidate,
   parseMealRecommendationFeedback,
@@ -259,6 +260,8 @@ export interface MealServiceDeps {
   food?: FoodService;
   /** 없으면 카탈로그로 못 채운 열량은 빈 채로 둔다. */
   estimator?: Pick<MealNutritionEstimator, 'lookup' | 'schedule'>;
+  /** 영양 기준 음식 — 비타민·무기질이 없는 이름을 저장 뒤 백그라운드로 표준 음식에 잇는다(영양소 점검용). */
+  nutrientRefs?: Pick<FoodNutrientRefService, 'schedule'>;
 }
 
 export class MealService {
@@ -676,9 +679,15 @@ export class MealService {
   }
 
   // 커밋 뒤 — 열량이 빈 항목 이름을 백그라운드로 추정해 채운다(LLM·웹). 저장 응답은 기다리지 않는다.
-  private scheduleEstimates(itemData: { name: string; nutritionBasis?: string | null }[]): void {
+  private scheduleEstimates(
+    itemData: { name: string; nutritionBasis?: string | null; foodId?: string | null; dishType?: string | null }[],
+  ): void {
     const missing = itemData.filter((d) => d.nutritionBasis === 'missing').map((d) => d.name);
     if (missing.length > 0) this.deps.estimator?.schedule(missing);
+    // 영양 기준 음식 — 행에 비타민·무기질이 없거나 카탈로그 밖 이름이면 백그라운드로 잇는다(이미 이은 이름은 그대로).
+    this.deps.nutrientRefs?.schedule(
+      itemData.map((d) => ({ name: d.name, foodId: d.foodId ?? null, dishType: d.dishType ?? null })),
+    );
   }
 
   async get(userId: string, id: string): Promise<MealEntryType> {

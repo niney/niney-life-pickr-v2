@@ -17,6 +17,10 @@ export interface NutrientDef {
   // 음식만으로 상한섭취량을 넘었다고 말할 수 있는지 — 니아신 상한은 보충제(니코틴산), 비타민 A 상한은 레티놀에만 해당해
   // 음식(카로티노이드 포함 RAE)으로는 판단하지 않는다. 상한 값 자체는 영양제 조언에 쓴다.
   foodUpperLimit: boolean;
+  // 상한이 음식 전체가 아니라 특정 형태에만 해당할 때 그 기준과 단위(조언 문장이 "상한 1,000μg(영양제·강화식품의 엽산 기준)"으로
+  // 밝히게). 엽산 섭취량은 μg DFE 지만 상한은 엽산(folic acid) μg 이다.
+  upperLimitBasis?: string;
+  upperLimitUnit?: string;
   // 과일·채소가 영양 정보 없이 기록되면 실제보다 적게 잡히는 영양소(원재료 DB 미적재).
   produceSensitive: boolean;
   // 이 영양소가 많은 흔한 음식(일반 영양 상식) — 카탈로그에 없는 과일·유제품까지 말할 수 있게 고정으로 둔다.
@@ -148,6 +152,7 @@ export const NUTRIENT_DEFS: readonly NutrientDef[] = [
     foodUpperLimit: false,
     produceSensitive: false,
     typicalFoods: ['닭가슴살', '생선', '땅콩'],
+    upperLimitBasis: '니코틴산',
     caution: '니코틴산 형태는 하루 35mg을 넘기면 얼굴이 붉어지는 등 부작용이 생길 수 있어요.',
   },
   {
@@ -161,6 +166,48 @@ export const NUTRIENT_DEFS: readonly NutrientDef[] = [
     produceSensitive: true,
     typicalFoods: ['귤·키위·딸기 같은 과일', '파프리카', '브로콜리', '풋고추'],
     caution: '하루 2,000mg을 넘기면 설사 등이 생길 수 있고, 신장결석이 있었다면 고용량은 피하세요.',
+  },
+  // 마그네슘·아연·엽산(2026-11-07) — K-FIND 식품영양성분 DB 전체판 음식 DB·국가표준식품성분표에서 온다. 문구는 사용자 검토본.
+  {
+    key: 'magnesium',
+    label: '마그네슘',
+    unit: 'mg',
+    from: { per100: 'magnesiumMg' },
+    supplement: true,
+    supplementForms: '구연산마그네슘·글리시네이트 같은 형태(산화마그네슘은 흡수가 낮은 편), 한 번에 많이 먹지 말고 나눠서',
+    // 상한은 식품 외 급원(보충제)에만 해당 — 음식으로는 '많음'을 말하지 않는다.
+    foodUpperLimit: false,
+    upperLimitBasis: '영양제(식품 외) 마그네슘',
+    produceSensitive: true,
+    typicalFoods: ['현미·잡곡밥', '두부·콩', '시금치 같은 녹색 채소', '견과류', '바나나'],
+    caution: '보충제로 많이 먹으면 설사할 수 있어요. 신장 질환이 있거나 약을 먹고 있다면 의사·약사와 먼저 상의하세요.',
+  },
+  {
+    key: 'zinc',
+    label: '아연',
+    unit: 'mg',
+    from: { per100: 'zincMg' },
+    supplement: true,
+    supplementForms: '글루콘산아연·구연산아연 등, 속이 불편하면 식사와 함께',
+    foodUpperLimit: true,
+    produceSensitive: false,
+    typicalFoods: ['굴', '소고기', '돼지고기', '달걀', '콩·견과류'],
+    caution: '아연을 오래 많이 먹으면 구리가 부족해질 수 있어요. 하루 상한을 넘지 않게 하세요.',
+  },
+  {
+    key: 'folate',
+    label: '엽산',
+    unit: 'μg DFE',
+    from: { per100: 'folateUg' },
+    supplement: true,
+    supplementForms: '엽산(폴산) — 종합비타민에 든 양으로 채우는 경우가 많아요',
+    // 상한은 보충제·강화식품의 엽산(folic acid)에만 해당 — 음식으로는 '많음'을 말하지 않는다.
+    foodUpperLimit: false,
+    upperLimitBasis: '영양제·강화식품의 엽산',
+    upperLimitUnit: 'μg',
+    produceSensitive: true,
+    typicalFoods: ['시금치·쑥갓 같은 녹색 잎채소', '브로콜리', '콩·두부', '달걀', '딸기·키위'],
+    caution: '임신을 계획 중이라면 권장량이 달라 의사·약사와 상의하세요. 고용량 엽산은 비타민 B12 부족을 가릴 수 있어요.',
   },
   {
     key: 'sodium',
@@ -176,11 +223,10 @@ export const NUTRIENT_DEFS: readonly NutrientDef[] = [
   },
 ];
 
-// 식단 데이터(식약처 음식 표준데이터)에 값이 없어 판단할 수 없는 영양소 — 영양제로 흔히 찾지만 부족하다고 말하지 않는다.
+// 식단 데이터에 값이 (거의) 없어 판단할 수 없는 영양소 — 영양제로 흔히 찾지만 부족하다고 말하지 않는다. K-FIND 음식
+// DB 에서도 음식 행 채움이 낮다(2026-11-07 실측, 영양소 있는 음식 행 중: B12·셀레늄 ~19%, B6·비타민 K 2%, 요오드 0,
+// 비타민 E·오메가3 60% — 보류가 잦을 것으로 보고 이번엔 넣지 않았다).
 export const NOT_MEASURED_NUTRIENTS: readonly string[] = [
-  '마그네슘',
-  '아연',
-  '엽산',
   '비타민 B6',
   '비타민 B12',
   '비타민 E',

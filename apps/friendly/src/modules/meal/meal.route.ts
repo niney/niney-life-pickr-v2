@@ -60,7 +60,11 @@ const TokenParams = z.object({ token: z.string().min(1).max(64) });
 const mealRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const photos = app.mealPhotos;
-  const meals = new MealService(app.prisma, { photos, estimator: app.mealNutritionEstimator });
+  const meals = new MealService(app.prisma, {
+    photos,
+    estimator: app.mealNutritionEstimator,
+    nutrientRefs: app.foodNutrientRefs,
+  });
   const mealData = new MealDataService(app.prisma, { photos });
   const stats = new MealStatsService(app.prisma);
   const preferences = new MealPreferenceService(app.prisma);

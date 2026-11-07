@@ -1943,6 +1943,29 @@ model FoodWebEstimate {
   @@map("food_web_estimates")
 }
 
+// 영양 기준 음식 — 비타민·무기질(nutrientsPer100gJson)이 없는 음식 이름(외식 어휘·레시피·800선 행, 카탈로그 밖 식단
+// 이름)을 영양소가 있는 표준 음식(식약처 음식·원재료 행)에 잇는 어휘 단위 영구 캐시. 영양소 점검이 "먹은 열량 × 기준
+// 음식의 열량당 영양소"로 계산한다(docs/PLAN-meal-nutrition.md A). 숫자는 늘 기준 음식 행에서 오고, 규칙·LLM 은
+// 어느 음식과 가까운지만 고른다. refFoodId null = 물어봤지만 없음(다시 묻지 않음 — version 을 올리면 재질의).
+// method: borrowed(빌려온 영양의 원래 행) | synonym | rule | llm | admin | none. admin 은 일괄 재실행이 덮지 않는다.
+// FoodItem FK 를 두지 않는다 — 카탈로그 재적재·정리가 이 표에 막히지 않게(메뉴 LLM 캐시와 같은 선택).
+model FoodNutrientRef {
+  id         String   @id @default(cuid())
+  nameNorm   String   @unique
+  name       String
+  refFoodId  String?
+  method     String
+  confidence String?
+  reason     String?
+  model      String?
+  version    Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([refFoodId])
+  @@map("food_nutrient_refs")
+}
+
 model FoodImportRun {
   id              String    @id @default(cuid())
   // 'cron' | 'manual'

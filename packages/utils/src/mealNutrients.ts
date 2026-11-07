@@ -20,6 +20,10 @@ export const MEAL_NUTRIENT_STATUS_ORDER: Record<MealNutrientStatusKey, number> =
   unknown: 4,
 };
 
+// 영양성분 자료 출처 — 공공데이터 이용 조건(출처 표시). 영양소 점검 화면(웹·앱)이 같은 문구를 쓴다.
+export const MEAL_NUTRIENT_DATA_SOURCES =
+  '영양성분 자료: 식품영양성분 데이터베이스(식품의약품안전처) · 국가표준식품성분표 10개정판(농촌진흥청 국립식량과학원)';
+
 export const MEAL_NUTRIENT_REFERENCE_LABEL: Record<'rni' | 'ai' | 'cdrr', string> = {
   rni: '권장섭취량',
   ai: '충분섭취량',

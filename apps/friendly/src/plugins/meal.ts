@@ -5,6 +5,7 @@ import { env, isTest } from '../config/env.js';
 import { AiConfigService } from '../modules/ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 import { FoodService } from '../modules/food/food.service.js';
+import { FoodNutrientRefService } from '../modules/food/food-nutrient-ref.service.js';
 import { FoodWebEstimateService } from '../modules/food/food-web-estimate.service.js';
 import { MenuLlmMatchService } from '../modules/food/menu-llm-match.service.js';
 import { MenuNutritionResolver } from '../modules/food/menu-nutrition.js';
@@ -52,6 +53,22 @@ export default fp(
       }),
     );
 
+    // 영양 기준 음식 — 영양소 점검(resolveIds, 규칙)과 식단 저장 뒤 백그라운드 연결(schedule, 규칙 → LLM)이 같은
+    // 인스턴스를 쓴다(후보 메모·대기열 공유). LLM 은 메뉴 칼로리 매칭과 같은 chat 용도·모델. 테스트는 규칙만.
+    app.decorate(
+      'foodNutrientRefs',
+      new FoodNutrientRefService(
+        app.prisma,
+        isTest
+          ? {}
+          : {
+              aiConfig: new AiConfigService(app.prisma, buildLlmProviderEnv()),
+              model: env.OLLAMA_MENU_MATCH_MODEL,
+              logger: app.log,
+            },
+      ),
+    );
+
     // 부팅 직후 1회 + 매일 — DB 고아 행뿐 아니라 DB 기록 전에 종료돼 파일만 남은 경우도 정리한다.
     const runPhotoGc = async (): Promise<void> => {
       await mealPhotos.drainDeletionOutbox();
@@ -79,5 +96,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     mealPhotos: MealPhotoService;
     mealNutritionEstimator: MealNutritionEstimator;
+    foodNutrientRefs: FoodNutrientRefService;
   }
 }

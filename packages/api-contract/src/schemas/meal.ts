@@ -641,6 +641,10 @@ export const MealNutrientKey = z.enum([
   'niacin',
   'vitaminC',
   'sodium',
+  // 2026-11-07 — K-FIND 식품영양성분 DB 전체판(음식 DB)·국가표준식품성분표로 점검에 추가.
+  'magnesium',
+  'zinc',
+  'folate',
 ]);
 export type MealNutrientKeyType = z.infer<typeof MealNutrientKey>;
 
@@ -703,7 +707,7 @@ export const MealNutritionAnalysis = z.object({
   status: z.enum(['ok', 'insufficient']),
   insufficientReason: z.string().nullable(),
   nutrients: z.array(MealNutrientResult),
-  // 식단 데이터에 없어 판단할 수 없는 영양소(마그네슘·아연·엽산…).
+  // 식단 데이터에 (거의) 없어 판단할 수 없는 영양소(비타민 B6·B12·E·K·오메가-3·요오드·셀레늄).
   notMeasured: z.array(z.string()),
   notes: z.array(z.string()),
 });

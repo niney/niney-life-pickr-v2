@@ -12,6 +12,7 @@ import {
   useMealNutrition,
 } from '@repo/shared';
 import {
+  MEAL_NUTRIENT_DATA_SOURCES,
   MEAL_NUTRIENT_REFERENCE_LABEL,
   MEAL_NUTRIENT_STATUS_LABEL,
   MEAL_NUTRIENT_STATUS_ORDER,
@@ -157,6 +158,7 @@ const NutritionAnalysisView = ({ data, dim }: { data: MealNutritionAnalysisType;
       <p className="text-xs text-muted-foreground">
         식단 데이터에 값이 없어 판단하지 않는 영양소: {data.notMeasured.join(', ')}
       </p>
+      <p className="text-xs text-muted-foreground">{MEAL_NUTRIENT_DATA_SOURCES}</p>
     </div>
   );
 };

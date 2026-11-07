@@ -317,6 +317,61 @@ export const FoodAdminMealNutritionEstimateResult = z.object({
 });
 export type FoodAdminMealNutritionEstimateResultType = z.infer<typeof FoodAdminMealNutritionEstimateResult>;
 
+// ── 어드민: 영양 기준 음식 ──
+// 비타민·무기질이 없는 음식 이름(외식 어휘·레시피·카탈로그 밖 식단 이름)을 영양소가 있는 표준 음식에 이은 결과.
+// 영양소 점검이 "먹은 열량 × 기준 음식의 열량당 영양소"로 쓴다. 규칙·AI 가 고르고 어드민이 바로잡는다.
+export const FoodNutrientRefMethod = z.enum(['same', 'borrowed', 'synonym', 'rule', 'llm', 'admin', 'none']);
+export type FoodNutrientRefMethodType = z.infer<typeof FoodNutrientRefMethod>;
+
+export const FoodAdminNutrientRef = z.object({
+  name: z.string(),
+  nameNorm: z.string(),
+  method: FoodNutrientRefMethod,
+  refFoodId: z.string().nullable(),
+  refFoodName: z.string().nullable(),
+  confidence: z.string().nullable(),
+  reason: z.string().nullable(),
+  // 이 이름(또는 이 이름의 카탈로그 행)으로 적힌 식단 항목 수.
+  itemCount: z.number().int().nonnegative(),
+  updatedAt: z.string(),
+});
+export type FoodAdminNutrientRefType = z.infer<typeof FoodAdminNutrientRef>;
+
+export const FoodAdminNutrientRefsResult = z.object({
+  items: z.array(FoodAdminNutrientRef),
+  // 기준 음식이 있는 이름 / '없음'(AI 도 못 고름·어드민이 없음으로 고정) 이름.
+  linked: z.number().int().nonnegative(),
+  unlinked: z.number().int().nonnegative(),
+});
+export type FoodAdminNutrientRefsResultType = z.infer<typeof FoodAdminNutrientRefsResult>;
+
+export const FoodAdminNutrientRefSetInput = z.object({
+  name: z.string().trim().min(1).max(60),
+  // null = "기준 음식 없음"으로 고정.
+  refFoodId: z.string().min(1).nullable(),
+});
+export type FoodAdminNutrientRefSetInputType = z.infer<typeof FoodAdminNutrientRefSetInput>;
+
+export const FoodAdminNutrientRefClearQuery = z.object({ name: z.string().trim().min(1).max(60) });
+
+export const FoodAdminNutrientRefLinkInput = z.object({
+  // 비우면 식단 기록에 나온 이름 전체 — 지정하면 그 이름만 저장된 판정을 지우고 다시 묻는다.
+  names: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+});
+export type FoodAdminNutrientRefLinkInputType = z.infer<typeof FoodAdminNutrientRefLinkInput>;
+
+export const FoodAdminNutrientRefLinkResult = z.object({
+  // 백그라운드로 보낸 이름 수(끝나면 다시 불러오면 보인다). 0 이면 AI 미설정이거나 대기열이 찼다.
+  scheduled: z.number().int().nonnegative(),
+});
+export type FoodAdminNutrientRefLinkResultType = z.infer<typeof FoodAdminNutrientRefLinkResult>;
+
+export const FoodAdminNutrientRefCandidatesQuery = z.object({ q: z.string().trim().min(1).max(40) });
+export const FoodAdminNutrientRefCandidatesResult = z.object({
+  items: z.array(z.object({ id: z.string(), name: z.string(), dishType: z.string().nullable() })),
+});
+export type FoodAdminNutrientRefCandidatesResultType = z.infer<typeof FoodAdminNutrientRefCandidatesResult>;
+
 // ── 어드민: 출처 관측·병합 충돌 검토 큐 ──
 // 외부 소스가 보낸 값을 FoodItem 대표값과 별개로 남긴다. 단순 누적 필드
 // (aliases/popularity)는 관측만 남기고, 단일 대표값 필드만 충돌 검토 대상이다.

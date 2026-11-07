@@ -14,6 +14,8 @@ import {
   type ServingCatalogRow,
 } from '../food/food-serving.js';
 import { parseNutrientsPer100g, type NutrientsPer100g } from '../food/food-nutrients.js';
+import { isNutrientProfileRow, type NutrientRefTarget } from '../food/food-nutrient-ref.js';
+import type { FoodNutrientRefService } from '../food/food-nutrient-ref.service.js';
 import { parseJsonStringArray } from '../food/food.service.js';
 import { MealPreferenceService } from '../meal/meal-preference.service.js';
 import { commonMealNorms } from '../meal-recommendation/common-meals.js';
@@ -69,11 +71,15 @@ const SOUP_DISH_TYPES = new Set(['soup', 'stew']);
 const SOUP_NAME_RE = /(국밥|탕|찌개|전골|국)$/;
 // 100g당 열량이 이 이상인 무거운 음식(족발·장어구이·튀김…)도 뺀다 — 끼니 추천 건강 점수의 고밀도 기준과 같다.
 const SUGGESTION_MAX_KCAL_PER_100G = 200;
+// 비슷한 음식(영양 기준 음식)의 영양 구성으로 추정한 열량이 이 비율 이상이면 notes 에 밝힌다.
+const REF_NOTE_MIN_SHARE = 0.2;
 
 export interface AnalysisItem {
   eatenDate: string;
   entryId: string;
   name: string;
+  /** 식단 항목 이름의 정규화 키 — 카탈로그 밖 이름의 영양 기준 음식을 찾는다(없으면 이름으로 계산). */
+  nameNorm?: string | null;
   foodId: string | null;
   dishType: string | null;
   kcal: number | null;
@@ -83,6 +89,7 @@ export interface AnalysisItem {
 
 export interface AnalysisCatalogRow extends ServingCatalogRow {
   id: string;
+  nameNorm?: string;
   nutrientsPer100gJson: string | null;
 }
 
@@ -116,6 +123,23 @@ export const profileFrom = (
     basis: sex && ageGroup ? 'user' : 'default',
     unsupportedReason: null,
   };
+};
+
+// 점검이 보는 비타민·무기질 키(100g당) — 단백질·나트륨(스냅샷 우선)은 '정보 있음' 판단에서 뺀다.
+const VITAMIN_MINERAL_KEYS = NUTRIENT_DEFS.flatMap((d) => ('per100' in d.from ? [d.from.per100] : []));
+const hasVitaminMinerals = (per100: NutrientsPer100g): boolean =>
+  VITAMIN_MINERAL_KEYS.some((k) => per100[k] !== undefined);
+
+/** 기준 행의 100g당 단백질·나트륨 — JSON(원재료·2026-11 이후 적재분)이 먼저, 없으면 1인분 ÷ 1인분 중량. */
+const per100Of = (
+  row: AnalysisCatalogRow,
+  per100: NutrientsPer100g,
+  key: 'proteinG' | 'sodiumMg',
+): number | null => {
+  const v = per100[key];
+  if (v !== undefined) return v;
+  const serving = key === 'proteinG' ? row.proteinG : row.sodiumMg;
+  return serving !== null && row.servingG && row.servingG > 0 ? (serving * 100) / row.servingG : null;
 };
 
 const isDrinkRow = (row: AnalysisCatalogRow | null, itemDishType: string | null): boolean =>
@@ -223,6 +247,11 @@ export const assessNutrient = ({
 export interface AnalyzeInput {
   items: AnalysisItem[];
   rowsById: ReadonlyMap<string, AnalysisCatalogRow>;
+  /**
+   * 영양 기준 음식 — 이름(정규화) → 영양소 있는 표준 음식 행. 항목의 카탈로그 행에 비타민·무기질이 없으면 행 이름,
+   * 카탈로그 밖 이름이면 항목 이름으로 찾는다(FoodNutrientRefService.resolveIds).
+   */
+  refRowsByName?: ReadonlyMap<string, AnalysisCatalogRow>;
   profile: AnalysisProfile;
   from: string;
   to: string;
@@ -247,10 +276,15 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
   const mealCount = new Set(items.map((i) => i.entryId)).size;
   const used = items.filter((i) => analyzedDates.has(i.eatenDate));
 
-  // 먹은 g 과 영양소 합계.
+  // 영양소 합계 — 먹은 열량 × 기준 행의 열량당 영양소(100g당 값 ÷ 100g당 열량). 기준 행은 항목의 카탈로그 행이
+  // 비타민·무기질과 100g당 열량을 가지면 그 행(예전 "먹은 g = 열량 ÷ 100g당 열량 × 100" 과 같은 값), 아니면 영양 기준
+  // 음식(refRowsByName). 1인분 무게를 몰라도 되므로 g 환산이 안 되던 행·웹 실측 열량만 있는 이름도 들어온다.
   let energyKcal = 0;
   let nutrientCoveredKcal = 0;
   let produceGapCount = 0;
+  let refKcal = 0;
+  const refNames = new Map<string, number>();
+  const refRows = input.refRowsByName ?? new Map<string, AnalysisCatalogRow>();
   const totals = new Map<KdriNutrient, NutrientTotals>(
     NUTRIENT_DEFS.map((d) => [d.key, { amount: 0, coveredKcal: 0, bySource: new Map() }]),
   );
@@ -264,15 +298,28 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
     }
     energyKcal += it.kcal;
     const drink = isDrinkRow(row, it.dishType);
-    const per100: NutrientsPer100g = row ? parseNutrientsPer100g(row.nutrientsPer100gJson) : {};
-    const kcal100 = row ? kcalPer100gOf(row) : null;
-    const grams = kcal100 && kcal100 > 0 ? (it.kcal / kcal100) * 100 : null;
-    if (drink || (grams !== null && Object.keys(per100).length > 0)) nutrientCoveredKcal += it.kcal;
+    const own = row && isNutrientProfileRow(row) ? row : null;
+    const ref = own
+      ? null
+      : ((row?.nameNorm ? refRows.get(row.nameNorm) : undefined) ??
+        refRows.get(it.nameNorm || normalizeTerm(it.name)) ??
+        null);
+    const basis = own ?? ref ?? row;
+    const per100: NutrientsPer100g = basis ? parseNutrientsPer100g(basis.nutrientsPer100gJson) : {};
+    const kcal100 = basis ? kcalPer100gOf(basis) : null;
+    // 먹은 열량 ÷ 기준 행의 100g당 열량 = 기준 행으로 환산한 100g 단위 양.
+    const factor = kcal100 && kcal100 > 0 ? it.kcal / kcal100 : null;
+    const hasVitamins = factor !== null && hasVitaminMinerals(per100);
+    if (drink || hasVitamins) nutrientCoveredKcal += it.kcal;
+    if (!drink && ref && hasVitamins) {
+      refKcal += it.kcal;
+      refNames.set(it.name, (refNames.get(it.name) ?? 0) + it.kcal);
+    }
     if (
       !drink &&
       row?.source === 'mfds-raw' &&
       PRODUCE_RAW_CATEGORIES.has(row.sourceCategory ?? '') &&
-      Object.keys(per100).length === 0
+      !hasVitamins
     ) {
       produceGapCount += 1;
     }
@@ -280,11 +327,16 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
       const t = totals.get(def.key)!;
       let value: number | null = null;
       if ('snapshot' in def.from) {
+        // 저장 스냅샷이 먼저 — 비면(1인분이 없는 원재료·기준 음식으로 추정한 항목) 기준 행의 100g당 값으로.
         value = def.from.snapshot === 'proteinG' ? it.proteinG : it.sodiumMg;
+        if (value === null && factor !== null && basis) {
+          const p = per100Of(basis, per100, def.from.snapshot);
+          if (p !== null) value = p * factor;
+        }
       } else if (drink) {
         value = 0;
-      } else if (grams !== null && per100[def.from.per100] !== undefined) {
-        value = (per100[def.from.per100]! * grams) / 100;
+      } else if (factor !== null && per100[def.from.per100] !== undefined) {
+        value = per100[def.from.per100]! * factor;
       }
       if (value === null) continue;
       t.amount += value;
@@ -349,6 +401,14 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
       `과일·채소 기록 ${produceGapCount}개는 아직 영양 정보가 없어 비타민 C·칼륨·식이섬유가 실제보다 적게 잡혔을 수 있어요.`,
     );
   }
+  // 비슷한 음식의 영양 구성으로 추정한 몫이 크면 밝힌다(사용자 결정 2026-11-07: 그 몫이 클 때 한 줄).
+  if (!insufficient && energyKcal > 0 && refKcal / energyKcal >= REF_NOTE_MIN_SHARE) {
+    const top = [...refNames.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    const examples = top.slice(0, 2).join('·');
+    notes.push(
+      `${examples}${top.length > 2 ? ' 등' : ''} ${top.length}가지 음식은 비슷한 음식의 영양 구성으로 추정했어요(기록 열량의 ${Math.round((refKcal / energyKcal) * 100)}%).`,
+    );
+  }
 
   return {
     from: input.from,
@@ -391,7 +451,11 @@ export class MealNutritionService {
   private suggestionCache: { at: number; lexicon: Lexicon; list: SuggestionCandidate[] } | null = null;
   private suggestionLoading: Promise<SuggestionCandidate[]> | null = null;
 
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    // 영양 기준 음식 — 없으면(옛 호출부·일부 테스트) 카탈로그 행 자신의 영양소만 쓴다.
+    private readonly deps: { refs?: Pick<FoodNutrientRefService, 'resolveIds'> } = {},
+  ) {}
 
   private async lexicon(): Promise<Lexicon> {
     if (this.lexiconCache && Date.now() - this.lexiconCache.at < LEXICON_TTL_MS) {
@@ -471,6 +535,7 @@ export class MealNutritionService {
           items: {
             select: {
               name: true,
+              nameNorm: true,
               foodId: true,
               dishType: true,
               kcal: true,
@@ -486,6 +551,7 @@ export class MealNutritionService {
         eatenDate: e.eatenDate,
         entryId: e.id,
         name: i.name,
+        nameNorm: i.nameNorm,
         foodId: i.foodId,
         dishType: i.dishType,
         kcal: i.kcal,
@@ -497,10 +563,13 @@ export class MealNutritionService {
     const rows = ids.length
       ? await this.prisma.foodItem.findMany({ where: { id: { in: ids } }, select: CATALOG_SELECT })
       : [];
+    const rowsById = new Map<string, AnalysisCatalogRow>(rows.map((r) => [r.id, r]));
+    const refRowsByName = await this.refRows(items, rowsById);
     const profile = profileFrom(preference.sex, preference.birthYear, today);
     const base = analyzeMealNutrition({
       items,
-      rowsById: new Map(rows.map((r) => [r.id, r])),
+      rowsById,
+      refRowsByName,
       profile,
       from,
       to: today,
@@ -520,6 +589,42 @@ export class MealNutritionService {
         suggestions.has(n.key) ? { ...n, foodSuggestions: suggestions.get(n.key) ?? [] } : n,
       ),
     };
+  }
+
+  /**
+   * 영양 기준 음식 행 — 비타민·무기질이 없는 카탈로그 행(이름)과 카탈로그 밖 항목 이름을 기준 음식에 잇는다.
+   * 열량이 없는 항목·음료는 점검에서 어차피 빠지거나 0 으로 세므로 묻지 않는다.
+   */
+  private async refRows(
+    items: readonly AnalysisItem[],
+    rowsById: ReadonlyMap<string, AnalysisCatalogRow>,
+  ): Promise<Map<string, AnalysisCatalogRow>> {
+    const out = new Map<string, AnalysisCatalogRow>();
+    if (!this.deps.refs) return out;
+    const targets: NutrientRefTarget[] = [];
+    for (const it of items) {
+      if (it.kcal === null) continue;
+      const row = it.foodId ? rowsById.get(it.foodId) : undefined;
+      if (row) {
+        if (isNutrientProfileRow(row) || isDrinkRow(row, it.dishType) || !row.nameNorm) continue;
+        targets.push({ name: row.name, nameNorm: row.nameNorm, dishType: row.dishType, nutritionFrom: row.nutritionFrom });
+      } else if (!isDrinkRow(null, it.dishType)) {
+        targets.push({ name: it.name, nameNorm: it.nameNorm || normalizeTerm(it.name), dishType: it.dishType, nutritionFrom: null });
+      }
+    }
+    if (targets.length === 0) return out;
+    const ids = await this.deps.refs.resolveIds(targets);
+    if (ids.size === 0) return out;
+    const refRows = await this.prisma.foodItem.findMany({
+      where: { id: { in: [...new Set(ids.values())] } },
+      select: CATALOG_SELECT,
+    });
+    const byId = new Map(refRows.map((r) => [r.id, r]));
+    for (const [nameNorm, id] of ids) {
+      const r = byId.get(id);
+      if (r) out.set(nameNorm, r);
+    }
+    return out;
   }
 
   /**
@@ -578,6 +683,7 @@ export class MealNutritionService {
 const CATALOG_SELECT = {
   id: true,
   name: true,
+  nameNorm: true,
   source: true,
   sourceCategory: true,
   dishType: true,

@@ -15,6 +15,7 @@ import {
   type Theme,
 } from '@repo/shared';
 import {
+  MEAL_NUTRIENT_DATA_SOURCES,
   MEAL_NUTRIENT_REFERENCE_LABEL,
   MEAL_NUTRIENT_STATUS_LABEL,
   MEAL_NUTRIENT_STATUS_ORDER,
@@ -152,6 +153,7 @@ const AnalysisBody = ({ data, styles }: { data: MealNutritionAnalysisType; style
       ) : null}
       {showUnknown ? unknown.map((n) => <NutrientRow key={n.key} n={n} styles={styles} />) : null}
       <Text style={styles.small}>식단 데이터에 값이 없어 판단하지 않는 영양소: {data.notMeasured.join(', ')}</Text>
+      <Text style={styles.small}>{MEAL_NUTRIENT_DATA_SOURCES}</Text>
     </View>
   );
 };

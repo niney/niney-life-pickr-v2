@@ -35,6 +35,7 @@ import {
   buildMealNutritionAdviceUserPrompt,
   shortfallOf,
   supplementAllowed,
+  upperLimitText,
 } from './meal-nutrition.prompts.js';
 import { MealNutritionService } from './meal-nutrition.service.js';
 
@@ -430,7 +431,7 @@ const fallbackSupplementTip = (n: MealNutrientResultType): string | null => {
   if (shortfall !== null && shortfall > 0) {
     parts.push(`하루 부족분(약 ${formatNutrientAmount(shortfall)}${n.unit}) 정도면 충분해요.`);
   }
-  if (n.upperLimit !== null) parts.push(`상한섭취량(${formatNutrientAmount(n.upperLimit)}${n.unit})은 넘기지 마세요.`);
+  if (n.upperLimit !== null) parts.push(`상한섭취량(${upperLimitText(n)})은 넘기지 마세요.`);
   return parts.join(' ');
 };
 
@@ -501,8 +502,9 @@ const HAN_RE = /\p{Script=Han}/u;
 // 병을 고치거나 막는다는 말 — 진단·치료 조언처럼 읽히지 않게.
 const CLAIM_RE = /치료|완치|예방/;
 // 점검하지 않은 영양소·흔한 건강기능식품 — 기록 근거 없이 권하게 되므로 말하지 않는다(NOT_MEASURED_NUTRIENTS 등).
+// 마그네슘·아연·엽산은 2026-11-07 부터 점검하는 영양소라 뺐다(조언 대상이 아닐 때는 프롬프트 규칙이 막는다).
 const OFF_LIST_RE =
-  /마그네슘|아연|엽산|오메가|요오드|셀레늄|유산균|프로바이오틱스|루테인|밀크씨슬|콜라겐|코엔자임|비오틴|비타민\s?(?:B6|B12|E|K)(?![A-Za-z0-9])/;
+  /오메가|요오드|셀레늄|유산균|프로바이오틱스|루테인|밀크씨슬|콜라겐|코엔자임|비오틴|비타민\s?(?:B6|B12|E|K)(?![A-Za-z0-9])/;
 
 const toNumber = (raw: string): number => Number(raw.replace(/,/g, ''));
 

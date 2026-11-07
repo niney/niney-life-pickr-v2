@@ -5,6 +5,11 @@
 //   ai   충분섭취량 — 근거가 부족해 rni 대신 둔 양(식이섬유·칼륨·비타민D).
 //   ul   상한섭취량 — 넘으면 해로울 수 있는 양(니아신은 니코틴산 기준).
 //   cdrr 만성질환위험감소섭취량(나트륨) — 이보다 적게 먹으라는 양.
+//
+// 마그네슘·아연·엽산(2026-11-07 추가)은 2020 KDRI 표를 옮겼다 — 마그네슘·아연: Nutr Res Pract 2022;16(Suppl 1):S113
+// Table 1 '2020 KDRIs for Mg, Zn, and Cu'(아연은 J Nutr Health 2022;55(4):441 Table 2 와 대조해 같음), 엽산: J Nutr
+// Health 2022;55(3):330 Table 1. 마그네슘 상한은 식품 외 급원(보충제)만, 엽산 상한은 보충제·강화식품의 엽산(folic acid)만
+// 해당해 음식으로는 '많음'을 말하지 않는다(meal-nutrition.defs 의 foodUpperLimit). 엽산 단위는 μg DFE.
 
 export type KdriSex = 'male' | 'female';
 export const KDRI_AGE_GROUPS = ['12-14', '15-18', '19-29', '30-49', '50-64', '65-74', '75+'] as const;
@@ -23,6 +28,9 @@ export const KDRI_NUTRIENTS = [
   'niacin',
   'vitaminC',
   'sodium',
+  'magnesium',
+  'zinc',
+  'folate',
 ] as const;
 export type KdriNutrient = (typeof KDRI_NUTRIENTS)[number];
 
@@ -84,6 +92,21 @@ const TABLE: Readonly<Record<KdriSex, Readonly<Record<KdriNutrient, Columns>>>> 
       ai: [1500, 1500, 1500, 1500, 1500, 1300, 1100],
       cdrr: [2300, 2300, 2300, 2300, 2300, 2100, 1700],
     },
+    magnesium: {
+      ear: [260, 340, 300, 310, 310, 310, 310],
+      rni: [320, 410, 360, 370, 370, 370, 370],
+      ul: [270, 350, 350, 350, 350, 350, 350],
+    },
+    zinc: {
+      ear: [7, 8, 9, 8, 8, 8, 7],
+      rni: [8, 10, 10, 10, 10, 9, 9],
+      ul: [27, 33, 35, 35, 35, 35, 35],
+    },
+    folate: {
+      ear: [300, 330, 320, 320, 320, 320, 320],
+      rni: [360, 400, 400, 400, 400, 400, 400],
+      ul: [800, 900, 1000, 1000, 1000, 1000, 1000],
+    },
   },
   female: {
     protein: { ear: [45, 45, 45, 40, 40, 40, 40], rni: [55, 55, 55, 50, 50, 50, 50] },
@@ -123,6 +146,21 @@ const TABLE: Readonly<Record<KdriSex, Readonly<Record<KdriNutrient, Columns>>>> 
     sodium: {
       ai: [1500, 1500, 1500, 1500, 1500, 1300, 1100],
       cdrr: [2300, 2300, 2300, 2300, 2300, 2100, 1700],
+    },
+    magnesium: {
+      ear: [240, 290, 230, 240, 240, 240, 240],
+      rni: [290, 340, 280, 280, 280, 280, 280],
+      ul: [270, 350, 350, 350, 350, 350, 350],
+    },
+    zinc: {
+      ear: [6, 7, 7, 7, 6, 6, 6],
+      rni: [8, 9, 8, 8, 8, 7, 7],
+      ul: [27, 33, 35, 35, 35, 35, 35],
+    },
+    folate: {
+      ear: [300, 330, 320, 320, 320, 320, 320],
+      rni: [360, 400, 400, 400, 400, 400, 400],
+      ul: [800, 900, 1000, 1000, 1000, 1000, 1000],
     },
   },
 };

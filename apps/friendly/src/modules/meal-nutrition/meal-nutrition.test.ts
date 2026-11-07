@@ -32,8 +32,8 @@ import {
   sanitizeAdvice,
   textProblem,
 } from './meal-nutrition-advice.service.js';
-import { NUTRIENT_DEFS } from './meal-nutrition.defs.js';
-import { buildMealNutritionAdviceUserPrompt } from './meal-nutrition.prompts.js';
+import { NOT_MEASURED_NUTRIENTS, NUTRIENT_DEFS } from './meal-nutrition.defs.js';
+import { buildMealNutritionAdviceUserPrompt, upperLimitText } from './meal-nutrition.prompts.js';
 import {
   MealNutritionService,
   analyzeMealNutrition,
@@ -279,6 +279,83 @@ describe('analyzeMealNutrition', () => {
   });
 });
 
+describe('analyzeMealNutrition — 영양 기준 음식(2026-11-07)', () => {
+  // 운영 모양: 외식 어휘 '공기밥'(1인분 349kcal·210g, 비타민·무기질·단백질 없음) → 쌀밥 기준.
+  const RICE_STD: NutrientsPer100g = { ...RICE, proteinG: 3, sodiumMg: 2 };
+  const rows = new Map<string, AnalysisCatalogRow>([
+    ...ROWS,
+    ['gongi', row('gongi', '공기밥', 349, 210, null, { source: 'menu-canonical', nameNorm: '공기밥' })],
+    ['chicken', row('chicken', '치킨', 342, 300, null, { source: 'menu-canonical', nameNorm: '치킨', kcalPer100g: null, servingG: null })],
+  ]);
+  const ref = new Map<string, AnalysisCatalogRow>([
+    ['공기밥', row('ricestd', '쌀밥', 150, 100, RICE_STD, { nameNorm: '쌀밥' })],
+    ['치킨', row('friedstd', '닭튀김', 600, 300, STEW, { nameNorm: '닭튀김' })],
+  ]);
+  const gongiMeal = (d: string, entryId: string): AnalysisItem[] => [
+    { eatenDate: d, entryId, name: '공기밥', foodId: 'gongi', dishType: 'rice', kcal: 300, proteinG: null, sodiumMg: null },
+    { eatenDate: d, entryId, name: '된장찌개', foodId: 'stew', dishType: 'stew', kcal: 150, proteinG: 10, sodiumMg: 1800 },
+  ];
+  const items = days(5).flatMap((d) => [...gongiMeal(d, `${d}-l`), ...gongiMeal(d, `${d}-d`)]);
+  const run = (refRowsByName?: Map<string, AnalysisCatalogRow>) =>
+    analyzeMealNutrition({ items, rowsById: rows, refRowsByName, profile: profileFrom(null, null, '2026-10-04'), from: '2026-09-21', to: '2026-10-04', days: 14 });
+
+  it('기준 음식이 없으면 그 열량은 정보 없음 — 있으면 열량당 밀도로 계산해 현미밥 행과 같은 값', () => {
+    const without = run();
+    expect(nutrient(without, 'calcium').coverage).toBeCloseTo(150 / 450, 2);
+    const withRef = run(ref);
+    // 쌀밥 기준: 300kcal ÷ 150kcal/100g = 200g 어치 → 칼슘 10mg(위 '현미밥 200g' 과 같다).
+    expect(nutrient(withRef, 'calcium').intakePerDay).toBe(260);
+    expect(nutrient(withRef, 'calcium').coverage).toBe(1);
+    // 스냅샷이 빈 단백질은 기준 음식의 100g당 단백질로 — 끼니당 6g + 된장찌개 10g → 하루 32g.
+    expect(nutrient(withRef, 'protein').intakePerDay).toBe(32);
+    expect(nutrient(withRef, 'protein').coverage).toBe(1);
+    // 추정 몫이 크면 밝힌다(공기밥 300/450 = 67%).
+    expect(withRef.notes.some((n) => n.includes('공기밥') && n.includes('비슷한 음식') && n.includes('67%'))).toBe(true);
+  });
+
+  it('행이 영양을 빌려 왔어도 100g당 열량이 없으면 기준 음식으로 — 카탈로그 밖 이름은 항목 이름으로 찾는다', () => {
+    const chickenItems = days(4).flatMap((d) => [
+      ...meal(d, `${d}-l`),
+      { eatenDate: d, entryId: `${d}-d`, name: '치킨', foodId: 'chicken', dishType: 'fried', kcal: 600, proteinG: 40, sodiumMg: 900 },
+      { eatenDate: d, entryId: `${d}-d`, name: '양념 반 후라이드 반', nameNorm: '치킨', foodId: null, dishType: null, kcal: 300, proteinG: null, sodiumMg: null },
+    ]);
+    const a = analyzeMealNutrition({ items: chickenItems, rowsById: rows, refRowsByName: ref, profile: profileFrom(null, null, '2026-10-04'), from: '2026-09-21', to: '2026-10-04', days: 14 });
+    expect(nutrient(a, 'calcium').coverage).toBe(1);
+    // 닭튀김 기준(200kcal/100g): 600kcal → 300g 어치 → 칼슘 90mg, 300kcal → 45mg.
+    expect(nutrient(a, 'calcium').topSources).toContain('치킨');
+  });
+});
+
+describe('마그네슘·아연·엽산(2026-11-07)', () => {
+  it('2020 KDRI 원문 값 — 성별을 모르면 남녀 중 낮은 값, 상한은 음식으로 판단하지 않는 영양소가 있다', () => {
+    expect(nutrientReference('magnesium', 'male', '30-49')).toEqual({ ear: 310, rni: 370, ul: 350 });
+    expect(nutrientReference('magnesium', 'female', '19-29')).toEqual({ ear: 230, rni: 280, ul: 350 });
+    expect(nutrientReference('zinc', null, '30-49')).toEqual({ ear: 7, rni: 8, ul: 35 });
+    expect(nutrientReference('folate', null, '15-18')).toEqual({ ear: 330, rni: 400, ul: 900 });
+    const byKey = new Map(NUTRIENT_DEFS.map((d) => [d.key, d]));
+    expect(byKey.get('magnesium')?.foodUpperLimit).toBe(false);
+    expect(byKey.get('folate')?.foodUpperLimit).toBe(false);
+    expect(byKey.get('zinc')?.foodUpperLimit).toBe(true);
+    expect(NOT_MEASURED_NUTRIENTS).not.toContain('마그네슘');
+  });
+
+  it('카탈로그에 값이 있으면 다른 영양소처럼 판정하고, 마그네슘 보충제 상한(350mg)을 음식으로 넘어도 많음이 아니다', () => {
+    const RICH = new Map<string, AnalysisCatalogRow>([
+      ['rice', row('rice', '현미밥', 300, 200, { ...RICE, magnesiumMg: 150, zincMg: 1.5, folateUg: 10 })],
+      ['stew', row('stew', '된장찌개', 150, 400, { ...STEW, magnesiumMg: 20, zincMg: 0.5, folateUg: 30 })],
+    ]);
+    const a = analyzeMealNutrition({ items: twoMealsPerDay(5), rowsById: RICH, profile: profileFrom(null, null, '2026-10-04'), from: '2026-09-21', to: '2026-10-04', days: 14 });
+    // 끼니당 마그네슘: 현미밥 200g → 300mg + 된장찌개 400g → 80mg = 380 → 하루 760mg(보충제 상한 350 초과지만 음식이라 많음 아님).
+    expect(nutrient(a, 'magnesium')).toMatchObject({ intakePerDay: 760, status: 'ok', coverage: 1 });
+    // 엽산: 끼니당 20 + 120 = 140μg → 하루 280 < 평균필요량 320 → 부족.
+    expect(nutrient(a, 'folate')).toMatchObject({ intakePerDay: 280, status: 'low', unit: 'μg DFE' });
+    // 상한은 형태가 정해져 있어 기준·단위를 밝힌다(엽산 섭취는 μg DFE, 상한은 엽산 μg).
+    expect(upperLimitText(nutrient(a, 'folate'))).toBe('1,000μg(영양제·강화식품의 엽산 기준)');
+    expect(upperLimitText(nutrient(a, 'magnesium'))).toBe('350mg(영양제(식품 외) 마그네슘 기준)');
+    expect(upperLimitText(nutrient(a, 'zinc'))).toBe('35mg');
+  });
+});
+
 describe('조언 후보·검사', () => {
   const a = analyze(twoMealsPerDay(5));
   const candidates = adviceCandidates(a);
@@ -314,8 +391,10 @@ describe('조언 후보·검사', () => {
     const allowed = new Set([8.5, 340, 100, 4000, 60]);
     expect(textProblem('칼슘(鈣)이 부족해요.', allowed)).toBe('hanja');
     expect(textProblem('골다공증 예방에 좋아요.', allowed)).toBe('claim');
-    expect(textProblem('마그네슘도 함께 드세요.', allowed)).toBe('offlist');
+    expect(textProblem('오메가-3도 함께 드세요.', allowed)).toBe('offlist');
     expect(textProblem('비타민 E 도 챙기세요.', allowed)).toBe('offlist');
+    // 마그네슘·아연·엽산은 2026-11-07 부터 점검하는 영양소 — 목록 밖 검사에 걸리지 않는다.
+    expect(textProblem('마그네슘은 현미밥·두부로 채워 보세요.', allowed)).toBeNull();
     expect(textProblem('하루 1,000IU 를 드세요.', allowed)).toBe('number');
     expect(textProblem('하루 8.5μg(340IU) 정도면 돼요. 상한 4,000IU', allowed)).toBeNull();
     expect(textProblem('하루 1~2번 나눠, 15~20분 햇빛', allowed)).toBeNull();

@@ -87,6 +87,7 @@ import {
 import { useDebounced } from '~/lib/useDebounced';
 import { cn } from '~/lib/utils';
 import { MealNutritionGapSection } from './MealNutritionGapSection';
+import { NutrientRefSection } from './NutrientRefSection';
 
 // ── 공통 상수/헬퍼 ───────────────────────────────────────────────────────────
 
@@ -206,6 +207,7 @@ export const AdminFoodPage = () => (
     <MergeConflictSection />
     <RecognitionQualitySection />
     <MealNutritionGapSection />
+    <NutrientRefSection />
     <MenuLexiconSection />
     <CatalogSection />
   </div>

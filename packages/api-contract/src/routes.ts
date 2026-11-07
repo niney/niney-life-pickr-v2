@@ -304,6 +304,10 @@ export const Food = {
   // 열량이 비었거나 이름으로 추정한 식단 항목 이름 목록(기록 수 순) / 추정 다시 돌리기(POST).
   adminMealNutritionGaps: `${API_PREFIX}/admin/food/meal-nutrition-gaps`,
   adminMealNutritionGapsEstimate: `${API_PREFIX}/admin/food/meal-nutrition-gaps/estimate`,
+  // 영양 기준 음식 — 목록(GET)·어드민 지정(PUT)·해제(DELETE ?name=) / 다시 연결(POST) / 기준 후보 검색(GET ?q=).
+  adminNutrientRefs: `${API_PREFIX}/admin/food/nutrient-refs`,
+  adminNutrientRefsLink: `${API_PREFIX}/admin/food/nutrient-refs/link`,
+  adminNutrientRefCandidates: `${API_PREFIX}/admin/food/nutrient-refs/candidates`,
   // 적재 잡 설정 조회/변경 — GET/PUT.
   importConfig: `${API_PREFIX}/admin/food/import`,
   // 지금 실행(manual) — body 로 이번 회차 소스/분류 여부 오버라이드 가능.

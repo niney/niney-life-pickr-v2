@@ -28,7 +28,8 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   const dailyQuota = new MealDailyQuotaService(app.prisma);
-  const nutrition = new MealNutritionService(app.prisma);
+  // 영양 기준 음식(plugins/meal) — 비타민·무기질이 없는 행·이름을 표준 음식의 열량당 영양소로 계산한다.
+  const nutrition = new MealNutritionService(app.prisma, { refs: app.foodNutrientRefs });
   const advice = new MealNutritionAdviceService(app.prisma, aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
