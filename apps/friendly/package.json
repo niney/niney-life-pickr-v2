@@ -40,6 +40,7 @@
     "probe:meal-vision": "tsx --env-file=.env scripts/probe-meal-vision.ts",
     "probe:meal-e2e": "tsx --env-file=.env scripts/probe-meal-e2e.ts",
     "probe:meal-recommend": "tsx --env-file=.env scripts/probe-meal-recommend.ts",
+    "probe:meal-recommend-nutrition": "tsx --env-file=.env scripts/probe-meal-recommend-nutrition.ts",
     "probe:meal-settings": "tsx --env-file=.env scripts/probe-meal-settings.ts",
     "probe:meal-models": "tsx --env-file=.env scripts/probe-meal-models.ts",
     "probe:meal-nutrition": "tsx --env-file=.env scripts/probe-meal-nutrition.ts",
