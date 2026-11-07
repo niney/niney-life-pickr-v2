@@ -2155,6 +2155,8 @@ model MealRecommendation {
   itemsJson     String   @default("[]")
   summary       String   @default("")
   notice        String?
+  // 끼니로 못 채운 부족 영양소의 곁들임 MealRecommendationSide[] JSON — 서버가 정한다(LLM 아님). null = 예전 추천.
+  sidesJson     String?
   // done|fallback|failed
   status        String
   model         String?

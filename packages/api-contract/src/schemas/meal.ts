@@ -829,6 +829,14 @@ export const MealRecommendationFeedback = z.object({
 });
 export type MealRecommendationFeedbackType = z.infer<typeof MealRecommendationFeedback>;
 
+// 끼니로 못 채운 부족 영양소의 곁들임 — 서버가 영양 탭 곁들임 후보에서 정한다(LLM 이 쓰지 않는다).
+export const MealRecommendationSide = z.object({
+  name: z.string(),
+  // 채우는 부족 영양소 이름(비타민 C·칼슘…).
+  nutrients: z.array(z.string()),
+});
+export type MealRecommendationSideType = z.infer<typeof MealRecommendationSide>;
+
 export const MealRecommendation = z.object({
   id: z.string(),
   targetDate: DateString,
@@ -841,6 +849,8 @@ export const MealRecommendation = z.object({
   promptVersion: z.number().int(),
   // 기록이 적어 추천 근거가 약할 때의 안내(콜드 스타트 등).
   notice: z.string().nullable(),
+  // "곁들이면 좋아요" 한 줄 — 최대 3개. 예전 추천·건강 중요도 0·부족 영양소가 없으면 빈 배열.
+  sides: z.array(MealRecommendationSide).default([]),
   feedback: MealRecommendationFeedback.nullable(),
   // 후보별 평가는 세트 평가와 분리해 취향 학습에만 사용한다.
   candidateRatings: z.array(

@@ -464,6 +464,16 @@ const RecommendationCard = ({
         {rec.targetDate} {MEAL_SLOT_LABEL[rec.targetSlot]} 추천
       </CardTitle>
       {rec.summary ? <p className="text-sm text-muted-foreground">{rec.summary}</p> : null}
+      {/* 끼니로 못 채운 부족 영양소의 곁들임(서버가 영양 탭 곁들임 후보에서 정한 것) — 권하는 말투 한 줄만.
+          응답을 검증하지 않고 받으므로 예전 서버 응답(sides 없음)도 견딘다. */}
+      {(rec.sides ?? []).length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          곁들이면 좋아요 · {rec.sides.map((s) => `${s.name}(${s.nutrients.join('·')})`).join(' · ')} ·{' '}
+          <Link to="/me/meals?tab=nutrition" className="text-primary hover:underline">
+            영양 보기
+          </Link>
+        </p>
+      ) : null}
       {/* 추천 하나는 기록 하나로만 이어진다(서버가 두 번째 연결을 거부) — 이어졌으면 기록으로 보낸다. */}
       {rec.feedback?.eatenEntryId ? (
         <p className="text-xs text-muted-foreground">

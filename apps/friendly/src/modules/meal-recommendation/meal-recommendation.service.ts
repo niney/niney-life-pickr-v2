@@ -7,6 +7,7 @@ import type {
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
 import {
+  MealRecommendationSide,
   MealRecommendationStatus,
   type CreateMealRecommendationInputType,
   type DeleteMealRecommendationsResultType,
@@ -17,6 +18,7 @@ import {
   type MealRecommendationEventInputType,
   type MealRecommendationEventType,
   type MealRecommendationItemType,
+  type MealRecommendationSideType,
   type MealRecommendationStatusType,
   type MealRecommendationType,
   type MealSlotType,
@@ -59,6 +61,7 @@ import {
   isSoupLike,
   nutritionSignalsFrom,
   nutritionSignalsKey,
+  recommendationSides,
   stripUnsupportedNutrientClaims,
   supportedGapKeys,
   type NutritionSignals,
@@ -163,14 +166,22 @@ export class MealRecommendationService {
     };
   }
 
-  /** 영양소 점검 → 추천 신호. 점검 의존이 없거나 실패하면 null(신호 없이 예전처럼 추천). */
-  private async nutritionSignals(userId: string, today: string): Promise<NutritionSignals | null> {
-    if (!this.deps.nutrition) return null;
+  /**
+   * 영양소 점검 → 추천 신호와 영양소별 곁들임 후보(곁들임 한 줄). 점검 의존이 없거나 실패하면 신호 없이 예전처럼 추천.
+   */
+  private async nutritionContext(
+    userId: string,
+    today: string,
+  ): Promise<{ signals: NutritionSignals | null; sides: Map<string, string[]> }> {
+    const sides = new Map<string, string[]>();
+    if (!this.deps.nutrition) return { signals: null, sides };
     try {
-      return nutritionSignalsFrom(await this.deps.nutrition.analyze(userId, today, NUTRITION_SIGNAL_DAYS));
+      const analysis = await this.deps.nutrition.analyze(userId, today, NUTRITION_SIGNAL_DAYS);
+      for (const n of analysis.nutrients) if (n.sideSuggestions.length > 0) sides.set(n.key, n.sideSuggestions);
+      return { signals: nutritionSignalsFrom(analysis), sides };
     } catch (e) {
       this.log?.warn({ err: e }, '[meal-recommendation] 영양소 점검 실패 — 영양 보정 없이 추천');
-      return null;
+      return { signals: null, sides };
     }
   }
 
@@ -306,8 +317,8 @@ export class MealRecommendationService {
       `${userId}|${today}`,
     );
 
-    const nutrition = await this.nutritionSignals(userId, today);
-    const month = Number(input.targetDate.slice(5, 7)) || new Date().getMonth() + 1;
+    const { signals: nutrition, sides: sideSuggestions } = await this.nutritionContext(userId, today);
+    const month =Number(input.targetDate.slice(5, 7)) || new Date().getMonth() + 1;
     // 날씨는 있으면 쓰고 없으면 계절로 — 어느 쪽이든 추천은 나온다.
     const weather =
       this.deps.weather &&
@@ -392,6 +403,7 @@ export class MealRecommendationService {
         status: 'fallback',
         model: null,
         notice: null,
+        sides: [],
         profileText: describeProfile(profile, input.targetSlot),
       });
       return { recommendation: saved, cached: false };
@@ -503,6 +515,9 @@ export class MealRecommendationService {
       }
     }
     items = items.slice(0, PICK_MAX);
+    // 곁들임 한 줄 — 고른 음식이 못 채운 부족 영양소만. 건강 중요도를 0 으로 둔 사람에겐 붙이지 않는다(설계 결정 E).
+    const sides =
+      preference.weights.health > 0 ? recommendationSides(items, scored, nutrition, sideSuggestions) : [];
 
     let saved: MealRecommendationType;
     try {
@@ -512,6 +527,7 @@ export class MealRecommendationService {
         status,
         model: status === 'done' ? model : null,
         notice,
+        sides,
         profileText: describeProfile(profile, input.targetSlot),
       });
     } catch (e) {
@@ -752,6 +768,7 @@ export class MealRecommendationService {
       status: MealRecommendationStatusType;
       model: string | null;
       notice: string | null;
+      sides: MealRecommendationSideType[];
       profileText: string;
     },
   ): Promise<MealRecommendationType> {
@@ -785,6 +802,7 @@ export class MealRecommendationService {
           itemsJson: JSON.stringify(out.items),
           summary: out.summary,
           notice: out.notice,
+          sidesJson: JSON.stringify(out.sides),
           status: out.status,
           model: out.model,
           promptVersion: MEAL_RECOMMENDATION_VERSION,
@@ -959,6 +977,17 @@ const candidateRatings = (events: readonly PrismaMealRecommendationEvent[] | und
   return [...latest.values()];
 };
 
+// 곁들임 열(sidesJson) — 예전 추천(null)·손상된 값은 빈 배열.
+const parseRecommendationSides = (json: string | null): MealRecommendationSideType[] => {
+  if (!json) return [];
+  try {
+    const parsed = z.array(MealRecommendationSide).safeParse(JSON.parse(json));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+};
+
 export const toRecommendation = (row: RecommendationWithEvents): MealRecommendationType => ({
   id: row.id,
   targetDate: row.targetDate,
@@ -971,6 +1000,7 @@ export const toRecommendation = (row: RecommendationWithEvents): MealRecommendat
   model: row.model,
   promptVersion: row.promptVersion,
   notice: row.notice,
+  sides: parseRecommendationSides(row.sidesJson),
   feedback: parseMealRecommendationFeedback(row.feedbackJson),
   candidateRatings: candidateRatings(row.events),
   createdAt: row.createdAt.toISOString(),

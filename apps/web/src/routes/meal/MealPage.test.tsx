@@ -553,6 +553,33 @@ describe('MealPage — 추천·설정 탭', () => {
     await waitFor(() => expect(forces).toEqual([false, true]));
   });
 
+  it('추천 탭 — 끼니로 못 채운 부족 영양소의 곁들임을 한 줄로 보이고 영양 탭으로 잇는다', async () => {
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({
+          entryCount: 12,
+          recentFoods: [],
+          preference,
+          latest: {
+            ...recommendation,
+            sides: [
+              { name: '파프리카', nutrients: ['비타민 C'] },
+              { name: '우유', nutrients: ['칼슘', '비타민 D'] },
+            ],
+          },
+        }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [] })),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    expect(
+      await screen.findByText(/곁들이면 좋아요 · 파프리카\(비타민 C\) · 우유\(칼슘·비타민 D\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '영양 보기' })).toHaveAttribute('href', '/me/meals?tab=nutrition');
+  });
+
   it('추천 피드백 — 👍 를 누르면 rating 1 을 보낸다', async () => {
     const ratings: (number | null | undefined)[] = [];
     server.use(

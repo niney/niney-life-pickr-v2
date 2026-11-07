@@ -5,6 +5,7 @@ import {
   nutritionFit,
   nutritionSignalsFrom,
   nutritionSignalsKey,
+  recommendationSides,
   stripUnsupportedNutrientClaims,
   supportedGapKeys,
   unsupportedNutrients,
@@ -168,5 +169,55 @@ describe('가공육의 비타민 C', () => {
     // 같은 값이라도 가공육이 아니면 그대로 — 햄버거는 가공육 이름이 아니다.
     expect(nutritionFit({ ...duck, nameNorm: '햄버거' }, vitaminC).gapTag).toBe('비타민 C 보충');
     expect([...supportedGapKeys({ ...duck, nameNorm: '파프리카볶음' }, vitaminC)]).toEqual(['vitaminC']);
+  });
+});
+
+describe('추천 카드의 곁들임 한 줄', () => {
+  // nutritionSignalsFrom 처럼 비율 낮은 순.
+  const signals: NutritionSignals = {
+    days: 14,
+    sodiumHigh: false,
+    sodiumPercent: 80,
+    gaps: [
+      { key: 'vitaminD', label: '비타민 D', per100: 'vitaminDUg', reference: 10, percent: 7, weight: 1 },
+      { key: 'vitaminC', label: '비타민 C', per100: 'vitaminCMg', reference: 100, percent: 19, weight: 1 },
+      { key: 'magnesium', label: '마그네슘', per100: 'magnesiumMg', reference: 350, percent: 59, weight: 1 },
+      { key: 'iron', label: '철', per100: 'ironMg', reference: 10, percent: 60, weight: 1 },
+      { key: 'niacin', label: '니아신(비타민 B3)', per100: 'niacinMg', reference: 16, percent: 72, weight: 0.5 },
+      { key: 'calcium', label: '칼슘', per100: 'calciumMg', reference: 700, percent: 80, weight: 0.5 },
+    ],
+  };
+  const pool = [
+    { nameNorm: '삼치구이', servingNutrients: { vitaminDUg: 5 } },
+    { nameNorm: '파프리카', servingNutrients: null },
+  ];
+  const sides = new Map<string, string[]>([
+    ['vitaminD', ['우유']],
+    ['vitaminC', ['파프리카', '딸기']],
+    ['magnesium', ['파래무침', '두부조림']],
+    ['iron', ['파래무침']],
+    ['niacin', ['땅콩']],
+    ['calcium', ['우유']],
+  ]);
+
+  it('고른 음식이 못 채운 부족 영양소마다 첫 곁들임 — 같은 곁들임은 묶고 최대 3개, 괄호 설명은 뗀다', () => {
+    // 비타민 D 는 삼치구이가 한 끼로 50% 를 채운다 → 곁들임 없음. 칼슘(우유)은 네 번째라 잘린다.
+    expect(recommendationSides([{ name: '삼치구이' }], pool, signals, sides)).toEqual([
+      { name: '파프리카', nutrients: ['비타민 C'] },
+      { name: '파래무침', nutrients: ['마그네슘', '철'] },
+      { name: '땅콩', nutrients: ['니아신'] },
+    ]);
+  });
+
+  it('이미 고른 음식은 곁들임으로 다시 권하지 않고, 신호·고른 음식이 없으면 비운다', () => {
+    // 삼치구이를 안 골랐으니 비타민 D 도 곁들임으로, 3개가 찬 뒤에도 같은 곁들임(우유)이 채우는 칼슘은 묶는다.
+    expect(recommendationSides([{ name: '파프리카' }], pool, signals, sides)).toEqual([
+      { name: '우유', nutrients: ['비타민 D', '칼슘'] },
+      { name: '딸기', nutrients: ['비타민 C'] },
+      { name: '파래무침', nutrients: ['마그네슘', '철'] },
+    ]);
+    expect(recommendationSides([{ name: '삼치구이' }], pool, null, sides)).toEqual([]);
+    expect(recommendationSides([], pool, signals, sides)).toEqual([]);
+    expect(recommendationSides([{ name: '삼치구이' }], pool, { ...signals, gaps: [] }, sides)).toEqual([]);
   });
 });

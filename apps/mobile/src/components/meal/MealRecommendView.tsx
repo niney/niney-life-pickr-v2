@@ -361,6 +361,12 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
               title={`${mealDateLabel(shown.targetDate, today)} ${MEAL_SLOT_LABEL[shown.targetSlot]} 추천`}
               sub={shown.summary || null}
             />
+            {/* 끼니로 못 채운 부족 영양소의 곁들임(서버가 정한 것) — 예전 서버 응답(sides 없음)도 견딘다. */}
+            {(shown.sides ?? []).length > 0 ? (
+              <Note tone="muted">
+                {`곁들이면 좋아요 · ${shown.sides.map((s) => `${s.name}(${s.nutrients.join('·')})`).join(' · ')}`}
+              </Note>
+            ) : null}
             {/* 서버 안내와 알레르기 주의를 한 띠에 — 주황 띠 두 개가 위아래로 겹쳐 있었다. */}
             {warnings.length > 0 ? (
               <Note tone="warn">

@@ -1082,6 +1082,65 @@ describe('MealRecommendationService (격리 DB)', () => {
     expect(provider.calls.at(-1)!.prompt).not.toContain('[영양 점검');
   });
 
+  it('곁들임 한 줄 — 고른 음식이 못 채운 부족 영양소의 곁들임을 저장해 돌려주고, 건강 중요도 0 이면 붙이지 않는다', async () => {
+    const vitaminC: MealNutrientResultType = {
+      key: 'vitaminC',
+      label: '비타민 C',
+      unit: 'mg',
+      intakePerDay: 19,
+      reference: { kind: 'rni', amount: 100, ear: 75 },
+      upperLimit: 2000,
+      percent: 19,
+      coverage: 1,
+      status: 'low',
+      supplementCandidate: true,
+      recordGap: false,
+      topSources: [],
+      foodSuggestions: [],
+      sideSuggestions: ['파프리카', '딸기'],
+      typicalFoods: [],
+      note: null,
+    };
+    const analyze = vi.fn(
+      async (): Promise<MealNutritionAnalysisType> => ({
+        from: '2026-08-09',
+        to: TODAY,
+        days: 14,
+        analyzedDays: 7,
+        mealCount: 14,
+        profile: { sex: null, ageGroup: '30-49', basis: 'default' },
+        energy: { intakePerDay: 1800, requirement: 1900, percent: 95 },
+        coverage: 1,
+        status: 'ok',
+        insufficientReason: null,
+        nutrients: [vitaminC],
+        notMeasured: [],
+        notes: [],
+      }),
+    );
+    const opts = { targetDate: '2026-08-26', targetSlot: 'lunch' as const, force: true };
+    const res = await build('gpt-oss:120b', { nutrition: { analyze } }).create('rec-u', opts, TODAY);
+    // 시드 음식은 1회 분량 비타민 C 를 몰라 끼니로는 못 채운다 → 첫 곁들임.
+    expect(res.recommendation.sides).toEqual([{ name: '파프리카', nutrients: ['비타민 C'] }]);
+    const stored = await app.prisma.mealRecommendation.findUniqueOrThrow({ where: { id: res.recommendation.id } });
+    expect(JSON.parse(stored.sidesJson!)).toEqual(res.recommendation.sides);
+
+    await app.prisma.mealPreference.upsert({
+      where: { userId: 'rec-u' },
+      create: { userId: 'rec-u', weightsJson: JSON.stringify({ ...MEAL_DEFAULT_WEIGHTS, health: 0 }) },
+      update: { weightsJson: JSON.stringify({ ...MEAL_DEFAULT_WEIGHTS, health: 0 }) },
+    });
+    try {
+      const off = await build('gpt-oss:120b', { nutrition: { analyze } }).create('rec-u', opts, TODAY);
+      expect(off.recommendation.sides).toEqual([]);
+    } finally {
+      await app.prisma.mealPreference.update({
+        where: { userId: 'rec-u' },
+        data: { weightsJson: JSON.stringify(MEAL_DEFAULT_WEIGHTS) },
+      });
+    }
+  });
+
   it('같은 날·끼니·프로필이면 캐시를 돌려주고 LLM 을 다시 안 부른다', async () => {
     provider.responses = [
       JSON.stringify({ items: [{ name: '비빔밥', reason: 'r' }], summary: 's' }),

@@ -1,4 +1,5 @@
-import type { MealNutritionAnalysisType } from '@repo/api-contract';
+import type { MealNutritionAnalysisType, MealRecommendationSideType } from '@repo/api-contract';
+import { normalizeTerm } from '../../lib/text.js';
 import type { NutrientKey, NutrientsPer100g } from '../food/food-nutrients.js';
 import { NUTRIENT_DEFS, isAdditiveNutrientSource } from '../meal-nutrition/meal-nutrition.defs.js';
 
@@ -181,4 +182,40 @@ export const stripUnsupportedNutrientClaims = (text: string, supported: Readonly
   const sentences = text.split(/(?<=[.!?。])\s+/).map((s) => s.trim()).filter(Boolean);
   const kept = sentences.filter((s) => unsupportedNutrients(s, supported).length === 0);
   return kept.length > 0 ? kept.join(' ') : null;
+};
+
+// ── 추천 카드의 곁들임 한 줄 ─────────────────────────────────────────────────────
+const MAX_RECOMMENDATION_SIDES = 3;
+
+/**
+ * 고른 음식들이 한 끼로 채우지 못한 부족 영양소(비율 낮은 순)마다 영양 탭의 첫 곁들임 후보를 하나씩 — 같은 곁들임은 영양소를
+ * 묶고 최대 3개. 비타민 C 는 흔한 한 끼 174개 중 한 끼로 25%를 채우는 음식이 거의 없어(2026-11-07) 끼니 추천만으로는 답이 없다.
+ * 결정적이라 LLM 이 쓰지 않는다. 곁들임 후보(sideSuggestions)는 영양 탭과 같아 알레르기·제외·덜 선호·나트륨이 이미 걸러져 있다.
+ * 영양소 이름의 괄호 설명은 뗀다('니아신(비타민 B3)' → 니아신) — 화면이 "곁들임(영양소)"로 감싼다.
+ */
+export const recommendationSides = (
+  picks: readonly { name: string }[],
+  pool: readonly { nameNorm: string; servingNutrients?: NutrientsPer100g | null }[],
+  s: NutritionSignals | null,
+  sideSuggestions: ReadonlyMap<string, readonly string[]>,
+): MealRecommendationSideType[] => {
+  if (!s || s.gaps.length === 0 || picks.length === 0) return [];
+  const byNorm = new Map(pool.map((c) => [c.nameNorm, c]));
+  const pickNorms = new Set(picks.map((p) => normalizeTerm(p.name)));
+  const covered = new Set<string>();
+  for (const norm of pickNorms) {
+    const c = byNorm.get(norm);
+    if (c) for (const key of supportedGapKeys(c, s)) covered.add(key);
+  }
+  const out: MealRecommendationSideType[] = [];
+  for (const g of s.gaps) {
+    if (covered.has(g.key)) continue;
+    const side = (sideSuggestions.get(g.key) ?? []).find((n) => !pickNorms.has(normalizeTerm(n)));
+    if (!side) continue;
+    const label = g.label.replace(/\s*\(.*\)$/, '');
+    const same = out.find((o) => o.name === side);
+    if (same) same.nutrients.push(label);
+    else if (out.length < MAX_RECOMMENDATION_SIDES) out.push({ name: side, nutrients: [label] });
+  }
+  return out;
 };
