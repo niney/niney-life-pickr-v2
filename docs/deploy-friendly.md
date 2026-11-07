@@ -136,8 +136,11 @@ pm2 startup     # 출력된 sudo 명령 실행 → 부팅 자동 기동
 - **libuv 스레드풀**(`UV_THREADPOOL_SIZE`, 2026-11 추가): Node 의 스레드풀은 기본 4개이고, sharp(썸네일·식단 사진·영수증·메뉴판)와
   비동기 fs·바깥 API 호출의 DNS 조회가 같이 쓴다. 사진 처리가 몇 건 겹치면 썸네일 캐시 히트의 `fs.stat` 같은 짧은 작업이 줄을 서
   수백 ms~1초를 기다렸다(PLAN-perf-2-findings G-1, 동시 미스 16건에 최대 782ms). ecosystem 의 `env` 에
-  `UV_THREADPOOL_SIZE: '8'` 을 넣고 `pm2 restart friendly --update-env` 로 다시 띄운다(값은 프로세스가 뜰 때 한 번만 읽는다 —
-  `reload` 로는 안 바뀔 수 있으니 restart). 운영은 4코어라 CPU 를 쓰는 작업이 더 빨라지지는 않고, 짧은 fs·DNS 작업이 사진 처리
+  `UV_THREADPOOL_SIZE: '8'` 을 넣고 **ecosystem 파일을 지정해** 다시 띄운 뒤 저장한다(리포 루트에서
+  `pm2 restart ecosystem.config.cjs --only friendly --update-env && pm2 save`). 이름으로 `pm2 restart friendly --update-env` 하면
+  pm2 가 파일을 다시 읽지 않고 지금 셸의 환경만 합쳐 새 값이 들어가지 않는다. 값은 프로세스가 뜰 때 읽으므로 확인은
+  `cat /proc/$(pm2 pid friendly)/environ | tr '\0' '\n' | grep UV_THREADPOOL_SIZE` — deploy.sh 의 `pm2 reload friendly --update-env`
+  뒤에도 남아 있는지 첫 배포 뒤 한 번 더 본다. 운영은 4코어라 CPU 를 쓰는 작업이 더 빨라지지는 않고, 짧은 fs·DNS 작업이 사진 처리
   뒤에 줄 서지 않게 하는 용도다. Node 24 에서는 `.env`(`node_args: '--env-file=.env'`)에 넣어도 적용되는 것을 확인했다
   (8건 동시 작업 소요 1건 대비 2.9배 → 1.2~1.7배) — 운영 Node 버전에서 확실하지 않으면 ecosystem `env` 쪽이 안전하다.
 
