@@ -848,6 +848,30 @@ describe('MealRecommendationService (격리 DB)', () => {
     expect(prompt).not.toContain('소주');
   });
 
+  it('추론 — 기본은 모델 규칙(gpt-oss low·kimi 끔), 어드민이 켜면 kimi 에 그 단계와 늘린 출력 예산을 보낸다', async () => {
+    const opts = { targetDate: '2026-08-24', targetSlot: 'dinner' as const, force: true };
+    await build('gpt-oss:120b').create('rec-u', opts, TODAY);
+    expect(provider.calls.at(-1)).toMatchObject({ think: 'low', maxTokens: 1200 });
+    await build('kimi-k3.1-pro').create('rec-u', opts, TODAY);
+    expect(provider.calls.at(-1)).toMatchObject({ think: false, maxTokens: 1200 });
+
+    const purposeRow = { provider_purpose: { provider: 'ollama-cloud', purpose: 'meal-recommend' } };
+    await app.prisma.llmProviderConfig.upsert({
+      where: purposeRow,
+      create: { provider: 'ollama-cloud', purpose: 'meal-recommend', apiKey: '', enabled: true, thinking: 'high' },
+      update: { thinking: 'high' },
+    });
+    try {
+      await build('kimi-k3.1-pro').create('rec-u', opts, TODAY);
+      expect(provider.calls.at(-1)).toMatchObject({ model: 'kimi-k3.1-pro', think: 'high', maxTokens: 6200, timeoutMs: 180_000 });
+      // kimi 가 아닌 모델에는 어드민 추론을 적용하지 않는다(규칙대로).
+      await build('gpt-oss:120b').create('rec-u', opts, TODAY);
+      expect(provider.calls.at(-1)).toMatchObject({ think: 'low', maxTokens: 1200 });
+    } finally {
+      await app.prisma.llmProviderConfig.deleteMany({ where: { purpose: 'meal-recommend' } });
+    }
+  });
+
   it('같은 날·끼니·프로필이면 캐시를 돌려주고 LLM 을 다시 안 부른다', async () => {
     provider.responses = [
       JSON.stringify({ items: [{ name: '비빔밥', reason: 'r' }], summary: 's' }),

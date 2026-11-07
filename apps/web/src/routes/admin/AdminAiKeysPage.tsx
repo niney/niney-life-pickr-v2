@@ -67,19 +67,21 @@ interface PurposeMeta {
   label: string;
   desc: string;
   placeholder: string;
-  /** 추론(thinking) 선택을 노출하는 용도 — 서비스가 이 설정을 읽는 곳만(사주(C)·영양제 조언). kimi 계열 모델일 때만 보인다. */
+  /** 추론(thinking) 선택을 노출하는 용도 — 서비스가 이 설정을 읽는 곳만(사주(C)·영양제 조언·식단 추천). kimi 계열 모델일 때만 보인다. */
   thinking?: boolean;
 }
 
 // 추론 선택지 — 계약 LlmThinking 순서(Ollama 가 받는 값). kimi-k3 실측(3문장 답 기준 사고량·소요):
 // 끔 0자·4.8s / 낮음 12자·2.7s / 보통 22자·5.9s / 높음 288자·3.1s / 최대 2.8천자·11.4s.
 // 사주 섹션(≈400자 답)은 최대에서 p50 12→29s, 출력 토큰 5배.
+// kimi-k3.1-pro 실측(2026-11-07, 식단 추천·영양제 조언): 끔 9~20s → 낮음 11~21s · 보통 22~50s · 높음 41~49s ·
+// 최대 63~74s, 사고 토큰 보통 1~2.5천 · 최대 4~5천. 예산·대기 시간은 utils thinkMaxTokens·thinkTimeoutMs 가 정한다.
 const THINKING_OPTIONS: Array<{ value: LlmThinkingType; label: string }> = [
   { value: 'off', label: '끔 — 빠름(기본)' },
   { value: 'low', label: '낮음 — 짧은 점검, 속도 거의 그대로' },
-  { value: 'medium', label: '보통 — 출력 예산 2배' },
-  { value: 'high', label: '높음 — 문장이 더 구체적, 출력 예산 3배' },
-  { value: 'max', label: '최대 — 가장 정확, 응답 2~3배 느림(예산 5배)' },
+  { value: 'medium', label: '보통 — 응답 2~3배 느림' },
+  { value: 'high', label: '높음 — 문장이 더 구체적, 응답 3~4배 느림' },
+  { value: 'max', label: '최대 — 가장 오래 생각, 1분 넘게 걸림' },
 ];
 
 const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
@@ -122,8 +124,9 @@ const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
   'meal-recommend': {
     icon: UtensilsCrossed,
     label: '식단 추천',
-    desc: '식단 관리 — 내 식사 패턴으로 다음 끼니를 추천하는 텍스트 모델',
+    desc: '식단 관리 — 내 식사 패턴으로 다음 끼니를 추천하는 텍스트 모델. kimi 계열이면 추론을 켤 수 있다(기본 끔 — 이유 문장만 받는다)',
     placeholder: 'gpt-oss:120b',
+    thinking: true,
   },
   'meal-supplement': {
     icon: Pill,
@@ -688,7 +691,7 @@ const PurposeModelRow = ({ provider, catalog, onSave, isSaving }: PurposeModelRo
                   ))}
                 </select>
                 {(shownThinking === 'high' || shownThinking === 'max') && (
-                  <span className="text-amber-600">사고 토큰만큼 출력 예산과 타임아웃을 늘립니다(최대 5배·120초) — 무대 연출보다 첫 문장이 늦게 옵니다.</span>
+                  <span className="text-amber-600">사고 토큰만큼 출력 예산과 대기 시간을 늘립니다(최대 단계는 1분 넘게 걸림) — 무대 연출보다 첫 문장이 늦게 옵니다.</span>
                 )}
               </label>
             )}

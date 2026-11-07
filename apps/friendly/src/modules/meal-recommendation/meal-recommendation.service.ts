@@ -22,7 +22,7 @@ import {
   type MealSlotType,
 } from '@repo/api-contract';
 import { extractFirstJsonObject } from '../../lib/json.js';
-import { thinkOptionForModel } from '@repo/utils';
+import { thinkMaxTokens, thinkOptionFor, thinkOptionForModel, thinkTimeoutMs, type ThinkOption } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
@@ -59,6 +59,9 @@ import {
 // 같은 날·끼니·프로필이면 캐시된 결과를 재사용한다(force 로만 새로 호출).
 
 const LLM_TIMEOUT_MS = 60_000;
+// 어드민이 추론을 켜면 사고 토큰만큼 출력 예산·대기 시간을 늘린다(utils thinkMaxTokens·thinkTimeoutMs, 상한 240초) —
+// kimi-k3.1-pro 실측: 사고+본문 보통 1.6~3천·최대 4.7~5.2천 토큰, 최대 63~74초.
+const LLM_TIMEOUT_MAX_MS = 240_000;
 const LLM_MAX_TOKENS = 1200;
 const LLM_NUM_CTX = 8192;
 const LLM_TEMPERATURE = 0.4;
@@ -122,12 +125,29 @@ export class MealRecommendationService {
     return this.deps.logger ?? null;
   }
 
-  private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {
+  private async resolveProvider(): Promise<{
+    provider: LLMProvider;
+    model: string;
+    think: ThinkOption;
+    maxTokens: number;
+    timeoutMs: number;
+  } | null> {
     const resolved = await this.aiConfig.getResolved('ollama-cloud', 'meal-recommend');
     if (!resolved) return null;
     const model = resolved.defaultModel.trim();
     if (!model) return null;
-    return { provider: (this.deps.cache ?? adapterCache).get(resolved), model };
+    // 어드민 "추론" 설정 — kimi 계열에만 반영, 그 외 모델은 규칙(thinkOptionForModel: gpt-oss low, 그 외 끔).
+    // 기본(off)은 예전처럼 사고를 끈다 — 이유 문장만 받으면 되고, 추론 모델은 사고가 출력 토큰을 먹는다.
+    // 출력 예산·대기 시간은 어드민이 규칙과 다르게 켰을 때만 늘린다 — 기본 경로(gpt-oss low 포함)는 예전 값 그대로.
+    const think = thinkOptionFor(model, resolved.thinking);
+    const byRule = think === thinkOptionForModel(model);
+    return {
+      provider: (this.deps.cache ?? adapterCache).get(resolved),
+      model,
+      think,
+      maxTokens: byRule ? LLM_MAX_TOKENS : thinkMaxTokens(LLM_MAX_TOKENS, think),
+      timeoutMs: byRule ? LLM_TIMEOUT_MS : thinkTimeoutMs(LLM_TIMEOUT_MS, think, LLM_TIMEOUT_MAX_MS),
+    };
   }
 
   // 추천 화면 진입용 — 기록 수·최근 음식·선호·직전 추천을 한 번에.
@@ -387,18 +407,19 @@ export class MealRecommendationService {
         recentDishCounts: recentDishTypeCounts(profile),
       });
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), LLM_TIMEOUT_MS);
+      const timer = setTimeout(() => ac.abort(), resolved.timeoutMs);
       try {
         const res = await resolved.provider.complete({
           prompt,
           systemPrompt: MEAL_RECOMMENDATION_SYSTEM_PROMPT,
           model: resolved.model,
           temperature: LLM_TEMPERATURE,
-          maxTokens: LLM_MAX_TOKENS,
+          maxTokens: resolved.maxTokens,
           numCtx: LLM_NUM_CTX,
           format: MEAL_RECOMMENDATION_JSON_SCHEMA as unknown as Record<string, unknown>,
-          // 이유 문장만 받으면 되므로 사고는 끈다(추론 모델이면 출력 토큰을 다 먹는다).
-          think: thinkOptionForModel(resolved.model),
+          think: resolved.think,
+          // 어댑터 기본(60초)이 아니라 이 호출의 대기 시간으로 — 추론을 켜면 60초를 넘긴다.
+          timeoutMs: resolved.timeoutMs,
           signal: ac.signal,
         });
         const parsed = parseRecommendationOutput(res.text);
@@ -414,7 +435,7 @@ export class MealRecommendationService {
             level: items.length > 0 ? 'info' : 'warn',
             message:
               items.length > 0 ? `추천 ${items.length}개` : 'LLM 응답에서 유효한 후보를 찾지 못함',
-            meta: { model: resolved.model, picked: items.length },
+            meta: { model: resolved.model, think: String(resolved.think), picked: items.length },
           });
         }
       } catch (e) {
