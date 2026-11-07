@@ -1047,6 +1047,52 @@ describe('app.analytics 싱글톤', () => {
     await app.close();
   });
 
+  it('어드민 전체 카테고리 트리 라우트 — 운영에선 응답 zod 검증을 건너뛰고, 테스트에선 zod 결과와 같은지 확인한다', async () => {
+    const r = await seedRestaurant(app, [
+      {
+        name: '트리라우트찌개',
+        nameNorm: '트리라우트찌개',
+        canonicalName: '트리라우트찌개',
+        canonicalNorm: '트리라우트찌개',
+        mentions: [{ sentiment: 'positive' }, { sentiment: 'negative' }],
+      },
+    ]);
+    const g = await app.prisma.globalMenuCanonical.create({
+      data: {
+        globalKey: `route-tree-${r.restaurantId}`,
+        displayName: '트리라우트찌개',
+        categoryPath: '라우트분류 > 트리라우트찌개',
+        version: 1,
+        model: 'seed',
+      },
+    });
+    await app.prisma.globalMenuCanonicalLink.create({
+      data: {
+        menuCanonicalId: r.menuCanonicalIds.get('트리라우트찌개')!,
+        restaurantId: r.restaurantId,
+        localCanonicalNorm: '트리라우트찌개',
+        globalCanonicalId: g.id,
+      },
+    });
+    app.analytics.invalidateReadCache();
+    try {
+      const token = app.jwt.sign({ userId: 'an-merge-admin', email: 'a@x.com', role: 'ADMIN' });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/admin/analytics/category-tree',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res.statusCode).toBe(200);
+      type Node = { label: string; totalMentions: number; positive: number; negative: number; children?: Node[] };
+      const top = res.json<{ roots: Node[] }>().roots.find((n) => n.label === '라우트분류');
+      expect(top?.children?.[0]).toMatchObject({ label: '트리라우트찌개', totalMentions: 2, positive: 1, negative: 1 });
+    } finally {
+      await app.prisma.globalMenuCanonical.delete({ where: { id: g.id } });
+      await app.prisma.restaurant.deleteMany({ where: { id: r.restaurantId } });
+      app.analytics.invalidateReadCache();
+    }
+  });
+
   it('스케줄 서비스가 쓰는 인스턴스가 app.analytics 와 같다', () => {
     expect(app.analytics).toBeInstanceOf(AnalyticsService);
     const deps = (app.schedule as unknown as { deps: { analytics: unknown } }).deps;

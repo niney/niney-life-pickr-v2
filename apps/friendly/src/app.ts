@@ -36,6 +36,9 @@ const TRUSTED_RESPONSE_ROUTES = new Set([
   `GET ${Routes.Restaurant.publicList}`,
   // 등산 산 목록 — 3,879곳 약 1MB, 서비스가 적재본마다 메모한 객체를 그대로 낸다(2026-11 검토).
   `GET ${Routes.Hiking.mountains}`,
+  // 어드민 전체 메뉴 카테고리 트리 — 운영 881KB 재귀 트리. 계산은 60초 캐시인데 zod(z.lazy) 검증만 응답마다 약 100ms 였다
+  // (stringify 는 2ms, 2026-11 운영 DB 실측).
+  `GET ${Routes.Analytics.categoryTree}`,
 ]);
 
 const sameJson = (a: string, b: string): boolean => {
