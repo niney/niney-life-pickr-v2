@@ -12,6 +12,7 @@ import errorHandlerPlugin from '../../plugins/error-handler.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
+import { invalidatePublicRestaurantCache } from '../restaurant/restaurant-public-base.js';
 import { MenuGroupingService, pickCanonicalName } from './menu-grouping.service.js';
 
 const buildApp = async (): Promise<FastifyInstance> => {
@@ -673,6 +674,24 @@ describe('MenuGroupingService', () => {
     } finally {
       await app.prisma.globalMenuCanonical.delete({ where: { id: global.id } });
     }
+  });
+
+  it('상태 목록의 분석 완료 수는 공개 목록 캐시(30초)의 집계를 함께 쓴다 — 무효화 전엔 지난 숫자', async () => {
+    const { restaurantId, placeId } = await seedRestaurantWithMentions(app, [{ name: '쫄면', nameNorm: '쫄면', sentiment: 'positive' }]);
+    const service = new MenuGroupingService(app.prisma, aiConfig, { resolveOverride: async () => null });
+    const analyzed = async () =>
+      (await service.getRestaurantsStatus({ sort: 'unmapped', page: 1, pageSize: 200, q: '테스트 식당' } as never)).items.find(
+        (s) => s.placeId === placeId,
+      )!.analyzedReviews;
+    invalidatePublicRestaurantCache();
+    expect(await analyzed()).toBe(1);
+    const review = await app.prisma.visitorReview.create({
+      data: { restaurantId, authorName: 'a', rating: 5, body: 'b', visitedAt: null, imageUrlsJson: '[]', contentHash: stamp() },
+    });
+    await app.prisma.reviewSummary.create({ data: { reviewId: review.id, status: 'done', sentiment: 'positive' } });
+    expect(await analyzed()).toBe(1);
+    invalidatePublicRestaurantCache();
+    expect(await analyzed()).toBe(2);
   });
 
   it('reports restaurant status with distinct/mapped/unmapped counts', async () => {

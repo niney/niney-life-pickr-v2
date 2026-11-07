@@ -17,6 +17,7 @@ import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import { extractFirstJsonObject } from '../../lib/json.js';
 import { normalizeTerm } from '../../lib/text.js';
+import { getPublicRestaurantBase } from '../restaurant/restaurant-public-base.js';
 import {
   MENU_GROUPING_CHUNK_SIZE,
   MENU_GROUPING_JSON_SCHEMA,
@@ -952,7 +953,7 @@ export class MenuGroupingService {
 
     // distinct nameNorm 수, mapped 수, 마지막 그룹핑 시각/버전, 분석 done 수
     // 모두 한 번씩의 groupBy 로. 식당 수가 많아도 한 번에 처리.
-    const [mentionGroups, canonicalGroups, latestCanonical, analyzedSummaries] =
+    const [mentionGroups, canonicalGroups, latestCanonical, publicBase] =
       await Promise.all([
         this.prisma.menuMention.groupBy({
           by: ['restaurantId', 'nameNorm'],
@@ -968,18 +969,14 @@ export class MenuGroupingService {
           _max: { createdAt: true },
           _min: { version: true },
         }),
-        // 분석 done 수 — 리뷰(restaurantId) 단위 GROUP BY 로 카운트만. done 행을 관계 select 로
-        // 전부 읽어 세면 매일 03:00 스케줄 경로에서 요약 수에 비례해 느려지고 메모리를 잡았다
-        // (docs/PLAN-perf-2.md A-V2).
-        this.prisma.visitorReview.groupBy({
-          by: ['restaurantId'],
-          where: { restaurantId: { in: ids }, summary: { is: { status: 'done' } } },
-          _count: { _all: true },
-        }),
+        // 분석 done 수 — 공개 목록 캐시(30초)가 전 가게를 한 번에 센 요약 집계를 함께 쓴다(어드민 맛집 목록과 같은 방식).
+        // 예전 Prisma groupBy 는 요약의 id 열까지 확인해 커버링 인덱스를 못 타고 큰 요약 행(운영 19.8만)을 다 읽어 한 번에
+        // 약 220ms 였다(2026-11 운영 DB 실측). 숫자는 최대 30초 늦을 수 있다(크롤 저장·삭제·병합은 캐시를 비운다).
+        getPublicRestaurantBase(this.prisma),
       ]);
 
     const analyzedMap = new Map<string, number>();
-    for (const g of analyzedSummaries) analyzedMap.set(g.restaurantId, g._count._all);
+    for (const id of ids) analyzedMap.set(id, publicBase.buckets.get(id)?.done ?? 0);
 
     const distinctMenuByRest = new Map<string, number>();
     for (const g of mentionGroups) {
