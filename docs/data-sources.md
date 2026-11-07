@@ -17,7 +17,9 @@
 | 경로 | 출처 | 크기 | 적재 명령 | 결과 |
 |---|---|---|---|---|
 | `food/mfds-nutrition.csv` | 식약처 전국통합식품영양성분정보(음식) — data.go.kr **15100070** (CSV 배포본) | 6.9MB | `pnpm --filter friendly load:food-catalog --source=nutrition` | 19,495행 → **1,236종** |
-| `food/mfds-nutrition-15100065.csv` | 식약처 전국통합식품영양성분정보(**원재료성식품**) — data.go.kr **15100065** (CSV 배포본) | 2.1MB | `pnpm --filter friendly load:food-catalog --source=raw` | 3,704행 → **855종**(생고기 부위·수산물·채소, 100g당만) |
+| `food/mfds-nutrition-15100065.csv` | 식약처 전국통합식품영양성분정보(**원재료성식품**) — data.go.kr **15100065** (CSV 배포본) | 2.1MB | `pnpm --filter friendly load:food-catalog --source=raw` | 3,704행 → **867종**(생고기 부위·수산물·채소, 100g당만). 2026-11-07 부터 열량과 같은 행 묶음의 **영양소별 중앙값**도 싣는다(전에는 열량만) |
+| `food/YYYYMMDD_음식DB_*.xlsx` (예: `20260828_음식DB_19617건.xlsx`) | **K-FIND 식품영양성분 DB 전체판 '음식 DB'**(식약처) — [various.foodsafetykorea.go.kr › 영양성분 DB 내려받기 › DB 다운로드 받기](https://various.foodsafetykorea.go.kr/nutrient/general/down/list.do) | 12MB | `load:food-catalog --source=nutrition`(이 파일이 있으면 CSV 보다 **먼저** 쓴다 — 파일명 날짜가 가장 최근 것) | 19,617행 × **160열**. 15100070 CSV 의 열·값을 그대로 갖고(같은 식품코드 19,495행 값 일치, 2026-11-07 대조) **마그네슘·아연·엽산(μg DFE)** 열이 더 있다 → 점검 영양소 12→15 |
+| `food/식품성분표(N개정판).xlsx` (예: `식품성분표(10개정판).xlsx`) | **국가표준식품성분 DB**(농촌진흥청 국립식량과학원) — [nics.go.kr › 국가표준식품성분표](https://www.nics.go.kr/food/kfi/fct/fctIntro/list?menuId=PS03562) '국가표준식품성분 DB (Excel)다운로드' | 13MB | `load:food-catalog --source=raw` 가 있으면 함께 읽는다 | 시트 `국가표준식품성분 Database 10.4`(가장 높은 판) 3,366종 × 약 130성분. 원재료 행에 **마그네슘·아연·엽산**을 식품명으로 짝지어 보탠다(원재료 CSV 905/3,704행) |
 | (파일 없음) | 코드 내장 큐레이션 표 `food-curated-seeds.ts` — 주류·음료·공기밥 30종(제조사 표기 기준 근사값) | — | `pnpm --filter friendly load:food-catalog --source=curated` | **30종**(브랜드 별칭 포함) |
 | `food/hansik-800.xlsx` | 한식진흥원 한식메뉴 외국어표기 800선 — data.go.kr **15129784** | 0.5MB | `pnpm --filter friendly load:food-catalog --source=hansik800` | 800행 → **452종**(+348종 별칭 보강) |
 | `life/cctv.csv` | 지방행정인허가데이터개방 전국 CCTV 설치현황 (CP949) | 79MB | `pnpm --filter friendly load:life-cctv data/open/life/cctv.csv` | **377,243행** |
@@ -88,6 +90,23 @@ API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 
 잘려 주류가 1행뿐이라 쓰지 않는다 — 주류·음료는 큐레이션 표로 채운다.
 
 판정 규칙·골든셋·어휘 편집은 [menu-calorie-engine.md](menu-calorie-engine.md).
+
+### 영양소 점검용 전체판 엑셀 2종 (2026-11-07, [PLAN-meal-nutrition.md](PLAN-meal-nutrition.md))
+
+공공데이터포털의 표준데이터 4종(15100064·65·66·70)은 모두 **같은 24성분**이라 마그네슘·아연·엽산이 없다. 15100066(가공식품)·
+15100064(통합)은 포털 배포본이 **50,000행에서 잘린다**(`columList.json` totalCount=50000). 그래서 점검용 영양소는 원 DB 의
+엑셀을 쓴다 — 둘 다 **받을 때 사용자 정보 입력이 필요**해 스크립트로 받지 않고 사람이 받아 위 경로에 둔다.
+
+- **K-FIND 음식 DB**: '시스템 개선을 위한 활용정보 입력'(소속·부서·기관유형·활용 목적·사용 용도)을 채우고 받는다. 활용 목적
+  `앱 등 시스템 개발 DB로 활용` · 사용 용도 `시스템·프로그램 개발`. **출처 표시 조건** — 화면에 "식품영양성분 데이터베이스
+  (식품의약품안전처)"를 밝힌다(`@repo/utils` `MEAL_NUTRIENT_DATA_SOURCES`). 같은 화면에 가공식품 DB(약 33만 건, 210MB —
+  5만 행 상한 없음)·건강기능식품 DB 도 있지만 영양소 점검에는 쓰지 않는다(가공식품은 비타민·무기질 채움 0~3%).
+  음식 행의 성분 채움(영양소 있는 4,352행 기준): 마그네슘·아연 77% · 엽산 91% · 비타민 E·오메가3 60% · 셀레늄·B12 ~19% ·
+  B6·비타민 K 2% · 요오드 0 — 그래서 점검에는 마그네슘·아연·엽산만 넣었다.
+- **국가표준식품성분 DB**: '사용목적·직업군'을 고르고 받는다. 엑셀 DB 는 **공공누리 1유형(출처 표시)**, 같은 페이지의 책자 PDF 는
+  2유형(상업적 이용 금지)이라 쓰지 않는다. 미분석은 `-`, 미량은 `Tr`, 추정 0 은 `(0)`(`food-rda-import.ts`).
+- 쓰지 않는 것: 농진청 메뉴젠 음식별 영양(15143461, 음식별 마그네슘·아연·엽산이 있지만 **공공누리 4유형**), 가공식품 품목별
+  영양성분 DB(15112364, 4유형), 급식 음식 영양성분(88062, 열량·탄단지만).
 
 메뉴 칼로리 관점의 역할 분담: 음식 DB(15100070)가 "김치찌개·삼겹살구이" 같은 조리음식(1인분·100g당),
 원재료 DB(15100065)가 고기집·횟집의 "항정살·안창살·곱창·광어·굴" 같은 생것 부위(100g당만, 먹태·마른오징어는

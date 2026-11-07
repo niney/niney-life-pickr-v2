@@ -66,6 +66,8 @@ pnpm --filter friendly load:subway-congestion  # 지하철 혼잡도(정적)
 
 ```bash
 scp data/open/food/{mfds-nutrition.csv,hansik-800.xlsx} 서버:/home/samplepcb/niney-life-pickr-v2/data/open/food/
+# 영양소 점검(2026-11-07~) — 원재료 CSV 와 전체판 엑셀 2개(파일명 그대로)
+scp data/open/food/mfds-nutrition-15100065.csv "data/open/food/20260828_음식DB_19617건.xlsx" "data/open/food/식품성분표(10개정판).xlsx" 서버:/home/samplepcb/niney-life-pickr-v2/data/open/food/
 ```
 
 ```bash
@@ -75,6 +77,14 @@ pnpm --filter friendly status:food-catalog     # ok items=N classified=C nutriti
 
 - 영양성분은 **파일이 기본**이고 `DATA_GO_KR_API_KEY`(data.go.kr 15100070)는 선택이다 — 같은 데이터를
   쿼터 써 가며 받을 뿐이다. 레시피만 `FOOD_RECIPE_API_KEY`(식품안전나라)가 필요하다.
+- **영양소 점검(마그네슘·아연·엽산·원재료 영양소)** 은 엑셀 2개가 더 있어야 한다 — `YYYYMMDD_음식DB_*.xlsx`(K-FIND 음식 DB)와
+  `식품성분표(N개정판).xlsx`(국가표준식품성분 DB). 받는 곳·조건은 [data-sources.md](data-sources.md). 둘 다 같은 폴더에 두면
+  적재기가 알아서 쓴다(음식은 K-FIND 엑셀이 CSV 보다 먼저). 이미 적재된 행에는 **빈 영양소 키만** 더해진다.
+  대표값 규칙을 바꾼 2026-11-07 판을 처음 배포할 때는 한 번
+  `pnpm --filter friendly load:food-catalog --source=nutrition --refresh-nutrients --backfill-nutrition` 으로 비타민·무기질만
+  다시 쓴다(1인분 열량은 그대로 — `--refresh-nutrition` 은 쓰지 말 것). 이어서 `--source=raw`.
+- 적재 뒤 `pnpm --filter friendly link:food-nutrients --llm` — 비타민·무기질이 없는 외식 어휘·식단 이름을 표준 음식에 잇는다
+  (영양 기준 음식, 규칙 → AI). `deploy.sh 7` 은 이 단계까지 돈다. 결과 확인은 `probe:nutrition-coverage --email=<계정>`.
 - `--classify` 단계는 chat 모델이 설정돼 있을 때만 돈다(없으면 조용히 건너뛴다).
 - 외식 어휘는 **그 서버의 식당·리뷰 데이터**에서 나오므로 서버마다 종수가 다르다. 정상이다.
 
