@@ -145,9 +145,10 @@ const runWorker = (
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      fn();
-      // 끝나면 바로 종료해 libheif wasm 메모리를 돌려준다.
-      void worker.terminate();
+      // 끝나면 바로 종료해 libheif wasm 메모리를 돌려주고, 워커가 실제로 끝난 뒤에 결과를 넘긴다. 호출측이 결과를
+      // 받자마자 게이트 자리를 돌려주므로, 종료 전에 넘기면 다음 사진의 워커가 이 워커의 메모리(디코드 중 타임아웃이면
+      // 수백 MB)가 반환되기 전에 떠 '동시 1건' 상한이 잠깐 깨진다.
+      worker.terminate().then(fn, fn);
     };
     const timer = setTimeout(
       () => finish(() => reject(new HeicDecodeError('timeout', 'HEIC 변환 시간이 너무 오래 걸립니다.'))),
