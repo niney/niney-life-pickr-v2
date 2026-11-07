@@ -331,15 +331,20 @@ export class FoodNutrientRefService {
         refFoodName: string | null;
         confidence: string | null;
         reason: string | null;
+        candidateFoodId: string | null;
+        candidateFoodName: string | null;
         updatedAt: Date | string | number;
         itemCount: bigint | number;
       }[]
     >`
-      SELECT r.nameNorm, r.name, r.method, r.refFoodId, f.name AS refFoodName, r.confidence, r.reason, r.updatedAt,
+      SELECT r.nameNorm, r.name, r.method, r.refFoodId, f.name AS refFoodName, r.confidence, r.reason,
+             r.candidateFoodId, cf.name AS candidateFoodName, r.updatedAt,
              (SELECT COUNT(*) FROM meal_items i
                WHERE i.nameNorm = r.nameNorm
                   OR i.foodId IN (SELECT c.id FROM food_items c WHERE c.nameNorm = r.nameNorm)) AS itemCount
-      FROM food_nutrient_refs r LEFT JOIN food_items f ON f.id = r.refFoodId
+      FROM food_nutrient_refs r
+      LEFT JOIN food_items f ON f.id = r.refFoodId
+      LEFT JOIN food_items cf ON cf.id = r.candidateFoodId
       ORDER BY (r.refFoodId IS NULL) DESC, itemCount DESC, r.updatedAt DESC
       LIMIT ${limit}`;
     const [linked, unlinked] = await Promise.all([
@@ -357,6 +362,9 @@ export class FoodNutrientRefService {
         refFoodName: r.refFoodName,
         confidence: r.confidence,
         reason: r.reason,
+        // 후보 행이 그새 사라졌으면(카탈로그 정리) 이름이 없다 — 화면에 '이걸로' 단추를 내지 않게 둘 다 비운다.
+        candidateFoodId: r.candidateFoodName ? r.candidateFoodId : null,
+        candidateFoodName: r.candidateFoodName,
         itemCount: Number(r.itemCount),
         updatedAt: new Date(r.updatedAt).toISOString(),
       })),
@@ -438,6 +446,7 @@ export class FoodNutrientRefService {
       confidence: null,
       reason: ref ? `어드민 지정: ${ref.name}` : '어드민: 기준 음식 없음',
       model: null,
+      candidateFoodId: null,
       version: FOOD_NUTRIENT_REF_VERSION,
     };
     await this.prisma.foodNutrientRef.upsert({ where: { nameNorm }, create: { nameNorm, ...data }, update: data });
@@ -488,7 +497,14 @@ export class FoodNutrientRefService {
         return 'none';
       }
       const hit = decideNutrientRef(parsed, candidates);
-      await this.save(t, hit, hit ? 'llm' : 'none', { reason: parsed.reason, confidence: parsed.confidence, model });
+      // 고르긴 했는데 확신이 high 가 아니면 채택하지 않고 후보로만 남긴다 — 어드민이 '이걸로' 한 번에 지정한다.
+      const unsure = hit ? null : (candidates.find((c) => c.name === parsed.choice) ?? null);
+      await this.save(t, hit, hit ? 'llm' : 'none', {
+        reason: parsed.reason,
+        confidence: parsed.confidence,
+        model,
+        candidateId: unsure?.id ?? null,
+      });
       this.failures.clear(t.nameNorm);
       return hit ? 'llm' : 'none';
     } catch (e) {
@@ -506,7 +522,7 @@ export class FoodNutrientRefService {
     t: NutrientRefTarget,
     candidate: Pick<NutrientRefCandidate, 'id'> | null,
     method: FoodNutrientRefMethod,
-    extra: { reason?: string | null; confidence?: string | null; model?: string | null },
+    extra: { reason?: string | null; confidence?: string | null; model?: string | null; candidateId?: string | null },
   ): Promise<void> {
     const data = {
       name: t.name,
@@ -515,6 +531,7 @@ export class FoodNutrientRefService {
       confidence: extra.confidence ?? null,
       reason: extra.reason ?? null,
       model: extra.model ?? null,
+      candidateFoodId: extra.candidateId ?? null,
       version: FOOD_NUTRIENT_REF_VERSION,
     };
     await this.prisma.foodNutrientRef.upsert({

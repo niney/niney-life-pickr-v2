@@ -6,7 +6,8 @@ import type { FoodAdminNutrientRefsResultType } from '@repo/api-contract';
 import { server } from '~/test/msw';
 import { NutrientRefSection } from './NutrientRefSection';
 
-// 어드민 "영양 기준 음식" — 목록 표시, '없음으로'(PUT refFoodId null), '바꾸기'(후보 검색 → PUT id), '다시 묻기'(POST names).
+// 어드민 "영양 기준 음식" — 목록 표시, '없음으로'(PUT refFoodId null), '바꾸기'(후보 검색 → PUT id), '다시 묻기'(POST names),
+// AI 가 확신이 낮아 채택하지 않은 후보 '이걸로'(PUT 후보 id).
 
 const LIST_URL = '/api/v1/admin/food/nutrient-refs';
 const LINK_URL = '/api/v1/admin/food/nutrient-refs/link';
@@ -14,11 +15,12 @@ const CANDIDATES_URL = '/api/v1/admin/food/nutrient-refs/candidates';
 
 const list: FoodAdminNutrientRefsResultType = {
   items: [
-    { name: '양념', nameNorm: '양념', method: 'none', refFoodId: null, refFoodName: null, confidence: 'high', reason: '조미료/양념은 제외', itemCount: 1, updatedAt: '2026-11-07T00:00:00.000Z' },
-    { name: '우거지탕', nameNorm: '우거지탕', method: 'llm', refFoodId: 'f-haejang', refFoodName: '해장국', confidence: 'high', reason: '주재료 및 조리법 유사', itemCount: 3, updatedAt: '2026-11-07T00:00:00.000Z' },
+    { name: '양념', nameNorm: '양념', method: 'none', refFoodId: null, refFoodName: null, confidence: 'high', reason: '조미료/양념은 제외', candidateFoodId: null, candidateFoodName: null, itemCount: 1, updatedAt: '2026-11-07T00:00:00.000Z' },
+    { name: '우거지탕', nameNorm: '우거지탕', method: 'llm', refFoodId: 'f-haejang', refFoodName: '해장국', confidence: 'high', reason: '주재료 및 조리법 유사', candidateFoodId: null, candidateFoodName: null, itemCount: 3, updatedAt: '2026-11-07T00:00:00.000Z' },
+    { name: '마라샹궈', nameNorm: '마라샹궈', method: 'none', refFoodId: null, refFoodName: null, confidence: 'medium', reason: '주재료와 양념 유사', candidateFoodId: 'f-mapa', candidateFoodName: '마파두부', itemCount: 0, updatedAt: '2026-11-07T00:00:00.000Z' },
   ],
   linked: 1,
-  unlinked: 1,
+  unlinked: 2,
 };
 
 const renderSection = () =>
@@ -52,16 +54,29 @@ describe('NutrientRefSection', () => {
     const row = (await screen.findByText('우거지탕')).closest('tr')!;
     expect(within(row).getByText('해장국')).toBeInTheDocument();
     expect(within(row).getByText('AI')).toBeInTheDocument();
-    expect(screen.getByText(/연결 1개 · 없음 1개/)).toBeInTheDocument();
+    expect(screen.getByText(/연결 1개 · 없음 2개/)).toBeInTheDocument();
     expect(within(screen.getByText('양념').closest('tr')!).getByText('없음')).toBeInTheDocument();
+    // 후보가 없는 '없음' 행·연결된 행에는 '이걸로'가 없다.
+    expect(within(screen.getByText('양념').closest('tr')!).queryByText(/AI 후보/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/AI 후보/)).not.toBeInTheDocument();
+    expect(within(screen.getByText('마라샹궈').closest('tr')!).getByText('AI 후보: 마파두부 (확신 보통)')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '양념 없음으로' }));
     await waitFor(() => expect(puts).toEqual([{ name: '양념', refFoodId: null }]));
 
+    fireEvent.click(screen.getByRole('button', { name: '마라샹궈 기준을 마파두부(으)로' }));
+    await waitFor(() => expect(puts).toEqual([{ name: '양념', refFoodId: null }, { name: '마라샹궈', refFoodId: 'f-mapa' }]));
+
     fireEvent.click(screen.getByRole('button', { name: '우거지탕 기준 바꾸기' }));
     fireEvent.change(screen.getByLabelText('우거지탕 기준 음식 검색'), { target: { value: '해장국' } });
     fireEvent.click(await screen.findByRole('button', { name: '선지해장국' }));
-    await waitFor(() => expect(puts).toEqual([{ name: '양념', refFoodId: null }, { name: '우거지탕', refFoodId: 'f-sunji' }]));
+    await waitFor(() =>
+      expect(puts).toEqual([
+        { name: '양념', refFoodId: null },
+        { name: '마라샹궈', refFoodId: 'f-mapa' },
+        { name: '우거지탕', refFoodId: 'f-sunji' },
+      ]),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '우거지탕 다시 묻기' }));
     await waitFor(() => expect(links).toEqual([{ names: ['우거지탕'] }]));

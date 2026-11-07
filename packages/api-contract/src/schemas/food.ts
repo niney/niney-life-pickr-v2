@@ -331,6 +331,9 @@ export const FoodAdminNutrientRef = z.object({
   refFoodName: z.string().nullable(),
   confidence: z.string().nullable(),
   reason: z.string().nullable(),
+  // AI 가 고르긴 했지만 확신이 high 가 아니라 채택하지 않은 후보 — 어드민이 한 번에 지정할 수 있게 남긴다.
+  candidateFoodId: z.string().nullable(),
+  candidateFoodName: z.string().nullable(),
   // 이 이름(또는 이 이름의 카탈로그 행)으로 적힌 식단 항목 수.
   itemCount: z.number().int().nonnegative(),
   updatedAt: z.string(),

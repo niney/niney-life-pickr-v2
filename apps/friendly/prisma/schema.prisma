@@ -1950,17 +1950,19 @@ model FoodWebEstimate {
 // method: borrowed(빌려온 영양의 원래 행) | synonym | rule | llm | admin | none. admin 은 일괄 재실행이 덮지 않는다.
 // FoodItem FK 를 두지 않는다 — 카탈로그 재적재·정리가 이 표에 막히지 않게(메뉴 LLM 캐시와 같은 선택).
 model FoodNutrientRef {
-  id         String   @id @default(cuid())
-  nameNorm   String   @unique
-  name       String
-  refFoodId  String?
-  method     String
-  confidence String?
-  reason     String?
-  model      String?
-  version    Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              String   @id @default(cuid())
+  nameNorm        String   @unique
+  name            String
+  refFoodId       String?
+  method          String
+  confidence      String?
+  reason          String?
+  model           String?
+  // AI 가 골랐지만 확신이 high 가 아니라 채택하지 않은 후보(method none) — 어드민이 한 번에 지정하게 남긴다.
+  candidateFoodId String?
+  version         Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([refFoodId])
   @@map("food_nutrient_refs")

@@ -30,6 +30,8 @@ const METHOD_LABEL: Record<FoodNutrientRefMethodType, string> = {
   none: '못 찾음',
 };
 
+const CONFIDENCE_LABEL: Record<string, string> = { high: '높음', medium: '보통', low: '낮음' };
+
 export const NutrientRefSection = () => {
   const refs = useNutrientRefs();
   const setRef = useSetNutrientRef();
@@ -116,6 +118,7 @@ export const NutrientRefSection = () => {
                   editing={editing === it.nameNorm}
                   onEdit={() => setEditing(editing === it.nameNorm ? null : it.nameNorm)}
                   onNone={() => choose(it.name, null)}
+                  onAdopt={() => it.candidateFoodId && choose(it.name, it.candidateFoodId)}
                   onClear={() => {
                     setMessage(null);
                     clearRef.mutate(it.name, { onError: (e) => fail(e, '해제하지 못했습니다') });
@@ -144,6 +147,7 @@ const RefRow = ({
   editing,
   onEdit,
   onNone,
+  onAdopt,
   onClear,
   onAsk,
 }: {
@@ -152,6 +156,7 @@ const RefRow = ({
   editing: boolean;
   onEdit: () => void;
   onNone: () => void;
+  onAdopt: () => void;
   onClear: () => void;
   onAsk: () => void;
 }) => (
@@ -164,6 +169,26 @@ const RefRow = ({
         <Badge variant="amber">없음</Badge>
       )}
       {it.reason ? <span className="ml-2 text-xs text-muted-foreground">{it.reason}</span> : null}
+      {/* AI 가 골랐지만 확신이 높지 않아 채택하지 않은 후보 — 맞으면 한 번에 지정한다. */}
+      {!it.refFoodId && it.candidateFoodId && it.candidateFoodName ? (
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">
+            AI 후보: {it.candidateFoodName}
+            {it.confidence ? ` (확신 ${CONFIDENCE_LABEL[it.confidence] ?? it.confidence})` : ''}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            disabled={busy}
+            onClick={onAdopt}
+            aria-label={`${it.name} 기준을 ${it.candidateFoodName}(으)로`}
+          >
+            이걸로
+          </Button>
+        </div>
+      ) : null}
     </TableCell>
     <TableCell className="text-xs text-muted-foreground">{METHOD_LABEL[it.method]}</TableCell>
     <TableCell className="text-right tabular-nums">{it.itemCount}</TableCell>

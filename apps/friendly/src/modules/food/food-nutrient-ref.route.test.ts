@@ -136,6 +136,23 @@ describe('food nutrient ref routes (격리 DB)', () => {
     expect(after.items.map((i) => i.name)).toEqual(['공기밥']);
   });
 
+  it('목록 — AI 가 채택하지 않은 후보는 이름과 함께, 후보 행이 사라졌으면 비운다', async () => {
+    const rice = await idOf('쌀밥');
+    await app.prisma.foodNutrientRef.createMany({
+      data: [
+        { nameNorm: '흰쌀정식', name: '흰쌀정식', method: 'none', confidence: 'medium', reason: '밥 위주', candidateFoodId: rice, version: 1 },
+        { nameNorm: '사라진후보', name: '사라진후보', method: 'none', confidence: 'low', reason: null, candidateFoodId: 'gone', version: 1 },
+      ],
+    });
+    try {
+      const list = (await app.inject({ method: 'GET', url: Routes.Food.adminNutrientRefs, headers: admin })).json<FoodAdminNutrientRefsResultType>();
+      expect(list.items.find((i) => i.name === '흰쌀정식')).toMatchObject({ refFoodId: null, candidateFoodId: rice, candidateFoodName: '쌀밥' });
+      expect(list.items.find((i) => i.name === '사라진후보')).toMatchObject({ candidateFoodId: null, candidateFoodName: null });
+    } finally {
+      await app.prisma.foodNutrientRef.deleteMany({ where: { nameNorm: { in: ['흰쌀정식', '사라진후보'] } } });
+    }
+  });
+
   it('기준 후보 검색은 영양소 있는 음식만, 다시 연결은 AI 가 없으면 보내지 않는다', async () => {
     const res = await app.inject({ method: 'GET', url: `${Routes.Food.adminNutrientRefCandidates}?q=${encodeURIComponent('쌀밥')}`, headers: admin });
     const names = res.json<FoodAdminNutrientRefCandidatesResultType>().items.map((i) => i.name);

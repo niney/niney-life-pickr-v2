@@ -161,6 +161,10 @@ const makeFakes = () => {
       if (prompt.includes('음식 이름: 우거지탕') && prompt.includes('해장국')) {
         return { text: '{"choice":"해장국","confidence":"high","reason":"우거지 국물"}', model: 'm', promptTokens: null, completionTokens: null };
       }
+      // 고르긴 했지만 확신이 medium — 채택하지 않고 후보로만 남는다.
+      if (prompt.includes('음식 이름: 갈비찜정식') && prompt.includes('돼지갈비찜')) {
+        return { text: '{"choice":"돼지갈비찜","confidence":"medium","reason":"갈비찜 계열"}', model: 'm', promptTokens: null, completionTokens: null };
+      }
       return { text: '{"choice":null,"confidence":"low","reason":"모름"}', model: 'm', promptTokens: null, completionTokens: null };
     },
   };
@@ -202,6 +206,24 @@ describe('FoodNutrientRefService', () => {
     // 점검용 조회 — 저장 판정 + 저장 안 된 이름은 규칙을 그 자리에서.
     const ids = await svc.resolveIds([...targets, { name: '흰밥', nameNorm: '흰밥', dishType: null, nutritionFrom: null }]);
     expect(Object.fromEntries(ids)).toEqual({ 공기밥: 'rice', 돼지등뼈찜: 'stew', 우거지탕: 'haejang', 흰밥: 'rice' });
+  });
+
+  it('AI 가 고른 후보가 high 가 아니면 채택하지 않고 후보로만 남긴다(어드민 "이걸로"), 어드민 지정은 후보를 비운다', async () => {
+    const f = makeFakes();
+    const svc = new FoodNutrientRefService(f.prisma, { aiConfig: f.aiConfig, cache: f.cache, model: 'gemma4:31b' });
+    const stats = await svc.link([{ name: '갈비찜정식', nameNorm: '갈비찜정식', dishType: null, nutritionFrom: null }], { llm: true });
+    expect(stats).toMatchObject({ llm: 0, none: 1 });
+    expect(f.store.get('갈비찜정식')).toMatchObject({
+      refFoodId: null,
+      method: 'none',
+      confidence: 'medium',
+      candidateFoodId: 'stew',
+    });
+    // 후보 없이 '없음'이면 후보도 없다.
+    await svc.link([{ name: '수상한메뉴', nameNorm: '수상한메뉴', dishType: null, nutritionFrom: null }], { llm: true });
+    expect(f.store.get('수상한메뉴')).toMatchObject({ method: 'none', candidateFoodId: null });
+    await svc.setAdmin('갈비찜정식', 'stew');
+    expect(f.store.get('갈비찜정식')).toMatchObject({ refFoodId: 'stew', method: 'admin', candidateFoodId: null });
   });
 
   it('어드민 지정이 규칙·LLM 보다 먼저이고, 일괄 연결이 덮지 않는다', async () => {
