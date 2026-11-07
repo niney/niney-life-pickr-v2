@@ -89,6 +89,10 @@ pnpm --filter friendly status:food-catalog     # ok items=N classified=C nutriti
   `20261107200000_food_nutrient_ref_candidate`).
 - 이어서 `pnpm --filter friendly backfill:meal-nutrition --estimate` 한 번 — 열량이 빈 식단 항목을 카탈로그·이름 추정
   (규칙 → AI → 웹)으로 채운다. 열량을 모르는 음식은 영양소 점검에서 빠진다(화면에 "열량을 모르는 음식 N개" 안내).
+- 식단 추천 카드의 "곁들이면 좋아요" 한 줄은 새 열 `meal_recommendations.sidesJson`(마이그레이션
+  `20261108090000_meal_recommendation_sides`)에 저장된다 — `migrate deploy` 가 처리하고, 예전 추천은 줄 없이 그대로 보인다.
+- 메뉴 칼로리 LLM 매칭 v2(2026-11-08)는 별도 작업이 없다 — 영양 없는 행을 골랐던 옛 판정만 메뉴 탭을 볼 때 백그라운드로 다시
+  묻는다(운영 사본 기준 약 180건). 맛집 메뉴에서 영양 없는 행에 걸렸던 이름(약 1,400종)도 그때그때 LLM·웹으로 채워진다.
 - `--classify` 단계는 chat 모델이 설정돼 있을 때만 돈다(없으면 조용히 건너뛴다).
 - 외식 어휘는 **그 서버의 식당·리뷰 데이터**에서 나오므로 서버마다 종수가 다르다. 정상이다.
 

@@ -258,7 +258,7 @@ niney@life.com: 14일 보류 10 → **0**(15개 영양소, 정보 100%·마그�
 "파프리카·딸기·키위를 끼니에 곁들이거나 간식으로", "약 9.3μg(370IU)", 요약 끝 '그 밖에' 확인. 로컬 운영 사본은 dev 서버가 DB 를
 잡고 있어 `prisma migrate deploy` 가 잠금 오류 — SQL 직접 실행 + `_prisma_migrations` 행 기록으로 적용(`migrate status` 최신).
 
-운영 반영 순서(갱신): 배포 → 마이그레이션(2건) → 엑셀 2개 업로드 →
+운영 반영 순서(갱신): 배포 → 마이그레이션(2건, 2026-11-08 추천 곁들임 열까지 3건) → 엑셀 2개 업로드 →
 `load:food-catalog --source=nutrition --refresh-nutrients --backfill-nutrition` → `--source=raw` → `link:food-nutrients --llm` →
 `backfill:meal-nutrition --estimate` → 재시작.
 
