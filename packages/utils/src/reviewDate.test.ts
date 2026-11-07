@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareReviewRecencyDesc, parseReviewVisitedAt } from './reviewDate.js';
+import { compareReviewRecencyDesc, parseReviewVisitedAt, sortReviewsByRecencyDesc } from './reviewDate.js';
 
 const isoDay = (value: number | null): string | null =>
   value === null ? null : new Date(value).toISOString().slice(0, 10);
@@ -52,5 +52,24 @@ describe('compareReviewRecencyDesc', () => {
       '신규',
       '기존',
     ]);
+  });
+});
+
+describe('sortReviewsByRecencyDesc', () => {
+  it('비교 함수로 정렬한 것과 같은 순서(동률은 입력 순서)이고 입력은 그대로 둔다', () => {
+    const visited = ['2026-08-15', '8.15.토', '12.31.수', '1.2.금', '26.8.15.토', '2026년 8월 15일', '2.30.월', '알 수 없음', null, '', '7.1.화'];
+    const fetched = ['2026-08-17T10:33:14.000Z', '2026-01-02T03:00:00.000Z', '2025-12-30T00:00:00.000Z', null, '', 'not a date', new Date('2026-08-17T00:00:00.000Z'), 1_786_000_000_000];
+    // 고정 씨앗 의사난수로 같은 값·동률이 많이 섞인 목록.
+    let seed = 7;
+    const next = (n: number) => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed % n;
+    };
+    const list = Array.from({ length: 400 }, (_, i) => ({ id: i, visitedAt: visited[next(visited.length)]!, fetchedAt: fetched[next(fetched.length)]! }));
+    const before = list.map((r) => r.id);
+    const sorted = sortReviewsByRecencyDesc(list);
+    expect(sorted.map((r) => r.id)).toEqual([...list].sort(compareReviewRecencyDesc).map((r) => r.id));
+    expect(list.map((r) => r.id)).toEqual(before);
+    expect(sortReviewsByRecencyDesc([])).toEqual([]);
   });
 });

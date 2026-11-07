@@ -1,4 +1,4 @@
-import { compareReviewRecencyDesc } from '@repo/utils';
+import { compareReviewRecencyDesc, sortReviewsByRecencyDesc } from '@repo/utils';
 import type {
   AdminVisitorReviewType,
   PersistedVisitorReviewType,
@@ -44,13 +44,14 @@ export const mergePersistedBatch = (
     });
   }
   if (fresh.length === 0) return prev;
-  fresh.sort(compareReviewRecencyDesc);
+  // 새 행 정렬은 방문일 해석을 행마다 한 번만 하는 공용 정렬로. 자리 찾기(이분 탐색)는 비교 함수 그대로.
+  const sortedFresh = sortReviewsByRecencyDesc(fresh);
 
   const base = prev.reviews;
   const merged: AdminVisitorReviewType[] = [];
-  // fresh 가 정렬돼 있어 다음 행의 자리는 직전 자리 이후다 — 탐색 구간을 좁혀 간다.
+  // sortedFresh 가 정렬돼 있어 다음 행의 자리는 직전 자리 이후다 — 탐색 구간을 좁혀 간다.
   let from = 0;
-  for (const item of fresh) {
+  for (const item of sortedFresh) {
     // lower bound: item 이 base[idx] 보다 앞이거나 동률인 첫 idx.
     let lo = from;
     let hi = base.length;

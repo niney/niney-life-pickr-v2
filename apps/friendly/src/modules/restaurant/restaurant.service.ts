@@ -23,7 +23,7 @@ import {
   type TablingSnapshot,
 } from './restaurant.merge.js';
 import { Routes } from '@repo/api-contract';
-import { compareReviewRecencyDesc } from '@repo/utils';
+import { sortReviewsByRecencyDesc } from '@repo/utils';
 import { deriveRegion } from './region-derive.js';
 import { getRestaurantStoreInfo } from './restaurant-store-match.service.js';
 import { getRestaurantTourMatchInfo } from '../tour/restaurant-tour-match.service.js';
@@ -1805,9 +1805,7 @@ export class RestaurantService {
     const tbReviews = tbRow
       ? tbRow.visitorReviews.map((v) => this.toPublicReview(v, 'tabling'))
       : [];
-    const reviews: PublicVisitorReviewType[] = [...naverReviews, ...dcReviews, ...tbReviews].sort(
-      compareReviewRecencyDesc,
-    );
+    const reviews: PublicVisitorReviewType[] = sortReviewsByRecencyDesc([...naverReviews, ...dcReviews, ...tbReviews]);
 
     return {
       naverRow,
@@ -2367,7 +2365,7 @@ export class RestaurantService {
         mixedCount: sentiment.mixed,
       });
     }
-    reviews.sort(compareReviewRecencyDesc);
+    const sortedReviews = sortReviewsByRecencyDesc(reviews);
     // 이 상세의 기준(네이버) 행을 맨 앞에 — 나머지는 최근 수집순 그대로(stable sort).
     sources.sort((a, b) => Number(b.restaurantId === r.id) - Number(a.restaurantId === r.id));
 
@@ -2387,7 +2385,7 @@ export class RestaurantService {
       lastCrawledAt: r.lastCrawledAt.toISOString(),
       // 리뷰는 reviews 한 곳에만 — 스냅샷에 같은 목록을 복제하면 응답만 두 배가 된다.
       snapshot: { ...snapshot, visitorReviews: [] },
-      reviews,
+      reviews: sortedReviews,
       sources,
       store: await getRestaurantStoreInfo(this.prisma, r.canonicalId),
       tour: await getRestaurantTourMatchInfo(this.prisma, r.canonicalId),

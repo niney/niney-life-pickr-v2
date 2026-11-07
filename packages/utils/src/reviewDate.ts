@@ -98,22 +98,42 @@ export const parseReviewVisitedAt = (
   return inferred;
 };
 
-/** 실제 방문일 최신순. 방문일을 해석하지 못하면 최근 수집 시각을 폴백으로 쓴다. */
-export const compareReviewRecencyDesc = <T extends ReviewRecencyLike>(a: T, b: T): number => {
-  const visitedA = parseReviewVisitedAt(a.visitedAt, a.fetchedAt);
-  const visitedB = parseReviewVisitedAt(b.visitedAt, b.fetchedAt);
-  if (visitedA !== null || visitedB !== null) {
-    if (visitedA === null) return 1;
-    if (visitedB === null) return -1;
-    if (visitedA !== visitedB) return visitedB - visitedA;
-  }
+// 최신순 정렬 키 — 해석한 방문일(UTC 자정 ms)과 수집 시각(ms).
+interface RecencyKey {
+  visited: number | null;
+  fetched: number | null;
+}
 
-  const fetchedA = fetchedAtMs(a.fetchedAt);
-  const fetchedB = fetchedAtMs(b.fetchedAt);
-  if (fetchedA === null || fetchedB === null) {
-    if (fetchedA === null && fetchedB !== null) return 1;
-    if (fetchedA !== null && fetchedB === null) return -1;
+const recencyKeyOf = (r: ReviewRecencyLike): RecencyKey => ({
+  visited: parseReviewVisitedAt(r.visitedAt, r.fetchedAt),
+  fetched: fetchedAtMs(r.fetchedAt),
+});
+
+// 방문일 최신순, 방문일을 해석하지 못한 쪽은 뒤로, 둘 다 같거나 없으면 수집 시각 최신순(없는 쪽은 뒤로).
+const compareRecencyKeys = (a: RecencyKey, b: RecencyKey): number => {
+  if (a.visited !== null || b.visited !== null) {
+    if (a.visited === null) return 1;
+    if (b.visited === null) return -1;
+    if (a.visited !== b.visited) return b.visited - a.visited;
+  }
+  if (a.fetched === null || b.fetched === null) {
+    if (a.fetched === null && b.fetched !== null) return 1;
+    if (a.fetched !== null && b.fetched === null) return -1;
     return 0;
   }
-  return fetchedB - fetchedA;
+  return b.fetched - a.fetched;
 };
+
+/** 실제 방문일 최신순. 방문일을 해석하지 못하면 최근 수집 시각을 폴백으로 쓴다. 여러 건을 정렬할 때는 sortReviewsByRecencyDesc. */
+export const compareReviewRecencyDesc = <T extends ReviewRecencyLike>(a: T, b: T): number =>
+  compareRecencyKeys(recencyKeyOf(a), recencyKeyOf(b));
+
+/**
+ * compareReviewRecencyDesc 로 정렬한 것과 같은 순서의 새 배열(입력은 그대로). 비교 함수는 비교할 때마다 두 리뷰의 방문일을
+ * 정규식으로 다시 해석해, 정렬 한 번에 해석이 비교 횟수의 두 배(546건이면 약 8천 번)였다 — 여기서는 리뷰마다 한 번.
+ */
+export const sortReviewsByRecencyDesc = <T extends ReviewRecencyLike>(reviews: readonly T[]): T[] =>
+  reviews
+    .map((item) => ({ item, key: recencyKeyOf(item) }))
+    .sort((a, b) => compareRecencyKeys(a.key, b.key))
+    .map(({ item }) => item);

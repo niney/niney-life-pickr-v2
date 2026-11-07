@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Search, X } from 'lucide-react';
 import { useRestaurantReviewMatch, useResummarizeReview } from '@repo/shared';
-import { compareReviewRecencyDesc } from '@repo/utils';
+import { sortReviewsByRecencyDesc } from '@repo/utils';
 import type { AdminVisitorReviewType, ReviewSummaryStatusType } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { ModelPickerPopup } from '~/components/restaurant/detail/ModelPickerPopup';
@@ -76,11 +76,10 @@ const sentimentOf = (r: AdminVisitorReviewType): SentimentFilter | null =>
   r.summary?.status === 'done' ? (r.summary.sentiment ?? null) : null;
 
 const sortReviews = (list: AdminVisitorReviewType[], mode: SortMode): AdminVisitorReviewType[] => {
+  // 방문일 최신순은 방문일 해석을 리뷰마다 한 번만 하는 공용 정렬로(비교 함수는 비교마다 다시 해석한다).
+  if (mode === 'visitedAt-desc') return sortReviewsByRecencyDesc(list);
   const arr = [...list];
   switch (mode) {
-    case 'visitedAt-desc':
-      arr.sort(compareReviewRecencyDesc);
-      break;
     case 'fetchedAt-desc':
       arr.sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
       break;
