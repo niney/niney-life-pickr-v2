@@ -59,11 +59,14 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
-      summary: '내 최근 영양제 조언 — 없으면 advice=null',
+      summary: '내 최근 영양제 조언 — 없으면 advice=null, 지금 점검과 판정이 달라졌으면 stale=true',
+      description:
+        '조언 방식(프롬프트 버전)이 바뀌었거나, 조언과 같은 기간을 오늘 다시 점검한 판정(영양소별 부족·조금 부족·' +
+        '기록 더 필요 여부)이 조언 때와 다르면 stale=true — 화면은 다시 받기를 권한다. 숫자만 조금 달라진 것은 보지 않는다.',
       security: [{ bearerAuth: [] }],
       response: { 200: LatestMealNutritionAdviceResult },
     },
-    handler: async (req) => ({ advice: await advice.latest(req.user.userId) }),
+    handler: async (req) => advice.latest(req.user.userId, kstToday()),
   });
 
   typed.post(Routes.Meal.nutritionAdvice, {

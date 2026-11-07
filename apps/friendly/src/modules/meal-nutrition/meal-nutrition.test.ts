@@ -26,6 +26,8 @@ import {
   MealNutritionAdviceError,
   MealNutritionAdviceService,
   adviceCandidates,
+  adviceOverflowNote,
+  adviceVerdict,
   allowedNumbersFor,
   fallbackAdviceItem,
   fallbackSummary,
@@ -33,11 +35,18 @@ import {
   textProblem,
 } from './meal-nutrition-advice.service.js';
 import { NOT_MEASURED_NUTRIENTS, NUTRIENT_DEFS } from './meal-nutrition.defs.js';
-import { buildMealNutritionAdviceUserPrompt, upperLimitText } from './meal-nutrition.prompts.js';
+import {
+  MEAL_NUTRITION_ADVICE_VERSION,
+  buildMealNutritionAdviceUserPrompt,
+  roundSignificant,
+  shortfallOf,
+  upperLimitText,
+} from './meal-nutrition.prompts.js';
 import {
   MealNutritionService,
   analyzeMealNutrition,
   assessNutrient,
+  intakeForDisplay,
   profileFrom,
   type AnalysisCatalogRow,
   type AnalysisItem,
@@ -89,7 +98,7 @@ describe('assessNutrient', () => {
 
   it('평균필요량 미만 low · 권장 미만 borderline · 이상 ok · 상한 초과 high', () => {
     const at = (intake: number) => assessNutrient({ ...base, def: def('calcium'), intake, ref: calciumRef });
-    expect(at(400)).toMatchObject({ status: 'low', supplementCandidate: true, percent: 57 });
+    expect(at(400)).toMatchObject({ status: 'low', supplementCandidate: true, percent: 57, recordGap: false });
     expect(at(600)).toMatchObject({ status: 'borderline', supplementCandidate: true });
     expect(at(800)).toMatchObject({ status: 'ok', supplementCandidate: false });
     expect(at(3000)).toMatchObject({ status: 'high', supplementCandidate: false });
@@ -111,9 +120,22 @@ describe('assessNutrient', () => {
       ref: calciumRef,
       energyRatio: 0.5,
     });
-    // 400 × 2 = 800 ≥ 700 — 기록이 빠졌을 수 있어 조언하지 않는다.
-    expect(half).toMatchObject({ status: 'low', supplementCandidate: false });
+    // 400 × 2 = 800 ≥ 700 — 기록이 빠졌을 수 있어 조언하지 않고, 화면은 '부족' 대신 '기록 더 필요'(recordGap).
+    expect(half).toMatchObject({ status: 'low', supplementCandidate: false, recordGap: true });
     expect(half.note).toContain('빠진 끼니');
+  });
+
+  it('기준에 못 미치면 반올림해도 100% 로 보이지 않고, 섭취량도 기준과 같은 숫자로 보이지 않게 한 자리 더', () => {
+    const fiber = nutrientReference('fiber', 'female', '30-49'); // ai 20
+    expect(assessNutrient({ ...base, def: def('fiber'), intake: 19.95, ref: fiber })).toMatchObject({
+      status: 'borderline',
+      percent: 99,
+    });
+    expect(intakeForDisplay(19.8, 20)).toBe(19.8);
+    expect(intakeForDisplay(19.96, 20)).toBe(19.96);
+    expect(intakeForDisplay(699.6, 700)).toBe(699.6);
+    expect(intakeForDisplay(260.4, 700)).toBe(260);
+    expect(intakeForDisplay(8.456, 10)).toBe(8.46);
   });
 
   it('정보가 적거나 기록이 모자라면 unknown, 과일·채소 공백은 해당 영양소만 보류', () => {
@@ -126,7 +148,7 @@ describe('assessNutrient', () => {
     ).toBe('unknown');
     const vitC = nutrientReference('vitaminC', 'female', '30-49');
     const gap = assessNutrient({ ...base, def: def('vitaminC'), intake: 20, ref: vitC, produceGap: true });
-    expect(gap).toMatchObject({ status: 'low', supplementCandidate: false });
+    expect(gap).toMatchObject({ status: 'low', supplementCandidate: false, recordGap: false });
     expect(gap.note).toContain('과일·채소');
     // 칼슘은 과일·채소 공백과 무관.
     expect(
@@ -235,8 +257,9 @@ describe('analyzeMealNutrition', () => {
     // 260 × 2(열량 보정 상한) = 520 < 700 → 조언 대상.
     expect(ca).toMatchObject({ status: 'low', supplementCandidate: true, percent: 37 });
     expect(ca.topSources[0]).toBe('된장찌개');
-    // 철 8.4mg — 평균필요량 8 은 넘고, 열량을 채우면 권장 10 을 넘는다 → 조언하지 않는다.
-    expect(nutrient(a, 'iron')).toMatchObject({ status: 'borderline', supplementCandidate: false });
+    // 철 8.4mg — 평균필요량 8 은 넘고, 열량을 채우면 권장 10 을 넘는다 → 조언하지 않고 화면은 '기록 더 필요'.
+    expect(nutrient(a, 'iron')).toMatchObject({ status: 'borderline', supplementCandidate: false, recordGap: true });
+    expect(ca.recordGap).toBe(false);
     // 단백질·나트륨은 항목 스냅샷.
     expect(nutrient(a, 'protein').intakePerDay).toBe(32);
     expect(nutrient(a, 'sodium')).toMatchObject({ intakePerDay: 3610, status: 'high' });
@@ -269,6 +292,28 @@ describe('analyzeMealNutrition', () => {
       expect(nutrient(a, key).supplementCandidate).toBe(false);
     }
     expect(nutrient(a, 'calcium').supplementCandidate).toBe(true);
+  });
+
+  it('열량을 모르는 음식은 몇 개 빠졌는지 밝히고(음료는 세지 않음), 기록 열량이 필요량의 85% 아래면 안내한다', () => {
+    const extra = (d: string, entryId: string): AnalysisItem[] => [
+      { eatenDate: d, entryId, name: '삼겹살', foodId: null, dishType: 'grill', kcal: 310, proteinG: 20, sodiumMg: 100 },
+    ];
+    const items = days(4).flatMap((d) => [
+      ...meal(d, `${d}-l`, [
+        ...extra(d, `${d}-l`),
+        { eatenDate: d, entryId: `${d}-l`, name: '참치', foodId: null, dishType: null, kcal: null, proteinG: null, sodiumMg: null },
+      ]),
+      ...meal(d, `${d}-d`, [
+        ...extra(d, `${d}-d`),
+        { eatenDate: d, entryId: `${d}-d`, name: '맥주', foodId: 'beer', dishType: 'alcohol', kcal: null, proteinG: null, sodiumMg: null },
+      ]),
+    ]);
+    const a = analyze(items);
+    // 하루 (450 + 310) × 2 = 1,520kcal = 필요량 1,900 의 80% — 예전 기준(70%)이면 안내가 없었다.
+    expect(a.energy.percent).toBe(80);
+    expect(a.notes.some((n) => n.includes('필요량의 80%'))).toBe(true);
+    // 참치 4개만 — 열량을 모르는 맥주(음료)는 세지 않는다.
+    expect(a.notes).toContain('열량을 모르는 음식 4개(참치)는 점검에서 빠졌어요.');
   });
 
   it('성별·출생연도가 있으면 그 기준으로 보고 안내 문구를 빼다', () => {
@@ -385,6 +430,51 @@ describe('조언 후보·검사', () => {
     expect(prompt).toMatch(/potassium 칼륨[\s\S]*영양제: 음식으로만/);
     expect(prompt).toContain('[여러 개]');
     expect(prompt).toContain('나트륨은 하루 평균 3,610mg');
+  });
+
+  it('부족분은 유효숫자 두 자리 — 화면·프롬프트·서버 문장이 같은 값(9.33μg(373IU) → 9.3μg(370IU))', () => {
+    expect(roundSignificant(9.33)).toBe(9.3);
+    expect(roundSignificant(435)).toBe(440);
+    expect(roundSignificant(1863)).toBe(1900);
+    expect(roundSignificant(0.05)).toBe(0.05);
+    expect(roundSignificant(4000)).toBe(4000);
+    const vitD = { ...nutrient(a, 'vitaminD'), intakePerDay: 0.67 };
+    expect(shortfallOf(vitD)).toBe(9.3);
+    const prompt = buildMealNutritionAdviceUserPrompt({ analysis: a, candidates: [vitD], sodiumHigh: null });
+    expect(prompt).toContain('하루 부족분 약 9.3μg(370IU)');
+    expect(fallbackAdviceItem(vitD).shortfallPerDay).toBe(9.3);
+  });
+
+  it('곁들임 후보가 있으면 프롬프트·서버 문장에 함께 쓴다 — 한 끼 후보가 없어도', () => {
+    const vitC = { ...nutrient(a, 'vitaminC'), foodSuggestions: [], sideSuggestions: ['파프리카', '키위', '딸기'] };
+    const prompt = buildMealNutritionAdviceUserPrompt({ analysis: a, candidates: [vitC], sodiumHigh: null });
+    expect(prompt).toContain('   - 곁들임 후보: 파프리카·키위·딸기');
+    expect(prompt).not.toContain('한 끼 후보');
+    expect(fallbackAdviceItem(vitC).foodTip).toBe(
+      `곁들임으로는 파프리카·키위, 평소에는 ${vitC.typicalFoods.slice(0, 3).join('·')} 같은 음식을 챙겨 보세요.`,
+    );
+    const both = { ...vitC, foodSuggestions: ['비빔밥'] };
+    expect(fallbackAdviceItem(both).foodTip).toMatch(/^한 끼로는 비빔밥, 곁들임으로는 파프리카·키위, 평소에는/);
+  });
+
+  it('6개를 넘는 조언 대상은 요약 끝 한 문장으로 — 판정 지문은 숫자가 아니라 판정만 본다', () => {
+    expect(adviceOverflowNote(a)).toBeNull();
+    const more = {
+      ...a,
+      nutrients: a.nutrients.map((n) =>
+        n.key === 'thiamin' || n.key === 'niacin'
+          ? { ...n, status: 'low' as const, supplementCandidate: true, recordGap: false, percent: 90 }
+          : n,
+      ),
+    };
+    expect(adviceCandidates(more)).toHaveLength(6);
+    expect(adviceOverflowNote(more)).toBe(`그 밖에 ${def('thiamin').label}·${def('niacin').label}도 기준보다 적어요.`);
+    const nudged = {
+      ...a,
+      nutrients: a.nutrients.map((n) => ({ ...n, intakePerDay: (n.intakePerDay ?? 0) + 1, percent: (n.percent ?? 0) + 1 })),
+    };
+    expect(adviceVerdict(nudged)).toBe(adviceVerdict(a));
+    expect(adviceVerdict(more)).not.toBe(adviceVerdict(a));
   });
 
   it('textProblem — 한자·효능 주장·점검 밖 영양소·프롬프트에 없는 용량', () => {
@@ -591,7 +681,8 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
         nutrition: { kcal: 150, carbG: null, proteinG: 10, fatG: null, sodiumMg: 1800, sugarG: null },
         nutrientsPer100g: STEW,
       },
-      // 음식 제안용 흔한 한 끼 — 국물 요리(싱거운 편)·구이·니아신 값이 비정상인 찌개.
+      // 음식 제안용 흔한 한 끼 — 국물 요리(싱거운 편)·구이·니아신 값이 비정상인 찌개. 칼슘은 1인분이 기준(700mg)의
+      // 25% 를 넘게(순두부찌개 200mg·고등어구이 195mg).
       {
         name: '순두부찌개',
         dishType: 'stew',
@@ -599,7 +690,7 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
         servingG: 200,
         kcalPer100g: 35,
         nutrition: { kcal: 70, carbG: null, proteinG: 6, fatG: null, sodiumMg: 300, sugarG: null },
-        nutrientsPer100g: { calciumMg: 50, niacinMg: 0 },
+        nutrientsPer100g: { calciumMg: 100, niacinMg: 0 },
       },
       {
         name: '고등어구이',
@@ -608,7 +699,19 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
         servingG: 150,
         kcalPer100g: 180,
         nutrition: { kcal: 270, carbG: null, proteinG: 25, fatG: null, sodiumMg: 400, sugarG: null },
-        nutrientsPer100g: { calciumMg: 60, niacinMg: 6 },
+        nutrientsPer100g: { calciumMg: 130, niacinMg: 6 },
+      },
+      // 곁들임(common-sides) — 1회 분량을 모르는 과일(100g 로 봄)·짠 편인 반찬.
+      { name: '귤', source: 'manual', kcalPer100g: 40, nutrientsPer100g: { vitaminCMg: 30 } },
+      { name: '사과', source: 'manual', kcalPer100g: 52, nutrientsPer100g: { vitaminCMg: 4 } },
+      {
+        name: '멸치볶음',
+        dishType: 'stir_fry',
+        source: 'manual',
+        servingG: 50,
+        kcalPer100g: 276,
+        nutrition: { kcal: 138, carbG: null, proteinG: 12, fatG: null, sodiumMg: 500, sugarG: null },
+        nutrientsPer100g: { calciumMg: 600 },
       },
       {
         name: '김치찌개',
@@ -696,7 +799,30 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
     expect(again).toMatchObject({ cached: true, advice: { id: first.advice.id } });
     expect(provider.calls).toHaveLength(1);
     expect(quota).toEqual(['nut-u']);
-    expect((await svc.latest('nut-u'))?.id).toBe(first.advice.id);
+    expect((await svc.latest('nut-u', '2026-08-22')).advice?.id).toBe(first.advice.id);
+  });
+
+  it('최근 조언 — 방금 만든 조언은 stale 이 아니고, 조언 방식(버전)이 다르거나 지금 점검의 판정이 달라지면 stale', async () => {
+    await seedAuthUsers(app, [{ id: 'nut-stale', role: 'USER' }]);
+    await seedDays('nut-stale', '2026-08-22', 5);
+    provider.fail = true; // 서버 문장(fallback)으로 충분하다
+    const svc = build();
+    const { advice } = await svc.create('nut-stale', { days: 14, force: false }, '2026-08-22');
+    expect(await svc.latest('nut-stale', '2026-08-22')).toMatchObject({ advice: { id: advice.id }, stale: false });
+    // 다음 날 봐도 같은 기록·같은 판정이면 stale 이 아니다.
+    expect((await svc.latest('nut-stale', '2026-08-23')).stale).toBe(false);
+
+    await app.prisma.mealNutritionAdvice.update({ where: { id: advice.id }, data: { promptVersion: MEAL_NUTRITION_ADVICE_VERSION - 1 } });
+    expect((await svc.latest('nut-stale', '2026-08-22')).stale).toBe(true);
+
+    // 조언 때는 칼슘이 '충분'이었다고 치면(카탈로그 보강·연결로 판정이 바뀐 경우) 지금 점검과 다르다.
+    const stored: MealNutritionAnalysisType = structuredClone(advice.analysis);
+    stored.nutrients = stored.nutrients.map((n) => (n.key === 'calcium' ? { ...n, status: 'ok', supplementCandidate: false } : n));
+    await app.prisma.mealNutritionAdvice.update({
+      where: { id: advice.id },
+      data: { promptVersion: MEAL_NUTRITION_ADVICE_VERSION, analysisJson: JSON.stringify(stored) },
+    });
+    expect((await svc.latest('nut-stale', '2026-08-22')).stale).toBe(true);
   });
 
   it('어드민 추론을 켜면 kimi 에 그 단계와 늘린 출력 예산을 보낸다', async () => {
@@ -750,6 +876,20 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
     // 김치찌개 니아신 160mg/1인분 > 상한 35mg — 원자료 오류로 보고 뺀다.
     const niacin = new Map([['niacin' as const, { reference: 14, upperLimit: 35 }]]);
     expect((await svc.foodSuggestions(niacin, [], [])).get('niacin')).toEqual(['고등어구이']);
+  });
+
+  it('곁들임 제안 — 흔한 곁들임 목록 안에서 1회 분량이 기준의 15% 이상, 분량을 모르면 100g, 나트륨이 많으면 짠 반찬을 뺀다', async () => {
+    const svc = new MealNutritionService(app.prisma);
+    const vitC = new Map([['vitaminC' as const, { reference: 100, upperLimit: 2000 }]]);
+    // 귤 100g → 30mg(30%) · 사과 100g → 4mg(4%, 문턱 아래).
+    expect((await svc.sideSuggestions(vitC, [], [])).get('vitaminC')).toEqual(['귤']);
+    expect((await svc.sideSuggestions(vitC, [], ['귤'])).get('vitaminC')).toEqual([]);
+    // 한 끼 제안은 흔한 한 끼 목록만 — 귤이 '한 끼로는'에 나오지 않는다.
+    expect((await svc.foodSuggestions(vitC, [], [])).get('vitaminC')).toEqual([]);
+    const calcium = new Map([['calcium' as const, { reference: 700, upperLimit: 2500 }]]);
+    // 멸치볶음 50g → 300mg(43%), 1회 나트륨 500mg — 나트륨이 많은 사람(1회 300mg 미만만)에겐 뺀다.
+    expect((await svc.sideSuggestions(calcium, [], [])).get('calcium')).toEqual(['멸치볶음']);
+    expect((await svc.sideSuggestions(calcium, [], [], { sodiumHigh: true })).get('calcium')).toEqual([]);
   });
 
   it('음식 제안 후보(카탈로그 파생)는 10분 동안 한 번만 읽고, 결과는 새로 계산한 것과 같다', async () => {
@@ -856,7 +996,7 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
       url: '/api/v1/meals/nutrition/advice',
       headers: authFor('nut-route'),
     });
-    expect(empty.json()).toEqual({ advice: null });
+    expect(empty.json()).toEqual({ advice: null, stale: false });
 
     // 이 용도를 꺼 두어 모델 없이 서버 문장으로 답한다.
     const created = await app.inject({
@@ -872,7 +1012,7 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
       url: '/api/v1/meals/nutrition/advice',
       headers: authFor('nut-route'),
     });
-    expect(latest.json().advice.id).toBe(created.json().id);
+    expect(latest.json()).toMatchObject({ advice: { id: created.json().id }, stale: false });
 
     await app.prisma.mealDailyQuota.upsert({
       where: { userId_date_purpose: { userId: 'nut-route', date: kstToday(), purpose: 'supplement' } },

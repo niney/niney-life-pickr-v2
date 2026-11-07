@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -936,8 +936,10 @@ describe('MealPage — 영양 탭', () => {
     coverage: 1,
     status: 'low',
     supplementCandidate: true,
+    recordGap: false,
     topSources: ['된장찌개'],
     foodSuggestions: ['순두부찌개'],
+    sideSuggestions: [],
     typicalFoods: ['우유·요거트·치즈', '두부'],
     note: null,
     ...over,
@@ -1036,6 +1038,63 @@ describe('MealPage — 영양 탭', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '28일' }));
     await waitFor(() => expect(asked).toContain(28));
+  });
+
+  it("채우면 닿는 영양소는 '기록 더 필요', 곁들임 후보·설정 링크를 보이고, 판정이 바뀐 지난 조언은 흐리게 두고 다시 받기를 권한다", async () => {
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(NUTRITION_URL, () =>
+        HttpResponse.json({
+          ...analysis(14),
+          notMeasured: ['비타민 B6'],
+          nutrients: [
+            nutrient({
+              key: 'zinc',
+              label: '아연',
+              intakePerDay: 6.75,
+              reference: { kind: 'rni', amount: 8, ear: 7 },
+              upperLimit: 35,
+              percent: 84,
+              supplementCandidate: false,
+              recordGap: true,
+              note: '기록이 빠진 끼니를 채우면 기준에 닿을 수 있는 수준이에요.',
+              foodSuggestions: [],
+              typicalFoods: ['굴'],
+            }),
+            nutrient({
+              key: 'vitaminC',
+              label: '비타민 C',
+              intakePerDay: 19,
+              reference: { kind: 'rni', amount: 100, ear: 75 },
+              upperLimit: 2000,
+              percent: 19,
+              foodSuggestions: [],
+              sideSuggestions: ['파프리카', '키위'],
+              typicalFoods: ['귤·키위·딸기 같은 과일'],
+            }),
+          ],
+        }),
+      ),
+      http.get(ADVICE_URL, () => HttpResponse.json({ advice, stale: true })),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+
+    const zinc = (await screen.findByText('아연')).closest('li')!;
+    expect(within(zinc).getByText('기록 더 필요')).toBeInTheDocument();
+    expect(within(zinc).queryByText('부족')).not.toBeInTheDocument();
+    // 진짜 부족(비타민 C)이 '기록 더 필요'(아연)보다 위.
+    const rows = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
+    expect(rows.findIndex((t) => t.startsWith('비타민 C'))).toBeLessThan(rows.findIndex((t) => t.startsWith('아연')));
+    expect(screen.getByText(/곁들임으로는 파프리카·키위/)).toBeInTheDocument();
+    expect(screen.queryByText(/한 끼로는/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '설정에서 성별·출생연도 넣기' })).toHaveAttribute(
+      'href',
+      '/me/meals?tab=preference',
+    );
+
+    expect(await screen.findByText(/지금 점검과 다를 수 있어요/)).toBeInTheDocument();
+    expect(screen.getByText('칼슘부터 음식으로 챙겨 보세요.').closest('.opacity-60')).not.toBeNull();
   });
 
   it('기록이 모자라면 이유를 보여 주고 조언 버튼을 막는다', async () => {

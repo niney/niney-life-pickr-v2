@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import type {
   MealNutrientResultType,
   MealNutritionAdviceType,
@@ -21,10 +22,12 @@ import {
   MEAL_NUTRIENT_STATUS_ORDER,
   NUTRIENT_BAR_MAX_PERCENT,
   formatNutrientAmount,
+  mealNutrientDisplayStatus,
   mealNutrientProfileLabel,
   mealDateTitle,
   nutrientBarWidth,
   toLocalDateKey,
+  type MealNutrientDisplayKey,
 } from '@repo/utils';
 import { Note, StateBlock } from '~/components/common/Cards';
 import { MealButton, MealSection, MealSectionTitle } from './mealUi';
@@ -37,9 +40,11 @@ import { mealFont, mealRadius } from './mealTokens';
 const MEAL_NUTRITION_PERIODS = [7, 14, 28] as const;
 export type MealNutritionPeriod = (typeof MEAL_NUTRITION_PERIODS)[number];
 
-const STATUS_COLOR: Record<MealNutrientResultType['status'], string> = {
+// '기록 더 필요'(recordGap)는 판정이 부족이어도 빠진 끼니 탓일 수 있다 — 같은 주황에 점선 배지로 잠정임을 보인다(웹과 같다).
+const STATUS_COLOR: Record<MealNutrientDisplayKey, string> = {
   low: '#ef4444',
   borderline: '#f59e0b',
+  recordGap: '#f59e0b',
   ok: '#10b981',
   high: '#f97316',
   unknown: '#a1a1aa',
@@ -107,12 +112,14 @@ type Styles = ReturnType<typeof createStyles>;
 
 const AnalysisBody = ({ data, styles }: { data: MealNutritionAnalysisType; styles: Styles }) => {
   const theme = useTheme();
+  const router = useRouter();
   const [showUnknown, setShowUnknown] = useState(false);
   if (data.status === 'insufficient') {
     return <Note tone="muted">{data.insufficientReason ?? '기록이 더 쌓이면 볼 수 있어요.'}</Note>;
   }
   const sorted = [...data.nutrients].sort(
-    (a, b) => MEAL_NUTRIENT_STATUS_ORDER[a.status] - MEAL_NUTRIENT_STATUS_ORDER[b.status],
+    (a, b) =>
+      MEAL_NUTRIENT_STATUS_ORDER[mealNutrientDisplayStatus(a)] - MEAL_NUTRIENT_STATUS_ORDER[mealNutrientDisplayStatus(b)],
   );
   const measured = sorted.filter((n) => n.status !== 'unknown');
   const unknown = sorted.filter((n) => n.status === 'unknown');
@@ -130,6 +137,12 @@ const AnalysisBody = ({ data, styles }: { data: MealNutritionAnalysisType; style
           {note}
         </Note>
       ))}
+      {data.profile.basis === 'default' ? (
+        <Pressable accessibilityRole="link" onPress={() => router.push('/meal/settings' as never)} style={styles.linkRow}>
+          <Text style={styles.linkText}>설정에서 성별·출생연도 넣기</Text>
+          <MaterialCommunityIcons name="chevron-right" size={16} color={theme.colors.primary} />
+        </Pressable>
+      ) : null}
       {measured.map((n) => (
         <NutrientRow key={n.key} n={n} styles={styles} />
       ))}
@@ -159,14 +172,22 @@ const AnalysisBody = ({ data, styles }: { data: MealNutritionAnalysisType; style
 };
 
 const NutrientRow = ({ n, styles }: { n: MealNutrientResultType; styles: Styles }) => {
-  const color = STATUS_COLOR[n.status];
+  const shown = mealNutrientDisplayStatus(n);
+  const color = STATUS_COLOR[shown];
   const short = n.status === 'low' || n.status === 'borderline';
   return (
-    <View style={styles.row} accessibilityLabel={`${n.label} ${MEAL_NUTRIENT_STATUS_LABEL[n.status]}`}>
+    <View style={styles.row} accessibilityLabel={`${n.label} ${MEAL_NUTRIENT_STATUS_LABEL[shown]}`}>
       <View style={styles.rowHead}>
         <Text style={styles.rowLabel}>{n.label}</Text>
-        <View style={[styles.badge, { backgroundColor: `${color}22` }]}>
-          <Text style={[styles.badgeText, { color }]}>{MEAL_NUTRIENT_STATUS_LABEL[n.status]}</Text>
+        <View
+          style={[
+            styles.badge,
+            shown === 'recordGap'
+              ? { borderWidth: 1, borderStyle: 'dashed', borderColor: color }
+              : { backgroundColor: `${color}22` },
+          ]}
+        >
+          <Text style={[styles.badgeText, { color }]}>{MEAL_NUTRIENT_STATUS_LABEL[shown]}</Text>
         </View>
         <Text style={styles.rowValue}>
           {n.intakePerDay !== null ? amount(n.intakePerDay, n.unit) : '-'} / {amount(n.reference.amount, n.unit)}
@@ -181,9 +202,10 @@ const NutrientRow = ({ n, styles }: { n: MealNutrientResultType; styles: Styles 
         {MEAL_NUTRIENT_REFERENCE_LABEL[n.reference.kind]} 기준
         {n.note ? ` · ${n.note}` : ''}
       </Text>
-      {short && (n.foodSuggestions.length > 0 || n.typicalFoods.length > 0) ? (
+      {short && (n.foodSuggestions.length > 0 || n.sideSuggestions.length > 0 || n.typicalFoods.length > 0) ? (
         <Text style={styles.small}>
-          {n.foodSuggestions.length > 0 ? `한 끼로는 ${n.foodSuggestions.join('·')} · ` : ''}많이 든 음식:{' '}
+          {n.foodSuggestions.length > 0 ? `한 끼로는 ${n.foodSuggestions.join('·')} · ` : ''}
+          {n.sideSuggestions.length > 0 ? `곁들임으로는 ${n.sideSuggestions.join('·')} · ` : ''}많이 든 음식:{' '}
           {n.typicalFoods.join(', ')}
         </Text>
       ) : null}
@@ -195,6 +217,8 @@ const AdviceCard = ({ days, ready, styles }: { days: MealNutritionPeriod; ready:
   const latest = useLatestMealNutritionAdvice();
   const create = useCreateMealNutritionAdvice();
   const advice = latest.data?.advice ?? null;
+  // 조언 방식이 바뀌었거나 지금 점검의 판정이 조언 때와 달라졌다 — 옛 조언을 흐리게 두고 다시 받기를 권한다.
+  const stale = !!advice && latest.data?.stale === true;
   const request = (force: boolean) => create.mutate({ days, force });
 
   return (
@@ -230,7 +254,16 @@ const AdviceCard = ({ days, ready, styles }: { days: MealNutritionPeriod; ready:
       {create.error ? (
         <Note tone="warn">{create.error instanceof Error ? create.error.message : '조언을 받지 못했어요.'}</Note>
       ) : null}
-      {latest.isLoading ? <StateBlock kind="loading" /> : advice ? <AdviceBody advice={advice} styles={styles} /> : null}
+      {stale && !create.isPending ? (
+        <Note tone="warn">기록이나 점검 방식이 바뀌어 아래 조언이 지금 점검과 다를 수 있어요. 위 단추로 새로 받아 보세요.</Note>
+      ) : null}
+      {latest.isLoading ? (
+        <StateBlock kind="loading" />
+      ) : advice ? (
+        <View style={stale ? styles.dim : undefined}>
+          <AdviceBody advice={advice} styles={styles} />
+        </View>
+      ) : null}
     </MealSection>
   );
 };
@@ -282,6 +315,9 @@ const AdviceLine = ({ label, text, styles }: { label: string; text: string; styl
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     body: { gap: 12 },
+    dim: { opacity: 0.6 },
+    linkRow: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', paddingVertical: 2 },
+    linkText: { fontSize: mealFont.footnote, fontWeight: '600', color: theme.colors.primary },
     moreRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
     moreText: { fontSize: mealFont.footnote, fontWeight: '600', color: theme.colors.textMuted },
     meta: { fontSize: mealFont.callout, lineHeight: 20, color: theme.colors.text },

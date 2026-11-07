@@ -5,7 +5,9 @@ import { NUTRIENT_DEFS } from './meal-nutrition.defs.js';
 // 영양제 조언 프롬프트 — 판단(부족·기준·부족분·상한)은 서버가 끝낸 뒤 문장만 모델이 쓴다.
 // v1(2026-10-04): kimi-k3 기본. 숫자는 프롬프트에 있는 것만(서버가 검사), 영양소는 후보 key 만, 제품명·효능 주장 금지.
 // v2(2026-11-07): 마그네슘·아연·엽산이 점검 영양소가 됐다 — 목록 밖 예시를 오메가-3·유산균·비타민 B12 로 바꿈.
-export const MEAL_NUTRITION_ADVICE_VERSION = 2;
+// v3(2026-11-07): 한 끼 후보 문턱 25%·곁들임 후보(과일·나물·유제품) 추가, 부족분은 두 자리로 반올림(9.33μg(373IU) →
+//   9.3μg(370IU)). 화면 검토에서 비타민 C 에 "피자·김밥에 곁들일 수 있어요"가 나왔다.
+export const MEAL_NUTRITION_ADVICE_VERSION = 3;
 
 export const MEAL_NUTRITION_ADVICE_SYSTEM_PROMPT = `너는 한 사람의 식단 기록을 보고 모자란 영양소를 음식과 영양제로 채우는 법을 알려 주는 영양 코치다.
 의사·약사가 아니며 진단하지 않는다. 판단(무엇이 얼마나 모자란지)은 이미 끝나 있다 — 너는 그 결과를 알기 쉽게 풀어 쓴다.
@@ -16,7 +18,7 @@ export const MEAL_NUTRITION_ADVICE_SYSTEM_PROMPT = `너는 한 사람의 식단 
 - 제품명·브랜드·가격·구매처는 쓰지 않는다. 성분·형태·먹는 때만, 적힌 '형태' 안에서 말한다.
 - 병을 고치거나 막는다는 말(치료·예방·완치)과 효능 과장은 쓰지 않는다.
 - reason: 왜 이 영양소인지 기록 근거로 1~2문장(하루 평균·기준 대비 %·주로 얻은 음식).
-- foodTip: 음식으로 먼저 채우는 법 1~2문장. '한 끼 후보'와 '많이 든 음식' 안에서 고른다.
+- foodTip: 음식으로 먼저 채우는 법 1~2문장. '한 끼 후보'·'곁들임 후보'·'많이 든 음식' 안에서 고른다. 한 끼 후보는 끼니로, 곁들임 후보는 끼니에 더하거나 간식으로 권한다.
 - supplementTip: '영양제: 권해도 됨'인 영양소만 1~2문장(형태·먹는 때·부족분·상한). '영양제: 음식으로만'이면 빈 문자열 "".
 - summary: 전체 한두 문장 — 무엇부터 챙기면 좋을지(음식 먼저, 모자라면 영양제). [주의]가 있으면 짧게 반영한다.
 - 한국어 존댓말(~요). 한자는 쓰지 않는다. 영어는 D3 같은 영양소 표기만.
@@ -60,13 +62,21 @@ export const supplementAllowed = (n: MealNutrientResultType): boolean => {
   return !!def?.supplement && !!def.supplementForms && n.status === 'low';
 };
 
-// 하루 기준까지 모자란 양 — 서버가 계산해 화면·프롬프트·폴백이 같은 값을 쓴다.
+/** 유효숫자 두 자리 — 영양제 양으로 읽히는 숫자를 9.33μg·373IU 처럼 정밀하게 쓰지 않는다(435 → 440, 9.33 → 9.3). */
+export const roundSignificant = (v: number, digits = 2): number => {
+  if (v === 0 || !Number.isFinite(v)) return v;
+  // 정수 거듭제곱으로 나눠·곱해 부동소수 꼬리(1899.9999…)를 피한다.
+  const exp = Math.ceil(Math.log10(Math.abs(v))) - digits;
+  return exp >= 0 ? Math.round(v / 10 ** exp) * 10 ** exp : Math.round(v * 10 ** -exp) / 10 ** -exp;
+};
+
+// 하루 기준까지 모자란 양(유효숫자 두 자리) — 서버가 계산해 화면·프롬프트·폴백이 같은 값을 쓴다.
 export const shortfallOf = (n: MealNutrientResultType): number | null =>
-  n.intakePerDay === null ? null : Math.max(0, n.reference.amount - n.intakePerDay);
+  n.intakePerDay === null ? null : roundSignificant(Math.max(0, n.reference.amount - n.intakePerDay));
 
 // 비타민 D 는 영양제 라벨이 IU 라 함께 적어 준다(1μg = 40IU). 모델이 IU 를 지어내지 않게 환산값을 직접 넘긴다.
 const withIu = (key: string, v: number): string =>
-  key === 'vitaminD' ? `${formatNutrientAmount(v)}μg(${formatNutrientAmount(v * 40)}IU)` : '';
+  key === 'vitaminD' ? `${formatNutrientAmount(v)}μg(${formatNutrientAmount(roundSignificant(v * 40))}IU)` : '';
 
 const amountText = (n: MealNutrientResultType, v: number): string =>
   withIu(n.key, v) || `${formatNutrientAmount(v)}${n.unit}`;
@@ -124,6 +134,7 @@ export const buildMealNutritionAdviceUserPrompt = (input: {
     lines.push(head);
     if (n.topSources.length > 0) lines.push(`   - 주로 얻은 음식: ${n.topSources.join('·')}`);
     if (n.foodSuggestions.length > 0) lines.push(`   - 한 끼 후보: ${n.foodSuggestions.join('·')}`);
+    if (n.sideSuggestions.length > 0) lines.push(`   - 곁들임 후보: ${n.sideSuggestions.join('·')}`);
     if (n.typicalFoods.length > 0) lines.push(`   - 많이 든 음식: ${n.typicalFoods.join(', ')}`);
     lines.push(
       supplementAllowed(n)

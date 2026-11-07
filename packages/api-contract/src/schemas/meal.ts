@@ -675,10 +675,16 @@ export const MealNutrientResult = z.object({
   status: MealNutrientStatus,
   // 기록이 덜 남았다고 보고 열량을 필요량만큼 채워 봐도 기준에 못 미치는지 — 조언 대상.
   supplementCandidate: z.boolean(),
+  // low·borderline 인데 열량을 필요량만큼 채우면 기준에 닿는다 — 화면은 '부족' 대신 '기록 더 필요'로 보인다
+  // (판정 status 는 그대로, 2026-11-07). 저장된 옛 점검 스냅샷에는 없어 기본 false.
+  recordGap: z.boolean().default(false),
   // 내 기록에서 이 영양소를 가장 많이 준 음식.
   topSources: z.array(z.string()),
-  // 흔한 한 끼 중 열량에 비해 이 영양소가 많은 음식(알레르기·제외 음식, 짜고 무거운 음식 뺀다).
+  // 흔한 한 끼 중 열량에 비해 이 영양소가 많은 음식(1인분이 기준의 25% 이상, 알레르기·제외 음식, 짜고 무거운 음식 뺀다).
   foodSuggestions: z.array(z.string()),
+  // 흔한 곁들임(과일·나물·유제품…) 중 1회 분량이 기준의 15% 이상인 것 — 비타민 C·엽산처럼 끼니 음식으로는 잘 안
+  // 채워지는 영양소용. 옛 스냅샷에는 없어 기본 [].
+  sideSuggestions: z.array(z.string()).default([]),
   // 이 영양소가 많은 흔한 음식(과일·유제품 포함, 일반 영양 상식).
   typicalFoods: z.array(z.string()),
   note: z.string().nullable(),
@@ -761,6 +767,9 @@ export type CreateMealNutritionAdviceInputType = z.infer<typeof CreateMealNutrit
 
 export const LatestMealNutritionAdviceResult = z.object({
   advice: MealNutritionAdvice.nullable(),
+  // 조언 방식(프롬프트 버전)이 바뀌었거나, 같은 기간을 지금 다시 점검하면 판정(부족·조금 부족…)이 달라진 조언 —
+  // 화면은 "지금 점검과 다를 수 있어요"를 띄우고 다시 받기를 권한다. 조언이 없으면 false.
+  stale: z.boolean().default(false),
 });
 export type LatestMealNutritionAdviceResultType = z.infer<typeof LatestMealNutritionAdviceResult>;
 

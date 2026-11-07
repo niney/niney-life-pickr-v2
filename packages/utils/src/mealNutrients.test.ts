@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MEAL_NUTRIENT_STATUS_LABEL,
+  MEAL_NUTRIENT_STATUS_ORDER,
   formatNutrientAmount,
+  mealNutrientDisplayStatus,
   mealNutrientProfileLabel,
   nutrientBarWidth,
   parseMealBirthYear,
@@ -42,5 +45,19 @@ describe('mealNutrientProfileLabel', () => {
     expect(mealNutrientProfileLabel({ sex: null, ageGroup: '30-49', basis: 'default' })).toBe(
       '30-49세 성인 기준',
     );
+  });
+});
+
+describe('mealNutrientDisplayStatus', () => {
+  it('부족·조금 부족이어도 기록을 채우면 닿는 영양소(recordGap)는 기록 더 필요 — 정렬은 진짜 부족·많음 다음', () => {
+    expect(mealNutrientDisplayStatus({ status: 'low', recordGap: true })).toBe('recordGap');
+    expect(mealNutrientDisplayStatus({ status: 'borderline', recordGap: true })).toBe('recordGap');
+    expect(mealNutrientDisplayStatus({ status: 'low', recordGap: false })).toBe('low');
+    // 옛 응답(필드 없음)·판정이 부족이 아니면 그대로.
+    expect(mealNutrientDisplayStatus({ status: 'low' })).toBe('low');
+    expect(mealNutrientDisplayStatus({ status: 'ok', recordGap: true })).toBe('ok');
+    expect(MEAL_NUTRIENT_STATUS_LABEL.recordGap).toBe('기록 더 필요');
+    expect(MEAL_NUTRIENT_STATUS_ORDER.high).toBeLessThan(MEAL_NUTRIENT_STATUS_ORDER.recordGap);
+    expect(MEAL_NUTRIENT_STATUS_ORDER.recordGap).toBeLessThan(MEAL_NUTRIENT_STATUS_ORDER.ok);
   });
 });

@@ -7,7 +7,7 @@ import type {
   MealSexType,
 } from '@repo/api-contract';
 import { normalizeTerm } from '../../lib/text.js';
-import { loadLexicon, type Lexicon } from '../food/engine/index.js';
+import { foodPortionGrams, loadLexicon, type Lexicon } from '../food/engine/index.js';
 import {
   kcalPer100gOf,
   mealServingNutrition,
@@ -35,6 +35,7 @@ import {
   type KdriNutrient,
   type NutrientReference,
 } from './kdri.js';
+import { COMMON_SIDE_PORTION_G, commonSideNorms } from './common-sides.js';
 import { NOT_MEASURED_NUTRIENTS, NUTRIENT_DEFS, type NutrientDef } from './meal-nutrition.defs.js';
 
 // 영양소 점검 — 최근 N일 식단 기록의 하루 평균 섭취를 2020 한국인 영양소 섭취기준과 견준다(결정적, LLM 없음).
@@ -62,7 +63,9 @@ const PRODUCE_RAW_CATEGORIES = new Set(['과일류', '채소류', '버섯류', '
 const SUGGESTIONS_PER_NUTRIENT = 3;
 const TOP_SOURCES = 3;
 // 음식 제안 — 1인분이 기준량의 이 비율은 채워야 하고, 1인분 나트륨이 이 이상이면 뺀다.
-const SUGGESTION_MIN_SHARE = 0.1;
+// 2026-11-07 10% → 25%: 비타민 C 가 모자란 사람에게 피자·모듬 김밥·김밥(1인분이 기준의 11~16%)이 '한 끼로는'으로
+// 나왔다. 넘는 음식이 없으면 한 끼 제안을 비우고 곁들임·많이 든 음식으로 안내한다.
+const SUGGESTION_MIN_SHARE = 0.25;
 const SUGGESTION_MAX_SODIUM_MG = 1500;
 // 나트륨을 이미 많이 먹는 사람에겐 더 엄격히 — 국물 요리는 빼고 1인분 나트륨도 낮춘다("국물을 줄이세요"와 모순되지 않게).
 const SUGGESTION_MAX_SODIUM_MG_WHEN_HIGH = 800;
@@ -71,8 +74,18 @@ const SOUP_DISH_TYPES = new Set(['soup', 'stew']);
 const SOUP_NAME_RE = /(국밥|탕|찌개|전골|국)$/;
 // 100g당 열량이 이 이상인 무거운 음식(족발·장어구이·튀김…)도 뺀다 — 끼니 추천 건강 점수의 고밀도 기준과 같다.
 const SUGGESTION_MAX_KCAL_PER_100G = 200;
+// 곁들임 제안(common-sides: 과일·나물·유제품…) — 양이 적어 한 끼보다 문턱을 낮추고, 1회 열량·나트륨으로 무거운 것을 뺀다.
+const SIDE_MIN_SHARE = 0.15;
+const SIDE_MAX_KCAL = 250;
+const SIDE_MAX_SODIUM_MG = 600;
+const SIDE_MAX_SODIUM_MG_WHEN_HIGH = 300;
+// 1회 분량을 카탈로그가 모르는 곁들임(메뉴 어휘의 과일·채소 행 — 딸기·당근 등) — 기준량 100g 으로 본다.
+const SIDE_DEFAULT_GRAMS = 100;
 // 비슷한 음식(영양 기준 음식)의 영양 구성으로 추정한 열량이 이 비율 이상이면 notes 에 밝힌다.
 const REF_NOTE_MIN_SHARE = 0.2;
+// 기록 열량이 필요량의 이 비율 아래면 notes 에 밝힌다 — 빠진 끼니가 있으면 모든 영양소가 함께 낮게 보인다.
+// 2026-11-07 0.7 → 0.85: 아침을 거의 안 적는 사용자(필요량의 71~75%)에게 15개 중 10개가 '부족'으로 보였는데 안내가 없었다.
+const ENERGY_NOTE_RATIO = 0.85;
 
 export interface AnalysisItem {
   eatenDate: string;
@@ -176,6 +189,8 @@ export interface Assessment {
   percent: number | null;
   status: MealNutrientStatusType;
   supplementCandidate: boolean;
+  // low·borderline 인데 열량을 필요량만큼 채우면 기준에 닿는다 — 화면은 '기록 더 필요'로(status 는 그대로).
+  recordGap: boolean;
   note: string | null;
 }
 
@@ -194,8 +209,10 @@ export const assessNutrient = ({
   const amount = (kind === 'cdrr' ? ref.cdrr : kind === 'rni' ? ref.rni : ref.ai) ?? 0;
   const reference = { kind, amount, ear: ref.ear ?? null };
   const upperLimit = ref.ul ?? null;
-  const percent = intake !== null && amount > 0 ? round((intake / amount) * 100, 0) : null;
-  const base = { reference, upperLimit, percent };
+  let percent = intake !== null && amount > 0 ? round((intake / amount) * 100, 0) : null;
+  // 기준에 못 미치는데 반올림으로 100% 가 되면 '조금 부족 (100%)'처럼 어긋나 보인다.
+  if (percent !== null && intake !== null && intake < amount && percent >= 100) percent = 99;
+  const base = { reference, upperLimit, percent, recordGap: false };
 
   if (insufficient || intake === null) {
     return { ...base, status: 'unknown', supplementCandidate: false, note: null };
@@ -236,10 +253,13 @@ export const assessNutrient = ({
       note: '영양 정보가 없는 과일·채소 기록이 있어 실제보다 적게 잡혔을 수 있어요.',
     };
   }
+  // 판정(status)은 기록 그대로 두고, 채워 보면 기준에 닿는 것만 표시를 바꾼다(사용자 결정 2026-11-07 A안 —
+  // '부족'과 '기록이 빠진 끼니를 채우면 닿을 수준'이 함께 뜨던 어긋남).
   return {
     ...base,
     status,
     supplementCandidate: stillShort,
+    recordGap: !stillShort,
     note: stillShort ? null : '기록이 빠진 끼니를 채우면 기준에 닿을 수 있는 수준이에요.',
   };
 };
@@ -256,9 +276,20 @@ export interface AnalyzeInput {
   from: string;
   to: string;
   days: number;
-  // 영양소별 흔한 한 끼 제안(서비스가 미리 고른 것).
+  // 영양소별 흔한 한 끼·곁들임 제안(서비스가 미리 고른 것).
   suggestions?: ReadonlyMap<KdriNutrient, string[]>;
+  sides?: ReadonlyMap<KdriNutrient, string[]>;
 }
+
+/**
+ * 하루 섭취량 표시값 — 화면 숫자 모양(formatNutrientAmount: 100 이상 정수·10 이상 소수 첫째·그 아래 둘째)과 같은 자리로
+ * 반올림한다. 기준에 못 미치는데 반올림으로 기준과 같아지면 한 자리 더(식이섬유 19.8g 이 '20g / 20g' 으로 보이지 않게).
+ */
+export const intakeForDisplay = (v: number, reference: number): number => {
+  const digits = v < 10 ? 2 : v < 100 ? 1 : 0;
+  const r = round(v, digits);
+  return v < reference && r >= reference ? round(v, digits + 1) : r;
+};
 
 /** 분석 본체 — 순수 함수(DB 없이 테스트). */
 export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysisType => {
@@ -284,6 +315,8 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
   let produceGapCount = 0;
   let refKcal = 0;
   const refNames = new Map<string, number>();
+  // 열량을 몰라 점검에서 빠진 음식(음료·과일·채소 공백은 따로 센다) — 정보 비율의 분모에도 안 들어가 조용히 빠졌다.
+  const missingKcalNames: string[] = [];
   const refRows = input.refRowsByName ?? new Map<string, AnalysisCatalogRow>();
   const totals = new Map<KdriNutrient, NutrientTotals>(
     NUTRIENT_DEFS.map((d) => [d.key, { amount: 0, coveredKcal: 0, bySource: new Map() }]),
@@ -293,6 +326,8 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
     if (it.kcal === null) {
       if (row?.source === 'mfds-raw' && PRODUCE_RAW_CATEGORIES.has(row.sourceCategory ?? '')) {
         produceGapCount += 1;
+      } else if (!isDrinkRow(row, it.dishType)) {
+        missingKcalNames.push(it.name);
       }
       continue;
     }
@@ -363,25 +398,25 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
     const coverage = energyKcal > 0 ? t.coveredKcal / energyKcal : 0;
     const intake = analyzedDays > 0 && t.coveredKcal > 0 ? t.amount / analyzedDays : null;
     const a = assessNutrient({ def, intake, ref, coverage, energyRatio, insufficient, produceGap });
+    const short = a.status === 'low' || a.status === 'borderline';
     return {
       key: def.key,
       label: def.label,
       unit: def.unit,
-      intakePerDay: intake === null ? null : round(intake, intake < 10 ? 2 : 0),
+      intakePerDay: intake === null ? null : intakeForDisplay(intake, a.reference.amount),
       reference: a.reference,
       upperLimit: a.upperLimit,
       percent: a.percent,
       coverage: round(coverage, 2),
       status: a.status,
       supplementCandidate: a.supplementCandidate,
+      recordGap: a.recordGap,
       topSources: [...t.bySource.entries()]
         .sort((x, y) => y[1] - x[1])
         .slice(0, TOP_SOURCES)
         .map(([name]) => name),
-      foodSuggestions:
-        a.status === 'low' || a.status === 'borderline'
-          ? [...(input.suggestions?.get(def.key) ?? [])]
-          : [],
+      foodSuggestions: short ? [...(input.suggestions?.get(def.key) ?? [])] : [],
+      sideSuggestions: short ? [...(input.sides?.get(def.key) ?? [])] : [],
       typicalFoods: [...def.typicalFoods],
       note: a.note,
     };
@@ -391,9 +426,15 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
   if (profile.basis === 'default' && !unsupported) {
     notes.push('성별·출생연도를 설정하면 내 기준으로 더 정확히 봐요(지금은 30-49세 성인 기준).');
   }
-  if (!insufficient && energyRatio !== null && energyRatio < 0.7) {
+  if (!insufficient && energyRatio !== null && energyRatio < ENERGY_NOTE_RATIO) {
     notes.push(
       `기록된 열량이 하루 필요량의 ${Math.round(energyRatio * 100)}%예요. 빠진 끼니·간식이 있으면 영양소도 실제보다 적게 보여요.`,
+    );
+  }
+  if (!insufficient && missingKcalNames.length > 0) {
+    const names = [...new Set(missingKcalNames)];
+    notes.push(
+      `열량을 모르는 음식 ${missingKcalNames.length}개(${names.slice(0, 2).join('·')}${names.length > 2 ? ' 등' : ''})는 점검에서 빠졌어요.`,
     );
   }
   if (!insufficient && produceGap) {
@@ -444,12 +485,56 @@ interface SuggestionCandidate {
   per100: NutrientsPer100g;
 }
 
+type SuggestionPool = 'meal' | 'side';
+type SuggestionTargets = ReadonlyMap<KdriNutrient, { reference: number; upperLimit: number | null }>;
+
+/**
+ * 후보를 영양소별로 줄 세운다(순수) — 1인분(1회 분량)이 기준량의 minShare 이상인 것만 100kcal 당 양 순으로 3개.
+ * 1인분이 하루 상한을 넘는 값은 원자료 오류로 보고 뺀다(초밥 니아신 150mg 등). 나트륨은 제안하지 않는다.
+ */
+const rankSuggestions = (
+  pool: readonly SuggestionCandidate[],
+  targets: SuggestionTargets,
+  minShare: number,
+): Map<KdriNutrient, string[]> => {
+  const out = new Map<KdriNutrient, string[]>();
+  for (const [key, { reference, upperLimit }] of targets) {
+    const def = NUTRIENT_DEFS.find((d) => d.key === key)!;
+    if (def.key === 'sodium') continue;
+    const scored = pool
+      .map(({ name, serving, grams, per100 }) => {
+        let amount = 0;
+        if ('snapshot' in def.from) {
+          // 원재료 행은 1인분 단백질이 없다 — 100g당 값 × 1회 분량.
+          const p100 = per100[def.from.snapshot];
+          amount =
+            (def.from.snapshot === 'proteinG' ? serving.proteinG : serving.sodiumMg) ??
+            (p100 !== undefined && grams !== null ? (p100 * grams) / 100 : 0);
+        } else if (grams !== null) {
+          const value = per100[def.from.per100];
+          amount = value !== undefined ? (value * grams) / 100 : 0;
+        }
+        return { name, amount, density: amount / serving.kcal! };
+      })
+      .filter((s) => s.amount >= reference * minShare && (upperLimit === null || s.amount <= upperLimit))
+      .sort((a, b) => b.density - a.density);
+    const names: string[] = [];
+    for (const s of scored) {
+      if (!names.includes(s.name)) names.push(s.name);
+      if (names.length >= SUGGESTIONS_PER_NUTRIENT) break;
+    }
+    out.set(key, names);
+  }
+  return out;
+};
+
 export class MealNutritionService {
   private lexiconCache: { value: Lexicon; at: number } | null = null;
   // 카탈로그 파생 제안 후보(사용자와 무관) — 어휘와 같은 10분 TTL. 요청마다 1,200여 행(영양 JSON 포함)을
   // 읽고 영양소마다 JSON 을 다시 파싱하던 것을 없앤다. 요청에서는 사용자 알레르기·제외·나트륨 필터와 정렬만 한다.
-  private suggestionCache: { at: number; lexicon: Lexicon; list: SuggestionCandidate[] } | null = null;
-  private suggestionLoading: Promise<SuggestionCandidate[]> | null = null;
+  // 흔한 한 끼(meal)와 흔한 곁들임(side) 두 묶음.
+  private readonly poolCache = new Map<SuggestionPool, { at: number; lexicon: Lexicon; list: SuggestionCandidate[] }>();
+  private readonly poolLoading = new Map<SuggestionPool, Promise<SuggestionCandidate[]>>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -466,21 +551,81 @@ export class MealNutritionService {
     return value;
   }
 
-  private async suggestionCandidates(): Promise<SuggestionCandidate[]> {
+  private async suggestionPool(kind: SuggestionPool): Promise<SuggestionCandidate[]> {
     const lex = await this.lexicon();
-    const cached = this.suggestionCache;
+    const cached = this.poolCache.get(kind);
     if (cached && cached.lexicon === lex && Date.now() - cached.at < LEXICON_TTL_MS) return cached.list;
     // 동시에 들어온 첫 요청들은 한 번만 읽는다.
-    this.suggestionLoading ??= (async () => {
-      try {
-        const list = await this.loadSuggestionCandidates(lex);
-        this.suggestionCache = { at: Date.now(), lexicon: lex, list };
-        return list;
-      } finally {
-        this.suggestionLoading = null;
-      }
-    })();
-    return this.suggestionLoading;
+    let loading = this.poolLoading.get(kind);
+    if (!loading) {
+      loading = (async () => {
+        try {
+          const list =
+            kind === 'meal' ? await this.loadSuggestionCandidates(lex) : await this.loadSideCandidates(lex);
+          this.poolCache.set(kind, { at: Date.now(), lexicon: lex, list });
+          return list;
+        } finally {
+          this.poolLoading.delete(kind);
+        }
+      })();
+      this.poolLoading.set(kind, loading);
+    }
+    return loading;
+  }
+
+  /**
+   * 흔한 곁들임(common-sides) 후보 — 반찬 1회 분량(카탈로그 값·원재료는 식품군 1회 분량), 모르면 100g. 1회 열량이
+   * 무거운 것(SIDE_MAX_KCAL 초과)은 뺀다. 나트륨·알레르기·제외 음식은 요청마다 거른다.
+   */
+  private async loadSideCandidates(lex: Lexicon): Promise<SuggestionCandidate[]> {
+    const sideNorms = [...commonSideNorms(lex)];
+    const rows = await this.prisma.foodItem.findMany({
+      where: { active: true, nutrientsPer100gJson: { not: null }, nameNorm: { in: sideNorms } },
+      select: {
+        ...CATALOG_SELECT,
+        nameNorm: true,
+        ingredientsJson: true,
+        allergensJson: true,
+        allergenEvidenceJson: true,
+        allergenStatus: true,
+      },
+    });
+    const out: SuggestionCandidate[] = [];
+    for (const r of rows) {
+      const kcal100 = kcalPer100gOf(r);
+      if (kcal100 === null || kcal100 <= 0) continue;
+      const per100 = parseNutrientsPer100g(r.nutrientsPer100gJson);
+      const catalog = mealServingNutrition(r, { isMain: false }, lex);
+      const catalogGrams = catalog.kcal !== null && catalog.kcal > 0 ? (catalog.kcal / kcal100) * 100 : null;
+      // 1회 양 — 운영자 어휘(portion) → 곁들임 통상 분량(우유 한 컵 등) → 카탈로그 1인분 → 100g.
+      const grams =
+        foodPortionGrams(lex, r.name) ?? COMMON_SIDE_PORTION_G[r.name] ?? catalogGrams ?? SIDE_DEFAULT_GRAMS;
+      const kcal = (kcal100 * grams) / 100;
+      if (kcal > SIDE_MAX_KCAL) continue;
+      // 1인분 단백질·나트륨은 카탈로그 양 기준이라 1회 양으로 늘리거나 줄인다(없으면 100g당 값으로).
+      const scaled = (serving: number | null, key: 'proteinG' | 'sodiumMg'): number | null =>
+        serving !== null && catalogGrams !== null
+          ? (serving * grams) / catalogGrams
+          : per100[key] !== undefined
+            ? (per100[key]! * grams) / 100
+            : null;
+      out.push({
+        name: r.name,
+        nameNorm: r.nameNorm,
+        excludeKey: { nameNorm: normalizeTerm(r.name), ingredients: parseJsonStringArray(r.ingredientsJson) },
+        allergen: allergenData(r.name, r.ingredientsJson, r.allergensJson, r.allergenEvidenceJson, r.allergenStatus),
+        dishType: r.dishType,
+        serving: {
+          ...catalog,
+          kcal,
+          proteinG: scaled(catalog.proteinG, 'proteinG'),
+          sodiumMg: scaled(catalog.sodiumMg, 'sodiumMg'),
+        },
+        grams,
+        per100,
+      });
+    }
+    return out;
   }
 
   private async loadSuggestionCandidates(lex: Lexicon): Promise<SuggestionCandidate[]> {
@@ -577,16 +722,25 @@ export class MealNutritionService {
     });
     const wanted = base.nutrients.filter((n) => n.status === 'low' || n.status === 'borderline');
     if (wanted.length === 0) return base;
-    const suggestions = await this.foodSuggestions(
-      new Map(wanted.map((n) => [n.key, { reference: n.reference.amount, upperLimit: n.upperLimit }])),
-      preference.allergens,
-      [...preference.excludedFoods, ...preference.dislikedFoods],
-      { sodiumHigh: base.nutrients.some((n) => n.key === 'sodium' && n.status === 'high') },
+    const targets: SuggestionTargets = new Map(
+      wanted.map((n) => [n.key, { reference: n.reference.amount, upperLimit: n.upperLimit }]),
     );
+    const avoid = [...preference.excludedFoods, ...preference.dislikedFoods];
+    const opts = { sodiumHigh: base.nutrients.some((n) => n.key === 'sodium' && n.status === 'high') };
+    const [meals, sides] = await Promise.all([
+      this.foodSuggestions(targets, preference.allergens, avoid, opts),
+      this.sideSuggestions(targets, preference.allergens, avoid, opts),
+    ]);
     return {
       ...base,
       nutrients: base.nutrients.map((n) =>
-        suggestions.has(n.key) ? { ...n, foodSuggestions: suggestions.get(n.key) ?? [] } : n,
+        meals.has(n.key) || sides.has(n.key)
+          ? {
+              ...n,
+              foodSuggestions: meals.get(n.key) ?? n.foodSuggestions,
+              sideSuggestions: sides.get(n.key) ?? n.sideSuggestions,
+            }
+          : n,
       ),
     };
   }
@@ -628,55 +782,47 @@ export class MealNutritionService {
   }
 
   /**
-   * 부족한 영양소가 열량에 비해 많은 흔한 한 끼(common-meals) — 100kcal 당 양으로 줄 세우되 1인분이 기준량의 10% 는
+   * 부족한 영양소가 열량에 비해 많은 흔한 한 끼(common-meals) — 100kcal 당 양으로 줄 세우되 1인분이 기준량의 25% 는
    * 채워야 하고, 1인분 나트륨 1,500mg 이상인 국물·찌개는 뺀다(1인분 양으로만 세면 짬뽕·불고기전골·족발처럼 양 많고
    * 짠 음식이 위로 왔다). 나트륨을 이미 많이 먹는 사람에겐 국물 요리를 빼고 800mg 로 낮춘다. 1인분이 하루 상한을
    * 넘는 값은 원자료 오류로 보고 뺀다(초밥 니아신 150mg 등). 알레르기·제외·덜 선호 음식도 뺀다. 음식으로 먼저
    * 채우자는 제안의 근거라 끼니 추천 후보가 될 수 있는 행만 본다.
    */
   async foodSuggestions(
-    targets: ReadonlyMap<KdriNutrient, { reference: number; upperLimit: number | null }>,
+    targets: SuggestionTargets,
     allergens: readonly MealAllergenType[],
     avoid: string[],
     opts: { sodiumHigh: boolean } = { sodiumHigh: false },
   ): Promise<Map<KdriNutrient, string[]>> {
     const sodiumCap = opts.sodiumHigh ? SUGGESTION_MAX_SODIUM_MG_WHEN_HIGH : SUGGESTION_MAX_SODIUM_MG;
-    const servings = (await this.suggestionCandidates()).filter(
+    const servings = (await this.suggestionPool('meal')).filter(
       (c) =>
         !hitsUserAllergen(c.allergen, allergens) &&
         !isExcluded(c.excludeKey, avoid) &&
         (c.serving.sodiumMg ?? 0) < sodiumCap &&
         !(opts.sodiumHigh && (SOUP_DISH_TYPES.has(c.dishType ?? '') || SOUP_NAME_RE.test(c.nameNorm))),
     );
-    const out = new Map<KdriNutrient, string[]>();
-    for (const [key, { reference, upperLimit }] of targets) {
-      const def = NUTRIENT_DEFS.find((d) => d.key === key)!;
-      if (def.key === 'sodium') continue;
-      const scored = servings
-        .map(({ name, serving, grams, per100 }) => {
-          let amount = 0;
-          if ('snapshot' in def.from) {
-            amount = def.from.snapshot === 'proteinG' ? (serving.proteinG ?? 0) : 0;
-          } else if (grams !== null) {
-            const value = per100[def.from.per100];
-            amount = value !== undefined ? (value * grams) / 100 : 0;
-          }
-          return { name, amount, density: amount / serving.kcal! };
-        })
-        .filter(
-          (s) =>
-            s.amount >= reference * SUGGESTION_MIN_SHARE &&
-            (upperLimit === null || s.amount <= upperLimit),
-        )
-        .sort((a, b) => b.density - a.density);
-      const names: string[] = [];
-      for (const s of scored) {
-        if (!names.includes(s.name)) names.push(s.name);
-        if (names.length >= SUGGESTIONS_PER_NUTRIENT) break;
-      }
-      out.set(key, names);
-    }
-    return out;
+    return rankSuggestions(servings, targets, SUGGESTION_MIN_SHARE);
+  }
+
+  /**
+   * 부족한 영양소를 곁들임(common-sides: 과일·나물·유제품…)으로 — 1회 분량이 기준량의 15% 이상인 것만 100kcal 당 양
+   * 순으로. 1회 나트륨 600mg(나트륨이 많으면 300mg) 이상은 빼고, 알레르기·제외·덜 선호 음식도 뺀다.
+   */
+  async sideSuggestions(
+    targets: SuggestionTargets,
+    allergens: readonly MealAllergenType[],
+    avoid: string[],
+    opts: { sodiumHigh: boolean } = { sodiumHigh: false },
+  ): Promise<Map<KdriNutrient, string[]>> {
+    const sodiumCap = opts.sodiumHigh ? SIDE_MAX_SODIUM_MG_WHEN_HIGH : SIDE_MAX_SODIUM_MG;
+    const sides = (await this.suggestionPool('side')).filter(
+      (c) =>
+        !hitsUserAllergen(c.allergen, allergens) &&
+        !isExcluded(c.excludeKey, avoid) &&
+        (c.serving.sodiumMg ?? 0) < sodiumCap,
+    );
+    return rankSuggestions(sides, targets, SIDE_MIN_SHARE);
   }
 }
 

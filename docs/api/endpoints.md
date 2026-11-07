@@ -124,7 +124,7 @@
 | GET | `/api/v1/meals/items/frequent` | 로그인 |  | `slot`, `limit` | 빠른 추가용 자주 먹은 음식 — 최근 90일 끼니 우선 순위 + 기본 목록(공기밥·김치 등) |
 | GET | `/api/v1/meals/items/recent` | 로그인 |  | `name`* | 음식명으로 지난번 섭취 조회 — 마지막 날짜·양·분류·그때 사진 토큰 |
 | GET | `/api/v1/meals/nutrition` | 로그인 | 30/분 | `days` | 영양소 점검 — 최근 N일 식단 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 비교 |
-| GET | `/api/v1/meals/nutrition/advice` | 로그인 |  |  | 내 최근 영양제 조언 — 없으면 advice=null |
+| GET | `/api/v1/meals/nutrition/advice` | 로그인 |  |  | 내 최근 영양제 조언 — 없으면 advice=null, 지금 점검과 판정이 달라졌으면 stale=true |
 | POST | `/api/v1/meals/nutrition/advice` | 로그인 | 5/분 | body | 영양제 조언 생성 — 부족한 영양소를 음식·영양제(성분·형태)로 채우는 법, 텍스트 LLM 1콜 |
 | POST | `/api/v1/meals/photos` | 로그인 | 30/분 |  | 식단 사진 업로드 — multipart 파일 1개(최대 5MB), 사진 토큰 발급 |
 | GET | `/api/v1/meals/photos/:token` | 로그인 |  |  | 식단 사진 원본(image/jpeg) — 본인 사진만, JWT 필요 |

@@ -114,12 +114,24 @@ export class MealNutritionAdviceService {
     this.nutrition = deps.nutrition ?? new MealNutritionService(prisma);
   }
 
-  async latest(userId: string): Promise<MealNutritionAdviceType | null> {
+  /**
+   * 가장 최근 조언 + 지금 점검과 어긋나는지(stale). 조언 방식(프롬프트 버전)이 바뀌었거나, 같은 기간을 오늘 다시 점검한
+   * 판정(부족·조금 부족·기록 더 필요…)이 조언 때와 다르면 stale — 카탈로그 보강·연결로 판정이 바뀌었는데 "모자란
+   * 영양소는 없어요"라는 옛 조언이 그대로 보였다(2026-11-07). 숫자만 조금 달라진 것은 stale 로 보지 않는다.
+   */
+  async latest(
+    userId: string,
+    today: string,
+  ): Promise<{ advice: MealNutritionAdviceType | null; stale: boolean }> {
     const row = await this.prisma.mealNutritionAdvice.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
-    return row ? toAdvice(row) : null;
+    const advice = row ? toAdvice(row) : null;
+    if (!row || !advice) return { advice, stale: false };
+    if (row.promptVersion !== MEAL_NUTRITION_ADVICE_VERSION) return { advice, stale: true };
+    const current = await this.nutrition.analyze(userId, today, advice.analysis.days);
+    return { advice, stale: adviceVerdict(current) !== adviceVerdict(advice.analysis) };
   }
 
   async create(
@@ -216,6 +228,8 @@ export class MealNutritionAdviceService {
 
     let items = candidates.map(fallbackAdviceItem);
     let summary = fallbackSummary(analysis, candidates);
+    // 6개를 넘어 이번 조언에서 다루지 않는 영양소는 요약 끝에 서버 문장으로 밝힌다(모델은 목록 밖을 말하지 않는다).
+    const overflowNote = adviceOverflowNote(analysis);
     let status: 'done' | 'fallback' = 'fallback';
     let model: string | null = null;
     let repairs: string[] = [];
@@ -302,7 +316,7 @@ export class MealNutritionAdviceService {
       advice = await this.save(userId, today, hash, generation, {
         analysis,
         items,
-        summary,
+        summary: overflowNote ? `${summary} ${overflowNote}` : summary,
         status,
         model: status === 'done' ? model : null,
       });
@@ -390,8 +404,8 @@ const defOf = (key: string): NutrientDef => NUTRIENT_DEFS.find((d) => d.key === 
 
 const roundAmount = (v: number): number => Number(formatNutrientAmount(v).replace(/,/g, ''));
 
-/** 조언 대상 — 열량을 채워 봐도 모자란 영양소(supplementCandidate)만, 부족 → 조금 부족·비율 낮은 순. */
-export const adviceCandidates = (analysis: MealNutritionAnalysisType): MealNutrientResultType[] =>
+/** 조언할 만한 영양소 전부 — 열량을 채워 봐도 모자란 것(supplementCandidate)만, 부족 → 조금 부족·비율 낮은 순. */
+const rankedAdviceTargets = (analysis: MealNutritionAnalysisType): MealNutrientResultType[] =>
   analysis.status !== 'ok'
     ? []
     : analysis.nutrients
@@ -402,8 +416,27 @@ export const adviceCandidates = (analysis: MealNutritionAnalysisType): MealNutri
             : a.status === 'low'
               ? -1
               : 1,
-        )
-        .slice(0, MAX_ADVICE_ITEMS);
+        );
+
+/** 조언 대상 — 우선순위대로 6개까지. */
+export const adviceCandidates = (analysis: MealNutritionAnalysisType): MealNutrientResultType[] =>
+  rankedAdviceTargets(analysis).slice(0, MAX_ADVICE_ITEMS);
+
+/** 6개에 들지 못해 이번 조언에서 다루지 않는 영양소 — 요약 끝 한 문장(없으면 null). */
+export const adviceOverflowNote = (analysis: MealNutritionAnalysisType): string | null => {
+  const rest = rankedAdviceTargets(analysis).slice(MAX_ADVICE_ITEMS);
+  return rest.length > 0 ? `그 밖에 ${rest.map((n) => n.label).join('·')}도 기준보다 적어요.` : null;
+};
+
+/**
+ * 판정 지문 — 같으면 같은 조언이 나올 점검으로 본다(stale 비교). 숫자가 아니라 영양소별 판정·조언 대상 여부만 본다:
+ * 기록이 하루 늘어 하루 평균이 조금 바뀌는 정도로 "다시 받으세요"를 띄우지 않게.
+ */
+export const adviceVerdict = (analysis: MealNutritionAnalysisType): string =>
+  JSON.stringify([
+    analysis.status,
+    analysis.nutrients.map((n) => [n.key, n.status, n.supplementCandidate, n.recordGap]),
+  ]);
 
 const fallbackReason = (n: MealNutrientResultType): string => {
   const head =
@@ -417,9 +450,11 @@ const fallbackReason = (n: MealNutrientResultType): string => {
 
 const fallbackFoodTip = (n: MealNutrientResultType): string => {
   const typical = n.typicalFoods.slice(0, 3).join('·');
-  if (n.foodSuggestions.length > 0) {
-    return `한 끼로는 ${n.foodSuggestions.slice(0, 2).join('·')}, 평소에는 ${typical} 같은 음식을 챙겨 보세요.`;
-  }
+  const picks = [
+    ...(n.foodSuggestions.length > 0 ? [`한 끼로는 ${n.foodSuggestions.slice(0, 2).join('·')}`] : []),
+    ...(n.sideSuggestions.length > 0 ? [`곁들임으로는 ${n.sideSuggestions.slice(0, 2).join('·')}`] : []),
+  ];
+  if (picks.length > 0) return `${picks.join(', ')}, 평소에는 ${typical} 같은 음식을 챙겨 보세요.`;
   return `${typical} 같은 음식으로 먼저 채워 보세요.`;
 };
 

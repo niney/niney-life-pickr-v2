@@ -18540,6 +18540,10 @@
                           "supplementCandidate": {
                             "type": "boolean"
                           },
+                          "recordGap": {
+                            "type": "boolean",
+                            "default": false
+                          },
                           "topSources": {
                             "type": "array",
                             "items": {
@@ -18551,6 +18555,13 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "sideSuggestions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "default": []
                           },
                           "typicalFoods": {
                             "type": "array",
@@ -18620,10 +18631,11 @@
     },
     "/api/v1/meals/nutrition/advice": {
       "get": {
-        "summary": "내 최근 영양제 조언 — 없으면 advice=null",
+        "summary": "내 최근 영양제 조언 — 없으면 advice=null, 지금 점검과 판정이 달라졌으면 stale=true",
         "tags": [
           "meal"
         ],
+        "description": "조언 방식(프롬프트 버전)이 바뀌었거나, 조언과 같은 기간을 오늘 다시 점검한 판정(영양소별 부족·조금 부족·기록 더 필요 여부)이 조언 때와 다르면 stale=true — 화면은 다시 받기를 권한다. 숫자만 조금 달라진 것은 보지 않는다.",
         "security": [
           {
             "bearerAuth": []
@@ -18903,6 +18915,10 @@
                                   "supplementCandidate": {
                                     "type": "boolean"
                                   },
+                                  "recordGap": {
+                                    "type": "boolean",
+                                    "default": false
+                                  },
                                   "topSources": {
                                     "type": "array",
                                     "items": {
@@ -18914,6 +18930,13 @@
                                     "items": {
                                       "type": "string"
                                     }
+                                  },
+                                  "sideSuggestions": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "default": []
                                   },
                                   "typicalFoods": {
                                     "type": "array",
@@ -18992,6 +19015,10 @@
                       ],
                       "additionalProperties": false,
                       "nullable": true
+                    },
+                    "stale": {
+                      "type": "boolean",
+                      "default": false
                     }
                   },
                   "required": [
@@ -19313,6 +19340,10 @@
                               "supplementCandidate": {
                                 "type": "boolean"
                               },
+                              "recordGap": {
+                                "type": "boolean",
+                                "default": false
+                              },
                               "topSources": {
                                 "type": "array",
                                 "items": {
@@ -19324,6 +19355,13 @@
                                 "items": {
                                   "type": "string"
                                 }
+                              },
+                              "sideSuggestions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "default": []
                               },
                               "typicalFoods": {
                                 "type": "array",

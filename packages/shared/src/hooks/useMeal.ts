@@ -489,7 +489,8 @@ export const useCreateMealNutritionAdvice = () => {
     mutationFn: (input: Partial<CreateMealNutritionAdviceInputType> = {}) =>
       mealApi.createNutritionAdvice(input),
     onSuccess: (advice) => {
-      qc.setQueryData([...KEY, 'nutrition', 'advice'], { advice });
+      // 방금 만든 조언은 지금 점검 그대로라 stale 이 아니다(서버 GET 의 stale 계산을 기다리지 않는다).
+      qc.setQueryData([...KEY, 'nutrition', 'advice'], { advice, stale: false });
     },
   });
 };

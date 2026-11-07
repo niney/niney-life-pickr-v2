@@ -2,23 +2,35 @@
 // utils 는 api-contract 에 의존할 수 없어(순환 금지) 값 유니온을 다시 적는다 — 계약 MealNutrientStatus·reference.kind 와 같은 값.
 
 export type MealNutrientStatusKey = 'low' | 'borderline' | 'ok' | 'high' | 'unknown';
+// 화면 상태 — 서버 판정(status)에 '기록 더 필요'를 얹는다: 판정은 부족·조금 부족이지만 기록 열량을 필요량만큼 채우면
+// 기준에 닿는 영양소(계약 recordGap). 빠진 끼니 탓일 수 있어 빨간 '부족'으로 보이지 않게 한다(2026-11-07).
+export type MealNutrientDisplayKey = MealNutrientStatusKey | 'recordGap';
 
-export const MEAL_NUTRIENT_STATUS_LABEL: Record<MealNutrientStatusKey, string> = {
+export const MEAL_NUTRIENT_STATUS_LABEL: Record<MealNutrientDisplayKey, string> = {
   low: '부족',
   borderline: '조금 부족',
+  recordGap: '기록 더 필요',
   ok: '충분',
   high: '많음',
   unknown: '판단 보류',
 };
 
-// 화면 정렬 — 모자란 것부터, 판단 보류는 맨 뒤.
-export const MEAL_NUTRIENT_STATUS_ORDER: Record<MealNutrientStatusKey, number> = {
+// 화면 정렬 — 모자란 것부터, 그다음 많음·기록 더 필요, 판단 보류는 맨 뒤.
+export const MEAL_NUTRIENT_STATUS_ORDER: Record<MealNutrientDisplayKey, number> = {
   low: 0,
   borderline: 1,
   high: 2,
-  ok: 3,
-  unknown: 4,
+  recordGap: 3,
+  ok: 4,
+  unknown: 5,
 };
+
+/** 화면에 보일 상태 — 부족·조금 부족이어도 recordGap 이면 '기록 더 필요'(색·라벨·정렬이 이 값을 따른다). */
+export const mealNutrientDisplayStatus = (n: {
+  status: MealNutrientStatusKey;
+  recordGap?: boolean;
+}): MealNutrientDisplayKey =>
+  n.recordGap && (n.status === 'low' || n.status === 'borderline') ? 'recordGap' : n.status;
 
 // 영양성분 자료 출처 — 공공데이터 이용 조건(출처 표시). 영양소 점검 화면(웹·앱)이 같은 문구를 쓴다.
 export const MEAL_NUTRIENT_DATA_SOURCES =

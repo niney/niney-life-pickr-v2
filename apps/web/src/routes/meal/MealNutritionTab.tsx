@@ -18,8 +18,10 @@ import {
   MEAL_NUTRIENT_STATUS_ORDER,
   NUTRIENT_BAR_MAX_PERCENT,
   formatNutrientAmount,
+  mealNutrientDisplayStatus,
   mealNutrientProfileLabel,
   nutrientBarWidth,
+  type MealNutrientDisplayKey,
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -31,16 +33,19 @@ import { cn } from '~/lib/utils';
 
 const PERIODS = [7, 14, 28] as const;
 
-const STATUS_TONE: Record<MealNutrientResultType['status'], string> = {
+// '기록 더 필요'(recordGap)는 판정이 부족이어도 빠진 끼니 탓일 수 있다 — 점선 테두리의 옅은 주황으로 잠정임을 보인다.
+const STATUS_TONE: Record<MealNutrientDisplayKey, string> = {
   low: 'bg-red-500/10 text-red-700 dark:text-red-400',
   borderline: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  recordGap: 'border border-dashed border-amber-500/60 text-amber-700 dark:text-amber-400',
   ok: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
   unknown: 'bg-muted text-muted-foreground',
 };
-const BAR_TONE: Record<MealNutrientResultType['status'], string> = {
+const BAR_TONE: Record<MealNutrientDisplayKey, string> = {
   low: 'bg-red-500',
   borderline: 'bg-amber-500',
+  recordGap: 'bg-amber-400/60',
   ok: 'bg-emerald-500',
   high: 'bg-orange-500',
   unknown: 'bg-muted-foreground/40',
@@ -127,7 +132,8 @@ const NutritionAnalysisView = ({ data, dim }: { data: MealNutritionAnalysisType;
     );
   }
   const sorted = [...data.nutrients].sort(
-    (a, b) => MEAL_NUTRIENT_STATUS_ORDER[a.status] - MEAL_NUTRIENT_STATUS_ORDER[b.status],
+    (a, b) =>
+      MEAL_NUTRIENT_STATUS_ORDER[mealNutrientDisplayStatus(a)] - MEAL_NUTRIENT_STATUS_ORDER[mealNutrientDisplayStatus(b)],
   );
   return (
     <div className={cn('space-y-4', dim && 'opacity-60')}>
@@ -144,11 +150,18 @@ const NutritionAnalysisView = ({ data, dim }: { data: MealNutritionAnalysisType;
         <span className="text-muted-foreground">{mealNutrientProfileLabel(data.profile)}</span>
       </div>
       {data.notes.length > 0 ? (
-        <ul className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
-          {data.notes.map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
+        <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+          <ul className="space-y-1">
+            {data.notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+          {data.profile.basis === 'default' ? (
+            <Link to="/me/meals?tab=preference" className="inline-block font-medium underline underline-offset-2">
+              설정에서 성별·출생연도 넣기
+            </Link>
+          ) : null}
+        </div>
       ) : null}
       <ul className="space-y-3">
         {sorted.map((n) => (
@@ -165,12 +178,14 @@ const NutritionAnalysisView = ({ data, dim }: { data: MealNutritionAnalysisType;
 
 const NutrientRow = ({ n }: { n: MealNutrientResultType }) => {
   const short = n.status === 'low' || n.status === 'borderline';
+  const shown = mealNutrientDisplayStatus(n);
+  const sides = n.sideSuggestions;
   return (
     <li className="space-y-1">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{n.label}</span>
-        <span className={cn('rounded-full px-2 py-0.5 text-xs', STATUS_TONE[n.status])}>
-          {MEAL_NUTRIENT_STATUS_LABEL[n.status]}
+        <span className={cn('rounded-full px-2 py-0.5 text-xs', STATUS_TONE[shown])}>
+          {MEAL_NUTRIENT_STATUS_LABEL[shown]}
         </span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
           {n.intakePerDay !== null ? amount(n.intakePerDay, n.unit) : '-'} /{' '}
@@ -183,7 +198,7 @@ const NutrientRow = ({ n }: { n: MealNutrientResultType }) => {
         role="img"
         aria-label={`${n.label} 기준 대비 ${n.percent ?? '알 수 없음'}%`}
       >
-        <div className={cn('h-full rounded-full', BAR_TONE[n.status])} style={{ width: `${nutrientBarWidth(n.percent)}%` }} />
+        <div className={cn('h-full rounded-full', BAR_TONE[shown])} style={{ width: `${nutrientBarWidth(n.percent)}%` }} />
         {/* 기준선(100%) */}
         <div
           className="absolute inset-y-0 w-px bg-foreground/40"
@@ -191,9 +206,10 @@ const NutrientRow = ({ n }: { n: MealNutrientResultType }) => {
         />
       </div>
       {n.note ? <p className="text-xs text-muted-foreground">{n.note}</p> : null}
-      {short && (n.foodSuggestions.length > 0 || n.typicalFoods.length > 0) ? (
+      {short && (n.foodSuggestions.length > 0 || sides.length > 0 || n.typicalFoods.length > 0) ? (
         <p className="text-xs text-muted-foreground">
           {n.foodSuggestions.length > 0 ? <>한 끼로는 {n.foodSuggestions.join('·')} · </> : null}
+          {sides.length > 0 ? <>곁들임으로는 {sides.join('·')} · </> : null}
           많이 든 음식: {n.typicalFoods.join(', ')}
         </p>
       ) : n.topSources.length > 0 && n.status !== 'unknown' ? (
@@ -207,6 +223,8 @@ const SupplementAdviceCard = ({ days, analysisReady }: { days: number; analysisR
   const latest = useLatestMealNutritionAdvice();
   const create = useCreateMealNutritionAdvice();
   const advice = latest.data?.advice ?? null;
+  // 조언 방식이 바뀌었거나 지금 점검의 판정이 조언 때와 달라졌다 — 옛 조언을 흐리게 두고 다시 받기를 권한다.
+  const stale = !!advice && latest.data?.stale === true;
 
   const request = (force: boolean) => create.mutate({ days, force });
 
@@ -244,12 +262,19 @@ const SupplementAdviceCard = ({ days, analysisReady }: { days: number; analysisR
             {create.error instanceof Error ? create.error.message : '조언을 받지 못했어요.'}
           </p>
         ) : null}
+        {stale && !create.isPending ? (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+            기록이나 점검 방식이 바뀌어 아래 조언이 지금 점검과 다를 수 있어요. 위 단추로 새로 받아 보세요.
+          </p>
+        ) : null}
         {latest.isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> 지난 조언을 불러오는 중…
           </div>
         ) : advice ? (
-          <AdviceView advice={advice} />
+          <div className={cn(stale && 'opacity-60')}>
+            <AdviceView advice={advice} />
+          </div>
         ) : null}
       </CardContent>
     </Card>
