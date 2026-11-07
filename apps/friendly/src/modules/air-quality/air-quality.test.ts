@@ -487,6 +487,36 @@ describe('업스트림 에러 → 502/503 (replyUpstreamError)', () => {
 describe('AirQualityService — 캐시·stale·쿼터·폴백', () => {
   const T0 = new Date('2026-08-21T03:00:00.000Z'); // KST 12:00 — 픽스처 측정 시각과 같다
 
+  it('측정소 확인은 목록을 먼저 — 목록에 있는 이름은 전국 실시간을 부르지 않고, 목록에 없을 때만 전국을 본다', async () => {
+    const adapter = {
+      getStationList: vi.fn(async () => stationList()),
+      getSidoRealtime: vi.fn(async () => sidoAll()),
+      getStationRealtime: vi.fn(async () => ({ rows: [], totalCount: 0, pages: 1 })),
+    };
+    const svc = new AirQualityService({ serviceKey: 'k', adapter, now: () => T0 });
+    await svc.getStationHistory('강남구', 'DAILY'); // 목록에 있는 이름
+    expect(adapter.getStationList).toHaveBeenCalledTimes(1);
+    expect(adapter.getSidoRealtime).not.toHaveBeenCalled();
+    await svc.getStationHistory('서초구', 'DAILY'); // 전국 실시간에만 있는 이름(목록 갱신 전 새 측정소)
+    expect(adapter.getSidoRealtime).toHaveBeenCalledTimes(1);
+    await expect(svc.getStationHistory('없는측정소', 'DAILY')).rejects.toMatchObject({ statusCode: 404 });
+    expect(adapter.getStationRealtime).toHaveBeenCalledTimes(2);
+
+    // 목록 API 가 죽었으면 전국 이름만으로, 둘 다 죽었으면 판정할 수 없어 전국 쪽 에러.
+    const down = new AirQualityService({
+      serviceKey: 'k',
+      adapter: {
+        getStationList: vi.fn(async () => {
+          throw new AirKoreaApiError('list down', { statusCode: 502, code: '05' });
+        }),
+        getSidoRealtime: vi.fn(async () => sidoAll()),
+        getStationRealtime: vi.fn(async () => ({ rows: [], totalCount: 0, pages: 1 })),
+      },
+      now: () => T0,
+    });
+    await expect(down.getStationHistory('강남구', 'DAILY')).resolves.toMatchObject({ stationName: '강남구' });
+  });
+
   it('빈 키면 503 (업스트림 호출 없음)', async () => {
     const adapter = { getSidoRealtime: vi.fn() };
     const svc = new AirQualityService({ serviceKey: '', adapter });

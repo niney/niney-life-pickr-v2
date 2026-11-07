@@ -592,20 +592,25 @@ export class AirQualityService {
     return { sidoName: wanted, items, total: items.length, fetchedAt: fetchedAt.toISOString(), stale };
   }
 
-  // 측정소 화이트리스트(E-2) — 측정소 목록(24h 캐시) ∪ 전국 실시간(측정 캐시)의 이름. 둘 다 평소 캐시 히트라
-  // 0콜이고, 목록 API 가 죽었으면 전국 이름만으로 판정한다. 둘 다 없으면 판정할 수 없어 그 에러를 낸다
-  // (업스트림이 그만큼 죽었으면 시계열 호출도 어차피 실패한다).
+  // 측정소 화이트리스트(E-2) — 측정소 목록(24h 캐시) ∪ 전국 실시간(측정 캐시)의 이름. 목록을 먼저 보고, 목록에
+  // 없는 이름(목록 갱신 전 새 측정소)이거나 목록 API 가 죽었을 때만 전국 실시간을 본다 — 전국 캐시가 만료돼 있으면
+  // 그 조회가 업스트림 1콜이라, 목록으로 답이 나는 대부분의 이름에서 쓰지 않는다. 둘 다 못 받으면 판정할 수 없어
+  // 전국 쪽 에러를 낸다(업스트림이 그만큼 죽었으면 시계열 호출도 어차피 실패한다). 판정은 예전 합집합과 같다.
   private async isKnownStation(name: string): Promise<boolean> {
-    const [list, realtime] = await Promise.allSettled([this.loadStations(), this.loadSidoAll()]);
-    const sources: Array<readonly { stationName: string }[]> = [];
-    if (list.status === 'fulfilled') sources.push(list.value.data);
-    if (realtime.status === 'fulfilled') sources.push(realtime.value.data);
-    if (sources.length === 0) {
-      throw realtime.status === 'rejected'
-        ? realtime.reason
-        : new AirQualityServiceError('측정소 목록을 확인할 수 없습니다.', 503);
+    let listLoaded = false;
+    try {
+      const list = await this.loadStations();
+      listLoaded = true;
+      if (this.nameSet(list.data).has(name)) return true;
+    } catch {
+      // 목록 API 실패 — 전국 이름만으로 판정한다.
     }
-    return sources.some((rows) => this.nameSet(rows).has(name));
+    try {
+      return this.nameSet((await this.loadSidoAll()).data).has(name);
+    } catch (e) {
+      if (listLoaded) return false; // 목록에는 없고 전국은 못 받음 — 목록 기준으로 모르는 이름
+      throw e;
+    }
   }
 
   private nameSet(rows: readonly { stationName: string }[]): Set<string> {
