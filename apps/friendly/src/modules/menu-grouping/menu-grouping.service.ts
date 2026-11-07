@@ -952,17 +952,22 @@ export class MenuGroupingService {
     const ids = restaurants.map((r) => r.id);
 
     // distinct nameNorm 수, mapped 수, 마지막 그룹핑 시각/버전, 분석 done 수
-    // 모두 한 번씩의 groupBy 로. 식당 수가 많아도 한 번에 처리.
-    const [mentionGroups, canonicalGroups, latestCanonical, publicBase] =
+    // 모두 한 번씩의 집계로. 식당 수가 많아도 한 번에 처리.
+    // 메뉴명 수는 SQL 이 가게별로 센다 — 예전엔 (가게, 메뉴명) 쌍(운영 4만 개)을 groupBy 로 다 가져와 JS 에서 셌다(합쳐 약
+    // 110ms, 2026-11 운영 DB 사본). 대상은 위 목록과 같은 네이버 가게 전부라 IN 목록 대신 하위 질의로 고른다.
+    const [mentionCounts, canonicalCounts, latestCanonical, publicBase] =
       await Promise.all([
-        this.prisma.menuMention.groupBy({
-          by: ['restaurantId', 'nameNorm'],
-          where: { restaurantId: { in: ids } },
-        }),
-        this.prisma.menuCanonical.groupBy({
-          by: ['restaurantId', 'nameNorm'],
-          where: { restaurantId: { in: ids } },
-        }),
+        this.prisma.$queryRaw<Array<{ restaurantId: string; n: bigint | number }>>`
+          SELECT "restaurantId", COUNT(DISTINCT "nameNorm") AS "n"
+            FROM "menu_mentions"
+           WHERE "restaurantId" IN (SELECT "id" FROM "restaurants" WHERE "source" = 'naver')
+           GROUP BY "restaurantId"`,
+        // 정규 메뉴는 (가게, 메뉴명)이 유일(@@unique)이라 가게별 행 수가 곧 매핑된 메뉴명 수다.
+        this.prisma.$queryRaw<Array<{ restaurantId: string; n: bigint | number }>>`
+          SELECT "restaurantId", COUNT(*) AS "n"
+            FROM "menu_canonicals"
+           WHERE "restaurantId" IN (SELECT "id" FROM "restaurants" WHERE "source" = 'naver')
+           GROUP BY "restaurantId"`,
         this.prisma.menuCanonical.groupBy({
           by: ['restaurantId'],
           where: { restaurantId: { in: ids } },
@@ -978,14 +983,8 @@ export class MenuGroupingService {
     const analyzedMap = new Map<string, number>();
     for (const id of ids) analyzedMap.set(id, publicBase.buckets.get(id)?.done ?? 0);
 
-    const distinctMenuByRest = new Map<string, number>();
-    for (const g of mentionGroups) {
-      distinctMenuByRest.set(g.restaurantId, (distinctMenuByRest.get(g.restaurantId) ?? 0) + 1);
-    }
-    const mappedByRest = new Map<string, number>();
-    for (const g of canonicalGroups) {
-      mappedByRest.set(g.restaurantId, (mappedByRest.get(g.restaurantId) ?? 0) + 1);
-    }
+    const distinctMenuByRest = new Map(mentionCounts.map((g) => [g.restaurantId, Number(g.n)]));
+    const mappedByRest = new Map(canonicalCounts.map((g) => [g.restaurantId, Number(g.n)]));
     const lastByRest = new Map<string, { at: Date | null; version: number | null }>();
     for (const g of latestCanonical) {
       lastByRest.set(g.restaurantId, {
