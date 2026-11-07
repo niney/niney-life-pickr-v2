@@ -85,6 +85,10 @@ pnpm --filter friendly status:food-catalog     # ok items=N classified=C nutriti
   다시 쓴다(1인분 열량은 그대로 — `--refresh-nutrition` 은 쓰지 말 것). 이어서 `--source=raw`.
 - 적재 뒤 `pnpm --filter friendly link:food-nutrients --llm` — 비타민·무기질이 없는 외식 어휘·식단 이름을 표준 음식에 잇는다
   (영양 기준 음식, 규칙 → AI). `deploy.sh 7` 은 이 단계까지 돈다. 결과 확인은 `probe:nutrition-coverage --email=<계정>`.
+  AI 가 골랐지만 확신이 낮아 채택하지 않은 후보는 어드민 '영양 기준 음식'에 'AI 후보 … 이걸로'로 남는다(마이그레이션
+  `20261107200000_food_nutrient_ref_candidate`).
+- 이어서 `pnpm --filter friendly backfill:meal-nutrition --estimate` 한 번 — 열량이 빈 식단 항목을 카탈로그·이름 추정
+  (규칙 → AI → 웹)으로 채운다. 열량을 모르는 음식은 영양소 점검에서 빠진다(화면에 "열량을 모르는 음식 N개" 안내).
 - `--classify` 단계는 chat 모델이 설정돼 있을 때만 돈다(없으면 조용히 건너뛴다).
 - 외식 어휘는 **그 서버의 식당·리뷰 데이터**에서 나오므로 서버마다 종수가 다르다. 정상이다.
 
