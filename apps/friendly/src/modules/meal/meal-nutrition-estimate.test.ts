@@ -181,3 +181,60 @@ describe('MealNutritionEstimator 채우기', () => {
     expect(makeEstimator({ prisma }).schedule(['뼈다귀우거지탕'])).toBe(0);
   });
 });
+
+// 2026-11-07 운영 사본 — 닭가슴살·두부·참치·돼지곱창·상추쌈·그래놀라가 '못 찾음'이었다. 영양 없는 외식 어휘 행이 이름을
+// 차지해 원재료 행이 가려졌고, 웹 100g당 값은 이름 끝말로 종류를 못 정해 버려졌다.
+describe('MealNutritionEstimator — 이름 끝말이 없는 흔한 이름', () => {
+  const plainRows = [
+    catalogRow('닭가슴살', { source: 'menu-canonical', dishType: 'other' }),
+    catalogRow('닭가슴', { kcalPer100g: 106, source: 'mfds-raw', aliases: ['닭가슴살'] }),
+    catalogRow('돼지곱창', { source: 'menu-canonical', dishType: 'other', kcalPer100g: 182 }),
+  ];
+  const plainEngine = new MenuNutritionEngine(buildCatalogIndex(plainRows));
+  const plainServing = new Map<string, ServingCatalogRow>(plainRows.map((r) => [r.id, { ...r, proteinG: null, sodiumMg: null }]));
+  const make = (opts: { llm?: ReturnType<typeof makeLlm>; web?: ReturnType<typeof makeWeb> } = {}) =>
+    new MealNutritionEstimator({
+      prisma: {} as PrismaClient,
+      food: {
+        getServingRow: async (id: string) => plainServing.get(id) ?? null,
+        servingLexicon: async () => DEFAULT_LEXICON,
+      },
+      resolver: { resolve: async (name: string) => plainEngine.resolve(name) },
+      ...(opts.llm ? { llm: opts.llm } : {}),
+      ...(opts.web ? { web: opts.web } : {}),
+    });
+
+  it('영양 없는 어휘 행이 이름을 차지해도 별칭의 원재료 행으로 — 닭가슴살 → 닭가슴 고기 통상 1인분', async () => {
+    const { estimate } = await make().lookup('닭가슴살', true);
+    expect(estimate).toMatchObject({ kcal: 159, basis: 'donor_estimate', nutritionFrom: '닭가슴 · 고기 통상 1인분 150g' });
+  });
+
+  it('100g당만 있고 조리형태가 기타인 행은 주식이면 이름의 주재료로 1인분, 반찬이면 비운다 — 돼지곱창', async () => {
+    const est = make();
+    expect((await est.lookup('돼지곱창', true)).estimate).toMatchObject({
+      kcal: 273,
+      proteinG: null,
+      basis: 'donor_estimate',
+      nutritionFrom: '돼지곱창 · 고기 통상 1인분 150g',
+    });
+    expect((await est.lookup('돼지곱창', false)).estimate).toBeNull();
+  });
+
+  it('웹 실측도 음식명 지정 중량·주재료로 1인분을 정한다 — 그래놀라 40g, 상추쌈 채소 70g', async () => {
+    const llm = makeLlm({ 그래놀라: { hit: null, canonical: '그래놀라' }, 상추쌈: { hit: null, canonical: '상추쌈' } });
+    const web = makeWeb({
+      그래놀라: { kcalPer100g: 428, agreeing: 7, basis: 'multi', source: 'fatsecret.kr' },
+      상추쌈: { kcalPer100g: 100, agreeing: 1, basis: 'single', source: 'fatsecret.kr' },
+    });
+    const est = make({ llm, web });
+    await est.ask(['그래놀라', '상추쌈']);
+    expect((await est.lookup('그래놀라', false)).estimate).toMatchObject({
+      kcal: 171.2,
+      nutritionFrom: '그래놀라(fatsecret.kr 7건 중앙값) · 통상 1인분 40g',
+    });
+    expect((await est.lookup('상추쌈', false)).estimate).toMatchObject({
+      kcal: 70,
+      nutritionFrom: '상추쌈(fatsecret.kr 1건) · 채소 통상 1인분 70g',
+    });
+  });
+});

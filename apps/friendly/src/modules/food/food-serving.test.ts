@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LEXICON_SOURCE, compileLexicon, mergeLexiconRows } from './engine/index.js';
-import { mealServingNutrition, type ServingCatalogRow } from './food-serving.js';
+import { mealServingNutrition, portionForName, type ServingCatalogRow } from './food-serving.js';
 
 // 식단 기록의 한 끼 1인분 — 식약처 식품중량(시료·급식 1회량)을 원본 수정 없이 바로잡는 규칙.
 
@@ -143,5 +143,20 @@ describe('mealServingNutrition', () => {
     expect(mealServingNutrition(null, { isMain: true }, lex).basis).toBe('missing');
     const empty = { ...jeyuk, servingG: null, kcal: null, kcalPer100g: null, proteinG: null, sodiumMg: null };
     expect(mealServingNutrition(empty, { isMain: true }, lex).basis).toBe('missing');
+  });
+});
+
+describe('portionForName', () => {
+  it('음식명 지정 중량 → 이름으로 짐작한 조리형태 → 주재료의 생재료 1회 분량 순, 모르면 null', () => {
+    expect(portionForName('두부', lex)).toEqual({ grams: 80, label: '통상 1인분 80g' });
+    expect(portionForName('그래놀라', lex)).toEqual({ grams: 40, label: '통상 1인분 40g' });
+    expect(portionForName('우거지탕', lex)).toEqual({ grams: 500, label: '국·탕 통상 1인분 500g' });
+    expect(portionForName('닭가슴살', lex)).toEqual({ grams: 150, label: '고기 통상 1인분 150g' });
+    expect(portionForName('참치', lex)).toEqual({ grams: 150, label: '수산물 통상 1인분 150g' });
+    expect(portionForName('상추쌈', lex)).toEqual({ grams: 70, label: '채소 통상 1인분 70g' });
+    // 두부·곡물처럼 먹는 양이 크게 다른 주재료는 짐작하지 않는다.
+    expect(portionForName('순두부', lex)).toEqual({ grams: 400, label: '찌개·전골 통상 1인분 400g' });
+    expect(portionForName('콩비지', lex)).toBeNull();
+    expect(portionForName('이상한음식', lex)).toBeNull();
   });
 });

@@ -1,11 +1,11 @@
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
-import { FOOD_DISH_TYPE_LABEL, guessDishTypeFromName, mealPortionFactor } from '@repo/utils';
+import { mealPortionFactor } from '@repo/utils';
 import { AsyncGate } from '../../lib/async-gate.js';
 import { normalizeTerm } from '../../lib/text.js';
 import type { Lexicon } from '../food/engine/index.js';
 import type { FoodService } from '../food/food.service.js';
-import { mealServingNutrition, type MealServingNutrition } from '../food/food-serving.js';
+import { kcalPer100gOf, mealServingNutrition, portionForName, type MealServingNutrition } from '../food/food-serving.js';
 import type { FoodWebEstimateService, WebEstimateHit } from '../food/food-web-estimate.service.js';
 import type { MenuLlmMatchService } from '../food/menu-llm-match.service.js';
 import type { MenuNutritionResolver } from '../food/menu-nutrition.js';
@@ -197,20 +197,33 @@ export class MealNutritionEstimator {
     const row = await this.deps.food.getServingRow(foodId);
     if (!row) return null;
     const n = mealServingNutrition(row, { isMain }, lex);
-    if (n.basis === 'missing' || n.kcal === null) return null;
-    return { ...n, nutritionFrom: n.nutritionFrom ? `${foodName} · ${n.nutritionFrom}` : foodName, basis: 'donor_estimate' };
-  }
-
-  // 웹 실측은 100g당뿐이라 이름으로 짐작한 종류의 통상 1인분 중량을 곱한다. 종류를 모르면 양을 정할 수 없어 쓰지 않는다.
-  private fromWeb(query: string, w: WebEstimateHit, lex: Lexicon): MealServingNutrition | null {
-    const key = guessDishTypeFromName(query);
-    const grams = key ? lex.portionGrams[key] : undefined;
-    if (!key || !grams) return null;
+    if (n.basis !== 'missing' && n.kcal !== null) {
+      return { ...n, nutritionFrom: n.nutritionFrom ? `${foodName} · ${n.nutritionFrom}` : foodName, basis: 'donor_estimate' };
+    }
+    // 100g당 열량만 있고 조리형태가 '기타'라 통상 1인분을 못 정한 행(외식 어휘 '돼지곱창') — 주식이면 이름으로 1인분을 정한다.
+    // 반찬은 mealServingNutrition 과 같이 통상 1인분으로 늘리지 않는다.
+    const kcal100 = kcalPer100gOf(row);
+    const portion = isMain && kcal100 !== null ? portionForName(row.name, lex) : null;
+    if (!portion || kcal100 === null) return null;
     return {
-      kcal: (w.kcalPer100g * grams) / 100,
+      kcal: (kcal100 * portion.grams) / 100,
       proteinG: null,
       sodiumMg: null,
-      nutritionFrom: `${webLabel(query, w)} · ${FOOD_DISH_TYPE_LABEL[key]} 통상 1인분 ${grams}g`,
+      nutritionFrom: `${foodName} · ${portion.label}`,
+      basis: 'donor_estimate',
+    };
+  }
+
+  // 웹 실측은 100g당뿐이라 1인분 중량을 곱한다 — 음식명 지정 중량 → 이름으로 짐작한 종류 → 주재료의 생재료 1회 분량
+  // (portionForName). 그래도 모르면 양을 정할 수 없어 쓰지 않는다.
+  private fromWeb(query: string, w: WebEstimateHit, lex: Lexicon): MealServingNutrition | null {
+    const portion = portionForName(query, lex);
+    if (!portion) return null;
+    return {
+      kcal: (w.kcalPer100g * portion.grams) / 100,
+      proteinG: null,
+      sodiumMg: null,
+      nutritionFrom: `${webLabel(query, w)} · ${portion.label}`,
       basis: 'donor_estimate',
     };
   }

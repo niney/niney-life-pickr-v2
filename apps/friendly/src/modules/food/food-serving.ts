@@ -11,7 +11,7 @@
 // 메뉴 칼로리 표시(engine/resolve computePortion)와 같은 기준량·같은 어휘를 쓴다.
 
 import type { FoodDishTypeType, MealNutritionBasisType } from '@repo/api-contract';
-import { FOOD_DISH_TYPE_LABEL } from '@repo/utils';
+import { FOOD_DISH_TYPE_LABEL, guessDishTypeFromName, guessMainIngredientFromName } from '@repo/utils';
 import { BASE_SERVING_G, foodPortionGrams, isRawCatalogRow, portionKeyFor, type Lexicon } from './engine/index.js';
 
 export interface ServingCatalogRow {
@@ -59,6 +59,39 @@ const MISSING: MealServingNutrition = {
 
 const portionLabel = (key: string): string =>
   FOOD_DISH_TYPE_LABEL[key as FoodDishTypeType] ?? RAW_PORTION_LABEL[key] ?? key;
+
+// 이름으로 짐작한 주재료 → 생재료 통상 1인분 키(원재료 행이 쓰는 값과 같다). 두부·곡물·유제품처럼 같은 재료라도 먹는 양이
+// 크게 다른 것은 넣지 않는다 — 그런 음식은 어휘 portion(음식명)으로 정한다(두부 80g·시리얼 40g).
+const MAIN_INGREDIENT_RAW_PORTION_KEY: Partial<Record<NonNullable<ReturnType<typeof guessMainIngredientFromName>>, string>> = {
+  beef: 'raw_meat',
+  pork: 'raw_meat',
+  chicken: 'raw_meat',
+  other_meat: 'raw_meat',
+  fish: 'raw_seafood',
+  seafood: 'raw_seafood',
+  vegetable: 'raw_vegetable',
+  fruit: 'raw_fruit',
+  egg: 'raw_egg',
+};
+
+/**
+ * 100g당 열량만 있고 행의 종류로는 1인분을 못 정할 때 이름으로 정하는 1인분 — 운영자가 정한 음식 중량(어휘 portion) →
+ * 이름으로 짐작한 조리형태의 통상 1인분 → 이름으로 짐작한 주재료의 생재료 1회 분량 순. 모르면 null.
+ * 식단 이름 추정이 웹 실측(카탈로그 밖 이름)과 조리형태 '기타' 행(외식 어휘 '돼지곱창')에 쓴다 — 이름 끝말이 없는 흔한 이름
+ * (닭가슴살·두부·상추쌈·그래놀라)이 종류를 못 정해 비었다(2026-11-07).
+ */
+export const portionForName = (name: string, lex: Lexicon): { grams: number; label: string } | null => {
+  const named = foodPortionGrams(lex, name);
+  if (named) return { grams: named, label: `통상 1인분 ${named}g` };
+  const dish = guessDishTypeFromName(name);
+  const dishG = dish ? lex.portionGrams[dish] : undefined;
+  if (dish && dishG) return { grams: dishG, label: `${portionLabel(dish)} 통상 1인분 ${dishG}g` };
+  const main = guessMainIngredientFromName(name);
+  const rawKey = main ? MAIN_INGREDIENT_RAW_PORTION_KEY[main] : undefined;
+  const rawG = rawKey ? lex.portionGrams[rawKey] : undefined;
+  if (rawKey && rawG) return { grams: rawG, label: `${portionLabel(rawKey)} 통상 1인분 ${rawG}g` };
+  return null;
+};
 
 /** 100g당 열량(에너지 밀도) — 원본 단위 값이 있으면 그것, 없으면 카탈로그 1인분 열량·중량으로 역산한다. */
 export const kcalPer100gOf = (
