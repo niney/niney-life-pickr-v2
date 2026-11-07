@@ -149,6 +149,8 @@ export interface PublicRestaurantBaseRow {
 
 export interface PublicRestaurantBase {
   rows: PublicRestaurantBaseRow[];
+  // 전 가게(출처 무관)의 요약 집계 — 공개 행을 만들며 한 번 센 것. 어드민 목록도 이걸 쓴다(같은 TTL 만큼 늦을 수 있다).
+  buckets: ReadonlyMap<string, SummaryBucket>;
 }
 
 // SQLite LIKE 는 ASCII 만 대소문자를 무시한다 — 같은 의미로 접는다.
@@ -270,7 +272,7 @@ async function computePublicRestaurantBase(prisma: PrismaClient): Promise<Public
       categoryFold: r.category ? foldAscii(r.category) : '',
     };
   });
-  return { rows };
+  return { rows, buckets };
 }
 
 // TTL 동안 공유하고, 만료 뒤 첫 요청은 지난 값을 바로 돌려주면서 뒤에서 다시 만든다(stale-while-revalidate).

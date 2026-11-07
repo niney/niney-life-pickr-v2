@@ -35,7 +35,6 @@ import {
   toPublicMenuBoard,
 } from '../menu-board/menu-board.naver-match.js';
 import {
-  aggregateSummaryBuckets,
   emptySummaryBucket,
   foldAscii,
   getPublicRestaurantBase,
@@ -1107,11 +1106,11 @@ export class RestaurantService {
       selectedRows = rows.filter((r) => matchedCanonicalIds.has(r.canonicalId));
     }
 
-    const ids = selectedRows.map((r) => r.id);
-
-    // ReviewSummary 원본을 애플리케이션으로 가져오지 않고 DB 에서 식당별로 집계한다(500개씩 IN,
-    // 커버링 인덱스). queued/pending 은 기존 카드 의미대로 pending 에 합산한다. 요약이 없는 가게는 빈 버킷.
-    const byRestaurant = await aggregateSummaryBuckets(this.prisma, ids);
+    // 식당별 요약 집계(queued/pending 은 기존 카드 의미대로 pending 에 합산, 요약이 없는 가게는 빈 버킷)는 공개 목록 캐시가
+    // 30초마다 전 가게를 한 번에 센 것을 함께 쓴다 — 예전엔 목록을 열 때마다 요약 전부(운영 19.8만 건)를 다시 세어 약
+    // 135ms 였다(2026-11 운영 DB 실측). 숫자는 최대 30초(만료 직후 한 번은 지난 값) 늦을 수 있고, 분석 진행은 목록 화면이
+    // SSE 로 따로 받는다. 크롤 저장·삭제·병합은 캐시를 비워 곧바로 반영된다.
+    const { buckets: byRestaurant } = await getPublicRestaurantBase(this.prisma);
 
     // canonicalId → 그 canonical 에 매달린 source 행들. rows 는 lastCrawledAt
     // desc 정렬이라 sources 도 자동으로 최근순.

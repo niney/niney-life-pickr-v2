@@ -447,6 +447,45 @@ describe('RestaurantService', () => {
   });
 });
 
+// 앞 블록의 `vi.spyOn(app.prisma, '$queryRaw')` 를 되돌린 뒤엔 그 앱의 $queryRaw 가 함수가 아니게 된다(Prisma 클라이언트
+// 프록시) — 공개 목록 캐시를 다시 계산하는 이 테스트는 자기 앱을 따로 띄운다.
+describe('RestaurantService — 어드민 목록 요약 집계 공유', () => {
+  let app: FastifyInstance;
+  let service: RestaurantService;
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    service = new RestaurantService(app.prisma);
+  });
+
+  afterAll(async () => {
+    await app.prisma.restaurant.deleteMany({ where: { placeId: { startsWith: PLACE_PREFIX } } });
+    invalidatePublicRestaurantCache();
+    await app.close();
+  });
+
+  it('list: 요약 집계는 공개 목록 캐시(30초)의 것을 함께 쓴다 — 무효화 전엔 지난 숫자, 크롤 저장 등으로 비우면 새 숫자', async () => {
+    const marker = stamp();
+    const { id } = await service.upsertRestaurantFromCrawl(placeData({ placeId: `${marker}-agg`, name: `집계-${marker}` }));
+    const doneCount = async () => {
+      const out = await service.list({ q: marker, limit: 25, offset: 0, sort: 'recent' });
+      return out.items[0]!.sources[0]!.summaryDone;
+    };
+    // upsert 가 공개 캐시를 비웠으니 첫 목록은 지금 상태로 센다.
+    expect(await doneCount()).toBe(0);
+    const review = await app.prisma.visitorReview.create({
+      data: { restaurantId: id, authorName: 'a', rating: 5, body: 'b', visitedAt: null, imageUrlsJson: '[]', videosJson: '[]', contentHash: `${marker}-agg-1` },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: { reviewId: review.id, status: 'done', text: '요약', sentiment: 'positive', sentimentScore: 0.5, satisfactionScore: 4, finishedAt: new Date() },
+    });
+    expect(await doneCount()).toBe(0);
+    invalidatePublicRestaurantCache();
+    expect(await doneCount()).toBe(1);
+  });
+});
+
 describe('Restaurant routes — auth guards', () => {
   let app: FastifyInstance;
 
