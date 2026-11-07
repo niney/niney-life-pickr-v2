@@ -18,6 +18,13 @@
 import { coerceStrOrNull, numOrNull } from '../../lib/narrow.js';
 import { normalizeTerm } from '../../lib/text.js';
 import type { FoodSeed, NormalizeReport } from './food-import.service.js';
+import {
+  MFDS_NUTRIENT_API_FIELD,
+  MFDS_NUTRIENT_CSV_HEADER,
+  NUTRIENT_KEYS,
+  looseNutrientHeader,
+  type NutrientsPer100g,
+} from './food-nutrients.js';
 
 const MEAT_ANIMALS: Record<string, string> = {
   소고기: '소',
@@ -132,11 +139,33 @@ interface RawRow {
   category: string | null;
   repName: string | null;
   kcal: number | null;
+  /** 100g당 비타민·무기질·단백질·나트륨(배포본 24성분 + 국가표준식품성분표로 보탠 마그네슘·아연·엽산). */
+  nutrients: NutrientsPer100g;
 }
+
+/** 한 행의 표본 — 열량과 영양소를 **같은 행 묶음**에서 대표값으로 접는다(대표 행이 있으면 그 행들만). */
+interface RawSample {
+  kcal: number;
+  nutrients: NutrientsPer100g;
+}
+
+const sampleOf = (row: RawRow): RawSample => ({ kcal: row.kcal!, nutrients: row.nutrients });
 
 const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length % 2 === 1 ? s[(s.length - 1) / 2]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
+};
+
+const round3 = (v: number): number => Math.round(v * 1000) / 1000;
+
+/** 영양소별 중앙값 — 그 영양소를 적은 표본만 센다(아무도 안 적었으면 뺀다). */
+const medianNutrients = (samples: readonly RawSample[]): NutrientsPer100g => {
+  const out: NutrientsPer100g = {};
+  for (const key of NUTRIENT_KEYS) {
+    const vals = samples.map((s) => s.nutrients[key]).filter((v): v is number => typeof v === 'number');
+    if (vals.length > 0) out[key] = round3(median(vals));
+  }
+  return out;
 };
 
 const splitParen = (seg: string): { outer: string; inner: string | null } => {
@@ -147,7 +176,7 @@ const splitParen = (seg: string): { outer: string; inner: string | null } => {
 
 interface Acc {
   name: string;
-  kcals: number[];
+  kcals: RawSample[];
   aliases: Set<string>;
   category: string | null;
   firstCode: string | null;
@@ -155,7 +184,7 @@ interface Acc {
   animal: string | null;
   bare: string | null;
   /** 수산물 등: "_대표_평균" 행이 있으면 그 값만 쓴다. */
-  representative: number[];
+  representative: RawSample[];
 }
 
 // 수산물 부위 — 먹는 부위(육·전체)만 값으로 쓰고 내장·껍질·알·뼈는 버린다.
@@ -178,7 +207,15 @@ const RAW_CATEGORIES_PLAIN = new Set([
 // 배포 CSV 첫 헤더에 붙는 BOM(U+FEFF). 리터럴 대신 코드포인트로 만든다(에디터·린터가 안 보이는 문자를 싫어한다).
 const BOM_RE = new RegExp(`^${String.fromCharCode(0xfeff)}`);
 
-export const rawFileRowsToRecords = (header: string[], rows: string[][]): RawRow[] => {
+/**
+ * 배포 CSV 행 → 정규화 행. `extra` 는 식품명으로 보탤 영양소(국가표준식품성분표의 마그네슘·아연·엽산 등)를 돌려준다 —
+ * 배포본에 이미 있는 키는 배포본 값이 이긴다.
+ */
+export const rawFileRowsToRecords = (
+  header: string[],
+  rows: string[][],
+  extra?: (foodNm: string) => NutrientsPer100g | undefined,
+): RawRow[] => {
   const idx = new Map<string, number>();
   header.forEach((h, i) => {
     const k = h.replace(BOM_RE, '').trim();
@@ -188,13 +225,39 @@ export const rawFileRowsToRecords = (header: string[], rows: string[][]): RawRow
     const i = idx.get(k);
     return i === undefined ? null : coerceStrOrNull(r[i]?.trim() ?? null);
   };
-  return rows.map((r) => ({
-    foodCd: col(r, '식품코드'),
-    foodNm: col(r, '식품명') ?? '',
-    category: col(r, '식품대분류명'),
-    repName: col(r, '대표식품명'),
-    kcal: numOrNull(col(r, '에너지(kcal)')),
-  }));
+  // 영양소 열은 음식 적재와 같은 표(MFDS_NUTRIENT_CSV_HEADER)·같은 느슨한 머리글 비교로 찾는다.
+  const loose = new Map<string, number>();
+  header.forEach((h, i) => {
+    const k = looseNutrientHeader(h);
+    if (k && !loose.has(k)) loose.set(k, i);
+  });
+  const fieldCol = new Map<string, number>();
+  for (const [ko, field] of Object.entries(MFDS_NUTRIENT_CSV_HEADER)) {
+    const i = loose.get(looseNutrientHeader(ko));
+    if (i !== undefined && !fieldCol.has(field)) fieldCol.set(field, i);
+  }
+  const nutrientCols = NUTRIENT_KEYS.flatMap((key) => {
+    const i = fieldCol.get(MFDS_NUTRIENT_API_FIELD[key]);
+    return i === undefined ? [] : [[key, i] as const];
+  });
+  return rows.map((r) => {
+    const foodNm = col(r, '식품명') ?? '';
+    const nutrients: NutrientsPer100g = {};
+    for (const [key, i] of nutrientCols) {
+      const v = numOrNull(coerceStrOrNull(r[i]?.trim() ?? null));
+      if (v !== null && v >= 0) nutrients[key] = v;
+    }
+    const more = foodNm && extra ? extra(foodNm) : undefined;
+    if (more) for (const key of NUTRIENT_KEYS) if (nutrients[key] === undefined && more[key] !== undefined) nutrients[key] = more[key];
+    return {
+      foodCd: col(r, '식품코드'),
+      foodNm,
+      category: col(r, '식품대분류명'),
+      repName: col(r, '대표식품명'),
+      kcal: numOrNull(col(r, '에너지(kcal)')),
+      nutrients,
+    };
+  });
 };
 
 export const normalizeMfdsRawRows = (rows: RawRow[]): { seeds: FoodSeed[]; report: NormalizeReport } => {
@@ -236,8 +299,8 @@ export const normalizeMfdsRawRows = (rows: RawRow[]): { seeds: FoodSeed[]; repor
       const dried = DRIED[species];
       if (dried && segs.some((s) => SEA_PARTS.has(s))) {
         const a = acc(dried.name, row);
-        if (segs.includes('대표')) a.representative.push(row.kcal);
-        else a.kcals.push(row.kcal);
+        if (segs.includes('대표')) a.representative.push(sampleOf(row));
+        else a.kcals.push(sampleOf(row));
         for (const al of dried.aliases) a.aliases.add(al);
         continue;
       }
@@ -261,10 +324,10 @@ export const normalizeMfdsRawRows = (rows: RawRow[]): { seeds: FoodSeed[]; repor
       // "닭 부산물_닭발" 처럼 부위가 이미 동물명으로 시작하면 접두를 겹치지 않는다(닭닭발 ✗).
       const named = (part: string): string => (part.startsWith(animal) && part.length > animal.length ? part : `${animal}${part}`);
       const outerAcc = acc(named(outer), row, { animal, bare: outer });
-      outerAcc.kcals.push(row.kcal);
+      outerAcc.kcals.push(sampleOf(row));
       if (inner && !PAREN_NOT_PART_RE.test(inner)) {
         const innerAcc = acc(named(inner), row, { animal, bare: inner });
-        innerAcc.kcals.push(row.kcal);
+        innerAcc.kcals.push(sampleOf(row));
       }
       continue;
     }
@@ -292,8 +355,8 @@ export const normalizeMfdsRawRows = (rows: RawRow[]): { seeds: FoodSeed[]; repor
       }
       const a = acc(outer, row);
       const isRep = segs.includes('대표');
-      if (isRep) a.representative.push(row.kcal);
-      else a.kcals.push(row.kcal);
+      if (isRep) a.representative.push(sampleOf(row));
+      else a.kcals.push(sampleOf(row));
       if (inner && !/^d/.test(inner)) a.aliases.add(inner);
       continue;
     }
@@ -325,8 +388,9 @@ export const normalizeMfdsRawRows = (rows: RawRow[]): { seeds: FoodSeed[]; repor
 
   const seeds: FoodSeed[] = [];
   for (const a of accs.values()) {
-    const vals = a.representative.length > 0 ? a.representative : a.kcals;
-    if (vals.length === 0) continue;
+    const samples = a.representative.length > 0 ? a.representative : a.kcals;
+    if (samples.length === 0) continue;
+    const nutrientsPer100g = medianNutrients(samples);
     seeds.push({
       name: a.name,
       repName: a.name,
@@ -337,7 +401,9 @@ export const normalizeMfdsRawRows = (rows: RawRow[]): { seeds: FoodSeed[]; repor
       ingredients: null,
       servingG: null,
       nutrition: null,
-      kcalPer100g: Math.round(median(vals) * 10) / 10,
+      kcalPer100g: Math.round(median(samples.map((s) => s.kcal)) * 10) / 10,
+      // 열량과 같은 표본 묶음의 영양소별 중앙값(2026-11-07 — 그 전엔 열량만 남겨 과일·채소 기록의 비타민이 비었다).
+      nutrientsPer100g: Object.keys(nutrientsPer100g).length > 0 ? nutrientsPer100g : null,
       source: 'mfds-raw',
       sourceId: a.firstCode,
       sourceCategory: a.category,

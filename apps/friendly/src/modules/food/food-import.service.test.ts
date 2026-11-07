@@ -85,7 +85,7 @@ describe('normalizeMfdsNutritionRows — 표준데이터(음식)', () => {
     expect(seeds.find((s) => s.repName === '육회')?.dishType ?? null).toBeNull();
   });
 
-  it('비타민·무기질 — 같은 이름 변형 안에서 0 보다 큰 첫 값, 다른 음식 변형 값은 같은 이름 행이 적었으면 안 쓴다', () => {
+  it('비타민·무기질 — 같은 이름 변형 안에서 0 보다 큰 값들의 중앙값, 다른 음식 변형 값은 같은 이름 행이 적었으면 안 쓴다', () => {
     const { seeds } = normalizeMfdsNutritionRows([
       // 외식 분석 행은 철·비타민C 를 0, 비타민D 를 빈칸으로 둔다(실측 김치찌개).
       { foodCd: 'K1', foodNm: '김치찌개', foodLv3Nm: '찌개 및 전골류', foodLv4Nm: '김치찌개', foodOriginNm: '외식(분석함량)', nutConSrtrQua: '100g', enerc: '61', ca: '38', fe: '0.00', vitc: '0.00', vitd: '', foodSize: '400g' },
@@ -94,13 +94,67 @@ describe('normalizeMfdsNutritionRows — 표준데이터(음식)', () => {
       { foodCd: 'K3', foodNm: '김치찌개_참치', foodLv3Nm: '찌개 및 전골류', foodLv4Nm: '김치찌개', foodOriginNm: '가정식(분석 함량)', nutConSrtrQua: '100g', enerc: '70', vitd: '1.61', thia: '0.05', foodSize: '400g' },
     ]);
     expect(seeds[0]?.nutrientsPer100g).toEqual({
-      calciumMg: 38,
+      // 같은 이름 층의 칼슘 38(외식 분석)·23(급식 산출) → 중앙값 30.5(2026-11-07 전에는 첫 값 38).
+      calciumMg: 30.5,
       ironMg: 0.3,
       vitaminCMg: 1.27,
       vitaminDUg: 0,
       // 같은 이름 행이 아무도 적지 않은 영양소만 다른 변형에서.
       thiaminMg: 0.05,
     });
+  });
+
+  it('100g당 단백질·나트륨은 열량과 같은 변형(best)에서, 마그네슘·아연·엽산은 비타민처럼 영양소별로 고른다', () => {
+    const { seeds } = normalizeMfdsNutritionRows([
+      // best — 가정식 분석(우선순위 0). 마그네슘은 적지 않았다.
+      { foodCd: 'K1', foodNm: '된장찌개', foodLv3Nm: '찌개 및 전골류', foodLv4Nm: '된장찌개', foodOriginNm: '가정식(분석 함량)', nutConSrtrQua: '100g', enerc: '46', prot: '3.1', nat: '420', ca: '30', foodSize: '400g' },
+      // 급식 산출 — 단백질·나트륨이 달라도 best 의 값이 남고, 마그네슘·엽산은 여기서 온다.
+      { foodCd: 'K2', foodNm: '된장찌개', foodLv3Nm: '찌개 및 전골류', foodLv4Nm: '된장찌개', foodOriginNm: '산업체급식(재료량 기반 산출 함량)', nutConSrtrQua: '100ml', enerc: '30', prot: '2.0', nat: '300', ca: '25', mg: '21.7', zn: '0.4', folDfe: '18', foodSize: '250ml' },
+    ]);
+    expect(seeds[0]?.kcalPer100g).toBe(46);
+    expect(seeds[0]?.nutrientsPer100g).toEqual({ calciumMg: 27.5, proteinG: 3.1, sodiumMg: 420, magnesiumMg: 21.7, zincMg: 0.4, folateUg: 18 });
+  });
+
+  it('이상치 변형이 첫 행이어도 대표값을 끌고 가지 않는다(해장국 철 — 선지 변형)', () => {
+    const row = (foodCd: string, foodNm: string, origin: string, fe: string) => ({
+      foodCd,
+      foodNm,
+      foodLv3Nm: '국 및 탕류',
+      foodLv4Nm: '해장국',
+      foodOriginNm: origin,
+      nutConSrtrQua: '100g',
+      enerc: '29',
+      fe,
+      foodSize: '700g',
+    });
+    const { seeds } = normalizeMfdsNutritionRows([
+      row('H1', '해장국_선지', '가정식(분석 함량)', '6.83'),
+      row('H2', '해장국_뼈다귀', '가정식(분석 함량)', '2.03'),
+      row('H3', '해장국_선지', '외식(분석함량)', '0.01'),
+      row('H4', '해장국_우거지', '외식(분석함량)', '0.00'),
+    ]);
+    expect(seeds[0]?.nutrientsPer100g?.ironMg).toBe(2.03);
+  });
+
+  it('같은 급식 레시피가 급식 종류별로 같은 값으로 여러 번 실려도 한 표로 센다(김치찌개 칼슘)', () => {
+    const row = (foodCd: string, origin: string, ca: string) => ({
+      foodCd,
+      foodNm: '김치찌개',
+      foodLv3Nm: '찌개 및 전골류',
+      foodLv4Nm: '김치찌개',
+      foodOriginNm: origin,
+      nutConSrtrQua: '100g',
+      enerc: '61',
+      ca,
+      foodSize: '400g',
+    });
+    const { seeds } = normalizeMfdsNutritionRows([
+      row('K1', '외식(분석함량)', '38'),
+      row('K2', '초등학교급식(재료량 기반 산출 함량)', '23'),
+      row('K3', '중고등학교급식(재료량 기반 산출함량)', '23'),
+      row('K4', '산업체급식(재료량 기반 산출 함량)', '23'),
+    ]);
+    expect(seeds[0]?.nutrientsPer100g?.calciumMg).toBe(30.5);
   });
 
   it('parseSize/originPriority 보조 함수', () => {
@@ -250,6 +304,42 @@ describe('upsertFoodSeeds + FoodService (격리 DB)', () => {
       { name: '나물비빔밥', source: 'mfds-nutrition', sourceId: 'N1', nutrientsPer100g: { calciumMg: 99 } },
     ]);
     expect(JSON.parse((await nutrientsOf('나물비빔밥'))!)).toEqual({ calciumMg: 31, vitaminCMg: 2 });
+    // 새 열(마그네슘·엽산)은 빈 키라 더해진다 — 있는 값(칼슘)은 그대로.
+    await upsertFoodSeeds(app.prisma, [
+      { name: '나물비빔밥', source: 'mfds-nutrition', sourceId: 'N1', nutrientsPer100g: { calciumMg: 99, magnesiumMg: 30, folateUg: 40 } },
+    ]);
+    expect(JSON.parse((await nutrientsOf('나물비빔밥'))!)).toEqual({ calciumMg: 31, vitaminCMg: 2, magnesiumMg: 30, folateUg: 40 });
+    // --refresh-nutrients 는 시드에 있는 키만 덮고 1인분 열량은 그대로 둔다(열량이 있는 행 — 빈 행은 원래도 채운다).
+    await app.prisma.foodItem.update({ where: { nameNorm: '나물비빔밥' }, data: { kcal: 500 } });
+    const kcalBefore = 500;
+    await upsertFoodSeeds(
+      app.prisma,
+      [
+        {
+          name: '나물비빔밥',
+          source: 'mfds-nutrition',
+          sourceId: 'N1',
+          servingG: 100,
+          nutrition: { kcal: 999, carbG: 1, proteinG: 1, fatG: 1, sodiumMg: 1, sugarG: 1 },
+          nutrientsPer100g: { calciumMg: 40 },
+        },
+      ],
+      { refreshNutrients: true },
+    );
+    expect(JSON.parse((await nutrientsOf('나물비빔밥'))!)).toEqual({ calciumMg: 40, vitaminCMg: 2, magnesiumMg: 30, folateUg: 40 });
+    expect((await app.prisma.foodItem.findUnique({ where: { nameNorm: '나물비빔밥' } }))?.kcal ?? null).toBe(kcalBefore);
+    // --refresh-nutrition 은 시드 값으로 덮는다.
+    await upsertFoodSeeds(
+      app.prisma,
+      [{ name: '나물비빔밥', source: 'mfds-nutrition', sourceId: 'N1', nutrientsPer100g: { calciumMg: 33, vitaminCMg: 2 } }],
+      { refreshNutrition: true },
+    );
+    expect(JSON.parse((await nutrientsOf('나물비빔밥'))!)).toEqual({ calciumMg: 33, vitaminCMg: 2 });
+    await upsertFoodSeeds(
+      app.prisma,
+      [{ name: '나물비빔밥', source: 'mfds-nutrition', sourceId: 'N1', nutrientsPer100g: { calciumMg: 31, vitaminCMg: 2 } }],
+      { refreshNutrition: true },
+    );
     // 값이 하나도 없으면 칼럼을 비워 둔다(나중에 채울 수 있게).
     await upsertFoodSeeds(app.prisma, [{ name: '빈영양', source: 'mfds-nutrition', nutrientsPer100g: {} }]);
     expect(await nutrientsOf('빈영양')).toBeNull();
@@ -267,9 +357,31 @@ describe('upsertFoodSeeds + FoodService (격리 DB)', () => {
     const r = await backfillBorrowedNutrients(app.prisma);
     expect(r.filled).toBeGreaterThanOrEqual(1);
     expect(JSON.parse((await nutrientsOf('산채비빔밥집메뉴'))!)).toEqual({ calciumMg: 31, vitaminCMg: 2 });
+    // 빌려준 행에 새 키가 생기면 다시 돌릴 때 그 키만 더한다(있는 값은 그대로).
+    await app.prisma.foodItem.update({
+      where: { nameNorm: '나물비빔밥' },
+      data: { nutrientsPer100gJson: JSON.stringify({ calciumMg: 31, vitaminCMg: 2, magnesiumMg: 30 }) },
+    });
+    await app.prisma.foodItem.update({
+      where: { nameNorm: '산채비빔밥집메뉴' },
+      data: { nutrientsPer100gJson: JSON.stringify({ calciumMg: 28, vitaminCMg: 2 }) },
+    });
+    await backfillBorrowedNutrients(app.prisma);
+    expect(JSON.parse((await nutrientsOf('산채비빔밥집메뉴'))!)).toEqual({ calciumMg: 28, vitaminCMg: 2, magnesiumMg: 30 });
+    // refresh(--refresh-nutrients 와 함께)면 빌려준 행 값으로 덮는다 — 그 키만.
+    await backfillBorrowedNutrients(app.prisma, { refresh: true });
+    expect(JSON.parse((await nutrientsOf('산채비빔밥집메뉴'))!)).toEqual({ calciumMg: 31, vitaminCMg: 2, magnesiumMg: 30 });
+
+    // 공기밥(=쌀밥)은 출처를 가리지 않는다 — 외식 어휘가 먼저 이름을 차지한 운영 모양.
+    await upsertFoodSeeds(app.prisma, [
+      { name: '쌀밥', source: 'mfds-nutrition', sourceId: 'R1', servingG: 100, nutrition: { kcal: 166, carbG: 36, proteinG: 3.4, fatG: 0.3, sodiumMg: 0, sugarG: 0 }, kcalPer100g: 166, nutrientsPer100g: { calciumMg: 3, thiaminMg: 0.02 } },
+      { name: '공기밥', source: 'menu-canonical', sourceId: '공기밥' },
+    ]);
+    await backfillBorrowedNutrients(app.prisma);
+    expect(JSON.parse((await nutrientsOf('공기밥'))!)).toEqual({ calciumMg: 3, thiaminMg: 0.02 });
     // 같은 격리 DB 를 쓰는 아래 집계 테스트가 행 수를 센다.
     await app.prisma.foodItem.deleteMany({
-      where: { nameNorm: { in: ['나물비빔밥', '빈영양', '산채비빔밥집메뉴'] } },
+      where: { nameNorm: { in: ['나물비빔밥', '빈영양', '산채비빔밥집메뉴', '쌀밥', '공기밥'] } },
     });
   });
 
@@ -457,6 +569,16 @@ describe('nutritionFileRowsToRecords — 배포 파일(CSV) 헤더 매핑', () =
       [['김밥', '30', '120', '4.5', '1.2']],
     );
     expect(rec).toMatchObject({ foodNm: '김밥', ca: '30', vitaRae: '120', vitc: '4.5', fibtg: '1.2' });
+  });
+
+  it('K-FIND 음식 DB 엑셀 열(마그네슘·아연·엽산 μg DFE, 공백 없는 비타민A)도 읽는다', () => {
+    const [rec] = nutritionFileRowsToRecords(
+      ['식품코드', '식품명', '비타민A(μg RAE)', '엽산(μg DFE)', '마그네슘(mg)', '아연(mg)', '셀레늄(μg)'],
+      [['D1', '흰죽', '0', '2.74', '5.27', '0.32', '1.1']],
+    );
+    expect(rec).toMatchObject({ foodCd: 'D1', vitaRae: '0', folDfe: '2.74', mg: '5.27', zn: '0.32' });
+    // 점검에 안 쓰는 열은 옮기지 않는다.
+    expect(Object.values(rec!)).not.toContain('1.1');
   });
 });
 

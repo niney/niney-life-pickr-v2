@@ -51,6 +51,9 @@ import {
   MFDS_NUTRIENT_API_FIELD,
   MFDS_NUTRIENT_CSV_HEADER,
   NUTRIENT_KEYS,
+  looseNutrientHeader,
+  mergeNutrientsPer100g,
+  overwriteNutrientsPer100g,
   pickNutrientsPer100g,
   serializeNutrientsPer100g,
   type NutrientKey,
@@ -264,12 +267,8 @@ const CSV_FIELD_MAP: Record<string, string> = {
 };
 
 // 머리글을 느슨하게 비교한다 — 배포본마다 '비타민 A(μg RAE)'·'비타민A(㎍RAE)'처럼 공백·μ 표기가 다르다.
-const looseHeader = (h: string): string =>
-  h
-    .replace(/^\uFEFF/, '')
-    .replace(/\s+/g, '')
-    .replace(/㎍/g, 'μg')
-    .replace(/µ/g, 'μ');
+// K-FIND 식품영양성분 DB 전체판(음식 DB 엑셀, 160열)도 같은 열 이름이라 그대로 읽힌다(마그네슘·아연·엽산 열 포함).
+const looseHeader = looseNutrientHeader;
 
 export const nutritionFileRowsToRecords = (
   header: string[],
@@ -368,6 +367,13 @@ export const normalizeMfdsNutritionRows = (
   for (const g of groups.values()) {
     const scale = g.best?.servingG ? g.best.servingG / 100 : null;
     const n = g.best?.per100;
+    // 100g당 단백질·나트륨은 열량(kcalPer100g)과 **같은 변형**(best)에서 — 영양소 점검이 열량 대비로 환산하므로
+    // 다른 변형 값이 섞이면 열량당 밀도가 틀어진다. 비타민·무기질은 지금처럼 영양소별로 고른다.
+    const nutrientsPer100g = pickNutrientsPer100g(g.nutrientVariants);
+    delete nutrientsPer100g.proteinG;
+    delete nutrientsPer100g.sodiumMg;
+    if (n?.proteinG != null) nutrientsPer100g.proteinG = n.proteinG;
+    if (n?.sodiumMg != null) nutrientsPer100g.sodiumMg = n.sodiumMg;
     const nutrition =
       n && scale
         ? {
@@ -391,7 +397,7 @@ export const normalizeMfdsNutritionRows = (
       nutrition,
       // 원본이 100g 기준이라 1인분 중량이 없어도 이 값은 남긴다.
       kcalPer100g: n?.kcal == null ? null : round1(n.kcal),
-      nutrientsPer100g: pickNutrientsPer100g(g.nutrientVariants),
+      nutrientsPer100g,
       source: 'mfds-nutrition',
       sourceId: g.firstCode,
       sourceCategory: g.category,
@@ -759,6 +765,11 @@ export interface UpsertOptions {
   onProgress?: (processed: number, total: number) => void;
   /** 이미 값이 있는 행의 영양·1인분 중량을 시드 값으로 덮어쓴다(정규화 규칙을 고친 뒤 재적재용). */
   refreshNutrition?: boolean;
+  /**
+   * 100g당 비타민·무기질(nutrientsPer100gJson)만 시드 값으로 덮어쓴다 — 시드에 있는 키만, 1인분 열량·탄단지는 그대로.
+   * 대표값 규칙(pickNutrientsPer100g)을 바꾼 뒤의 재적재용(2026-11-07, 운영 --refresh-nutrients).
+   */
+  refreshNutrients?: boolean;
 }
 
 export const upsertFoodSeeds = async (
@@ -798,7 +809,11 @@ export const upsertFoodSeeds = async (
       prev.ingredients = prev.ingredients ?? s.ingredients ?? null;
       prev.servingG = prev.servingG ?? s.servingG ?? null;
       prev.nutrition = prev.nutrition ?? s.nutrition ?? null;
-      prev.nutrientsPer100g = prev.nutrientsPer100g ?? s.nutrientsPer100g ?? null;
+      // 영양소는 키 단위로 — 먼저 온 시드의 값이 이기고, 빈 키만 뒤 시드에서 채운다.
+      prev.nutrientsPer100g =
+        prev.nutrientsPer100g || s.nutrientsPer100g
+          ? { ...(s.nutrientsPer100g ?? {}), ...(prev.nutrientsPer100g ?? {}) }
+          : null;
       prev.sourceCategory = prev.sourceCategory ?? s.sourceCategory ?? null;
       if (s.source !== prev.source && !(prev.sourceRefs ?? []).some((r) => r.source === s.source)) {
         prev.sourceRefs = [
@@ -900,11 +915,17 @@ export const upsertFoodSeeds = async (
       ) {
         data.kcalPer100g = seedWithRules.kcalPer100g;
       }
-      // 비타민·무기질도 빈 행만 채운다(빌려온 값이 있으면 그대로) — 영양소 점검 도입(2026-10-04) 전 적재분을
-      // 재적재로 채우려면 이 규칙이면 된다.
-      const nutrientsJson = serializeNutrientsPer100g(seedWithRules.nutrientsPer100g);
-      if (nutrientsJson && (opts.refreshNutrition || !existing.nutrientsPer100gJson)) {
-        data.nutrientsPer100gJson = nutrientsJson;
+      // 비타민·무기질은 **빈 키만** 채운다(이미 있는 값·빌려온 값은 그대로) — 영양소 점검 도입(2026-10-04) 전 적재분과
+      // 새 열(마그네슘·아연·엽산, 2026-11-07)이 재적재로 기존 행에 더해진다. refreshNutrition 은 시드 값으로 덮는다.
+      if (opts.refreshNutrition) {
+        const nutrientsJson = serializeNutrientsPer100g(seedWithRules.nutrientsPer100g);
+        if (nutrientsJson) data.nutrientsPer100gJson = nutrientsJson;
+      } else if (opts.refreshNutrients) {
+        const next = overwriteNutrientsPer100g(existing.nutrientsPer100gJson, seedWithRules.nutrientsPer100g);
+        if (next) data.nutrientsPer100gJson = next;
+      } else {
+        const merged = mergeNutrientsPer100g(existing.nutrientsPer100gJson, seedWithRules.nutrientsPer100g);
+        if (merged) data.nutrientsPer100gJson = merged;
       }
       if (!existing.sourceCategory && seedWithRules.sourceCategory) {
         data.sourceCategory = seedWithRules.sourceCategory;

@@ -11,6 +11,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import { CURATED_NUTRIENTS_LIKE } from './food-curated-seeds.js';
+import { mergeNutrientsPer100g, overwriteNutrientsPer100g, parseNutrientsPer100g } from './food-nutrients.js';
 
 // 대상명이 이보다 짧으면(1글자) 범주어일 위험이 커서 보강하지 않는다.
 const MIN_TARGET_LEN = 2;
@@ -170,7 +171,8 @@ export interface BorrowedNutrientsResult {
  */
 export const backfillBorrowedNutrients = async (
   prisma: PrismaClient,
-  opts: { dryRun?: boolean } = {},
+  // refresh — 빌려준 행 값으로 덮어쓴다(그 키만). 대표값 규칙을 바꾼 뒤 빌려준 행이 다시 적재됐을 때(--refresh-nutrients).
+  opts: { dryRun?: boolean; refresh?: boolean } = {},
 ): Promise<BorrowedNutrientsResult> => {
   const donors = (await prisma.foodItem.findMany({
     where: { active: true, kcal: { not: null }, nutritionFrom: null, nutrientsPer100gJson: { not: null } },
@@ -191,16 +193,23 @@ export const backfillBorrowedNutrients = async (
     },
   })) as NutritionDonor[];
   const byName = new Map(donors.map((d) => [d.name, d]));
+  // 비타민·무기질이 아직 없는 행만이 아니라 **키가 모자란 행**도 대상이다 — 새 영양소 열(마그네슘·아연·엽산)이
+  // 생긴 뒤 다시 돌리면 빌려준 행에서 그 키만 더한다(있는 값은 그대로, mergeNutrientsPer100g).
+  // 공기밥(=쌀밥)은 출처를 가리지 않는다 — 운영처럼 외식 어휘(menu-canonical)가 먼저 '공기밥' 이름을 차지하면
+  // 큐레이션 시드가 그 행에 합쳐지고 source 는 menu-canonical 로 남는다(2026-11-07 운영 사본에서 확인).
   const targets = await prisma.foodItem.findMany({
     where: {
       active: true,
-      nutrientsPer100gJson: null,
-      OR: [
-        { nutritionFrom: { not: null } },
-        { source: 'curated', name: { in: Object.keys(CURATED_NUTRIENTS_LIKE) } },
-      ],
+      OR: [{ nutritionFrom: { not: null } }, { name: { in: Object.keys(CURATED_NUTRIENTS_LIKE) } }],
     },
-    select: { id: true, name: true, nameNorm: true, dishType: true, nutritionFrom: true },
+    select: {
+      id: true,
+      name: true,
+      nameNorm: true,
+      dishType: true,
+      nutritionFrom: true,
+      nutrientsPer100gJson: true,
+    },
   });
   const result: BorrowedNutrientsResult = { targets: targets.length, filled: 0, skipped: 0 };
   for (const target of targets) {
@@ -210,14 +219,20 @@ export const backfillBorrowedNutrients = async (
     const named = byName.get(likeName);
     const donor =
       named ?? (target.nutritionFrom ? (pickNutritionDonor(target, donors)?.donor ?? null) : null);
-    if (!donor?.nutrientsPer100gJson) {
+    const donorValues = donor?.nutrientsPer100gJson ? parseNutrientsPer100g(donor.nutrientsPer100gJson) : null;
+    const merged = donorValues
+      ? opts.refresh
+        ? overwriteNutrientsPer100g(target.nutrientsPer100gJson, donorValues)
+        : mergeNutrientsPer100g(target.nutrientsPer100gJson, donorValues)
+      : null;
+    if (!merged) {
       result.skipped += 1;
       continue;
     }
     if (!opts.dryRun) {
       await prisma.foodItem.update({
         where: { id: target.id },
-        data: { nutrientsPer100gJson: donor.nutrientsPer100gJson },
+        data: { nutrientsPer100gJson: merged },
       });
     }
     result.filled += 1;

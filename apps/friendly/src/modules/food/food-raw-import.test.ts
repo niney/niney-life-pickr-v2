@@ -78,6 +78,50 @@ describe('normalizeMfdsRawRows', () => {
   });
 });
 
+describe('normalizeMfdsRawRows — 100g당 영양소(2026-11-07)', () => {
+  const NUT_HEADER = ['식품코드', '식품명', '식품대분류명', '대표식품명', '에너지(kcal)', '단백질(g)', '나트륨(mg)', '칼슘(mg)', '비타민 C(mg)', '칼륨(mg)', '비타민 A(μg RAE)'];
+  const nutRows: string[][] = [
+    // 대표 행이 있으면 열량처럼 영양소도 대표 행만 — 다른 산지 행(비타민C 99)은 안 섞인다.
+    ['S1', '굴_육_생것_대표_평균', '어패류 및 기타 수산물', '굴', '58', '9.5', '450', '80', '3', '200', ''],
+    ['S2', '굴_육_생것_통영_12월', '어패류 및 기타 수산물', '굴', '70', '11', '500', '100', '99', '250', ''],
+    // 대표 행이 없으면 생것 행들의 영양소별 중앙값, 빈칸은 그 영양소에서만 뺀다.
+    ['F1', '바나나_생것', '과일류', '바나나', '93', '1.1', '1', '6', '10', '330', '3'],
+    ['F2', '바나나_생것_수입_평균', '과일류', '바나나', '89', '1.0', '', '4', '8.7', '358', ''],
+    ['F3', '바나나_생것_필리핀산', '과일류', '바나나', '95', '1.2', '0', '5', '12', '', '5'],
+  ];
+  const rda = new Map([['바나나|생것', { magnesiumMg: 27, zincMg: 0.15, folateUg: 20, calciumMg: 999 }]]);
+  const { seeds } = normalizeMfdsRawRows(
+    rawFileRowsToRecords(NUT_HEADER, nutRows, (nm) => rda.get(nm.split('_').join('|'))),
+  );
+  const byName = new Map(seeds.map((s) => [s.name, s]));
+
+  it('대표 행이 있으면 그 행의 영양소만', () => {
+    expect(byName.get('굴')?.nutrientsPer100g).toEqual({ calciumMg: 80, vitaminCMg: 3, potassiumMg: 200, proteinG: 9.5, sodiumMg: 450 });
+  });
+
+  it('대표 행이 없으면 영양소별 중앙값 + 보탠 값(배포본에 있는 키는 배포본이 이긴다)', () => {
+    const banana = byName.get('바나나')!;
+    expect(banana.kcalPer100g).toBe(93);
+    expect(banana.nutrientsPer100g).toEqual({
+      calciumMg: 5,
+      potassiumMg: 344,
+      vitaminAUg: 4,
+      vitaminCMg: 10,
+      proteinG: 1.1,
+      sodiumMg: 0.5,
+      // '바나나_생것' 한 행만 성분표와 짝이 맞아 그 값.
+      magnesiumMg: 27,
+      zincMg: 0.15,
+      folateUg: 20,
+    });
+  });
+
+  it('영양소 열이 없는 배포본이면 nutrientsPer100g 은 비운다', () => {
+    const { seeds: plain } = normalizeMfdsRawRows(rawFileRowsToRecords(HEADER, rows));
+    expect(plain.every((s) => s.nutrientsPer100g == null)).toBe(true);
+  });
+});
+
 describe('curatedSeeds', () => {
   it('이름·별칭이 정규화 기준으로 서로 겹치지 않고, 병·잔 용량이 있으면 1인분 kcal 을 계산한다', () => {
     const seeds = curatedSeeds();
