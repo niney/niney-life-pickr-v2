@@ -112,7 +112,41 @@ export const courseEffort = (c: Pick<HikingCourse, 'surfaces' | 'shape' | 'isLoo
   return { surfaces, roughSurfaces, shape, times, outingMin, difficulty };
 };
 
-const toCourseSummary = (c: HikingCourse): HikingCourseSummaryType => {
+// 코스 요약에 쓰는 열만 — 산 상세는 코스마다 고도 프로필(profile, 20m 표본 JSON)을 응답에 싣지 않는데 예전엔 함께 읽었다
+// (금정산은 코스 합 215KB, 2026-11 검토). 선(pieces)·노면(surfaces)은 지도·난이도에 쓴다.
+const COURSE_SUMMARY_SELECT = {
+  id: true,
+  no: true,
+  name: true,
+  nameSource: true,
+  startName: true,
+  endName: true,
+  peakName: true,
+  lengthM: true,
+  hasElevation: true,
+  gainM: true,
+  lossM: true,
+  minEle: true,
+  maxEle: true,
+  isLoop: true,
+  shape: true,
+  moveMin: true,
+  moveRevMin: true,
+  steepPct: true,
+  gapCount: true,
+  gapM: true,
+  source: true,
+  park: true,
+  surfaces: true,
+  minLat: true,
+  minLng: true,
+  maxLat: true,
+  maxLng: true,
+  pieces: true,
+} satisfies Prisma.HikingCourseSelect;
+type CourseSummaryRow = Prisma.HikingCourseGetPayload<{ select: typeof COURSE_SUMMARY_SELECT }>;
+
+const toCourseSummary = (c: CourseSummaryRow): HikingCourseSummaryType => {
   const { roughSurfaces, shape, times, difficulty } = courseEffort(c);
   const park = parkCourseOf(c.park);
   return {
@@ -202,7 +236,10 @@ export class HikingService {
   }
 
   async getMountain(id: string): Promise<HikingMountainDetailType | null> {
-    const m = await this.prisma.hikingMountain.findUnique({ where: { id }, include: { courses: { orderBy: { no: 'asc' } } } });
+    const m = await this.prisma.hikingMountain.findUnique({
+      where: { id },
+      include: { courses: { orderBy: { no: 'asc' }, select: COURSE_SUMMARY_SELECT } },
+    });
     if (!m) return null;
     const [parks, park] = await Promise.all([this.parkNames(), m.parkId ? this.prisma.hikingPark.findUnique({ where: { id: m.parkId } }) : null]);
     const summary = toMountainSummary(m, parks);
@@ -210,7 +247,7 @@ export class HikingService {
       ? { id: park.id, name: park.name, designatedYear: park.designatedYear, polygons: parseJson<string[][]>(park.polygons, []) }
       : null;
     // 국립공원 공식 코스가 먼저(공원 안 순번), 그다음 순번(no).
-    const seqOf = (c: HikingCourse): number => parkCourseOf(c.park)?.seq ?? Infinity;
+    const seqOf = (c: CourseSummaryRow): number => parkCourseOf(c.park)?.seq ?? Infinity;
     const courses = [...m.courses].sort((a, b) => {
       const sa = seqOf(a);
       const sb = seqOf(b);
@@ -218,7 +255,8 @@ export class HikingService {
     });
     // 이어진 봉우리 — 적재 때 정한 id 순서(정상끼리 가까운 순) 그대로.
     const ids = parseJson<string[]>(m.neighbors, []);
-    const rows = ids.length > 0 ? await this.prisma.hikingMountain.findMany({ where: { id: { in: ids } } }) : [];
+    const rows =
+      ids.length > 0 ? await this.prisma.hikingMountain.findMany({ where: { id: { in: ids } }, select: MOUNTAIN_SUMMARY_SELECT }) : [];
     const byId = new Map(rows.map((r) => [r.id, toMountainSummary(r, parks)]));
     const neighbors: HikingNeighborType[] = ids
       .map((nid) => byId.get(nid))
