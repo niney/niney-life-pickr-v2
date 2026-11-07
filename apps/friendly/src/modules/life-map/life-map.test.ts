@@ -289,6 +289,44 @@ describe('life-map routes (격리 DB)', () => {
     expect([toilet.mode, toilet.total, toilet.items.length]).toEqual(['points', 1, 1]);
   });
 
+  it('점 모드 잘림 — 상한을 넘으면 rowid 고정 해시 순 표본(truncated), 같은 화면은 같은 점이고 확대해도 보이던 점은 남는다', async () => {
+    const { LifeMapService } = await import('./life-map.service.js');
+    const q = { layer: 'cctv', bbox: SEOUL_BBOX, zoom: 16, open24: false, disabled: false, kids: false, diaper: false, bell: false } as const;
+    // 박스 안 cctv 를 고정 해시 순으로 — 표본은 이 순서의 앞에서부터다.
+    const ranked = (
+      await app.prisma.$queryRawUnsafe<{ id: string }[]>(
+        'SELECT "id" FROM "life_cctvs" WHERE "lat" >= 37.560 AND "lat" <= 37.575 AND "lng" >= 126.970 AND "lng" <= 126.990 ORDER BY (rowid * 2654435761) % 4294967296',
+      )
+    ).map((r) => r.id);
+    expect(ranked).toHaveLength(3);
+
+    const two = new LifeMapService({ prisma: app.prisma, pointsMax: 2 });
+    const sampled = await two.getPoints(q);
+    expect([sampled.mode, sampled.total, sampled.truncated, sampled.items.length]).toEqual(['points', 3, true, 2]);
+    expect(sampled.items.map((i) => i.id).sort()).toEqual(ranked.slice(0, 2).sort());
+    expect(sampled.items[0]).toEqual(expect.objectContaining({ purpose: expect.any(String) }));
+    expect((await two.getPoints(q)).items).toEqual(sampled.items);
+
+    // 상한 1 — 전체 박스의 1등 점은, 그 점과 다른 점 하나만 담은 작은 박스에서도 1등이다.
+    const one = new LifeMapService({ prisma: app.prisma, pointsMax: 1 });
+    const top = (await one.getPoints(q)).items.map((i) => i.id);
+    expect(top).toEqual([ranked[0]]);
+    const smaller = top[0] === 'LMT-C3' ? '126.9785,37.5668,126.986,37.571' : '126.977,37.566,126.980,37.568';
+    const zoomed = await one.getPoints({ ...q, bbox: smaller });
+    expect([zoomed.total, zoomed.truncated]).toEqual([2, true]);
+    expect(zoomed.items.map((i) => i.id)).toEqual(top);
+
+    // 다른 레이어도 같은 경로 — 표본 행도 점 모드와 같은 모양(화장실 불리언, 생활편의 표시 이름).
+    const toilet = await one.getPoints({ ...q, layer: 'toilet' });
+    expect([toilet.total, toilet.truncated, toilet.items.length]).toEqual([2, true, 1]);
+    expect(typeof (toilet.items[0] as { open24: unknown }).open24).toBe('boolean');
+    const store = await one.getPoints({ ...q, layer: 'store' });
+    expect([store.total, store.truncated, store.items.length]).toEqual([2, true, 1]);
+    expect(['GS25 시청점', '시청약국']).toContain((store.items[0] as { name: string }).name);
+    const hospital = await one.getPoints({ ...q, layer: 'hospital' });
+    expect([hospital.total, hospital.truncated, hospital.items.length]).toEqual([2, true, 1]);
+  });
+
   it('status·crime — 사용자 무관 정적 응답은 public Cache-Control(D-10)', async () => {
     for (const url of [STATUS_URL, '/api/v1/life-map/crime']) {
       const res = await app.inject({ method: 'GET', url });

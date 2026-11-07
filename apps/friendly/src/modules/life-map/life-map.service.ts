@@ -74,6 +74,13 @@ const LAYER_TABLE: Record<LifeMapLayerType, Prisma.Sql> = {
   store: Prisma.raw('"life_stores"'),
 };
 
+// 점 모드에서 박스 안 행이 상한(LIFE_MAP_POINTS_MAX)을 넘을 때 고를 순서 — rowid 의 고정 해시(Knuth 곱셈 해시).
+// 예전엔 Prisma take 가 붙이는 ORDER BY id 로 상한까지 잘라, 박스 안 행을 전부 표에서 읽어 정렬하느라 4K/5K 화면이
+// 0.37~0.7초였고(PLAN-perf-2 D-7) 표본도 칸별로 15%p 치우쳤다. 좌표 인덱스에서 rowid 만 읽어 이 순서로 상한까지 고른 뒤
+// 그 행만 읽는다. 해시가 고정이라 한 점의 순위는 박스와 무관하다 — 박스를 줄여도(확대) 보이던 점은 계속 보이고, 같은
+// 화면은 늘 같은 점이다. 재적재로 rowid 가 바뀌면 표본도 바뀐다.
+const POINT_SAMPLE_ORDER = Prisma.raw('(rowid * 2654435761) % 4294967296');
+
 interface Bbox {
   minLng: number;
   minLat: number;
@@ -221,9 +228,15 @@ export interface LifeMapServiceDeps {
   now?: () => Date;
   // 점 모드 강등 기준(기본 POINTS_DEMOTE_COUNT) — 테스트 주입용.
   pointsDemoteCount?: number;
+  // 점 모드 상한(기본 LIFE_MAP_POINTS_MAX) — 테스트가 작은 시드로 표본 경로를 타게 하는 주입용.
+  pointsMax?: number;
 }
 
 export class LifeMapService {
+  private get pointsMax(): number {
+    return this.deps.pointsMax ?? LIFE_MAP_POINTS_MAX;
+  }
+
   private readonly cellCache = new LRUCache<string, LifeMapPointsResultType>({
     max: CELL_CACHE_MAX,
     maxSize: CELL_CACHE_MAX_UNITS,
@@ -347,8 +360,8 @@ export class LifeMapService {
     const zoom = Math.floor(q.zoom);
     const fetchedAt = sync.loadedAt.toISOString();
     if (zoom >= LIFE_MAP_POINT_MIN_ZOOM[q.layer] && pointsSpanOk(zoom, bbox)) {
-      // 점은 박스 안 행을 id 순으로 정렬해 상한까지 자르므로 비용이 박스 안 행 수에 비례한다 — 먼저 세고, 정상 화면이
-      // 닿지 않는 밀도면 셀로 강등. total 은 이 COUNT 를 그대로 쓴다.
+      // 점은 박스 안 행이 상한을 넘으면 고정 해시 표본을 고르느라 박스 안 rowid 를 다 훑는다 — 먼저 세고, 정상 화면이
+      // 닿지 않는 밀도(남용)면 셀로 강등. total 은 이 COUNT 를 그대로 쓴다.
       const total = await this.countIn(q.layer, bbox, filters);
       if (total <= (this.deps.pointsDemoteCount ?? POINTS_DEMOTE_COUNT)) {
         if (q.layer === 'cctv') return this.cctvPoints(bbox, filters, fetchedAt, total);
@@ -360,15 +373,34 @@ export class LifeMapService {
     return this.cells(q.layer, zoom, bbox, filters, sync.id, fetchedAt);
   }
 
+  // 박스 안 행이 상한을 넘을 때의 점 — 좌표 인덱스에서 rowid 만 읽어 고정 해시 순(POINT_SAMPLE_ORDER)으로 상한까지 고르고
+  // 그 행만 읽는다. 열 이름은 점 모드 select 와 같게 둔다(불리언은 SQLite 정수로 오므로 호출측이 바꾼다).
+  private sampledPointRows<T>(layer: LifeMapLayerType, b: Bbox, f: Filters, cols: string): Promise<T[]> {
+    const table = LAYER_TABLE[layer];
+    return this.deps.prisma.$queryRaw<T[]>(
+      Prisma.sql`SELECT ${Prisma.raw(cols)} FROM ${table} WHERE rowid IN (
+        SELECT rowid FROM ${table} WHERE ${Prisma.join(this.rawConds(layer, b, f), ' AND ')}
+        ORDER BY ${POINT_SAMPLE_ORDER} LIMIT ${this.pointsMax})`,
+    );
+  }
+
+  // 점 4종 공통 — 박스 안 행(total, 커버링 COUNT)이 상한 안이면 전부, 넘으면 고정 해시 표본(truncated).
   private async cctvPoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
-    const where = this.cctvWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeCctv.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, purpose: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).map((r) => ({
+    const sampled = total > this.pointsMax;
+    const rows = sampled
+      ? await this.sampledPointRows<{ id: string; lat: number; lng: number; purpose: string }>(
+          'cctv',
+          bbox,
+          f,
+          '"id", "lat", "lng", "purpose"',
+        )
+      : await this.deps.prisma.lifeCctv.findMany({
+          where: this.cctvWhere(bbox, f),
+          select: { id: true, lat: true, lng: true, purpose: true },
+          take: this.pointsMax + 1,
+        });
+    const truncated = sampled || rows.length > this.pointsMax;
+    const items = rows.slice(0, this.pointsMax).map((r) => ({
       id: r.id,
       lat: r.lat,
       lng: r.lng,
@@ -387,14 +419,23 @@ export class LifeMapService {
   }
 
   private async toiletPoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
-    const where = this.toiletWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeToilet.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, name: true, open24: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).flatMap((r) =>
+    const sampled = total > this.pointsMax;
+    const rows = sampled
+      ? (
+          await this.sampledPointRows<{ id: string; lat: number | null; lng: number | null; name: string; open24: unknown }>(
+            'toilet',
+            bbox,
+            f,
+            '"id", "lat", "lng", "name", "open24"',
+          )
+        ).map((r) => ({ ...r, open24: Boolean(r.open24) }))
+      : await this.deps.prisma.lifeToilet.findMany({
+          where: this.toiletWhere(bbox, f),
+          select: { id: true, lat: true, lng: true, name: true, open24: true },
+          take: this.pointsMax + 1,
+        });
+    const truncated = sampled || rows.length > this.pointsMax;
+    const items = rows.slice(0, this.pointsMax).flatMap((r) =>
       r.lat !== null && r.lng !== null
         ? [{ id: r.id, lat: r.lat, lng: r.lng, name: r.name, open24: r.open24 }]
         : [],
@@ -412,14 +453,21 @@ export class LifeMapService {
   }
 
   private async hospitalPoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
-    const where = this.hospitalWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeHospital.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, name: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).flatMap((r) =>
+    const sampled = total > this.pointsMax;
+    const rows = sampled
+      ? await this.sampledPointRows<{ id: string; lat: number | null; lng: number | null; name: string }>(
+          'hospital',
+          bbox,
+          f,
+          '"id", "lat", "lng", "name"',
+        )
+      : await this.deps.prisma.lifeHospital.findMany({
+          where: this.hospitalWhere(bbox, f),
+          select: { id: true, lat: true, lng: true, name: true },
+          take: this.pointsMax + 1,
+        });
+    const truncated = sampled || rows.length > this.pointsMax;
+    const items = rows.slice(0, this.pointsMax).flatMap((r) =>
       r.lat !== null && r.lng !== null ? [{ id: r.id, lat: r.lat, lng: r.lng, name: r.name }] : [],
     );
     return {
@@ -435,14 +483,21 @@ export class LifeMapService {
   }
 
   private async storePoints(bbox: Bbox, f: Filters, fetchedAt: string, total: number): Promise<LifeMapPointsResultType> {
-    const where = this.storeWhere(bbox, f);
-    const rows = await this.deps.prisma.lifeStore.findMany({
-      where,
-      select: { id: true, lat: true, lng: true, name: true, branch: true, kind: true },
-      take: LIFE_MAP_POINTS_MAX + 1,
-    });
-    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
-    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).map((r) => ({
+    const sampled = total > this.pointsMax;
+    const rows = sampled
+      ? await this.sampledPointRows<{ id: string; lat: number; lng: number; name: string; branch: string | null; kind: string }>(
+          'store',
+          bbox,
+          f,
+          '"id", "lat", "lng", "name", "branch", "kind"',
+        )
+      : await this.deps.prisma.lifeStore.findMany({
+          where: this.storeWhere(bbox, f),
+          select: { id: true, lat: true, lng: true, name: true, branch: true, kind: true },
+          take: this.pointsMax + 1,
+        });
+    const truncated = sampled || rows.length > this.pointsMax;
+    const items = rows.slice(0, this.pointsMax).map((r) => ({
       id: r.id,
       lat: r.lat,
       lng: r.lng,
