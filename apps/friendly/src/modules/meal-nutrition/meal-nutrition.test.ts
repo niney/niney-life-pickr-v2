@@ -5,6 +5,7 @@ import {
   MEAL_DATA_DELETE_CONFIRMATION,
   type MealNutrientResultType,
   type MealNutritionAnalysisType,
+  type MealStatsNutrientsResultType,
   type MealStatsNutritionResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
@@ -993,6 +994,33 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
       { name: '된장찌개', count: 10 },
       { name: '현미밥', count: 10 },
     ]);
+  });
+
+  it('통계 영양소별 하루 평균 라우트 — 로그인 필요, 기간 검사, 같은 기간 영양 탭 점검과 같은 숫자·판정', async () => {
+    const to = kstToday();
+    const from = shiftDate(to, -6);
+    const url = (f: string, until = to) => `/api/v1/meals/stats/nutrients?from=${f}&to=${until}`;
+    expect((await app.inject({ method: 'GET', url: url(from) })).statusCode).toBe(401);
+    const auth = authFor('nut-route');
+    expect((await app.inject({ method: 'GET', url: url(to, shiftDate(to, -1)), headers: auth })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: url(shiftDate(to, -400)), headers: auth })).statusCode).toBe(400);
+
+    const res = await app.inject({ method: 'GET', url: url(from), headers: auth });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<MealStatsNutrientsResultType>();
+    // 5일 × 두 끼 × (현미밥 300 + 된장찌개 150) — 7일 중 기록 없는 이틀은 끼니 0.
+    expect(body).toMatchObject({ days: 7, analyzedDays: 5, status: 'ok' });
+    expect(body.meals.filter((m) => m === 2)).toHaveLength(5);
+    expect(body.rows.find((r) => r.key === 'kcal')?.intakePerDay).toBe(900);
+    // 영양 탭 점검(최근 7일 = 같은 기간)과 영양소마다 같은 하루 평균·판정.
+    const check = (
+      await app.inject({ method: 'GET', url: '/api/v1/meals/nutrition?days=7', headers: auth })
+    ).json<MealNutritionAnalysisType>();
+    expect(check.from).toBe(from);
+    for (const n of check.nutrients) {
+      const s = body.rows.find((r) => r.key === n.key);
+      expect([n.key, s?.intakePerDay, s?.status]).toEqual([n.key, n.intakePerDay, n.status]);
+    }
   });
 
   it('라우트 — 점검·조언 생성·최근 조언, 로그인 필요, 일일 한도 429', async () => {

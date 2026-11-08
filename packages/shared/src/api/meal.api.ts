@@ -28,6 +28,7 @@ import {
   type MealPreferenceType,
   type MealPhotoRetentionPreviewType,
   type MealSlotType,
+  type MealStatsNutrientsResultType,
   type MealStatsNutritionResultType,
   type MealStatsResultType,
   type MealTimePresetsResultType,
@@ -123,6 +124,12 @@ export const mealApi = {
   statsNutrition: (from: string, to: string) =>
     apiFetch<MealStatsNutritionResultType>(
       `${Routes.Meal.statsNutrition}?${new URLSearchParams({ from, to }).toString()}`,
+    ),
+
+  // 통계 — 영양소별 하루 평균·날마다 흐름·많이 준 음식(영양 탭과 같은 셈을 고른 기간에).
+  statsNutrients: (from: string, to: string) =>
+    apiFetch<MealStatsNutrientsResultType>(
+      `${Routes.Meal.statsNutrients}?${new URLSearchParams({ from, to }).toString()}`,
     ),
 
   // ── 사진 ──

@@ -22934,6 +22934,344 @@
         }
       }
     },
+    "/api/v1/meals/stats/nutrients": {
+      "get": {
+        "summary": "통계 — 영양소별 하루 평균·날마다 흐름·많이 준 음식(고른 기간을 영양 탭과 같은 셈·기준으로)",
+        "tags": [
+          "meal"
+        ],
+        "description": "기간은 from~to(포함) 최대 400일 — 넘으면 400. 하루 평균과 판정(status)은 영양소 점검을 이 기간에 그대로 돌린 값이다(두 끼 이상 기록한 날만, 2020 한국인 영양소 섭취기준, 그런 날이 4일 미만이면 status=insufficient). 점검에 없는 탄수화물·당류·지방·포화지방·콜레스테롤은 카탈로그(1인분·100g당) 값으로 어림하고 판정 없이 열량 중 비율(energyShare)과 에너지적정비율(energyRange)을 준다. daily 는 dates 와 같은 순서의 그날 합계(한 끼만 기록한 날도 값을 준다 — meals 가 2 미만이면 평균에서 빠진 날), topFoods 는 기간의 모든 기록에서 그 영양소를 많이 준 음식(최대 5). LLM 없음.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "x-rate-limit": {
+          "max": 30,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "days": {
+                      "type": "integer"
+                    },
+                    "analyzedDays": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "insufficient"
+                      ]
+                    },
+                    "insufficientReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "sex": {
+                          "type": "string",
+                          "enum": [
+                            "male",
+                            "female"
+                          ],
+                          "nullable": true
+                        },
+                        "ageGroup": {
+                          "type": "string"
+                        },
+                        "basis": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "default"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "sex",
+                        "ageGroup",
+                        "basis"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "dates": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      }
+                    },
+                    "meals": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "kcal",
+                              "carb",
+                              "sugar",
+                              "fat",
+                              "saturatedFat",
+                              "cholesterol",
+                              "protein",
+                              "fiber",
+                              "calcium",
+                              "iron",
+                              "potassium",
+                              "vitaminA",
+                              "vitaminD",
+                              "thiamin",
+                              "riboflavin",
+                              "niacin",
+                              "vitaminC",
+                              "sodium",
+                              "magnesium",
+                              "zinc",
+                              "folate"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "group": {
+                            "type": "string",
+                            "enum": [
+                              "core",
+                              "micro"
+                            ]
+                          },
+                          "parent": {
+                            "type": "string",
+                            "enum": [
+                              "kcal",
+                              "carb",
+                              "sugar",
+                              "fat",
+                              "saturatedFat",
+                              "cholesterol",
+                              "protein",
+                              "fiber",
+                              "calcium",
+                              "iron",
+                              "potassium",
+                              "vitaminA",
+                              "vitaminD",
+                              "thiamin",
+                              "riboflavin",
+                              "niacin",
+                              "vitaminC",
+                              "sodium",
+                              "magnesium",
+                              "zinc",
+                              "folate"
+                            ],
+                            "nullable": true
+                          },
+                          "intakePerDay": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "coverage": {
+                            "type": "number"
+                          },
+                          "reference": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "eer",
+                                  "rni",
+                                  "ai",
+                                  "cdrr"
+                                ]
+                              },
+                              "amount": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "amount"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
+                          },
+                          "percent": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "energyShare": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "energyRange": {
+                            "type": "object",
+                            "properties": {
+                              "min": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "max": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "min",
+                              "max"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "borderline",
+                              "ok",
+                              "high",
+                              "unknown"
+                            ],
+                            "nullable": true
+                          },
+                          "recordGap": {
+                            "type": "boolean"
+                          },
+                          "note": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "daily": {
+                            "type": "array",
+                            "items": {
+                              "type": "number",
+                              "nullable": true
+                            }
+                          },
+                          "topFoods": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "share": {
+                                  "type": "number"
+                                },
+                                "count": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "share",
+                                "count"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "unit",
+                          "group",
+                          "parent",
+                          "intakePerDay",
+                          "coverage",
+                          "reference",
+                          "percent",
+                          "energyShare",
+                          "energyRange",
+                          "status",
+                          "recordGap",
+                          "note",
+                          "daily",
+                          "topFoods"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "days",
+                    "analyzedDays",
+                    "status",
+                    "insufficientReason",
+                    "profile",
+                    "dates",
+                    "meals",
+                    "rows",
+                    "notes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meals/stats/nutrition": {
       "get": {
         "summary": "통계 — 묶음(조리 형태·주재료·요리 계통)별 영양 몫: 이 기간 먹은 열량·탄단지·나트륨·비타민·무기질 중 그 묶음 몫",

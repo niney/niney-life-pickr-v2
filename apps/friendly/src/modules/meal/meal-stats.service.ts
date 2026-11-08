@@ -133,8 +133,11 @@ export const computeMealStats = (
   }
 
   // 영양 — 값이 있는 항목만 더한다. 그래서 합계는 실제보다 **적게** 나오고, coverage 로 그
-  // 사실을 함께 내려보낸다(UI 가 "78% 반영"이라고 밝힌다). 나눔의 분모는 기간 전체가 아니라
-  // **기록이 있는 날**이다 — 안 먹은 게 아니라 안 적은 날이기 때문이다.
+  // 사실을 함께 내려보낸다(UI 가 "78% 반영"이라고 밝힌다). 하루 평균은 기간 전체가 아니라 **두 끼 이상 기록한 날**의
+  // 기록만 그 날 수로 나눈다 — 안 적은 날은 안 먹은 날이 아니고, 한 끼만 적은 날이 섞이면 평균이 낮아 보인다. 영양 탭의
+  // 영양소 점검·통계의 영양 표와 같은 셈이라 세 곳의 '하루 평균 열량'이 같은 기간이면 같다(2026-11-08, 예전엔 기록한 모든 날).
+  // 정보 비율(coverage·주식 근거)은 기간의 모든 기록으로 본다.
+  const averagedDays = new Set([...byDate].filter(([, entries]) => entries >= 2).map(([date]) => date));
   let sumKcal = 0;
   let sumProtein = 0;
   let sumSodium = 0;
@@ -144,6 +147,7 @@ export const computeMealStats = (
   let mainItems = 0;
   let mainItemsWithNutrition = 0;
   for (const row of rows) {
+    const averaged = averagedDays.has(row.eatenDate);
     for (const item of row.items) {
       if (item.isMain) mainItems += 1;
       if (item.kcal === null || item.kcal === undefined) continue;
@@ -154,12 +158,13 @@ export const computeMealStats = (
         itemsEstimated += 1;
       }
       else itemsDirect += 1;
+      if (!averaged) continue;
       sumKcal += item.kcal;
       sumProtein += item.proteinG ?? 0;
       sumSodium += item.sodiumMg ?? 0;
     }
   }
-  const nutritionDays = byDate.size;
+  const nutritionDays = averagedDays.size;
   const mainItemCoverage = mainItems === 0 ? 0 : mainItemsWithNutrition / mainItems;
   const averageReliable = itemsWithNutrition > 0 && mainItemCoverage >= 0.6;
   const perDay = (total: number): number | null =>

@@ -7,9 +7,11 @@ import {
   MEAL_STATS_MAX_DAYS,
   MealNutritionAnalysis,
   MealNutritionQuery,
+  MealStatsNutrientsResult,
   MealStatsNutritionResult,
   MealStatsQuery,
   Routes,
+  type MealStatsQueryType,
 } from '@repo/api-contract';
 import { daysBetween } from '@repo/utils';
 import { env } from '../../config/env.js';
@@ -22,6 +24,7 @@ import {
   MealNutritionAdviceService,
 } from './meal-nutrition-advice.service.js';
 import { MealNutritionGroupsService } from './meal-nutrition-groups.js';
+import { MealNutritionStatsService } from './meal-nutrition-stats.js';
 import { MealNutritionService } from './meal-nutrition.service.js';
 
 // 영양소 점검·영양제 조언 — 로그인 사용자 본인 기록만. 점검은 LLM 없이 계산만, 조언은 텍스트 LLM 1콜
@@ -36,6 +39,15 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
   // 영양 기준 음식(plugins/meal) — 비타민·무기질이 없는 행·이름을 표준 음식의 열량당 영양소로 계산한다.
   const nutrition = new MealNutritionService(app.prisma, { refs: app.foodNutrientRefs });
   const groups = new MealNutritionGroupsService(app.prisma, nutrition);
+  const stats = new MealNutritionStatsService(app.prisma, nutrition);
+  // 통계 기간 — from ≤ to, 최대 MEAL_STATS_MAX_DAYS 일(묶음별 몫·영양소별 하루 평균이 같은 규칙).
+  const checkStatsRange = ({ from, to }: MealStatsQueryType): void => {
+    if (from > to) throw app.httpErrors.badRequest('from 이 to 보다 뒤입니다.');
+    const span = daysBetween(from, to);
+    if (span === null || span + 1 > MEAL_STATS_MAX_DAYS) {
+      throw app.httpErrors.badRequest(`통계 기간은 최대 ${MEAL_STATS_MAX_DAYS}일입니다.`);
+    }
+  };
   const advice = new MealNutritionAdviceService(app.prisma, aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
@@ -76,12 +88,30 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: MealStatsNutritionResult },
     },
     handler: async (req) => {
-      if (req.query.from > req.query.to) throw app.httpErrors.badRequest('from 이 to 보다 뒤입니다.');
-      const span = daysBetween(req.query.from, req.query.to);
-      if (span === null || span + 1 > MEAL_STATS_MAX_DAYS) {
-        throw app.httpErrors.badRequest(`통계 기간은 최대 ${MEAL_STATS_MAX_DAYS}일입니다.`);
-      }
+      checkStatsRange(req.query);
       return groups.groups(req.user.userId, req.query.from, req.query.to);
+    },
+  });
+
+  typed.get(Routes.Meal.statsNutrients, {
+    onRequest: [app.authenticate],
+    config: { rateLimit: RATE.mealNutrition },
+    schema: {
+      tags: ['meal'],
+      summary: '통계 — 영양소별 하루 평균·날마다 흐름·많이 준 음식(고른 기간을 영양 탭과 같은 셈·기준으로)',
+      description:
+        `기간은 from~to(포함) 최대 ${MEAL_STATS_MAX_DAYS}일 — 넘으면 400. 하루 평균과 판정(status)은 영양소 점검을 이 기간에 ` +
+        '그대로 돌린 값이다(두 끼 이상 기록한 날만, 2020 한국인 영양소 섭취기준, 그런 날이 4일 미만이면 status=insufficient). ' +
+        '점검에 없는 탄수화물·당류·지방·포화지방·콜레스테롤은 카탈로그(1인분·100g당) 값으로 어림하고 판정 없이 열량 중 비율' +
+        '(energyShare)과 에너지적정비율(energyRange)을 준다. daily 는 dates 와 같은 순서의 그날 합계(한 끼만 기록한 날도 값을 ' +
+        '준다 — meals 가 2 미만이면 평균에서 빠진 날), topFoods 는 기간의 모든 기록에서 그 영양소를 많이 준 음식(최대 5). LLM 없음.',
+      security: [{ bearerAuth: [] }],
+      querystring: MealStatsQuery,
+      response: { 200: MealStatsNutrientsResult },
+    },
+    handler: async (req) => {
+      checkStatsRange(req.query);
+      return stats.nutrients(req.user.userId, req.query.from, req.query.to, kstToday());
     },
   });
 

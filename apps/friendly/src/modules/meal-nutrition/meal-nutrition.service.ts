@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { MEAL_NUTRIENT_MIN_COVERAGE } from '@repo/api-contract';
 import type {
   MealAllergenType,
   MealNutrientResultType,
@@ -48,8 +49,8 @@ import { NOT_MEASURED_NUTRIENTS, NUTRIENT_DEFS, isAdditiveNutrientSource, type N
 
 // 두 끼 이상 기록한 날이 이보다 적으면 판단하지 않는다.
 export const MIN_ANALYZED_DAYS = 4;
-// 그 영양소 값이 있는 기록의 열량 비율이 이보다 낮으면 판단을 미룬다.
-export const MIN_COVERAGE = 0.6;
+// 그 영양소 값이 있는 기록의 열량 비율이 이보다 낮으면 판단을 미룬다(통계의 영양 표와 같은 문턱 — 계약 상수).
+export const MIN_COVERAGE = MEAL_NUTRIENT_MIN_COVERAGE;
 // 충분섭취량(ai)만 있는 영양소는 이 비율 아래를 '부족 가능성'으로 본다(평균필요량이 없어서).
 const AI_LOW_RATIO = 0.7;
 // 기록이 덜 남은 몫을 채워 볼 때 열량 배수 상한.
@@ -104,9 +105,10 @@ export interface AnalysisCatalogRow extends ServingCatalogRow {
   id: string;
   nameNorm?: string;
   nutrientsPer100gJson: string | null;
-  /** 1인분 탄수화물·지방(g) — 1인분 열량(kcal)과 같은 변형에서 온 값. 없으면 null. */
+  /** 1인분 탄수화물·지방·당류(g) — 1인분 열량(kcal)과 같은 변형에서 온 값. 없으면 null. */
   carbG?: number | null;
   fatG?: number | null;
+  sugarG?: number | null;
 }
 
 export interface AnalysisProfile {
@@ -174,6 +176,9 @@ export interface ItemNutrients {
   hasVitamins: boolean;
   /** 영양소별 먹은 양 — 값을 아는 영양소만 들어 있다. */
   values: Map<KdriNutrient, number>;
+  /** 기준 행의 100g당 값과 먹은 양의 100g 배수(먹은 열량 ÷ 100g당 열량) — 점검 밖 성분(포화지방·콜레스테롤)을 같은 풀이로 꺼낸다. */
+  per100: NutrientsPer100g;
+  factor: number | null;
 }
 
 /**
@@ -218,19 +223,29 @@ export const resolveItemNutrients = (
     }
     if (value !== null) values.set(def.key, value);
   }
-  return { row, ref, drink, hasVitamins, values };
+  return { row, ref, drink, hasVitamins, values, per100, factor };
 };
 
 /**
- * 탄수화물·지방(g) — 식단 항목 스냅샷에 없어 카탈로그 1인분의 열량당 비율 × 먹은 열량으로 어림한다(항목의 카탈로그 행 →
+ * 탄수화물·지방·당류(g) — 식단 항목 스냅샷에 없어 카탈로그 1인분의 열량당 비율 × 먹은 열량으로 어림한다(항목의 카탈로그 행 →
  * 영양 기준 음식 순). 1인분 영양은 적재 때 같은 변형에서 함께 온 값이라 비율이 맞는다. 모르면 null.
  */
-export const itemMacroGrams = (r: ItemNutrients, kcal: number, key: 'carbG' | 'fatG'): number | null => {
+export const itemMacroGrams = (
+  r: ItemNutrients,
+  kcal: number,
+  key: 'carbG' | 'fatG' | 'sugarG',
+): number | null => {
   for (const c of [r.row, r.ref]) {
     const v = c?.[key];
     if (c && v !== null && v !== undefined && c.kcal !== null && c.kcal > 0) return (v / c.kcal) * kcal;
   }
   return null;
+};
+
+/** 점검 밖 100g당 성분(포화지방·콜레스테롤) — 비타민·무기질과 같은 기준 행 × 먹은 양. 모르면 null(음료도 0 으로 보지 않는다). */
+export const itemPer100Amount = (r: ItemNutrients, key: 'saturatedFatG' | 'cholesterolMg'): number | null => {
+  const v = r.per100[key];
+  return v !== undefined && r.factor !== null ? v * r.factor : null;
 };
 
 const round = (v: number, digits = 1): number => {
@@ -901,4 +916,5 @@ const CATALOG_SELECT = {
   nutrientsPer100gJson: true,
   carbG: true,
   fatG: true,
+  sugarG: true,
 } as const;

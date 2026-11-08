@@ -341,6 +341,7 @@ export const Meal = {
   stats: `${API_PREFIX}/meals/stats`,
   // 통계 — 묶음(조리 형태·주재료·요리 계통)별 영양 몫(?from&to).
   statsNutrition: `${API_PREFIX}/meals/stats/nutrition`,
+  statsNutrients: `${API_PREFIX}/meals/stats/nutrients`,
   // 사진 업로드(multipart, 필드 file) — 서버가 토큰 발급.
   photos: `${API_PREFIX}/meals/photos`,
   // 원본/썸네일 조회(JWT 필요 — <img src> 직접 불가) + 삭제.

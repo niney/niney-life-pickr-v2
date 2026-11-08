@@ -219,3 +219,15 @@ export const energyRequirement = (sex: KdriSex | null, ageGroup: KdriAgeGroup): 
   const i = KDRI_AGE_GROUPS.indexOf(ageGroup);
   return sex ? EER[sex][i]! : Math.min(EER.male[i]!, EER.female[i]!);
 };
+
+// 에너지적정비율 — 열량 중 탄수화물·단백질·지방에서 온 비율(2020, 3세 이상은 모두 같아 12세 이상에 그대로 쓴다). 양 기준이
+// 없는(지방) 또는 거의 누구나 넘는(탄수화물 평균필요량 100g) 영양소를 비율로 본다 — 통계의 영양 표가 판정 없이 나란히 둔다.
+// 포화지방산은 19세 이상 7% 미만(청소년 값은 원문을 대조하기 전이라 두지 않는다). 2025 개정(2025-12-31, 탄수화물 50~65%·
+// 단백질 10~20%)은 섭취기준 표 전체를 원문으로 대조할 때 함께 바꾼다.
+export const ENERGY_RATIO_RANGE = {
+  carb: { min: 0.55, max: 0.65 },
+  protein: { min: 0.07, max: 0.2 },
+  fat: { min: 0.15, max: 0.3 },
+} as const;
+export const SATURATED_FAT_MAX_RATIO_ADULT = 0.07;
+export const isAdultAgeGroup = (ageGroup: KdriAgeGroup): boolean => ageGroup !== '12-14' && ageGroup !== '15-18';

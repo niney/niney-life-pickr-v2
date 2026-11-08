@@ -143,6 +143,19 @@ export const useMealStatsNutrition = (from: string, to: string, enabled = true) 
     placeholderData: keepPreviousData,
   });
 
+/**
+ * 통계의 영양소별 하루 평균·흐름·많이 준 음식 — 영양 탭 점검과 같은 셈(두 끼 이상 기록한 날, 같은 섭취기준·판정)을
+ * 고른 기간에. 통계 화면의 영양 표·막대 위 한 줄·묶음 카드의 판정이 함께 쓴다.
+ */
+export const useMealStatsNutrients = (from: string, to: string, enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'stats-nutrients', from, to],
+    queryFn: () => mealApi.statsNutrients(from, to),
+    enabled: enabled && !!from && !!to,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+
 export interface CreateMealEntryMutationVariables {
   input: CreateMealEntryInputType;
   /** 요청을 시작한 로그인 주체. 생략한 기존 호출자는 종전처럼 캐시를 반영한다. */

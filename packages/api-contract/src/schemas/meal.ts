@@ -791,6 +791,72 @@ export const MealNutritionQuery = z.object({
 });
 export type MealNutritionQueryType = z.infer<typeof MealNutritionQuery>;
 
+// ── 통계 — 영양소별 하루 평균·흐름·많이 준 음식(2026-11-08) ──────────────────────
+// 고른 기간(통계의 1주·1달·3달)을 영양소 점검과 같은 셈으로 본다 — 두 끼 이상 기록한 날의 하루 평균, 같은 섭취기준·판정.
+// 점검에 없는 탄수화물·당류·지방·포화지방·콜레스테롤은 카탈로그 값으로 어림하고 판정 없이 양과 열량 중 비율만 준다.
+export const MealStatsNutrientKey = z.enum([
+  'kcal',
+  'carb',
+  'sugar',
+  'fat',
+  'saturatedFat',
+  'cholesterol',
+  ...MealNutrientKey.options,
+]);
+export type MealStatsNutrientKeyType = z.infer<typeof MealStatsNutrientKey>;
+
+export const MealStatsNutrientRow = z.object({
+  key: MealStatsNutrientKey,
+  label: z.string(),
+  unit: z.string(),
+  // core = 위 묶음(열량·탄수화물·당류·단백질·지방·포화지방·나트륨·콜레스테롤 — 이 차례로 온다), micro = 식이섬유·비타민·무기질.
+  group: z.enum(['core', 'micro']),
+  // 하위 줄 — 당류는 탄수화물, 포화지방은 지방 아래.
+  parent: MealStatsNutrientKey.nullable(),
+  // 두 끼 이상 기록한 날의 하루 평균 — 값을 아는 기록만 더해 실제보다 적을 수 있다(coverage 로 그 비율을 밝힌다).
+  intakePerDay: z.number().nullable(),
+  // 두 끼 이상 기록한 날의 기록 열량 중 이 영양소 값을 아는 비율(0~1).
+  coverage: z.number(),
+  // 양 기준 — eer 필요추정량(열량) · rni 권장섭취량 · ai 충분섭취량 · cdrr 만성질환위험감소섭취량(나트륨). 없으면 null.
+  reference: z.object({ kind: z.enum(['eer', 'rni', 'ai', 'cdrr']), amount: z.number() }).nullable(),
+  // intakePerDay ÷ reference.amount × 100.
+  percent: z.number().nullable(),
+  // 열량 중 이 영양소에서 온 비율(0~1, 1g = 탄수화물·단백질·당류 4kcal, 지방·포화지방 9kcal) — 기간의 모든 기록에서.
+  energyShare: z.number().nullable(),
+  // 에너지적정비율(2020 한국인 영양소 섭취기준) — 포화지방은 성인 7% 미만이라 max 만.
+  energyRange: z.object({ min: z.number().nullable(), max: z.number().nullable() }).nullable(),
+  // 영양 탭과 같은 판정(섭취기준이 있는 영양소만, 나머지는 null).
+  status: MealNutrientStatus.nullable(),
+  recordGap: z.boolean(),
+  note: z.string().nullable(),
+  // dates 와 같은 순서의 그날 합계 — 그날 값을 아는 기록이 없으면 null. 한 끼만 기록한 날도 값을 준다(평균에는 안 든다).
+  daily: z.array(z.number().nullable()),
+  // 기간의 모든 기록에서 이 영양소를 많이 준 음식(최대 5) — share 는 기간 합 중 몫, count 는 먹은 횟수.
+  topFoods: z.array(z.object({ name: z.string(), share: z.number(), count: z.number().int() })),
+});
+export type MealStatsNutrientRowType = z.infer<typeof MealStatsNutrientRow>;
+
+export const MealStatsNutrientsResult = z.object({
+  from: DateString,
+  to: DateString,
+  days: z.number().int(),
+  // 두 끼 이상 기록한 날 — 하루 평균은 이 날들로만 낸다.
+  analyzedDays: z.number().int(),
+  status: z.enum(['ok', 'insufficient']),
+  insufficientReason: z.string().nullable(),
+  profile: z.object({
+    sex: MealSex.nullable(),
+    ageGroup: z.string(),
+    basis: z.enum(['user', 'default']),
+  }),
+  dates: z.array(DateString),
+  // 날짜마다 기록한 끼니 수(dates 와 같은 순서) — 2 이상인 날만 평균에 든다.
+  meals: z.array(z.number().int()),
+  rows: z.array(MealStatsNutrientRow),
+  notes: z.array(z.string()),
+});
+export type MealStatsNutrientsResultType = z.infer<typeof MealStatsNutrientsResult>;
+
 export const MealSupplementAdviceItem = z.object({
   nutrient: MealNutrientKey,
   label: z.string(),

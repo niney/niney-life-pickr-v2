@@ -165,6 +165,50 @@ describe('computeMealStats', () => {
     expect(r.nutrition.coverage).toBe(0);
   });
 
+  it('하루 평균은 두 끼 이상 기록한 날만 — 한 끼만 적은 날은 평균에서 빠진다(영양 탭 점검과 같은 셈)', () => {
+    const meal = (eatenDate: string, slot: string, kcal: number, sodiumMg: number) => ({
+      eatenDate,
+      slot,
+      mealType: null,
+      items: [{ name: '밥', nameNorm: '밥', dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal, proteinG: 10, sodiumMg }],
+    });
+    const r = computeMealStats(
+      [
+        meal('2026-08-20', 'lunch', 600, 1000),
+        meal('2026-08-20', 'dinner', 900, 1500),
+        meal('2026-08-21', 'lunch', 300, 800),
+      ],
+      '2026-08-20',
+      '2026-08-21',
+      '2026-08-21',
+    );
+    // 예전 셈(기록한 모든 날)이면 (600+900+300)/2 = 900.
+    expect(r.nutrition.avgKcalPerDay).toBe(1500);
+    expect(r.nutrition.avgSodiumMgPerDay).toBe(2500);
+    expect(r.nutrition.avgProteinGPerDay).toBe(20);
+    // 정보 비율은 기간의 모든 기록으로 본다.
+    expect(r.nutrition.itemsWithNutrition).toBe(3);
+    expect(r.nutrition.coverage).toBe(1);
+  });
+
+  it('두 끼 이상 기록한 날이 없으면 하루 평균은 null', () => {
+    const r = computeMealStats(
+      [
+        {
+          eatenDate: '2026-08-20',
+          slot: 'lunch',
+          mealType: null,
+          items: [{ name: '밥', nameNorm: '밥', dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: 500 }],
+        },
+      ],
+      '2026-08-20',
+      '2026-08-21',
+      '2026-08-21',
+    );
+    expect(r.nutrition.avgKcalPerDay).toBeNull();
+    expect(r.nutrition.averageReliable).toBe(true);
+  });
+
   it('추천 선택·실제 기록·평가와 수락률을 집계한다', () => {
     const r = computeMealStats([], '2026-08-20', '2026-08-21', '2026-08-21', [
       { feedbackJson: JSON.stringify({ pickedName: '김치찌개', eatenEntryId: 'e1', rating: 1 }), events: [{ kind: 'shown' }, { kind: 'candidate_rated' }] },
