@@ -52,7 +52,7 @@ export const HikingMountainPanel = ({ mountain, loading, error, onBack, onSelect
               )}
             </View>
             <View style={styles.badges}>
-              {mountain.kind === 'top100' && <Text style={[styles.badge, styles.top100]}>100대 명산</Text>}
+              {mountain.kind === 'top100' && <Text style={[styles.badge, styles.top100, theme.mode === 'dark' && styles.top100Dark]}>100대 명산</Text>}
               {mountain.park && <Text style={[styles.badge, styles.park]}>{mountain.park}</Text>}
             </View>
             {mountain.subtitle && <Text style={[styles.sub, { color: theme.colors.textMuted }]}>{mountain.subtitle}</Text>}
@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { fontSize: 10, fontWeight: '600', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
   top100: { color: '#047857', backgroundColor: 'rgba(16,185,129,0.12)' },
+  top100Dark: { color: '#6ee7b7' },
   park: { color: '#0369a1', backgroundColor: 'rgba(14,165,233,0.12)' },
   sub: { fontSize: 12, lineHeight: 17 },
   overview: { fontSize: 13, lineHeight: 19, marginTop: 4 },

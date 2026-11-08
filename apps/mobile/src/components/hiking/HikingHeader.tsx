@@ -3,7 +3,8 @@ import Animated, { interpolateColor, useAnimatedStyle, type SharedValue } from '
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme, type HikingSort } from '@repo/shared';
 
-// 등산 지도 위 플로팅 헤더 — [뒤로] [산·봉우리·지역·국립공원 검색] [내 위치] + 정렬 칩(가까운순·높은순·이름순).
+// 등산 지도 위 플로팅 헤더 — [뒤로] [산·봉우리·지역·국립공원 검색] [내 위치] + [오늘 추천] 칩 · 정렬 칩(가까운순·높은순·이름순).
+// 추천을 켜면 목록 시트가 추천으로 바뀌어 정렬 칩은 숨긴다.
 // 일상지도 헤더와 같은 카드 룩·보간: 목록 시트 index 1.5→2 에서 플로팅 카드 → sticky 바.
 
 const SORTS: { key: HikingSort; label: string }[] = [
@@ -19,13 +20,15 @@ interface Props {
   onChangeQ: (q: string) => void;
   sort: HikingSort;
   onSort: (s: HikingSort) => void;
+  recommend: boolean;
+  onToggleRecommend: () => void;
   onBack: () => void;
   onLocate: () => void;
   locating: boolean;
   onMeasure: (h: number) => void;
 }
 
-export const HikingHeader = ({ topInset, sheetIndex, q, onChangeQ, sort, onSort, onBack, onLocate, locating, onMeasure }: Props) => {
+export const HikingHeader = ({ topInset, sheetIndex, q, onChangeQ, sort, onSort, recommend, onToggleRecommend, onBack, onLocate, locating, onMeasure }: Props) => {
   const theme = useTheme();
   const animatedCardStyle = useAnimatedStyle(() => {
     'worklet';
@@ -81,7 +84,22 @@ export const HikingHeader = ({ topInset, sheetIndex, q, onChangeQ, sort, onSort,
           </Pressable>
         </View>
         <View style={styles.chips}>
-          {SORTS.map(({ key, label }) => {
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: recommend }}
+            accessibilityHint={recommend ? '산 목록으로 돌아갑니다' : '날짜·시간·난이도로 오늘 갈 산을 추천합니다'}
+            onPress={onToggleRecommend}
+            style={({ pressed }) => [
+              styles.chip,
+              recommend ? { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary } : { borderColor: theme.colors.border },
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+          >
+            <MaterialCommunityIcons name="star-four-points-outline" size={14} color={recommend ? theme.colors.primaryText : theme.colors.primary} />
+            <Text style={[styles.chipText, { color: recommend ? theme.colors.primaryText : theme.colors.text }]}>오늘 추천</Text>
+            {recommend && <MaterialCommunityIcons name="close" size={13} color={theme.colors.primaryText} />}
+          </Pressable>
+          {!recommend && SORTS.map(({ key, label }) => {
             const on = sort === key;
             return (
               <Pressable
@@ -112,6 +130,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 13, paddingVertical: 0 },
   iconBtn: { width: 36, height: 36, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, height: 30 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, height: 30 },
   chipText: { fontSize: 12, fontWeight: '600' },
 });

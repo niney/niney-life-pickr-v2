@@ -7,16 +7,19 @@ import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, type Share
 import {
   HIKING_DEFAULT_SORT,
   SEOUL_CITY_HALL,
+  hikingDefaultPick,
+  minToHm,
   rankMountains,
   useAirLocation,
   useHikingCourse,
   useHikingMountain,
   useHikingMountains,
+  useHikingRecommend,
   useTheme,
   type HikingSort,
   type RankedMountain,
 } from '@repo/shared';
-import { isInKorea } from '@repo/utils';
+import { hikingOriginCity, isInKorea, kmaTodayIsoDate } from '@repo/utils';
 import { TransitMapView } from '~/components/transit/TransitMapView';
 import type { TransitMapHandle } from '~/components/transit/useTransitMapSync';
 import type { BridgeViewport } from '~/components/transit/transitMapBridge';
@@ -24,6 +27,7 @@ import { HikingCoursePanel } from '~/components/hiking/HikingCoursePanel';
 import { HikingHeader } from '~/components/hiking/HikingHeader';
 import { HikingMountainPanel } from '~/components/hiking/HikingMountainPanel';
 import { HikingMountainRow } from '~/components/hiking/HikingMountainRow';
+import { HikingRecommendPanel, type HikingOriginState, type HikingRecommendInput } from '~/components/hiking/HikingRecommendPanel';
 import {
   bboxCorners,
   buildCourseLines,
@@ -36,8 +40,9 @@ import {
 import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 
 // 등산(앱) — 100대 명산·전국 주요 봉우리·국립공원 공식 코스. 일상지도와 같은 골격: WebView 지도(TransitMapView) 풀블리드 +
-// 플로팅 헤더(뒤로·검색·내 위치·정렬) + 목록 시트(산 목록) + 고르면 상세 시트(산 → 코스). 데이터·문구 규칙은 웹과 공용
-// (@repo/shared 훅·hikingFormat, @repo/utils). 진입 파라미터 m(산)·c(코스). 추천·산행 조건·가는 법은 다음 차수.
+// 플로팅 헤더(뒤로·검색·내 위치·오늘 추천·정렬) + 목록 시트(산 목록 또는 추천) + 고르면 상세 시트(산 → 코스: 산행 조건·
+// 가는 법·주변까지). 데이터·문구 규칙은 웹과 공용(@repo/shared 훅·hikingFormat, @repo/utils). 진입 파라미터 m(산)·c(코스)·
+// rec=1(추천으로 열기).
 
 const KOREA = { lat: 36.4, lng: 127.8 };
 const START_ZOOM = 7;
@@ -52,7 +57,7 @@ export default function HikingScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ m?: string; c?: string }>();
+  const params = useLocalSearchParams<{ m?: string; c?: string; rec?: string }>();
 
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<HikingSort>(HIKING_DEFAULT_SORT);
@@ -181,6 +186,14 @@ export default function HikingScreen() {
     setSelectedPoiId(id);
     mapRef.current?.flyTo(lat, lng, 15);
   }, []);
+  // 추천에서 고르면 그 산의 그 코스 상세로 바로.
+  const selectRecommended = useCallback((mId: string, cId: string) => {
+    setMountainId(mId);
+    setCourseId(cId);
+    setSelectedPoiId(null);
+    fittedRef.current = null;
+    listSheetRef.current?.snapToIndex(0);
+  }, []);
 
   // ── 내 위치 ──
   const userLoc = useUserLocationNative();
@@ -211,6 +224,61 @@ export default function HikingScreen() {
       setLocating(false);
     }
   }, [userLoc]);
+
+  // ── 오늘 추천 — 기본은 오늘 남은 시각(없으면 내일 08:00) · 반나절 · 상관없음 · 차 · 내 위치(웹과 같다). ──
+  // 처음 그린 시각을 잡아 두고 날짜 3개·지난 시각 거르기에 쓴다(렌더 중 Date.now() 를 부르지 않게).
+  const [recommendOn, setRecommendOn] = useState(() => first(params.rec) === '1' && !first(params.m));
+  const [openedAt] = useState(() => Date.now());
+  const dates = useMemo(() => [0, 1, 2].map((i) => kmaTodayIsoDate(new Date(openedAt + i * 86_400_000))), [openedAt]);
+  const [recInput, setRecInput] = useState<HikingRecommendInput>(() => ({
+    ...hikingDefaultPick(dates, openedAt),
+    duration: 'half',
+    level: 'any',
+    mode: 'car',
+    origin: 'me',
+  }));
+  // '내 위치' = 버튼으로 받은 위치 → 저장한 내 위치. 둘 다 없으면 추천을 켤 때 한 번 묻는다(지도는 옮기지 않는다).
+  const [recLocation, setRecLocation] = useState<'pending' | 'failed' | null>(null);
+  const meCoords = myLocation ?? (savedLat !== null && savedLng !== null ? { lat: savedLat, lng: savedLng } : null);
+  const originState: HikingOriginState = meCoords ? 'ok' : recLocation === 'pending' ? 'pending' : recLocation === 'failed' ? 'failed' : 'idle';
+  const locateForRecommend = useCallback(async () => {
+    setRecLocation('pending');
+    const r = await userLoc.refetch();
+    if (r.status === 'granted' && r.coords && isInKorea(r.coords)) {
+      setMyLocation(r.coords);
+      setRecLocation(null);
+    } else setRecLocation(r.status === 'pending' || r.status === 'idle' ? null : 'failed');
+  }, [userLoc]);
+  const recCity = recInput.origin === 'me' ? null : hikingOriginCity(recInput.origin);
+  const recOrigin = recCity ?? (recInput.origin === 'me' ? meCoords : null);
+  // 내 위치를 찾는 동안은 기다린다(찾자마자 거리 넣은 추천으로 다시 받지 않게).
+  const recParams =
+    recommendOn && !(recInput.origin === 'me' && originState === 'pending')
+      ? {
+          ...(recOrigin ? { lat: recOrigin.lat, lng: recOrigin.lng } : {}),
+          date: dates[recInput.day] ?? dates[0],
+          start: minToHm(recInput.startMin),
+          duration: recInput.duration,
+          level: recInput.level,
+          mode: recInput.mode,
+        }
+      : null;
+  const recommendQ = useHikingRecommend(recParams);
+  const changeRecommend = useCallback((patch: Partial<HikingRecommendInput>) => setRecInput((prev) => ({ ...prev, ...patch })), []);
+  const toggleRecommend = () => {
+    const next = !recommendOn;
+    setRecommendOn(next);
+    if (!next) return;
+    // 켜면 열린 산을 닫고 목록 시트를 반쯤 올려 추천이 바로 보이게.
+    closeMountain();
+    listSheetRef.current?.snapToIndex(1);
+    if (recInput.origin === 'me' && !meCoords && recLocation === null) void locateForRecommend();
+  };
+  const changeQ = useCallback((next: string) => {
+    setQ(next);
+    // 검색하면 산 목록으로 돌아간다(추천에는 검색이 없다).
+    if (next.length > 0) setRecommendOn(false);
+  }, []);
 
   const sheetBottomPad = insets.bottom + 24;
   const originLabel = myLocation ? '내 위치' : saved ? '저장한 내 위치' : '서울 시청';
@@ -247,38 +315,57 @@ export default function HikingScreen() {
           handleIndicatorStyle={{ backgroundColor: theme.colors.border, width: 36 }}
           backgroundComponent={(bgProps) => <SheetBackground {...bgProps} sheetIndex={listSheetIndex} color={theme.colors.surface} />}
         >
-          <BottomSheetFlatList
-            data={ranked}
-            keyExtractor={(r: RankedMountain) => r.mountain.id}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={[styles.listPad, { paddingBottom: sheetBottomPad }]}
-            initialNumToRender={20}
-            windowSize={7}
-            ListHeaderComponent={
-              items ? (
-                <Text style={[styles.count, { color: theme.colors.textMuted }]}>
-                  {ranked.length.toLocaleString('ko-KR')}개 산{sort === 'near' ? ` · ${originLabel} 기준` : ''}
+          {recommendOn ? (
+            <HikingRecommendPanel
+              input={recInput}
+              dates={dates}
+              openedAt={openedAt}
+              originState={originState}
+              originSaved={myLocation === null && meCoords !== null}
+              onChange={changeRecommend}
+              onUseMyLocation={() => void locateForRecommend()}
+              result={recommendQ.data}
+              isLoading={recParams === null || recommendQ.isLoading}
+              isFetching={recommendQ.isFetching}
+              isError={recommendQ.isError}
+              selectedMountainId={mountainId}
+              onSelect={selectRecommended}
+              bottomPad={sheetBottomPad}
+            />
+          ) : (
+            <BottomSheetFlatList
+              data={ranked}
+              keyExtractor={(r: RankedMountain) => r.mountain.id}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={[styles.listPad, { paddingBottom: sheetBottomPad }]}
+              initialNumToRender={20}
+              windowSize={7}
+              ListHeaderComponent={
+                items ? (
+                  <Text style={[styles.count, { color: theme.colors.textMuted }]}>
+                    {ranked.length.toLocaleString('ko-KR')}개 산{sort === 'near' ? ` · ${originLabel} 기준` : ''}
+                  </Text>
+                ) : null
+              }
+              renderItem={({ item }: { item: RankedMountain }) => (
+                <HikingMountainRow mountain={item.mountain} distM={sort === 'near' ? item.distM : null} onPress={() => selectMountain(item.mountain.id)} />
+              )}
+              ListEmptyComponent={
+                <Text style={[styles.empty, { color: theme.colors.textMuted }]}>
+                  {mountainsQ.isLoading ? '산 목록을 불러오는 중…' : mountainsQ.isError ? '산 목록을 불러오지 못했습니다.' : '검색에 맞는 산이 없습니다.'}
                 </Text>
-              ) : null
-            }
-            renderItem={({ item }: { item: RankedMountain }) => (
-              <HikingMountainRow mountain={item.mountain} distM={sort === 'near' ? item.distM : null} onPress={() => selectMountain(item.mountain.id)} />
-            )}
-            ListEmptyComponent={
-              <Text style={[styles.empty, { color: theme.colors.textMuted }]}>
-                {mountainsQ.isLoading ? '산 목록을 불러오는 중…' : mountainsQ.isError ? '산 목록을 불러오지 못했습니다.' : '검색에 맞는 산이 없습니다.'}
-              </Text>
-            }
-            ListFooterComponent={
-              items ? (
-                <Text style={[styles.footer, { color: theme.colors.textMuted }]}>
-                  코스·지점은 100대 명산 2022년 1월·전국 주요 봉우리 2022년 11월·국립공원 공식 코스 2024년 2월 기준 자료입니다. 입산통제·탐방로
-                  폐쇄·공사는 반영되지 않으니 산행 전 국립공원·지자체 안내를 확인하세요. 출처 한국등산트레킹지원센터·행정안전부 산행안전지도(국립공원공단)·
-                  산림청(공공데이터포털), 지형 고도 SRTM(U.S. Geological Survey).
-                </Text>
-              ) : null
-            }
-          />
+              }
+              ListFooterComponent={
+                items ? (
+                  <Text style={[styles.footer, { color: theme.colors.textMuted }]}>
+                    코스·지점은 100대 명산 2022년 1월·전국 주요 봉우리 2022년 11월·국립공원 공식 코스 2024년 2월 기준 자료입니다. 입산통제·탐방로
+                    폐쇄·공사는 반영되지 않으니 산행 전 국립공원·지자체 안내를 확인하세요. 출처 한국등산트레킹지원센터·행정안전부 산행안전지도(국립공원공단)·
+                    산림청(공공데이터포털), 지형 고도 SRTM(U.S. Geological Survey).
+                  </Text>
+                ) : null
+              }
+            />
+          )}
         </BottomSheet>
 
         {detailVisible ? (
@@ -320,9 +407,11 @@ export default function HikingScreen() {
           topInset={insets.top}
           sheetIndex={headerSheetIndex}
           q={q}
-          onChangeQ={setQ}
+          onChangeQ={changeQ}
           sort={sort}
           onSort={setSort}
+          recommend={recommendOn}
+          onToggleRecommend={toggleRecommend}
           onBack={() => router.back()}
           onLocate={() => void locate()}
           locating={locating}

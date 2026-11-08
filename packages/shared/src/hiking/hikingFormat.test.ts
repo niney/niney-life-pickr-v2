@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { HikingMountainSummaryType } from '@repo/api-contract';
-import { courseOutingLabel, courseTimeBreakdown, formatAtM, officialCourseLines, rankMountains } from './hikingFormat.js';
+import {
+  courseOutingLabel,
+  courseTimeBreakdown,
+  formatAtM,
+  hikingDayLabel,
+  hikingDefaultPick,
+  hikingStartsFor,
+  hmToMin,
+  minToHm,
+  officialCourseLines,
+  rankMountains,
+} from './hikingFormat.js';
 
 // 웹·앱 공용 등산 도우미 — 산 거르기·정렬(국립공원 이름 검색), 나들이 시간·방향별 시간 문구.
 
@@ -45,5 +56,35 @@ describe('hikingFormat', () => {
     expect(formatAtM(240)).toBe('240m');
     expect(formatAtM(1460)).toBe('1.5km');
     expect(officialCourseLines(' ①A\n\n②B ')).toEqual(['①A', '②B']);
+  });
+});
+
+// 날짜·출발 시각 — 산행 조건 카드·추천 입력(웹·앱 공용). 시각은 KST 기준.
+describe('hiking 날짜·출발 시각', () => {
+  it('분 ↔ HH:MM', () => {
+    expect(minToHm(8 * 60)).toBe('08:00');
+    expect(minToHm(13 * 60 + 30)).toBe('13:30');
+    expect(hmToMin('0830')).toBe(510);
+    expect(hmToMin('08:30')).toBe(510);
+    expect(hmToMin('8시')).toBeNull();
+  });
+
+  it('날짜 라벨 — 오늘·내일·모레와 월.일(요일)', () => {
+    expect(hikingDayLabel('2026-10-29', 0)).toBe('오늘 10.29(목)');
+    expect(hikingDayLabel('2026-10-30', 1)).toBe('내일 10.30(금)');
+  });
+
+  it('오늘은 지금 이후 출발만, 다른 날은 04:00~18:00 전부', () => {
+    const now = Date.parse('2026-10-29T12:10:00+09:00');
+    const today = hikingStartsFor('2026-10-29', 0, now);
+    expect(today[0]).toBe(12 * 60 + 30);
+    expect(today.at(-1)).toBe(18 * 60);
+    expect(hikingStartsFor('2026-10-30', 1, now)).toHaveLength(29);
+  });
+
+  it('기본 고르기 — 오늘 남은 시각이 없으면 내일 08:00', () => {
+    const dates = ['2026-10-29', '2026-10-30', '2026-10-31'];
+    expect(hikingDefaultPick(dates, Date.parse('2026-10-29T07:40:00+09:00'))).toEqual({ day: 0, startMin: 8 * 60 });
+    expect(hikingDefaultPick(dates, Date.parse('2026-10-29T19:00:00+09:00'))).toEqual({ day: 1, startMin: 8 * 60 });
   });
 });

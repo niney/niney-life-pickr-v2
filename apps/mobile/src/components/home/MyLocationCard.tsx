@@ -218,7 +218,7 @@ const LifeMapLink = () => {
   );
 };
 
-// 등산 진입 — 100대 명산·국립공원 공식 코스(저장 위치가 있으면 가까운 산부터).
+// 등산 진입 — 100대 명산·국립공원 공식 코스(저장 위치가 있으면 가까운 산부터), 오늘 어느 산 추천은 지도 머리의 칩.
 const HikingLink = () => {
   const theme = useTheme();
   const router = useRouter();
@@ -229,7 +229,7 @@ const HikingLink = () => {
       style={({ pressed }) => [styles.lifeRow, { borderTopColor: theme.colors.border, opacity: pressed ? 0.6 : 1 }]}
     >
       <MaterialCommunityIcons name="image-filter-hdr" size={16} color={theme.colors.textMuted} />
-      <Text style={[styles.lifeText, { color: theme.colors.text }]}>등산 — 가까운 산·국립공원 공식 코스</Text>
+      <Text style={[styles.lifeText, { color: theme.colors.text }]}>등산 — 가까운 산·오늘 추천·공식 코스</Text>
       <MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.textMuted} />
     </Pressable>
   );

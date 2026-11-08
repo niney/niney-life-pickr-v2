@@ -6,11 +6,15 @@ import type { HikingCourseDetailType } from '@repo/api-contract';
 import { courseDifficultyReasons, courseOutingLabel, courseTimeBreakdown, formatAtM, useTheme } from '@repo/shared';
 import { HIKING_DIFFICULTY_LABEL, formatHikingEle, formatHikingLength, hikingPoiLabel, isHikingMapPoiCategory } from '@repo/utils';
 import { HikingElevationBars } from './HikingElevationBars';
+import { HikingAroundSection } from './HikingAroundSection';
+import { HikingConditionsCard } from './HikingConditionsCard';
 import { KnpsLinks } from './HikingMountainPanel';
 import { hikingGpxUrl } from './hikingUrls';
 
 // 코스 상세(앱, Detail 시트) — 국립공원 공식 안내(원문 그대로) · 숫자(거리·예상·난이도·오르막·내리막·최고 고도) · 시간 문구 ·
-// 원천 안내 · 고도 그래프 · 코스 지점(갈림길 가는 길) · GPX 받기. 웹 CourseDetail 의 앱 판(산행 조건·가는 법은 다음 차수).
+// 원천 안내 · 산행 조건(날짜·출발 시각별 날씨·대기·산불·하산 시각) · 고도 그래프 · 코스 지점(갈림길 가는 길) · 가는 법·주변 ·
+// GPX 받기.
+// 웹 CourseDetail 의 앱 판.
 
 interface Props {
   course: HikingCourseDetailType | null;
@@ -112,6 +116,7 @@ const CourseBody = ({ course: c, onSelectPoi }: { course: HikingCourseDetailType
           : '고도 기록이 없어 예상 시간·난이도를 계산하지 못했습니다.'}
       </Note>
       {note && <Note>{note}</Note>}
+      <HikingConditionsCard course={c} />
       <HikingElevationBars profile={c.profile} lengthM={c.lengthM} />
       {pois.length > 0 && <Text style={[styles.section, { color: theme.colors.text }]}>코스 지점 {pois.length}</Text>}
       {pois.map((p) => {
@@ -138,7 +143,7 @@ const CourseBody = ({ course: c, onSelectPoi }: { course: HikingCourseDetailType
                 )}
                 {p.ele !== null ? <Text style={{ color: theme.colors.textMuted }}> {formatHikingEle(p.ele)}</Text> : null}
               </Text>
-              {next && <Text style={[styles.poiSub, { color: '#15803d' }]}>가는 길 → {next.dest}</Text>}
+              {next && <Text style={[styles.poiSub, { color: theme.mode === 'dark' ? '#86efac' : '#15803d' }]}>가는 길 → {next.dest}</Text>}
               {p.description && (p.category === 'ENTRY' || p.category === 'SHELTER') && (
                 <Text style={[styles.poiSub, { color: theme.colors.textMuted }]}>{p.description}</Text>
               )}
@@ -146,6 +151,7 @@ const CourseBody = ({ course: c, onSelectPoi }: { course: HikingCourseDetailType
           </Pressable>
         );
       })}
+      <HikingAroundSection course={c} />
     </>
   );
 };

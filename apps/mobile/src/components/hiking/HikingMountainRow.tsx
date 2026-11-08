@@ -40,7 +40,7 @@ export const HikingMountainRow = ({ mountain: m, distM, onPress }: Props) => {
             {m.name}
           </Text>
           {m.heightM !== null && <Text style={[styles.height, { color: theme.colors.textMuted }]}>{Math.round(m.heightM).toLocaleString('ko-KR')}m</Text>}
-          {m.kind === 'top100' && <Text style={[styles.badge, styles.top100]}>100대 명산</Text>}
+          {m.kind === 'top100' && <Text style={[styles.badge, styles.top100, theme.mode === 'dark' && styles.top100Dark]}>100대 명산</Text>}
         </View>
         {m.park && (
           <Text style={[styles.badge, styles.park, { alignSelf: 'flex-start' }]} numberOfLines={1}>
@@ -71,6 +71,8 @@ const styles = StyleSheet.create({
   height: { fontSize: 12 },
   badge: { fontSize: 10, fontWeight: '600', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
   top100: { color: '#047857', backgroundColor: 'rgba(16,185,129,0.12)' },
+  // 다크 바탕에선 진녹색 글자가 묻혀 밝은 녹색으로(웹 dark:text-emerald-300).
+  top100Dark: { color: '#6ee7b7' },
   park: { color: '#0369a1', backgroundColor: 'rgba(14,165,233,0.12)' },
   sub: { fontSize: 12 },
   dist: { fontSize: 12, fontVariant: ['tabular-nums'] },
