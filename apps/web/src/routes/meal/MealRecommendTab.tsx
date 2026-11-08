@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   Loader2,
@@ -47,6 +47,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ConfirmDialog } from '~/components/ui/confirm-dialog';
 import { cn } from '~/lib/utils';
 import { useMealDraftReady } from './useMealDraftReady';
+import { MealLink } from './MealLink';
+import { useMealOpen } from './mealPanel';
+import { MEAL_PATH } from './mealPaths';
 
 // 다음 끼니 추천 — 끼니·상황을 고르고 받는다. 서버가 같은 날·끼니·프로필이면 캐시를 주므로
 // 다시 누르는 것 자체는 싸다("다시 추천"만 LLM 을 새로 부른다).
@@ -68,7 +71,7 @@ const shownEventIdsOf = (client: QueryClient): Set<string> => {
 
 export const MealRecommendTab = () => {
   const now = new Date();
-  const navigate = useNavigate();
+  const open = useMealOpen();
   const draftReady = useMealDraftReady();
   const [slot, setSlot] = useState<MealSlotType>(() => guessMealSlot(new Date()));
   // undefined = 사용자가 아직 고르지 않음(설정의 첫 식사 유형을 기본값으로 사용),
@@ -227,7 +230,7 @@ export const MealRecommendTab = () => {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="예: 가볍게 / 국물 있는 걸로"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="meal-input w-full"
               maxLength={120}
             />
           </div>
@@ -281,7 +284,7 @@ export const MealRecommendTab = () => {
               draftReady
                 ? (name) => {
                     startMealDraftFromRecommendation(shown, name, effectiveMealType);
-                    navigate('/me/meals/new');
+                    open(MEAL_PATH.new);
                   }
                 : null
             }
@@ -329,7 +332,7 @@ export const MealRecommendTab = () => {
           />
         ) : ctx.data ? (
           // 데스크톱에서 오른쪽 결과 자리가 비지 않게 — 좁은 화면은 바로 위가 조건 입력이라 안내가 필요 없다.
-          <div className="hidden rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground lg:block">
+          <div className="meal-empty hidden lg:flex">
             끼니와 상황을 고르고 &lsquo;추천받기&rsquo;를 누르면 여기에 추천이 나와요.
           </div>
         ) : null}
@@ -469,7 +472,7 @@ const RecommendationCard = ({
       {(rec.sides ?? []).length > 0 ? (
         <p className="text-xs text-muted-foreground">
           곁들이면 좋아요 · {rec.sides.map((s) => `${s.name}(${s.nutrients.join('·')})`).join(' · ')} ·{' '}
-          <Link to="/me/meals?tab=nutrition" className="text-primary hover:underline">
+          <Link to={MEAL_PATH.nutrition} className="text-primary hover:underline">
             영양 보기
           </Link>
         </p>
@@ -478,12 +481,12 @@ const RecommendationCard = ({
       {rec.feedback?.eatenEntryId ? (
         <p className="text-xs text-muted-foreground">
           이 추천은 식단 기록으로 이어졌어요 ·{' '}
-          <Link
-            to={`/me/meals/${rec.feedback.eatenEntryId}`}
+          <MealLink
+            to={MEAL_PATH.entry(rec.feedback.eatenEntryId)}
             className="text-primary hover:underline"
           >
             기록 보기
-          </Link>
+          </MealLink>
         </p>
       ) : null}
       {rec.notice ? (
@@ -503,16 +506,16 @@ const RecommendationCard = ({
         <p className="text-sm text-muted-foreground">추천할 음식을 찾지 못했어요.</p>
       ) : (
         rec.items.map((item, rank) => (
-          <div key={item.name} className="rounded-lg border p-3">
+          <div key={item.name} className="meal-reco-cand">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{item.name}</span>
+              <span className="meal-reco-name">{item.name}</span>
               {item.dishType ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                <span className="meal-tag">
                   {FOOD_DISH_TYPE_LABEL[item.dishType]}
                 </span>
               ) : null}
               {item.cuisine ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                <span className="meal-tag">
                   {FOOD_CUISINE_LABEL[item.cuisine]}
                 </span>
               ) : null}
@@ -548,10 +551,7 @@ const RecommendationCard = ({
             {(item.tags?.length ?? 0) > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {item.tags.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
-                  >
+                  <span key={t} className="meal-tag">
                     {t}
                   </span>
                 ))}
@@ -562,7 +562,7 @@ const RecommendationCard = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => onFeedback({ pickedName: item.name })}
-                className={cn(rec.feedback?.pickedName === item.name && 'text-primary')}
+                className={cn(rec.feedback?.pickedName === item.name && 'text-primary meal-picked')}
               >
                 이걸로 할래요
               </Button>
@@ -585,7 +585,7 @@ const RecommendationCard = ({
                 onClick={() => onCandidateRating(item.name, rank, 1)}
                 className={cn(
                   rec.candidateRatings?.find((candidate) => candidate.name === item.name)
-                    ?.rating === 1 && 'text-primary',
+                    ?.rating === 1 && 'meal-ok meal-picked',
                 )}
               >
                 <ThumbsUp className="size-3.5" />
@@ -620,7 +620,7 @@ const RecommendationCard = ({
           size="sm"
           aria-label="추천이 좋아요"
           onClick={() => onFeedback({ rating: rec.feedback?.rating === 1 ? null : 1 })}
-          className={cn(rec.feedback?.rating === 1 && 'text-primary')}
+          className={cn(rec.feedback?.rating === 1 && 'meal-ok meal-picked')}
         >
           <ThumbsUp className="size-4" />
         </Button>
@@ -756,10 +756,7 @@ const Chip = ({
     type="button"
     onClick={onClick}
     aria-pressed={selected}
-    className={cn(
-      'rounded-full border px-3 py-1.5 text-sm transition-colors',
-      selected ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
-    )}
+    className="meal-opt"
   >
     {label}
   </button>

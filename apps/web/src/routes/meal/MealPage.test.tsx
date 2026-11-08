@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION } from '@repo/api-contract';
 import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/shared';
 import { server } from '~/test/msw';
-import { MealPage } from './MealPage';
+import MealApp from './MealApp';
 
-// 내 식단(웹) — 목록·달력·통계·추천·설정 탭. 입력은 별도 화면(MealEntryFormPage)이고 여기서는
+// 내 식단(웹, 식단 셸 /meal/*) — 목록·달력·통계·추천·영양·설정 화면. 입력은 별도 화면(MealEntryFormPage)이고 여기서는
 // 그리로 가는 링크와 추천→draft 연결만 본다. 탭 전환 시 어떤 요청이 나가는지까지 계약으로 고정한다
 // (onUnhandledRequest: 'error' 라 핸들러를 안 깔면 즉시 실패한다).
 
@@ -103,13 +103,17 @@ const stats = {
   ],
 };
 
+// path — 식단 셸 안의 화면 주소(기본: 기록 목록).
 const renderPage = (
   client: QueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  path = '/meal/records',
 ) =>
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <MealPage />
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/meal/*" element={<MealApp />} />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -155,9 +159,12 @@ describe('MealPage', () => {
     renderPage();
     expect(await screen.findByRole('link', { name: '첫 끼니 기록하기' })).toHaveAttribute(
       'href',
-      '/me/meals/new',
+      '/meal/new',
     );
-    expect(screen.getByRole('link', { name: /^기록하기$/ })).toHaveAttribute('href', '/me/meals/new');
+    // 셸의 사이드 메뉴·하단 탭 '기록하기'도 새 기록으로 간다.
+    for (const link of screen.getAllByRole('link', { name: /^기록하기$/ })) {
+      expect(link).toHaveAttribute('href', '/meal/new');
+    }
   });
 
   it('기록 카드는 상세로 가는 링크다', async () => {
@@ -166,7 +173,7 @@ describe('MealPage', () => {
     );
     renderPage();
     const food = await screen.findByText('김치찌개');
-    expect(food.closest('a')).toHaveAttribute('href', '/me/meals/e1');
+    expect(food.closest('a')).toHaveAttribute('href', '/meal/e1');
   });
 
   it('더 보기 — opaque nextCursor 를 그대로 넘기고 앞 페이지를 유지한다', async () => {
@@ -218,8 +225,7 @@ describe('MealPage', () => {
         });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /달력/ }));
+    renderPage(undefined, '/meal/calendar');
     const day = await screen.findByRole('button', { name: '5' });
     expect(limits).not.toContain('0');
     expect(dayQueries).toHaveLength(0);
@@ -238,8 +244,7 @@ describe('MealPage', () => {
         return HttpResponse.json(stats);
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /통계/ }));
+    renderPage(undefined, '/meal/stats');
     expect(await screen.findByText('찌개·전골')).toBeInTheDocument();
     expect(screen.getByText('2일')).toBeInTheDocument();
     expect(screen.getByText('25%')).toBeInTheDocument();
@@ -365,8 +370,7 @@ describe('MealPage', () => {
         });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /달력/ }));
+    renderPage(undefined, '/meal/calendar');
     fireEvent.click(await screen.findByRole('button', { name: '5' }));
     const first = await screen.findByText(/오일식당/);
     expect(first.closest('.opacity-60')).toBeNull();
@@ -397,11 +401,11 @@ describe('MealPage', () => {
     );
     renderPage();
     const firstSrc = (await screen.findByAltText('식단 사진')).getAttribute('src');
-    fireEvent.click(screen.getByRole('button', { name: /달력/ }));
+    fireEvent.click(screen.getAllByRole('link', { name: '달력' })[0]!);
     await screen.findByRole('button', { name: '5' });
     expect(screen.queryByAltText('식단 사진')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '기록' }));
+    fireEvent.click(screen.getAllByRole('link', { name: '기록' })[0]!);
     expect((await screen.findByAltText('식단 사진')).getAttribute('src')).toBe(firstSrc);
     expect(photoRequests).toBe(1);
   });
@@ -541,8 +545,7 @@ describe('MealPage — 추천·설정 탭', () => {
         return HttpResponse.json(recommendation);
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
     fireEvent.click(await screen.findByRole('button', { name: /추천받기/ }));
 
     expect(await screen.findByText('연어초밥')).toBeInTheDocument();
@@ -572,12 +575,11 @@ describe('MealPage — 추천·설정 탭', () => {
       ),
       http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [] })),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
     expect(
       await screen.findByText(/곁들이면 좋아요 · 파프리카\(비타민 C\) · 우유\(칼슘·비타민 D\)/),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '영양 보기' })).toHaveAttribute('href', '/me/meals?tab=nutrition');
+    expect(screen.getByRole('link', { name: '영양 보기' })).toHaveAttribute('href', '/meal/nutrition');
   });
 
   it('추천 피드백 — 👍 를 누르면 rating 1 을 보낸다', async () => {
@@ -597,8 +599,7 @@ describe('MealPage — 추천·설정 탭', () => {
         });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
     fireEvent.click(await screen.findByRole('button', { name: '추천이 좋아요' }));
     await waitFor(() => expect(ratings).toEqual([1]));
   });
@@ -622,8 +623,7 @@ describe('MealPage — 추천·설정 탭', () => {
         });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
 
     const choice = await screen.findByRole('button', { name: '이걸로 할래요' });
     expect(choice).not.toHaveClass('text-primary');
@@ -643,8 +643,7 @@ describe('MealPage — 추천·설정 탭', () => {
       ),
       http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [recommendation] })),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
     fireEvent.click(await screen.findByRole('button', { name: '연어초밥 먹은 메뉴로 기록' }));
 
     const s = useMealDraftStore.getState();
@@ -668,9 +667,8 @@ describe('MealPage — 추천·설정 탭', () => {
       ),
       http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [linked] })),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
-    expect(await screen.findByRole('link', { name: '기록 보기' })).toHaveAttribute('href', '/me/meals/e9');
+    renderPage(undefined, '/meal/recommend');
+    expect(await screen.findByRole('link', { name: '기록 보기' })).toHaveAttribute('href', '/meal/e9');
     expect(screen.queryByRole('button', { name: /먹은 메뉴로 기록/ })).not.toBeInTheDocument();
   });
 
@@ -697,8 +695,7 @@ describe('MealPage — 추천·설정 탭', () => {
         return HttpResponse.json({ ok: true });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
 
     // 목록 줄은 받은 시각(HH:MM)이 붙은 버튼 — 카드 버튼에는 시각이 없다. 줄마다 붙은 삭제 버튼은 뺀다.
     const rows = async () =>
@@ -759,8 +756,7 @@ describe('MealPage — 추천·설정 탭', () => {
         return HttpResponse.json({ ok: true });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
     await screen.findByRole('button', { name: '연어초밥 먹은 메뉴로 기록' });
     await waitFor(() => expect(shownIds).toEqual(['r1']));
     // 노출은 화면에 보이는 추천 데이터를 바꾸지 않는다 — 응답 뒤에도 context·목록은 한 번씩만.
@@ -768,10 +764,10 @@ describe('MealPage — 추천·설정 탭', () => {
     expect(contextCalls).toBe(1);
     expect(listCalls).toBe(1);
 
-    // 기록 탭에 갔다 와도 같은 추천의 노출을 또 보내지 않는다(탭 버튼이 필터 칩 '추천'보다 앞에 있다).
-    fireEvent.click(screen.getByRole('button', { name: '기록' }));
+    // 기록 화면에 갔다 와도 같은 추천의 노출을 또 보내지 않는다(사이드 메뉴 링크로 오간다).
+    fireEvent.click(screen.getAllByRole('link', { name: '기록' })[0]!);
     await screen.findByPlaceholderText('음식·장소·메모 검색');
-    fireEvent.click(screen.getAllByRole('button', { name: '추천' })[0]!);
+    fireEvent.click(screen.getAllByRole('link', { name: '추천' })[0]!);
     await screen.findByRole('button', { name: '연어초밥 먹은 메뉴로 기록' });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(shownIds).toEqual(['r1']);
@@ -811,8 +807,7 @@ describe('MealPage — 추천·설정 탭', () => {
         return HttpResponse.json({ deleted: { recommendations: count, recommendationEvents: 0 } });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    renderPage(undefined, '/meal/recommend');
 
     const deleteButtons = async () => screen.findAllByRole('button', { name: /추천 삭제$/ });
     // 확인창에서 취소하면 지우지 않는다.
@@ -854,8 +849,7 @@ describe('MealPage — 추천·설정 탭', () => {
         return HttpResponse.json({ ...preference, ...saved });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+    renderPage(undefined, '/meal/settings');
 
     const slider = await screen.findByLabelText('건강');
     fireEvent.change(slider, { target: { value: '5' } });
@@ -885,8 +879,7 @@ describe('MealPage — 추천·설정 탭', () => {
       http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
       http.get(PREFERENCE_URL, () => HttpResponse.json(preference)),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+    renderPage(undefined, '/meal/settings');
     fireEvent.click(await screen.findByRole('button', { name: '새로운 도전' }));
     expect((screen.getByLabelText('새로운 시도') as HTMLInputElement).value).toBe('5');
   });
@@ -901,8 +894,7 @@ describe('MealPage — 추천·설정 탭', () => {
         return HttpResponse.json({ ...preference, ...saved });
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+    renderPage(undefined, '/meal/settings');
     fireEvent.click(await screen.findByRole('button', { name: '여성' }));
     const year = screen.getByLabelText('출생연도');
     fireEvent.change(year, { target: { value: '19' } });
@@ -925,8 +917,7 @@ describe('MealPage — 추천·설정 탭', () => {
       http.put(PREFERENCE_URL, () => HttpResponse.json({ ...preference, excludedFoods: ['정리된값'] })),
     );
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    renderPage(client);
-    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+    renderPage(client, '/meal/settings');
     const excluded = () => screen.getByLabelText('취향상 제외할 음식');
     await waitFor(() => expect(excluded()).toHaveValue('오이'));
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
@@ -1043,8 +1034,7 @@ describe('MealPage — 영양 탭', () => {
         return HttpResponse.json(advice);
       }),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+    renderPage(undefined, '/meal/nutrition');
 
     expect(await screen.findByText('260mg / 권장섭취량 700mg (37%)', { exact: false })).toBeInTheDocument();
     const rows = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
@@ -1104,8 +1094,7 @@ describe('MealPage — 영양 탭', () => {
       ),
       http.get(ADVICE_URL, () => HttpResponse.json({ advice, stale: true })),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+    renderPage(undefined, '/meal/nutrition');
 
     const zinc = (await screen.findByText('아연')).closest('li')!;
     expect(within(zinc).getByText('기록 더 필요')).toBeInTheDocument();
@@ -1117,7 +1106,7 @@ describe('MealPage — 영양 탭', () => {
     expect(screen.queryByText(/한 끼로는/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '설정에서 성별·출생연도 넣기' })).toHaveAttribute(
       'href',
-      '/me/meals?tab=preference',
+      '/meal/settings',
     );
 
     expect(await screen.findByText(/지금 점검과 다를 수 있어요/)).toBeInTheDocument();
@@ -1137,8 +1126,7 @@ describe('MealPage — 영양 탭', () => {
       ),
       http.get(ADVICE_URL, () => HttpResponse.json({ advice: null })),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+    renderPage(undefined, '/meal/nutrition');
     expect(await screen.findByText(/두 끼 이상 기록한 날이 2일/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '최근 14일로 조언 받기' })).toBeDisabled();
   });
@@ -1155,8 +1143,7 @@ describe('MealPage — 영양 탭', () => {
       }),
       http.get(ADVICE_URL, () => HttpResponse.json({ advice: null })),
     );
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: '영양' }));
+    renderPage(undefined, '/meal/nutrition');
     const before = await screen.findByText(/최근 14일 중/);
     expect(before.closest('.opacity-60')).toBeNull();
 

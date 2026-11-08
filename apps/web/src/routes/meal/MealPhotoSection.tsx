@@ -1,8 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { ImagePlus, Loader2, RefreshCw, X } from 'lucide-react';
 import { MEAL_DRAFT_MAX_PHOTOS, useMealDraftStore } from '@repo/shared';
-import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { MealPhotoImg } from './MealPhotoImg';
 import { MealPhotoLightbox } from './MealPhotoLightbox';
@@ -16,7 +14,13 @@ const takenAtLabel = (d: Date): string =>
 
 const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer.types).includes('Files');
 
-export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
+export const MealPhotoSection = ({
+  intake,
+  heading: Heading = 'h2',
+}: {
+  intake: MealPhotoIntake;
+  heading?: 'h2' | 'h3';
+}) => {
   const photos = useMealDraftStore((s) => s.photos);
   const [dragging, setDragging] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
@@ -37,7 +41,8 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
   }, [addFiles]);
 
   return (
-    <Card
+    <section
+      aria-labelledby="meal-form-photos"
       onDragOver={(event) => {
         if (!hasFiles(event)) return;
         event.preventDefault();
@@ -53,16 +58,16 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
         setDragging(false);
         void addFiles(Array.from(event.dataTransfer.files));
       }}
-      className={cn(dragging && 'ring-2 ring-primary')}
+      className={cn('meal-sec', dragging && 'meal-drop-active')}
     >
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-base">사진</CardTitle>
-        <p className="text-xs text-muted-foreground">
+      <Heading id="meal-form-photos" className="meal-sec-title">
+        사진
+      </Heading>
+      <p className="mb-3 mt-1 text-xs text-muted-foreground">
           최대 {MEAL_DRAFT_MAX_PHOTOS}장 · 넣으면 음식을 찾아 채우고 찍은 시각으로 먹은 시각을 맞춰요. 끌어다 놓거나
           복사한 사진을 붙여넣어도 돼요.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      </p>
+      <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {photos.map((photo, i) => (
             <div key={photo.token} className="relative">
@@ -71,7 +76,7 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
                 type="button"
                 onClick={() => setViewing(i)}
                 aria-label={`사진 ${i + 1} 크게 보기`}
-                className="block cursor-zoom-in rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="block cursor-zoom-in"
               >
                 <MealPhotoImg token={photo.token} className="size-20" />
               </button>
@@ -80,7 +85,7 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
                 onClick={() => intake.removePhoto(photo.token)}
                 disabled={intake.busy}
                 aria-label="사진 빼기"
-                className="absolute -right-1.5 -top-1.5 rounded-full border bg-background p-0.5 text-muted-foreground shadow-sm hover:text-destructive disabled:opacity-50"
+                className="meal-photo-remove"
               >
                 <X className="size-3.5" />
               </button>
@@ -88,10 +93,7 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
           ))}
           {photos.length < MEAL_DRAFT_MAX_PHOTOS ? (
             <label
-              className={cn(
-                'flex size-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground hover:bg-accent',
-                !canAdd && 'pointer-events-none opacity-50',
-              )}
+              className={cn('meal-photo-add', !canAdd && 'pointer-events-none opacity-50')}
             >
               <ImagePlus className="size-5" />
               사진 추가
@@ -122,10 +124,10 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
             음식을 찾는 중…
           </p>
         ) : photos.length > 0 ? (
-          <Button type="button" variant="ghost" size="sm" onClick={() => void intake.recognizeAgain()}>
-            <RefreshCw className="size-4" />
+          <button type="button" className="meal-btn-quiet" onClick={() => void intake.recognizeAgain()}>
+            <RefreshCw className="size-4" aria-hidden />
             다시 인식하기
-          </Button>
+          </button>
         ) : null}
 
         {intake.takenAt ? (
@@ -134,7 +136,7 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
           </p>
         ) : null}
         {intake.notice ? (
-          <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">{intake.notice}</p>
+          <p className="meal-note">{intake.notice}</p>
         ) : null}
         {intake.error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -149,7 +151,7 @@ export const MealPhotoSection = ({ intake }: { intake: MealPhotoIntake }) => {
             onClose={() => setViewing(null)}
           />
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 };

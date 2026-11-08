@@ -177,10 +177,10 @@ const renderAt = (path: string) =>
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route path="/me/meals" element={<p>목록 화면</p>} />
-          <Route path="/me/meals/new" element={<MealNewPage />} />
-          <Route path="/me/meals/:id" element={<DetailProbe />} />
-          <Route path="/me/meals/:id/edit" element={<MealEditPage />} />
+          <Route path="/meal" element={<p>목록 화면</p>} />
+          <Route path="/meal/new" element={<MealNewPage />} />
+          <Route path="/meal/:id" element={<DetailProbe />} />
+          <Route path="/meal/:id/edit" element={<MealEditPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -228,7 +228,7 @@ describe('MealEntryFormPage', () => {
         });
       }),
     );
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
 
     const save = await screen.findByRole('button', { name: '저장' });
     // 이름이 빈 첫 줄만 있으면 저장할 수 없다.
@@ -303,7 +303,7 @@ describe('MealEntryFormPage', () => {
         });
       }),
     );
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
 
     const name = await screen.findByLabelText('음식 이름');
     fireEvent.focus(name);
@@ -340,7 +340,7 @@ describe('MealEntryFormPage', () => {
         return HttpResponse.json(savedEntry({ id: 'new-2', source: 'manual', photos: [] }), { status: 201 });
       }),
     );
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
 
     const rice = await screen.findByRole('button', { name: '공기밥' });
     expect(slots[0]).toBe(useMealDraftStore.getState().slot);
@@ -366,7 +366,7 @@ describe('MealEntryFormPage', () => {
   });
 
   it('평소 시각 칩은 시각과 끼니를 함께 정하고 날짜는 두고, 음식 추가로 줄을 늘린다', async () => {
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     fireEvent.change(await screen.findByLabelText('먹은 날짜'), { target: { value: '2026-09-21' } });
     fireEvent.click(screen.getByRole('button', { name: '아침 08:10' }));
     const s = useMealDraftStore.getState();
@@ -401,7 +401,7 @@ describe('MealEntryFormPage', () => {
       '연어초밥',
       'delivery',
     );
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
 
     expect(await screen.findByDisplayValue('연어초밥')).toBeInTheDocument();
     expect(screen.getByText(/추천에서 고른 메뉴예요/)).toBeInTheDocument();
@@ -425,7 +425,7 @@ describe('MealEntryFormPage', () => {
       slot: 'dinner',
       memo: '쓰던 메모',
     });
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     expect(await screen.findByLabelText('메모')).toHaveValue('쓰던 메모');
     expect(useMealDraftStore.getState().eatenDate).toBe('2026-09-28');
   });
@@ -433,7 +433,7 @@ describe('MealEntryFormPage', () => {
   it('draft 복원 전에는 입력 화면을 열지 않고, /me 로 계정이 확정되면 연다', async () => {
     await setMealDraftPrincipal(null);
     useAuthStore.setState({ token: 't', user: null, isGuest: false });
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     expect(screen.getByText(/불러오는 중/)).toBeInTheDocument();
     expect(screen.queryByLabelText('음식 이름')).not.toBeInTheDocument();
 
@@ -453,7 +453,7 @@ describe('MealEntryFormPage', () => {
         return HttpResponse.json(savedEntry({ memo: '팀 점심 · 수정' }));
       }),
     );
-    renderAt('/me/meals/e1/edit');
+    renderAt('/meal/e1/edit');
 
     expect(await screen.findByDisplayValue('김치찌개')).toBeInTheDocument();
     expect(screen.getByText('숯토리')).toBeInTheDocument();
@@ -479,7 +479,7 @@ describe('MealEntryFormPage', () => {
     server.use(
       http.get(`${ENTRIES_URL}/e1`, () => HttpResponse.json(savedEntry({ photos: [] }))),
     );
-    renderAt('/me/meals/e1/edit');
+    renderAt('/meal/e1/edit');
     fireEvent.click(await screen.findByRole('button', { name: '취소' }));
     expect(await screen.findByText('상세 화면 e1')).toBeInTheDocument();
     expect(useMealDraftStore.getState().entryId).toBeNull();
@@ -494,7 +494,7 @@ describe('MealEntryFormPage', () => {
         return HttpResponse.json(savedEntry({ id: 'new-3' }), { status: 201 });
       }),
     );
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     await screen.findByLabelText('음식 이름');
 
     fireEvent.change(fileInput(), { target: { files: [photoFile()] } });
@@ -535,7 +535,7 @@ describe('MealEntryFormPage', () => {
 
   it('사진의 촬영 시각(EXIF)으로 먹은 날짜·시각·끼니를 맞추고 알려 준다', async () => {
     photoHandlers();
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     await screen.findByLabelText('음식 이름');
 
     fireEvent.change(fileInput(), {
@@ -551,7 +551,7 @@ describe('MealEntryFormPage', () => {
 
   it('복사한 사진을 붙여넣거나 사진 칸에 끌어다 놓아도 올린다 — 글자 붙여넣기는 건드리지 않는다', async () => {
     const photos = photoHandlers();
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     await screen.findByLabelText('음식 이름');
 
     fireEvent.paste(document, { clipboardData: { files: [] } });
@@ -586,7 +586,7 @@ describe('MealEntryFormPage', () => {
         return HttpResponse.json(savedEntry({ id: 'new-4' }), { status: 201 });
       }),
     );
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     const name = await screen.findByLabelText('음식 이름');
 
     fireEvent.change(fileInput(), { target: { files: [new File(['%PDF'], 'menu.pdf', { type: 'application/pdf' })] } });
@@ -637,7 +637,7 @@ describe('MealEntryFormPage', () => {
       source: 'manual',
       candidates: [],
     });
-    renderAt('/me/meals/new');
+    renderAt('/meal/new');
     const save = await screen.findByRole('button', { name: '저장' });
     expect(save).toBeEnabled();
 
@@ -661,7 +661,7 @@ describe('MealEntryFormPage', () => {
         HttpResponse.arrayBuffer(new ArrayBuffer(16), { headers: { 'Content-Type': 'image/jpeg' } }),
       ),
     );
-    renderAt('/me/meals/e1/edit');
+    renderAt('/meal/e1/edit');
 
     fireEvent.click(await screen.findByRole('button', { name: '사진 1 크게 보기' }));
     const dialog = await screen.findByRole('dialog', { name: '사진 보기' });
@@ -684,7 +684,7 @@ describe('MealEntryFormPage', () => {
         return HttpResponse.json(savedEntry());
       }),
     );
-    renderAt('/me/meals/e1/edit');
+    renderAt('/meal/e1/edit');
     expect(await screen.findByDisplayValue('김치찌개')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '사진 빼기' }));

@@ -26,3 +26,7 @@ afterEach(cleanup);
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
+
+// jsdom 은 window.scrollTo 를 만들지 않아 부를 때마다 'Not implemented' 를 찍는다 — 화면을 바꿀 때 스크롤을 맞추는
+// 화면(식단)이 테스트 출력을 덮지 않게 아무것도 하지 않는 것으로 바꿔 둔다.
+window.scrollTo = (() => undefined) as typeof window.scrollTo;

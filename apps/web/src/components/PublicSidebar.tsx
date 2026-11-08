@@ -53,7 +53,7 @@ const NAV: NavItem[] = [
   { to: '/tarot', label: '타로', icon: Sparkles },
   { to: '/saju-c', label: '사주(C)', icon: Compass },
   { to: '/saju-g', label: '사주(G)', icon: Sparkles },
-  { to: '/me/meals', label: '식단', icon: Salad, requiresAuth: true },
+  { to: '/meal', label: '식단', icon: Salad, requiresAuth: true },
 ];
 
 const ROW = 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors';

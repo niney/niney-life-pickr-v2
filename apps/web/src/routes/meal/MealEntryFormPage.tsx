@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Plus } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Loader2, Plus } from 'lucide-react';
 import { MEAL_MAX_ITEMS_PER_ENTRY, type MealSlotType } from '@repo/api-contract';
 import {
   ApiError,
@@ -17,7 +17,6 @@ import {
   useMealEntry,
   useMealTimePresets,
   useUpdateMealEntry,
-  type MealDraftItem,
 } from '@repo/shared';
 import {
   MEAL_SLOTS,
@@ -29,34 +28,34 @@ import {
   parseTimeOfDay,
   toLocalDateKey,
 } from '@repo/utils';
-import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { ConfirmDialog } from '~/components/ui/confirm-dialog';
+import { useMediaQuery } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
+import { MealFoodSheet, type MealFoodSheetMode } from './MealFoodSheet';
 import { MealItemInputRow } from './MealItemInputRow';
-import { MEAL_MAIN_CLASS, MEAL_PAGE_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
 import { MealPhotoSection } from './MealPhotoSection';
+import { MealSurface } from './MealSurface';
 import { useMealDraftReady } from './useMealDraftReady';
 import { useMealPhotoIntake } from './useMealPhotoIntake';
+import {
+  emptyMealItem,
+  isMealDraftChanged,
+  isMealDraftStale,
+  startFreshMealDraft,
+} from './mealDraftStart';
+import { useMealFrame, useMealLeave, useMealOpen } from './mealPanel';
+import { MEAL_PATH } from './mealPaths';
 
 // 식단 입력(웹) — 새 기록 / 기존 기록 수정. 사진을 넣으면 음식을 인식해 채우고(useMealPhotoIntake), 손으로
 // 적어도 된다. 사진·인식 규칙은 앱과 같다.
 //
 // 앱과 같은 mealDraftStore 를 쓴다(웹은 sessionStorage, 탭 수명). 그래서 새로고침해도 쓰던
-// 기록이 남고, 추천 탭의 "먹은 메뉴 기록"·상세의 "수정"·"다시 기록"이 draft 를 채운 뒤 이 화면으로
+// 기록이 남고, 추천 탭의 "먹은 메뉴 기록"·상세의 "수정"·"같은 메뉴로 새 기록"이 draft 를 채운 뒤 이 화면으로
 // 넘어온다. 새로고침 직후에는 draft 복원이 끝날 때까지(useMealDraftReady) 화면을 열지 않는다.
-
-const emptyItem = (): Omit<MealDraftItem, 'clientId'> => ({
-  name: '',
-  foodId: null,
-  dishType: null,
-  mainIngredient: null,
-  cuisine: null,
-  portion: null,
-  isMain: true,
-  confidence: null,
-  source: 'manual',
-  candidates: [],
-});
+//
+// 2026-11-08 리뉴얼: 데스크톱은 모달 패널(약 880px — 왼쪽 사진·음식, 오른쪽 언제·어떻게, 아래 저장 줄), 좁은 화면은
+// 자체 상단바 + 아래 고정 저장 줄. 닫기(✕·Esc·바깥·←)는 새 기록이면 쓰던 것을 남겨 두고(다음에 이어 쓴다), 수정이면
+// 고친 내용이 있을 때 버릴지 묻는다(다시 '수정'을 누르면 서버 기록으로 새로 채워 고친 것이 사라진다).
 
 // 'HH:MM' — eatenAt(ISO)은 UTC 지만 입력·표시는 로컬.
 const timeValue = (iso: string): string => {
@@ -64,8 +63,10 @@ const timeValue = (iso: string): string => {
   return `${`${d.getHours()}`.padStart(2, '0')}:${`${d.getMinutes()}`.padStart(2, '0')}`;
 };
 
+const NEW_FALLBACK = { to: MEAL_PATH.home, label: '식단 홈' };
+
 export const MealNewPage = () => (
-  <MealDraftGate>
+  <MealDraftGate fallback={NEW_FALLBACK}>
     <NewMealDraft />
   </MealDraftGate>
 );
@@ -73,33 +74,37 @@ export const MealNewPage = () => (
 export const MealEditPage = () => {
   const { id = '' } = useParams();
   return (
-    <MealDraftGate>
+    <MealDraftGate fallback={{ to: MEAL_PATH.entry(id), label: '기록으로' }}>
       <EditMealDraft id={id} />
     </MealDraftGate>
   );
 };
 
-const MealDraftGate = ({ children }: { children: ReactNode }) => {
+type Fallback = { to: string; label: string };
+
+const MealDraftGate = ({ fallback, children }: { fallback: Fallback; children: ReactNode }) => {
   const me = useCurrentUser();
   const ready = useMealDraftReady();
   if (ready) return <>{children}</>;
-  if (me.isError) {
-    return (
-      <PageFrame>
-        <ErrorBox message="로그인 정보를 확인하지 못했어요." onRetry={() => void me.refetch()} />
-      </PageFrame>
-    );
-  }
   return (
-    <PageFrame>
-      <Loading />
-    </PageFrame>
+    <MealSurface title="식단 기록" fallback={fallback}>
+      {me.isError ? (
+        <ErrorBox message="로그인 정보를 확인하지 못했어요." onRetry={() => void me.refetch()} />
+      ) : (
+        <Loading />
+      )}
+    </MealSurface>
   );
 };
 
 const NewMealDraft = () => {
   const needsStart = useMealDraftStore((s) => s.entryId !== null || s.eatenDate === '');
   const started = useRef(false);
+  // 한참 전에 쓰다 둔 새 기록으로 열리면 알린다 — 닫기(✕)가 쓰던 것을 남겨 두기 때문이다. 방금 채워 넘어온 draft
+  // (홈의 끼니 칸·추천의 먹은 메뉴·같은 메뉴로 새 기록)는 새것이라 알리지 않는다.
+  const [continued, setContinued] = useState(() =>
+    isMealDraftStale(useMealDraftStore.getState(), Date.now()),
+  );
 
   // 이어 쓸 새 기록이 없으면(처음 열었거나 수정하던 draft 가 남아 있으면) 지금 시각으로 연다.
   // 탭 안에서 쓰다 만 새 기록은 그대로 이어진다(앱과 같은 규칙). draft 가 외부 저장소라 effect 다.
@@ -108,19 +113,38 @@ const NewMealDraft = () => {
     started.current = true;
     const current = useMealDraftStore.getState();
     if (current.entryId === null && current.eatenDate !== '') return;
-    const now = new Date();
-    current.start({ eatenAt: now.toISOString(), eatenDate: toLocalDateKey(now), slot: guessMealSlot(now) });
-    useMealDraftStore.getState().addItem(emptyItem());
+    startFreshMealDraft(new Date());
   }, []);
 
   if (needsStart) {
     return (
-      <PageFrame>
+      <MealSurface title="식단 기록" fallback={NEW_FALLBACK}>
         <Loading />
-      </PageFrame>
+      </MealSurface>
     );
   }
-  return <MealEntryForm entryId={null} />;
+  return (
+    <MealEntryForm
+      entryId={null}
+      notice={
+        continued ? (
+          <p className="meal-note">
+            쓰다 둔 기록을 이어서 열었어요.
+            <button
+              type="button"
+              className="meal-note-action"
+              onClick={() => {
+                startFreshMealDraft(new Date());
+                setContinued(false);
+              }}
+            >
+              새로 쓰기
+            </button>
+          </p>
+        ) : null
+      }
+    />
+  );
 };
 
 const EditMealDraft = ({ id }: { id: string }) => {
@@ -140,7 +164,11 @@ const EditMealDraft = ({ id }: { id: string }) => {
 
   if (draftEntryId === id) return <MealEntryForm entryId={id} />;
   return (
-    <PageFrame>
+    <MealSurface
+      title="식단 수정"
+      fallback={{ to: MEAL_PATH.entry(id), label: '기록으로' }}
+      entryId={id}
+    >
       {entry.error ? (
         <ErrorBox
           message={
@@ -153,32 +181,49 @@ const EditMealDraft = ({ id }: { id: string }) => {
       ) : (
         <Loading />
       )}
-    </PageFrame>
+    </MealSurface>
   );
 };
 
-const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
+const MealEntryForm = ({ entryId, notice }: { entryId: string | null; notice?: ReactNode }) => {
+  const frame = useMealFrame();
+  const open = useMealOpen();
   const draft = useMealDraftStore();
+  const original = useMealEntry(entryId);
   const timePresets = useMealTimePresets();
   const create = useCreateMealEntry();
   const update = useUpdateMealEntry();
   const photoIntake = useMealPhotoIntake();
   const [error, setError] = useState<string | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
   // "음식 추가"로 막 만든 줄에만 포커스를 준다(처음 열 때는 자동 포커스하지 않는다).
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
+  // 휴대폰은 음식을 '음식 찾기' 시트에서 넣는다(입력칸 아래 자동완성은 키보드에 가린다).
+  const compact = useMediaQuery('(max-width: 47.99rem)', false);
+  const [sheet, setSheet] = useState<MealFoodSheetMode | null>(null);
 
   const saving = create.isPending || update.isPending;
   // 사진을 올리거나 인식하는 동안은 저장을 막는다(앱과 같이) — 끝나야 사진·인식 결과가 함께 저장된다.
-  const canSave = draft.items.some((item) => item.name.trim().length > 0) && !saving && !photoIntake.busy;
-  const fallbackPath = entryId ? `/me/meals/${entryId}` : '/me/meals';
-  const today = toLocalDateKey(new Date());
-
+  const canSave =
+    draft.items.some((item) => item.name.trim().length > 0) && !saving && !photoIntake.busy;
+  const fallbackPath = entryId ? MEAL_PATH.entry(entryId) : MEAL_PATH.home;
+  const fallback = { to: fallbackPath, label: entryId ? '기록으로' : '식단 홈' };
   // 들어온 화면(목록·추천·상세)으로 돌아간다. 주소로 바로 열었으면 돌아갈 곳이 없어 기본 경로로.
-  const leave = () => {
-    if (location.key !== 'default') navigate(-1);
-    else navigate(fallbackPath, { replace: true });
+  const leave = useMealLeave(fallbackPath);
+  const today = toLocalDateKey(new Date());
+  const Heading = frame.type === 'panel' ? 'h3' : 'h2';
+
+  // 닫기(✕·Esc·바깥·←) — 고치던 기록에 저장 안 한 내용이 있으면 묻는다. 새 기록은 남겨 두고 닫는다.
+  const requestClose = () => {
+    if (
+      entryId &&
+      original.data &&
+      isMealDraftChanged(useMealDraftStore.getState(), original.data)
+    ) {
+      setDiscardOpen(true);
+      return;
+    }
+    leave();
   };
 
   const setEatenAt = (d: Date) => {
@@ -204,7 +249,7 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
   };
 
   const addItem = () => {
-    draft.addItem(emptyItem());
+    draft.addItem(emptyMealItem());
     setFocusItemId(useMealDraftStore.getState().items.at(-1)?.clientId ?? null);
   };
 
@@ -256,9 +301,10 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
         }
         if (!isMealDraftIdentityCurrent(identity)) return;
         if (!useMealDraftStore.getState().clear(identity.sessionId)) return;
-        // 새 기록은 방금 만든 기록의 상세로(입력 화면 자리를 바꿔 뒤로 가면 들어온 화면). 들어온 화면으로 돌아가면
-        // "같은 메뉴로 새 기록"을 상세에서 눌렀을 때 원래 기록이 그대로 보여 저장이 안 된 것처럼 보였다.
-        if (createdId) navigate(`/me/meals/${createdId}`, { replace: true });
+        // 새 기록은 방금 만든 기록의 상세로(입력 자리를 바꿔 뒤로 가면 들어온 화면 — 패널이면 같은 배경 위 상세 패널).
+        // 들어온 화면으로 돌아가면 "같은 메뉴로 새 기록"을 상세에서 눌렀을 때 원래 기록이 그대로 보여 저장이 안 된
+        // 것처럼 보였다.
+        if (createdId) open(MEAL_PATH.entry(createdId), { replace: true });
         else leave();
       } catch (e) {
         if (isMealDraftIdentityCurrent(identity)) {
@@ -269,35 +315,80 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
   };
 
   return (
-    <PageFrame>
-      <header className="mb-5 space-y-1">
-        <BackLink to={fallbackPath} label={entryId ? '기록으로' : '내 식단'} />
-        <h1 className="text-xl font-semibold">{entryId ? '식단 수정' : '식단 기록'}</h1>
-        <p className="text-sm text-muted-foreground">
-          {entryId
-            ? '음식·시각·메모·사진을 고칠 수 있어요.'
-            : '사진을 넣으면 음식을 찾아 채워요. 직접 적어도 돼요.'}
-        </p>
-      </header>
-
-      <div className={MEAL_SPLIT_CLASS}>
-        <div className={MEAL_MAIN_CLASS}>
+    <MealSurface
+      title={entryId ? '식단 수정' : '식단 기록'}
+      meta={
+        entryId
+          ? '음식·시각·메모·사진을 고칠 수 있어요.'
+          : '사진을 넣으면 음식을 찾아 채워요. 직접 적어도 돼요.'
+      }
+      fallback={fallback}
+      onClose={requestClose}
+      entryId={entryId ?? undefined}
+      overlay={
+        <ConfirmDialog
+          open={discardOpen}
+          title="고친 내용 버리기"
+          description="저장하지 않고 닫으면 고친 내용이 사라져요."
+          confirmLabel="버리고 닫기"
+          cancelLabel="계속 고치기"
+          variant="destructive"
+          onConfirm={() => {
+            setDiscardOpen(false);
+            useMealDraftStore.getState().clear();
+            leave();
+          }}
+          onClose={() => setDiscardOpen(false)}
+        />
+      }
+      footer={
+        <>
+          {error ? (
+            <p role="alert" className="meal-foot-error">
+              {error}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="meal-btn-line ml-auto"
+            disabled={saving}
+            onClick={() => {
+              draft.clear();
+              leave();
+            }}
+          >
+            취소
+          </button>
+          <button type="button" className="meal-btn" onClick={save} disabled={!canSave}>
+            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {saving ? '저장 중…' : '저장'}
+          </button>
+        </>
+      }
+    >
+      <div className="meal-form">
+        <div className="meal-form-main">
+          {notice}
           {draft.originRecommendationId ? (
-            <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            <p className="meal-note">
               추천에서 고른 메뉴예요. 저장하면 그 추천을 실제로 먹은 것으로 이어요.
             </p>
           ) : null}
 
-          <MealPhotoSection intake={photoIntake} />
+          <MealPhotoSection intake={photoIntake} heading={Heading} />
 
-          <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-base">먹은 음식</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                이름을 치면 음식 목록에서 골라 분류·영양을 붙일 수 있어요. 목록에 없으면 그대로 적어도 돼요.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-2">
+          <section className="meal-sec" aria-labelledby="meal-form-foods">
+            <div className="meal-sec-head">
+              <Heading id="meal-form-foods" className="meal-sec-title">
+                먹은 음식
+              </Heading>
+            </div>
+            <p className="-mt-2 mb-3 text-xs text-muted-foreground">
+              {compact
+                ? '음식 찾기에서 내 기록·음식 목록으로 고르거나, 친 이름 그대로 넣을 수 있어요.'
+                : '이름을 치면 음식 목록에서 골라 분류·영양을 붙일 수 있어요. 목록에 없으면 그대로 적어도 돼요.'}
+            </p>
+            <div className="space-y-2.5">
               <QuickAddChips slot={draft.slot} />
               {draft.items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">음식을 추가해 주세요.</p>
@@ -309,27 +400,43 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
                     autoFocus={item.clientId === focusItemId}
                     onChange={(patch) => draft.updateItem(item.clientId, patch)}
                     onRemove={() => draft.removeItem(item.clientId)}
+                    // 빈 줄은 이어서 여러 개 넣는 '찾기', 이름 있는 줄은 그 줄만 바꾸는 '바꾸기'.
+                    onOpenSearch={
+                      compact
+                        ? () =>
+                            setSheet(
+                              item.name.trim()
+                                ? { kind: 'replace', clientId: item.clientId }
+                                : { kind: 'add' },
+                            )
+                        : undefined
+                    }
                   />
                 ))
               )}
               {draft.items.length < MEAL_MAX_ITEMS_PER_ENTRY ? (
-                <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                  <Plus className="size-4" />
+                <button
+                  type="button"
+                  className="meal-btn-line"
+                  onClick={compact ? () => setSheet({ kind: 'add' }) : addItem}
+                >
+                  <Plus className="size-4" aria-hidden />
                   음식 추가
-                </Button>
+                </button>
               ) : null}
-            </CardContent>
-          </Card>
+            </div>
+            {sheet ? (
+              <MealFoodSheet mode={sheet} slot={draft.slot} onClose={() => setSheet(null)} />
+            ) : null}
+          </section>
         </div>
 
-        {/* 데스크톱은 언제·어떻게를 오른쪽 패널에 붙여 두고 저장 줄은 화면 아래에 둔다 — 한 단일 땐 저장 버튼이
-            1,251px 아래였다. 패널 높이는 저장 줄(약 60px)에 끝이 가리지 않게 그만큼 줄인다. */}
-        <div className={cn(MEAL_SIDE_CLASS, 'lg:max-h-[calc(100dvh-10rem)]')}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">언제 먹었나요</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        <div className="meal-form-side">
+          <section className="meal-sec" aria-labelledby="meal-form-when">
+            <Heading id="meal-form-when" className="meal-sec-title mb-3">
+              언제 먹었나요
+            </Heading>
+            <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="date"
@@ -337,14 +444,14 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
                   max={today}
                   onChange={(event) => changeDate(event.target.value)}
                   aria-label="먹은 날짜"
-                  className="rounded-md border bg-background px-3 py-2 text-sm"
+                  className="meal-input"
                 />
                 <input
                   type="time"
                   value={timeValue(draft.eatenAt)}
                   onChange={(event) => changeTime(event.target.value)}
                   aria-label="먹은 시각"
-                  className="rounded-md border bg-background px-3 py-2 text-sm"
+                  className="meal-input"
                 />
                 <Chip
                   label="지금"
@@ -380,47 +487,46 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
                   />
                 ))}
               </Field>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">어떻게 먹었나요</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <section className="meal-sec" aria-labelledby="meal-form-how">
+            <Heading id="meal-form-how" className="meal-sec-title mb-3">
+              어떻게 먹었나요
+            </Heading>
+            <div className="space-y-4">
               <Field label="식사 방식">
                 {MEAL_TYPES.map((type) => (
                   <Chip
                     key={type}
                     label={MEAL_TYPE_LABEL[type]}
                     selected={draft.mealType === type}
-                    onClick={() => draft.setField('mealType', draft.mealType === type ? null : type)}
+                    onClick={() =>
+                      draft.setField('mealType', draft.mealType === type ? null : type)
+                    }
                   />
                 ))}
               </Field>
               {draft.placeName ? (
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">식당 / 장소</p>
+                  <p className="meal-field-label">식당 / 장소</p>
                   <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-sm">
-                      {draft.placeName}
-                    </span>
-                    <Button
+                    <span className="meal-input min-w-0 flex-1 truncate">{draft.placeName}</span>
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
+                      className="meal-btn-quiet"
                       onClick={() => {
                         draft.setField('placeId', null);
                         draft.setField('placeName', null);
                       }}
                     >
                       지우기
-                    </Button>
+                    </button>
                   </div>
                 </div>
               ) : null}
               <div className="space-y-1.5">
-                <label htmlFor="meal-memo" className="text-xs font-medium text-muted-foreground">
+                <label htmlFor="meal-memo" className="meal-field-label">
                   메모
                 </label>
                 <textarea
@@ -430,39 +536,14 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
                   maxLength={500}
                   rows={3}
                   placeholder="선택 — 같이 먹은 사람, 기분 등"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  className="meal-input w-full"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
       </div>
-
-      {/* 저장 줄 — 데스크톱은 화면 아래에 붙여 둔다(오른쪽 패널 맨 아래면 첫 화면 밖이었다). 좁은 화면은 예전처럼
-          맨 끝에 오류 → 버튼. */}
-      <div className="mt-4 flex flex-wrap items-center justify-end gap-2 lg:sticky lg:bottom-0 lg:z-10 lg:-mx-6 lg:border-t lg:bg-background/95 lg:px-6 lg:py-3 lg:backdrop-blur">
-        {error ? (
-          <p role="alert" className="basis-full text-sm text-destructive lg:mr-auto lg:basis-auto">
-            {error}
-          </p>
-        ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={saving}
-          onClick={() => {
-            draft.clear();
-            leave();
-          }}
-        >
-          취소
-        </Button>
-        <Button type="button" onClick={save} disabled={!canSave}>
-          {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-          {saving ? '저장 중…' : '저장'}
-        </Button>
-      </div>
-    </PageFrame>
+    </MealSurface>
   );
 };
 
@@ -477,7 +558,7 @@ const QuickAddChips = ({ slot }: { slot: MealSlotType }) => {
   const chosen = new Set(items.map((item) => mealItemNameKey(item.name)));
   return (
     <div className="space-y-1.5 pb-1">
-      <p className="text-xs font-medium text-muted-foreground">빠르게 추가</p>
+      <p className="meal-field-label">빠르게 추가</p>
       <div className="flex flex-wrap gap-1.5">
         {list.map((quick) => (
           <button
@@ -486,12 +567,7 @@ const QuickAddChips = ({ slot }: { slot: MealSlotType }) => {
             aria-pressed={chosen.has(mealItemNameKey(quick.name))}
             title={quick.count > 0 ? `최근 90일 ${quick.count}번` : '기본 목록'}
             onClick={() => toggleQuickItem(quick)}
-            className={cn(
-              'rounded-full border px-2.5 py-1 text-xs transition-colors',
-              chosen.has(mealItemNameKey(quick.name))
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'hover:bg-accent',
-            )}
+            className="meal-opt"
           >
             {quick.name}
           </button>
@@ -501,34 +577,28 @@ const QuickAddChips = ({ slot }: { slot: MealSlotType }) => {
   );
 };
 
-const PageFrame = ({ children }: { children: ReactNode }) => (
-  <div className={MEAL_PAGE_CLASS}>{children}</div>
-);
-
-const BackLink = ({ to, label }: { to: string; label: string }) => (
-  <Link to={to} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-    <ArrowLeft className="size-4" />
-    {label}
-  </Link>
-);
-
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <div className="space-y-1.5">
-    <p className="text-xs font-medium text-muted-foreground">{label}</p>
+    <p className="meal-field-label">{label}</p>
     <div className="flex flex-wrap gap-1.5">{children}</div>
   </div>
 );
 
 // selected 를 주지 않으면 켜고 끄는 선택지가 아니라 한 번 누르는 동작 버튼이다(지금·평소 시각).
-const Chip = ({ label, selected, onClick }: { label: string; selected?: boolean; onClick: () => void }) => (
+const Chip = ({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected?: boolean;
+  onClick: () => void;
+}) => (
   <button
     type="button"
     aria-pressed={selected}
     onClick={onClick}
-    className={cn(
-      'rounded-full border px-3 py-1.5 text-sm transition-colors',
-      selected ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
-    )}
+    className={cn('meal-opt', selected === undefined && 'meal-opt-action')}
   >
     {label}
   </button>
@@ -541,12 +611,10 @@ const Loading = () => (
 );
 
 const ErrorBox = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
-  <Card>
-    <CardContent className="space-y-3 py-8 text-center">
-      <p className="text-sm text-destructive">{message}</p>
-      <Button variant="outline" onClick={onRetry}>
-        재시도
-      </Button>
-    </CardContent>
-  </Card>
+  <div className="space-y-3 py-10 text-center">
+    <p className="text-sm text-destructive">{message}</p>
+    <button type="button" className="meal-btn-line" onClick={onRetry}>
+      재시도
+    </button>
+  </div>
 );

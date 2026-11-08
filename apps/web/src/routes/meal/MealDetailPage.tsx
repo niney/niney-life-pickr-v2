@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Loader2, Pencil, Trash2 } from 'lucide-react';
-import type { MealEntrySourceType } from '@repo/api-contract';
+import { useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { Copy, Loader2, Pencil, Trash2 } from 'lucide-react';
+import type { MealEntrySourceType, MealEntryType } from '@repo/api-contract';
 import {
   ApiError,
   mealDraftInitForRepeat,
@@ -21,18 +21,18 @@ import {
   summarizeMealNutrition,
   toLocalDateKey,
 } from '@repo/utils';
-import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ConfirmDialog } from '~/components/ui/confirm-dialog';
-import { MEAL_MAIN_CLASS, MEAL_PAGE_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
 import { MealPhotoImg } from './MealPhotoImg';
 import { MealPhotoLightbox } from './MealPhotoLightbox';
+import { MealSurface, type MealSurfaceNav } from './MealSurface';
 import { useMealDraftReady } from './useMealDraftReady';
+import { mealPanelStateOf, useMealFrame, useMealLeave, useMealOpen } from './mealPanel';
+import { MEAL_PATH } from './mealPaths';
 
-// 식단 상세(웹) — 한 끼의 음식·영양·사진을 보고 수정·다시 기록·삭제로 넘어간다.
-// 수정과 다시 기록은 앱 상세와 같은 shared 도우미로 draft 를 채운 뒤 입력 화면으로 보낸다.
-// 데스크톱은 목록과 같은 틀(mealLayout)에 두 단 — 왼쪽 음식·사진, 오른쪽 식당·메모·버튼. 오가도 제목 자리가
-// 같다(전엔 max-w-2xl 가운데 정렬이라 목록에서 넘어오면 제목이 250px 옮겨 갔다).
+// 식단 상세(웹) — 한 끼의 음식·영양·사진을 보고 수정·같은 메뉴로 새 기록·삭제로 넘어간다.
+// 수정과 같은 메뉴로 새 기록은 앱 상세와 같은 shared 도우미로 draft 를 채운 뒤 입력으로 보낸다.
+// 2026-11-08 리뉴얼: 데스크톱은 목록 옆 패널(비모달 — 옆 목록 눌러 바꾸기·↑↓ 이전·다음), 좁은 화면은 자체 상단바 + 아래
+// 동작 줄. 이 끼니의 영양은 포장 식품 '영양정보' 표의 말투로 — % 는 식품 표시의 1일 영양성분 기준치 대비다.
 
 const SOURCE_LABEL: Record<MealEntrySourceType, string> = {
   photo: '사진 기록',
@@ -40,63 +40,76 @@ const SOURCE_LABEL: Record<MealEntrySourceType, string> = {
   recommendation: '추천에서 기록',
 };
 
+// 식품 등의 표시기준 1일 영양성분 기준치 — 포장 식품 영양정보 표의 % 와 같은 기준.
+const DAILY_VALUE = { proteinG: 55, sodiumMg: 2000 } as const;
+
+const FALLBACK = { to: MEAL_PATH.records, label: '기록' };
+
 const timeText = (iso: string): string => {
   const d = new Date(iso);
   return `${`${d.getHours()}`.padStart(2, '0')}:${`${d.getMinutes()}`.padStart(2, '0')}`;
 };
 
+const fmt = (n: number): string => Math.round(n).toLocaleString('ko-KR');
+
 export const MealDetailPage = () => {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
   const location = useLocation();
+  const frame = useMealFrame();
+  const open = useMealOpen();
+  const leave = useMealLeave(MEAL_PATH.records);
   const entry = useMealEntry(id);
   const remove = useDeleteMealEntry();
   const draftReady = useMealDraftReady();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
-  if (entry.isLoading) {
-    return (
-      <PageFrame>
-        <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> 불러오는 중…
-        </div>
-      </PageFrame>
-    );
-  }
-  if (entry.error || !entry.data) {
+  // 패널의 이전·다음 — 연 목록의 순서(기록 상태에 실려 온다). 줄을 바꿔도 기록 한 칸이다(뒤로 = 닫기).
+  const siblings = frame.type === 'panel' ? (mealPanelStateOf(location)?.mealSiblings ?? []) : [];
+  const at = siblings.indexOf(id);
+  const goTo = (target: string | undefined) =>
+    target ? () => open(MEAL_PATH.entry(target), { siblings, swap: true }) : null;
+  const nav: MealSurfaceNav | undefined =
+    at >= 0 && siblings.length > 1
+      ? { onPrev: goTo(siblings[at - 1]), onNext: goTo(siblings[at + 1]) }
+      : undefined;
+
+  if (entry.isLoading || entry.error || !entry.data) {
     const notFound = entry.error instanceof ApiError && entry.error.statusCode === 404;
     return (
-      <PageFrame>
-        <Card>
-          <CardContent className="space-y-3 py-8 text-center">
+      <MealSurface title="기록" fallback={FALLBACK} nav={nav} entryId={id}>
+        {entry.isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> 불러오는 중…
+          </div>
+        ) : (
+          <div className="space-y-3 py-10 text-center">
             <p className="text-sm text-destructive">
               {notFound ? '기록을 찾을 수 없어요.' : '기록을 불러오지 못했어요.'}
             </p>
             {notFound ? null : (
-              <Button variant="outline" onClick={() => void entry.refetch()}>
+              <button type="button" className="meal-btn-line" onClick={() => void entry.refetch()}>
                 재시도
-              </Button>
+              </button>
             )}
-          </CardContent>
-        </Card>
-      </PageFrame>
+          </div>
+        )}
+      </MealSurface>
     );
   }
 
   const data = entry.data;
-  // 영양은 값이 있는 항목만 더한 합계다(카탈로그 커버리지가 100% 가 아니다) — 몇 개가 반영됐는지 같이 보여 준다.
-  const nutrition = summarizeMealNutrition(data.items);
   const today = toLocalDateKey(new Date());
+  const Heading = frame.type === 'panel' ? 'h3' : 'h2';
 
   const startEdit = () => {
     useMealDraftStore.getState().start(mealDraftInitFromEntry(data));
-    navigate(`/me/meals/${data.id}/edit`);
+    open(MEAL_PATH.edit(data.id));
   };
 
   const repeatEntry = () => {
     useMealDraftStore.getState().start(mealDraftInitForRepeat(data, new Date()));
-    navigate('/me/meals/new');
+    open(MEAL_PATH.new);
   };
 
   const confirmDelete = () => {
@@ -107,185 +120,231 @@ export const MealDetailPage = () => {
         const draft = useMealDraftStore.getState();
         if (draft.entryId === data.id) draft.clear();
         setConfirmOpen(false);
-        if (location.key !== 'default') navigate(-1);
-        else navigate('/me/meals', { replace: true });
+        leave();
       },
       onError: (e) => {
         setConfirmOpen(false);
-        setRemoveError(e instanceof ApiError ? e.message : '삭제하지 못했어요. 다시 시도해 주세요.');
+        setRemoveError(
+          e instanceof ApiError ? e.message : '삭제하지 못했어요. 다시 시도해 주세요.',
+        );
       },
     });
   };
 
-  return (
-    <PageFrame>
-      <header className="mb-5 space-y-1">
-        <Link
-          to="/me/meals"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          내 식단
-        </Link>
-        <h1 className="text-xl font-semibold">
-          {mealDateLabel(data.eatenDate, today)} {MEAL_SLOT_LABEL[data.slot]}
-        </h1>
-        <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
-          <span>
-            {data.eatenDate} {timeText(data.eatenAt)}
-          </span>
-          {data.mealType ? <span>· {MEAL_TYPE_LABEL[data.mealType]}</span> : null}
-          <span>· {SOURCE_LABEL[data.source]}</span>
-        </p>
-      </header>
+  const meta = [
+    `${data.eatenDate} ${timeText(data.eatenAt)}`,
+    data.mealType ? MEAL_TYPE_LABEL[data.mealType] : null,
+    SOURCE_LABEL[data.source],
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
-      <div className={MEAL_SPLIT_CLASS}>
-        <div className={MEAL_MAIN_CLASS}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">음식 {data.items.length}개</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {data.items.map((item) => (
-                <div key={item.id} className="space-y-0.5">
-                  <p className="text-sm">
-                    {item.isMain ? null : <span className="text-muted-foreground">곁들임 · </span>}
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {[
-                      item.dishType ? FOOD_DISH_TYPE_LABEL[item.dishType] : null,
-                      item.mainIngredient ? FOOD_MAIN_INGREDIENT_LABEL[item.mainIngredient] : null,
-                      item.cuisine ? FOOD_CUISINE_LABEL[item.cuisine] : null,
-                      item.portion ? MEAL_PORTION_LABEL[item.portion] : null,
-                      item.servings !== null ? `${item.servings}인분(직접 입력)` : null,
-                      item.kcal !== null ? `${Math.round(item.kcal)}kcal` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                  {item.nutritionBasis === 'donor_estimate' ||
-                  item.nutritionBasis === 'typical_portion' ? (
-                    <p className="text-xs italic text-muted-foreground">
-                      {item.nutritionFrom ?? '유사 음식'} 기준 추정
-                    </p>
-                  ) : item.nutritionBasis === 'missing' ? (
-                    <p className="text-xs italic text-muted-foreground">공개된 영양 근거 없음</p>
-                  ) : null}
-                </div>
-              ))}
-              {nutrition.kcal !== null ? (
-                <div className="mt-3 border-t pt-3">
-                  <p className="text-sm font-medium">
-                    약 {nutrition.kcal.toLocaleString('ko-KR')}kcal
-                    {nutrition.proteinG ? ` · 단백질 ${nutrition.proteinG}g` : ''}
-                    {nutrition.sodiumMg
-                      ? ` · 나트륨 ${nutrition.sodiumMg.toLocaleString('ko-KR')}mg`
-                      : ''}
-                  </p>
-                  {nutrition.counted < nutrition.total ? (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {nutrition.total}개 중 {nutrition.counted}개만 반영 — 나머지는 공개된 영양
-                      정보가 없어요.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+  return (
+    <MealSurface
+      title={`${mealDateLabel(data.eatenDate, today)} ${MEAL_SLOT_LABEL[data.slot]}`}
+      meta={meta}
+      fallback={FALLBACK}
+      nav={nav}
+      entryId={data.id}
+      overlay={
+        <ConfirmDialog
+          open={confirmOpen}
+          title="기록 삭제"
+          description={
+            data.photos.length > 0
+              ? '이 기록과 사진을 삭제할까요? 되돌릴 수 없어요.'
+              : '이 기록을 삭제할까요? 되돌릴 수 없어요.'
+          }
+          confirmLabel="삭제"
+          variant="destructive"
+          pending={remove.isPending}
+          onConfirm={confirmDelete}
+          onClose={() => setConfirmOpen(false)}
+        />
+      }
+      footer={
+        <>
+          {removeError ? (
+            <p role="alert" className="meal-foot-error">
+              {removeError}
+            </p>
+          ) : null}
+          {/* 수정이 기본 동작 — "다시 기록"을 수정으로 읽고 눌러 새 기록이 생긴 일이 있어(2026-10-02) 새로 만드는
+              버튼은 이름에 '새 기록'을 넣고 보조 버튼으로 둔다. */}
+          <button type="button" className="meal-btn" onClick={startEdit} disabled={!draftReady}>
+            <Pencil className="size-4" aria-hidden />
+            수정
+          </button>
+          <button
+            type="button"
+            className="meal-btn-line"
+            onClick={repeatEntry}
+            disabled={!draftReady}
+          >
+            <Copy className="size-4" aria-hidden />
+            같은 메뉴로 새 기록
+          </button>
+          <button
+            type="button"
+            className="meal-btn-quiet meal-over ml-auto"
+            onClick={() => setConfirmOpen(true)}
+          >
+            <Trash2 className="size-4" aria-hidden />
+            삭제
+          </button>
+        </>
+      }
+    >
+      <div className="meal-detail">
+        <div className="meal-detail-main">
           {data.photos.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">사진</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                <PhotoGrid tokens={data.photos.map((photo) => photo.token)} />
-              </CardContent>
-            </Card>
+            <PhotoGrid tokens={data.photos.map((photo) => photo.token)} />
           ) : data.photoPurgedAt ? (
             <p className="text-xs text-muted-foreground">
               보존 설정에 따라 사진은 {data.photoPurgedAt.slice(0, 10)}에 정리됐어요.
             </p>
           ) : null}
+          <section className="meal-sec" aria-labelledby="meal-detail-foods">
+            <div className="meal-sec-head">
+              <Heading id="meal-detail-foods" className="meal-sec-title">
+                먹은 음식
+              </Heading>
+              <span className="text-sm font-semibold text-muted-foreground">
+                {data.items.length}개
+              </span>
+            </div>
+            <ul>
+              {data.items.map((item) => (
+                <FoodRow key={item.id} item={item} />
+              ))}
+            </ul>
+          </section>
         </div>
 
-        <div className={MEAL_SIDE_CLASS}>
+        <div className="meal-detail-side">
+          <EntryLabel items={data.items} />
           {data.placeName ? (
-            <Card>
-              <CardContent className="flex items-center justify-between gap-3 py-4">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">기록한 식당</p>
-                  <p className="truncate text-sm font-medium">{data.placeName}</p>
-                </div>
+            <section className="meal-sec">
+              <Heading className="meal-sec-title mb-2">기록한 식당</Heading>
+              <div className="flex items-center justify-between gap-3">
+                <p className="min-w-0 truncate font-bold">{data.placeName}</p>
                 {data.placeId ? (
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link to={`/restaurants-v2/${data.placeId}`}>상세 보기</Link>
-                  </Button>
+                  <Link to={`/restaurants-v2/${data.placeId}`} className="meal-btn-line shrink-0">
+                    상세 보기
+                  </Link>
                 ) : null}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           ) : null}
           {data.memo ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">메모</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="whitespace-pre-wrap text-sm">{data.memo}</p>
-              </CardContent>
-            </Card>
+            <section className="meal-sec">
+              <Heading className="meal-sec-title mb-2">메모</Heading>
+              <p className="whitespace-pre-wrap">{data.memo}</p>
+            </section>
           ) : null}
-          {data.recognition?.model ? (
-            <p className="text-xs text-muted-foreground">사진 인식: {data.recognition.model}</p>
-          ) : null}
-
-          {/* 수정이 기본 동작 — "다시 기록"을 수정으로 읽고 눌러 새 기록이 생긴 일이 있어(2026-10-02) 새로 만드는
-              버튼은 이름에 '새 기록'을 넣고 보조 버튼으로 둔다. */}
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={startEdit} disabled={!draftReady}>
-              <Pencil className="size-4" />
-              수정
-            </Button>
-            <Button variant="outline" onClick={repeatEntry} disabled={!draftReady}>
-              <Copy className="size-4" />
-              같은 메뉴로 새 기록
-            </Button>
-            <Button
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setConfirmOpen(true)}
-            >
-              <Trash2 className="size-4" />
-              삭제
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            같은 메뉴로 새 기록은 음식·양·장소만 지금 시각의 새 기록으로 복사해요(사진·메모 제외).
-            이 기록은 그대로 남아요.
-          </p>
-          {removeError ? (
-            <p role="alert" className="text-sm text-destructive">
-              {removeError}
+          <div className="space-y-1 text-xs text-muted-foreground">
+            {data.recognition?.model ? <p>사진 인식: {data.recognition.model}</p> : null}
+            <p>
+              같은 메뉴로 새 기록은 음식·양·장소만 지금 시각의 새 기록으로 복사해요(사진·메모 제외).
+              이 기록은 그대로 남아요.
             </p>
-          ) : null}
+          </div>
         </div>
       </div>
+    </MealSurface>
+  );
+};
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title="기록 삭제"
-        description={
-          data.photos.length > 0
-            ? '이 기록과 사진을 삭제할까요? 되돌릴 수 없어요.'
-            : '이 기록을 삭제할까요? 되돌릴 수 없어요.'
-        }
-        confirmLabel="삭제"
-        variant="destructive"
-        pending={remove.isPending}
-        onConfirm={confirmDelete}
-        onClose={() => setConfirmOpen(false)}
-      />
-    </PageFrame>
+type MealItem = MealEntryType['items'][number];
+
+const FoodRow = ({ item }: { item: MealItem }) => {
+  const sub = [
+    item.dishType ? FOOD_DISH_TYPE_LABEL[item.dishType] : null,
+    item.mainIngredient ? FOOD_MAIN_INGREDIENT_LABEL[item.mainIngredient] : null,
+    item.cuisine ? FOOD_CUISINE_LABEL[item.cuisine] : null,
+    item.portion ? MEAL_PORTION_LABEL[item.portion] : null,
+    item.servings !== null ? `${item.servings}인분(직접 입력)` : null,
+  ].filter(Boolean);
+  return (
+    <li className="meal-food-row">
+      <div className="min-w-0">
+        <p className="meal-food-name">
+          {item.isMain ? null : <span className="meal-food-tag">곁들임</span>}
+          {item.name}
+        </p>
+        {sub.length > 0 ? <p className="meal-food-sub">{sub.join(' · ')}</p> : null}
+        {item.nutritionBasis === 'donor_estimate' || item.nutritionBasis === 'typical_portion' ? (
+          <p className="meal-food-note">{item.nutritionFrom ?? '유사 음식'} 기준 추정</p>
+        ) : item.nutritionBasis === 'missing' ? (
+          <p className="meal-food-note">공개된 영양 근거 없음</p>
+        ) : null}
+      </div>
+      <span className="meal-food-kcal">{item.kcal !== null ? `${fmt(item.kcal)}kcal` : '—'}</span>
+    </li>
+  );
+};
+
+// 이 끼니의 영양정보 — 값이 있는 항목만 더한 합계다(카탈로그 커버리지가 100% 가 아니다). 몇 개가 반영됐는지 같이 보여 준다.
+const EntryLabel = ({ items }: { items: MealItem[] }) => {
+  const sum = summarizeMealNutrition(items);
+  if (sum.kcal === null) {
+    return (
+      <section className="meal-label" aria-label="영양정보">
+        <div className="meal-label-head">
+          <p className="meal-label-title">영양정보</p>
+        </div>
+        <p className="p-4 text-sm text-muted-foreground">
+          공개된 영양 정보가 있는 음식이 없어 합계를 내지 못했어요.
+        </p>
+      </section>
+    );
+  }
+  const rows = [
+    { key: 'protein', label: '단백질', amount: sum.proteinG, unit: 'g', dv: DAILY_VALUE.proteinG },
+    { key: 'sodium', label: '나트륨', amount: sum.sodiumMg, unit: 'mg', dv: DAILY_VALUE.sodiumMg },
+  ];
+  return (
+    <section className="meal-label" aria-label="영양정보">
+      <div className="meal-label-head">
+        <p className="meal-label-title">영양정보</p>
+        <p className="meal-label-total">
+          이 끼니 합계
+          <br />
+          <b>약 {sum.kcal.toLocaleString('ko-KR')}kcal</b>
+        </p>
+      </div>
+      <div className="meal-label-colhead">
+        <span>
+          음식 {sum.total}개 중 {sum.counted}개
+        </span>
+        <span>1일 영양성분 기준치에 대한 비율</span>
+      </div>
+      {rows.map((row) => (
+        <div key={row.key} className="meal-label-row">
+          <span>
+            <span className="meal-label-name">{row.label}</span>
+            <span className="meal-label-amt">
+              {row.amount !== null ? `${row.amount.toLocaleString('ko-KR')}${row.unit}` : '—'}
+            </span>
+          </span>
+          <span className="meal-label-pct">
+            {row.amount !== null ? `${Math.round((row.amount / row.dv) * 100)}%` : '—'}
+          </span>
+        </div>
+      ))}
+      <div className="meal-label-fine space-y-1 pt-2">
+        {sum.counted < sum.total ? (
+          <p>
+            {sum.total}개 중 {sum.counted}개만 반영 — 나머지는 공개된 영양 정보가 없어요.
+          </p>
+        ) : null}
+        <p>
+          1일 영양성분 기준치(단백질 {DAILY_VALUE.proteinG}g · 나트륨{' '}
+          {DAILY_VALUE.sodiumMg.toLocaleString('ko-KR')}mg)는 포장 식품 영양정보 표와 같은
+          기준이에요.
+        </p>
+      </div>
+    </section>
   );
 };
 
@@ -293,14 +352,14 @@ export const MealDetailPage = () => {
 const PhotoGrid = ({ tokens }: { tokens: string[] }) => {
   const [viewing, setViewing] = useState<number | null>(null);
   return (
-    <>
+    <div className="meal-photos" data-count={Math.min(tokens.length, 5)}>
       {tokens.map((token, i) => (
         <button
           key={token}
           type="button"
           onClick={() => setViewing(i)}
           aria-label={`사진 ${i + 1} 크게 보기`}
-          className="block cursor-zoom-in rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="block cursor-zoom-in"
         >
           <MealPhotoImg token={token} className="aspect-square w-full" />
         </button>
@@ -313,10 +372,6 @@ const PhotoGrid = ({ tokens }: { tokens: string[] }) => {
           onClose={() => setViewing(null)}
         />
       ) : null}
-    </>
+    </div>
   );
 };
-
-const PageFrame = ({ children }: { children: ReactNode }) => (
-  <div className={MEAL_PAGE_CLASS}>{children}</div>
-);

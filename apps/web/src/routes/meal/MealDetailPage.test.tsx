@@ -82,12 +82,12 @@ const entry = {
 const renderDetail = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/me/meals/e1']}>
+      <MemoryRouter initialEntries={['/meal/e1']}>
         <Routes>
-          <Route path="/me/meals" element={<p>목록 화면</p>} />
-          <Route path="/me/meals/new" element={<p>새 기록 화면</p>} />
-          <Route path="/me/meals/:id" element={<MealDetailPage />} />
-          <Route path="/me/meals/:id/edit" element={<p>수정 화면</p>} />
+          <Route path="/meal/records" element={<p>목록 화면</p>} />
+          <Route path="/meal/new" element={<p>새 기록 화면</p>} />
+          <Route path="/meal/:id" element={<MealDetailPage />} />
+          <Route path="/meal/:id/edit" element={<p>수정 화면</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -128,7 +128,8 @@ describe('MealDetailPage', () => {
   it('수정은 이 기록으로 draft 를 채우고 수정 화면으로 간다', async () => {
     renderDetail();
     // 수정이 맨 앞(기본 동작), 새 기록을 만드는 버튼은 이름에 '새 기록'을 담아 그 뒤에 둔다.
-    const actions = (await screen.findAllByRole('button')).map((b) => b.textContent?.trim());
+    await screen.findByRole('button', { name: '수정' });
+    const actions = screen.getAllByRole('button').map((b) => b.textContent?.trim());
     expect(actions.indexOf('수정')).toBeLessThan(actions.indexOf('같은 메뉴로 새 기록'));
     fireEvent.click(await screen.findByRole('button', { name: /수정/ }));
     expect(await screen.findByText('수정 화면')).toBeInTheDocument();

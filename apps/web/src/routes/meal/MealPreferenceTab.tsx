@@ -146,8 +146,8 @@ export const MealPreferenceTab = () => {
   return (
     <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
       {pref.data && !pref.data.onboarded ? (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 lg:col-span-2">
-          <p className="text-sm font-medium">첫 추천을 위한 기본 설정</p>
+        <div className="meal-note meal-note-block lg:col-span-2">
+          <p className="font-bold">첫 추천을 위한 기본 설정</p>
           <p className="mt-1 text-xs text-muted-foreground">
             좋아하는 음식, 덜 선호하는 음식, 알레르기 주의 항목과 끼니를 저장하면 기록이 적어도
             반영돼요.
@@ -221,7 +221,7 @@ export const MealPreferenceTab = () => {
                 />
               ))}
             </div>
-            <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+            <p className="meal-note text-xs" data-tone="warn">
               알려진 음식명·재료만 보조적으로 걸러요. 원재료 누락이나 조리 중 교차접촉까지 확인할 수
               없으므로, 심한 알레르기는 제품 표시와 식당에 반드시 다시 확인해 주세요.
             </p>
@@ -318,7 +318,7 @@ export const MealPreferenceTab = () => {
               onChange={(e) => edit({ birthYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
               inputMode="numeric"
               placeholder="예: 1990"
-              className="w-32 rounded-md border bg-background px-3 py-2 text-sm"
+              className="meal-input w-32"
             />
             <p className="text-xs text-muted-foreground">나이 구간을 고르는 데만 쓰고 공개되지 않아요.</p>
           </div>
@@ -442,7 +442,7 @@ const MealDataManagement = () => {
               aria-label="식단 데이터 전체 삭제 확인 문구"
               placeholder="확인 문구 입력"
               autoComplete="off"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="meal-input w-full"
             />
             <Button
               variant="destructive"
@@ -476,7 +476,7 @@ const Field = ({
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+      className="meal-input w-full"
       placeholder="쉼표로 구분"
       aria-label={label}
     />
@@ -497,10 +497,7 @@ const Toggle = ({
     type="button"
     onClick={onClick}
     aria-pressed={selected}
-    className={cn(
-      'rounded-full border px-3 py-1.5 text-sm transition-colors',
-      selected ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
-    )}
+    className="meal-opt"
   >
     {label}
   </button>

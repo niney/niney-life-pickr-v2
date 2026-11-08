@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { useAuthStore, useCurrentUser } from '@repo/shared';
@@ -9,6 +9,7 @@ import { ReviewAskToaster } from './components/ReviewAskToaster';
 import { PublicLayout } from './components/PublicLayout';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
+import { legacyMealPath } from './routes/meal/mealPaths';
 
 // 코드 스플리팅 — 공개 진입(/, /login)과 레이아웃 셸만 메인 번들에 두고, 무거운
 // 라우트는 React.lazy 로 분할한다. 어드민 서브트리 16개 페이지와 OpenLayers(ol)
@@ -84,16 +85,8 @@ const SettlementHistoryPage = lazy(() =>
 const ContactsPage = lazy(() =>
   import('./routes/settlement/ContactsPage').then((m) => ({ default: m.ContactsPage })),
 );
-const MealPage = lazy(() => import('./routes/meal/MealPage').then((m) => ({ default: m.MealPage })));
-const MealNewPage = lazy(() =>
-  import('./routes/meal/MealEntryFormPage').then((m) => ({ default: m.MealNewPage })),
-);
-const MealEditPage = lazy(() =>
-  import('./routes/meal/MealEntryFormPage').then((m) => ({ default: m.MealEditPage })),
-);
-const MealDetailPage = lazy(() =>
-  import('./routes/meal/MealDetailPage').then((m) => ({ default: m.MealDetailPage })),
-);
+// 식단 하위 사이트(/meal/*) — 전용 셸과 화면들을 한 덩어리로 늦게 부른다(어드민과 같은 방식).
+const MealApp = lazy(() => import('./routes/meal/MealApp'));
 const SettlementNewPage = lazy(() =>
   import('./routes/settlement/SettlementNewPage').then((m) => ({ default: m.SettlementNewPage })),
 );
@@ -130,6 +123,12 @@ const RequireUser = ({ children }: { children: React.ReactNode }) => {
   const token = useAuthStore((s) => s.token);
   if (!token) return <Navigate to="/login" replace />;
   return <>{children}</>;
+};
+
+// 예전 식단 주소 → 새 주소(/meal…). 북마크·열려 있던 탭이 끊기지 않게 기록을 남기지 않고 바꾼다.
+const LegacyMealRedirect = () => {
+  const { pathname, search } = useLocation();
+  return <Navigate to={legacyMealPath(pathname, search)} replace />;
 };
 
 const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
@@ -246,39 +245,6 @@ export const App = () => {
                 </RequireUser>
               }
             />
-            {/* 내 식단 — 입력(사진 인식·직접 입력)·상세·수정·삭제와 조회·통계·추천. 로그인 필수. */}
-            <Route
-              path="/me/meals"
-              element={
-                <RequireUser>
-                  <MealPage />
-                </RequireUser>
-              }
-            />
-            <Route
-              path="/me/meals/new"
-              element={
-                <RequireUser>
-                  <MealNewPage />
-                </RequireUser>
-              }
-            />
-            <Route
-              path="/me/meals/:id"
-              element={
-                <RequireUser>
-                  <MealDetailPage />
-                </RequireUser>
-              }
-            />
-            <Route
-              path="/me/meals/:id/edit"
-              element={
-                <RequireUser>
-                  <MealEditPage />
-                </RequireUser>
-              }
-            />
             <Route
               path="/me/settlements"
               element={
@@ -330,6 +296,17 @@ export const App = () => {
               </RequireUser>
             }
           />
+          {/* 내 식단 — 공통 상단바 없이 전용 셸(사이드 메뉴·하단 탭)로 띄우는 하위 사이트. 로그인 필수.
+            예전 주소(/me/meals?tab=…, /me/meals/:id…)는 새 주소로 넘긴다. */}
+          <Route
+            path="/meal/*"
+            element={
+              <RequireUser>
+                <MealApp />
+              </RequireUser>
+            }
+          />
+          <Route path="/me/meals/*" element={<LegacyMealRedirect />} />
           {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
             않아 받는 사람이 단순히 결과만 보게 한다. 짧은 /s/:token 경로. */}
           <Route path="/s/:token" element={<SharedSettlementPage />} />
