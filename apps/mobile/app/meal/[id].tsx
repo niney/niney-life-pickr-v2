@@ -34,6 +34,7 @@ import {
   daysBetween,
   mealDateLabel,
   mealDateTitle,
+  mealMacroGapNote,
   mealNutritionLabel,
   summarizeMealNutrition,
   toLocalDateKey,
@@ -153,6 +154,8 @@ export default function MealDetailScreen() {
   const subItems = mains.length > 0 ? sides : [];
   // 목록 카드와 같은 기준으로 합계를 숨긴다(주식이 있는데 곁들임만 반영된 합계 등).
   const kcalShown = mealNutritionLabel(nutrition) !== null ? nutrition.kcal : null;
+  // 열량만 아는 음식(이름 추정)이 섞이면 단백질·나트륨 칸은 그리지 않는다 — 비운 이유를 칸 아래 한 줄로.
+  const macroGapNote = mealMacroGapNote(nutrition);
   const dayDiff = data ? daysBetween(data.eatenDate, today) : null;
   const dayText = data
     ? dayDiff !== null && dayDiff >= 0 && dayDiff <= 6
@@ -290,6 +293,7 @@ export default function MealDetailScreen() {
                     />
                   ) : null}
                 </View>
+                {macroGapNote ? <Text style={styles.macroGapNote}>{macroGapNote}</Text> : null}
               </MealSection>
             ) : null}
 
@@ -371,6 +375,7 @@ const createStyles = (theme: Theme) =>
     placeName: { flex: 1, color: theme.colors.text, fontSize: mealFont.callout, fontWeight: '600' },
     tiles: { flexDirection: 'row', gap: 8 },
     tile: { minWidth: 0 },
+    macroGapNote: { color: theme.colors.textMuted, fontSize: mealFont.caption, lineHeight: 17 },
     itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
     itemDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
     itemBody: { flex: 1, minWidth: 0, gap: 2 },

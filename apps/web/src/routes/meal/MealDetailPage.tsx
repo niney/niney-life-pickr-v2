@@ -20,6 +20,7 @@ import {
   formatMenuPrice,
   mealDateLabel,
   mealItemLabels,
+  mealMacroGapNote,
   summarizeMealNutrition,
   toLocalDateKey,
 } from '@repo/utils';
@@ -312,10 +313,12 @@ const EntryLabel = ({ items }: { items: MealItem[] }) => {
       </section>
     );
   }
+  // 열량만 아는 음식(이름 추정)이 섞이면 단백질·나트륨은 null — 칸은 '—' 로 두고 이유를 아래에 밝힌다.
   const rows = [
     { key: 'protein', label: '단백질', amount: sum.proteinG, unit: 'g', dv: DAILY_VALUE.proteinG },
     { key: 'sodium', label: '나트륨', amount: sum.sodiumMg, unit: 'mg', dv: DAILY_VALUE.sodiumMg },
   ];
+  const gapNote = mealMacroGapNote(sum);
   return (
     <section className="meal-label" aria-label="영양정보">
       <div className="meal-label-head">
@@ -351,6 +354,7 @@ const EntryLabel = ({ items }: { items: MealItem[] }) => {
             {sum.total}개 중 {sum.counted}개만 반영 — 나머지는 공개된 영양 정보가 없어요.
           </p>
         ) : null}
+        {gapNote ? <p>{gapNote}</p> : null}
         <p>
           1일 영양성분 기준치(단백질 {DAILY_VALUE.proteinG}g · 나트륨{' '}
           {DAILY_VALUE.sodiumMg.toLocaleString('ko-KR')}mg)는 포장 식품 영양정보 표와 같은

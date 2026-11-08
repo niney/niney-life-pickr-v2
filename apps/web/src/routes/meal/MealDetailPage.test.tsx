@@ -185,6 +185,35 @@ describe('MealDetailPage', () => {
     expect(await screen.findByText('이야기 화면')).toBeInTheDocument();
   });
 
+  it('열량만 아는 음식(이름 추정)이 섞이면 단백질·나트륨 칸은 비우고 이유를 밝힌다', async () => {
+    const [stew] = entry.items;
+    server.use(
+      http.get(ENTRY_URL, () =>
+        HttpResponse.json({
+          ...entry,
+          items: [
+            {
+              ...stew,
+              name: '닭가슴살',
+              kcal: 159,
+              proteinG: null,
+              sodiumMg: null,
+              nutritionFrom: '닭가슴 · 고기 통상 1인분 150g',
+              nutritionBasis: 'donor_estimate',
+            },
+            { ...stew, id: 'i2', name: '쌀밥', isMain: false, sortOrder: 1, kcal: 166, proteinG: 3.4, sodiumMg: 0 },
+          ],
+        }),
+      ),
+    );
+    renderDetail();
+    expect(await screen.findByText('닭가슴살')).toBeInTheDocument();
+    expect(screen.getByText(/약 325kcal/)).toBeInTheDocument();
+    // 쌀밥 몫(3.4g)만 '단백질 합계'로 보이던 것.
+    expect(screen.queryByText('3.4g')).not.toBeInTheDocument();
+    expect(screen.getByText('열량만 아는 음식이 섞여 단백질·나트륨 합계는 내지 않았어요.')).toBeInTheDocument();
+  });
+
   it('수정은 이 기록으로 draft 를 채우고 수정 화면으로 간다', async () => {
     renderDetail();
     // 수정이 맨 앞(기본 동작), 새 기록을 만드는 버튼은 이름에 '새 기록'을 담아 그 뒤에 둔다.

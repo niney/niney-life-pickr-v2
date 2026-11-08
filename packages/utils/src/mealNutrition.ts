@@ -4,6 +4,11 @@
 // 브랜드 메뉴(양념치킨 등)는 애초에 영양이 공개되지 않는다. 그래서 합계는 **값이 있는 항목만**
 // 더한 과소평가이고, 화면은 그 사실(counted/total)을 반드시 함께 보여 준다. 없는 값을 0 으로
 // 채우면 "안 먹었다"는 뜻이 되어 버린다.
+//
+// 단백질·나트륨은 한 겹 더 엄격하다 — 열량이 반영된 음식 **모두**에 값이 있을 때만 합계를 낸다. 열량만 아는 음식은
+// 이름 추정(비슷한 음식·웹 실측의 100g당 열량 × 통상 1인분)뿐인데(카탈로그는 열량이 있으면 단백질·나트륨도 있다,
+// 2026-11-08), 그런 음식은 대개 그 끼니의 주재료라 빼고 더한 값은 실제와 동떨어진다 — 닭가슴살(추정 159kcal) +
+// 쌀밥이 "단백질 3.4g" 으로 보였다. 감춘 사실은 proteinMissing/sodiumMissing → mealMacroGapNote 로 밝힌다.
 
 export interface MealNutritionItem {
   kcal?: number | null;
@@ -16,8 +21,12 @@ export interface MealNutritionItem {
 
 export interface MealNutritionSummary {
   kcal: number | null;
+  /** 열량이 반영된 음식 모두에 값이 있을 때만의 합계. 하나라도 비면 null(proteinMissing 참고). */
   proteinG: number | null;
   sodiumMg: number | null;
+  /** 열량은 있는데 단백질 / 나트륨이 빈 항목 수(이름 추정 등). 0 보다 크면 그 합계는 null 이다. */
+  proteinMissing: number;
+  sodiumMissing: number;
   /** 영양 값이 있어 합계에 들어간 항목 수. */
   counted: number;
   /** 전체 항목 수. counted < total 이면 합계는 실제보다 적다. */
@@ -33,6 +42,8 @@ export const summarizeMealNutrition = (items: MealNutritionItem[]): MealNutritio
   let kcal = 0;
   let proteinG = 0;
   let sodiumMg = 0;
+  let proteinMissing = 0;
+  let sodiumMissing = 0;
   let counted = 0;
   let hasEstimate = false;
   let hasMain = false;
@@ -44,14 +55,18 @@ export const summarizeMealNutrition = (items: MealNutritionItem[]): MealNutritio
     counted += 1;
     if (main) countedMain += 1;
     kcal += item.kcal;
-    proteinG += item.proteinG ?? 0;
-    sodiumMg += item.sodiumMg ?? 0;
+    if (item.proteinG === null || item.proteinG === undefined) proteinMissing += 1;
+    else proteinG += item.proteinG;
+    if (item.sodiumMg === null || item.sodiumMg === undefined) sodiumMissing += 1;
+    else sodiumMg += item.sodiumMg;
     if (item.nutritionFrom) hasEstimate = true;
   }
   return {
     kcal: counted === 0 ? null : Math.round(kcal),
-    proteinG: counted === 0 ? null : Math.round(proteinG * 10) / 10,
-    sodiumMg: counted === 0 ? null : Math.round(sodiumMg),
+    proteinG: counted === 0 || proteinMissing > 0 ? null : Math.round(proteinG * 10) / 10,
+    sodiumMg: counted === 0 || sodiumMissing > 0 ? null : Math.round(sodiumMg),
+    proteinMissing,
+    sodiumMissing,
     counted,
     total: items.length,
     hasEstimate,
@@ -72,4 +87,17 @@ export const mealNutritionLabel = (s: MealNutritionSummary): string | null => {
   const base = `약 ${s.kcal.toLocaleString('ko-KR')}kcal`;
   if (s.counted < s.total) return `${base} · ${s.total}개 중 ${s.counted}개 반영`;
   return s.hasEstimate ? `${base} (추정)` : base;
+};
+
+/**
+ * 단백질·나트륨을 감춘 이유 한 줄 — 열량만 아는 음식이 섞여 그 합계를 내지 않았을 때만(아니면 null).
+ * 상세 화면이 단백질·나트륨 칸을 비우거나 '—' 로 둘 때 함께 보여 준다.
+ */
+export const mealMacroGapNote = (s: MealNutritionSummary): string | null => {
+  if (s.counted === 0) return null;
+  const names = [s.proteinMissing > 0 ? '단백질' : null, s.sodiumMissing > 0 ? '나트륨' : null].filter(
+    (n): n is string => n !== null,
+  );
+  if (names.length === 0) return null;
+  return `열량만 아는 음식이 섞여 ${names.join('·')} 합계는 내지 않았어요.`;
 };
