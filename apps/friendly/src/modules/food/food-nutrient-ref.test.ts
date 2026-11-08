@@ -54,6 +54,8 @@ describe('isNutrientProfileRow', () => {
     expect(isNutrientProfileRow({ ...base, nutrientsPer100gJson: '{"calciumMg":3}' })).toBe(true);
     // 단백질·나트륨만 있으면 기준이 못 된다(점검은 스냅샷이 먼저).
     expect(isNutrientProfileRow({ ...base, nutrientsPer100gJson: '{"proteinG":3,"sodiumMg":1}' })).toBe(false);
+    // 100g당 탄수화물·지방·당류만 있어도 비타민 기준은 못 된다(탄단지는 비타민·무기질이 아니다).
+    expect(isNutrientProfileRow({ ...base, nutrientsPer100gJson: '{"carbG":20,"fatG":3,"sugarG":1}' })).toBe(false);
     // 100g당 열량을 모르면(빌려온 영양만 있는 외식 어휘 — 운영 '치킨') 기준이 못 된다.
     expect(isNutrientProfileRow({ kcalPer100g: null, kcal: 342, servingG: null, nutrientsPer100gJson: '{"calciumMg":3}' })).toBe(false);
     // 1인분 열량·중량으로 역산되면 된다.
@@ -117,13 +119,30 @@ describe('decideNutrientRef', () => {
 });
 
 // DB·provider 없이 — 서비스가 쓰는 Prisma 메서드만 흉내낸다.
-const makeFakes = () => {
+// gongiVitamins: 운영처럼 공기밥이 쌀밥의 비타민만 빌려 온 상태(비타민 기준 후보지만 탄단지는 비어 있다).
+// fishPer100Macros: 원재료 넙치(1인분 없음)에 100g당 탄수화물·지방이 있는 상태.
+const makeFakes = ({ gongiVitamins = false, fishPer100Macros = false }: { gongiVitamins?: boolean; fishPer100Macros?: boolean } = {}) => {
   const rows = [
-    { id: 'rice', name: '쌀밥', nameNorm: '쌀밥', aliasNormsJson: '[]', dishType: 'rice', kcal: 166, servingG: 100, kcalPer100g: 166, nutritionFrom: null, nutrientsPer100gJson: '{"calciumMg":3,"proteinG":3.4}', active: true },
-    { id: 'stew', name: '돼지갈비찜', nameNorm: '돼지갈비찜', aliasNormsJson: '[]', dishType: 'steam', kcal: 582, servingG: 300, kcalPer100g: 194, nutritionFrom: null, nutrientsPer100gJson: '{"calciumMg":40}', active: true },
-    { id: 'haejang', name: '해장국', nameNorm: '해장국', aliasNormsJson: '["해장국우거지","해장국선지"]', dishType: 'soup', kcal: 208, servingG: 800, kcalPer100g: 26, nutritionFrom: null, nutrientsPer100gJson: '{"calciumMg":20}', active: true },
-    { id: 'gongi', name: '공기밥', nameNorm: '공기밥', aliasNormsJson: '[]', dishType: 'rice', kcal: 349, servingG: 210, kcalPer100g: 166, nutritionFrom: null, nutrientsPer100gJson: null, active: true },
-    { id: 'deung', name: '돼지등뼈찜', nameNorm: '돼지등뼈찜', aliasNormsJson: '[]', dishType: 'steam', kcal: null, servingG: null, kcalPer100g: null, nutritionFrom: null, nutrientsPer100gJson: null, active: true },
+    {
+      id: 'fish',
+      name: '넙치',
+      nameNorm: '넙치',
+      aliasNormsJson: '[]',
+      dishType: null,
+      kcal: null,
+      servingG: null,
+      kcalPer100g: 137,
+      nutritionFrom: null,
+      nutrientsPer100gJson: fishPer100Macros ? '{"calciumMg":61,"carbG":0,"fatG":6}' : '{"calciumMg":61}',
+      carbG: null,
+      fatG: null,
+      active: true,
+    },
+    { id: 'rice', name: '쌀밥', nameNorm: '쌀밥', aliasNormsJson: '[]', dishType: 'rice', kcal: 166, servingG: 100, kcalPer100g: 166, nutritionFrom: null, nutrientsPer100gJson: '{"calciumMg":3,"proteinG":3.4}', carbG: 37.3, fatG: 0.3, active: true },
+    { id: 'stew', name: '돼지갈비찜', nameNorm: '돼지갈비찜', aliasNormsJson: '[]', dishType: 'steam', kcal: 582, servingG: 300, kcalPer100g: 194, nutritionFrom: null, nutrientsPer100gJson: '{"calciumMg":40}', carbG: null, fatG: null, active: true },
+    { id: 'haejang', name: '해장국', nameNorm: '해장국', aliasNormsJson: '["해장국우거지","해장국선지"]', dishType: 'soup', kcal: 208, servingG: 800, kcalPer100g: 26, nutritionFrom: null, nutrientsPer100gJson: '{"calciumMg":20}', carbG: 12, fatG: 8, active: true },
+    { id: 'gongi', name: '공기밥', nameNorm: '공기밥', aliasNormsJson: '[]', dishType: 'rice', kcal: 349, servingG: 210, kcalPer100g: 166, nutritionFrom: null, nutrientsPer100gJson: gongiVitamins ? '{"calciumMg":3}' : null, carbG: null, fatG: null, active: true },
+    { id: 'deung', name: '돼지등뼈찜', nameNorm: '돼지등뼈찜', aliasNormsJson: '[]', dishType: 'steam', kcal: null, servingG: null, kcalPer100g: null, nutritionFrom: null, nutrientsPer100gJson: null, carbG: null, fatG: null, active: true },
   ];
   const store = new Map<string, { nameNorm: string; name: string; refFoodId: string | null; method: string; version: number; reason: string | null }>();
   const calls: string[] = [];
@@ -237,6 +256,35 @@ describe('FoodNutrientRefService', () => {
     expect(f.store.get('공기밥')?.method).toBe('admin');
     await svc.clear('공기밥');
     expect((await svc.resolveIds([{ name: '공기밥', nameNorm: '공기밥', dishType: 'rice', nutritionFrom: null }])).get('공기밥')).toBe('rice');
+  });
+
+  it('탄수화물·지방 기준(macros) — 탄단지를 아는 후보 안에서만: 비타민만 빌린 공기밥은 자신이 아니라 쌀밥, 저장된 기준이 탄단지를 모르면 규칙으로', async () => {
+    const f = makeFakes({ gongiVitamins: true });
+    const svc = new FoodNutrientRefService(f.prisma);
+    const gongi = { name: '공기밥', nameNorm: '공기밥', dishType: 'rice', nutritionFrom: null };
+    // 비타민 기준으로는 같은 이름의 행(자신)이 후보라 그대로 — 점검은 이 행 자신의 비타민을 쓴다.
+    expect((await svc.resolveIds([gongi])).get('공기밥')).toBe('gongi');
+    // 탄단지 기준으로는 공기밥이 후보에서 빠져 동의 표(공기밥 = 쌀밥)로 간다.
+    expect((await svc.resolveIds([gongi], { macros: true })).get('공기밥')).toBe('rice');
+    // 돼지등뼈찜의 저장된 기준(돼지갈비찜)은 탄단지를 몰라 탄단지 기준으로는 쓰지 않는다(규칙으로도 못 찾으면 없음).
+    f.store.set('돼지등뼈찜', { nameNorm: '돼지등뼈찜', name: '돼지등뼈찜', refFoodId: 'stew', method: 'llm', version: FOOD_NUTRIENT_REF_VERSION, reason: null });
+    const deung = { name: '돼지등뼈찜', nameNorm: '돼지등뼈찜', dishType: 'steam', nutritionFrom: null };
+    expect((await svc.resolveIds([deung])).get('돼지등뼈찜')).toBe('stew');
+    expect((await svc.resolveIds([deung], { macros: true })).has('돼지등뼈찜')).toBe(false);
+    // 저장된 기준이 탄단지를 알면 그대로 쓴다.
+    f.store.set('우거지탕', { nameNorm: '우거지탕', name: '우거지탕', refFoodId: 'haejang', method: 'llm', version: FOOD_NUTRIENT_REF_VERSION, reason: null });
+    const ugeoji = { name: '우거지탕', nameNorm: '우거지탕', dishType: 'soup', nutritionFrom: null };
+    expect((await svc.resolveIds([ugeoji], { macros: true })).get('우거지탕')).toBe('haejang');
+  });
+
+  it('1인분이 없어도 100g당 탄수화물·지방이 있는 원재료는 탄단지 후보다(2026-11-08)', async () => {
+    // 넙치는 원재료라 1인분이 없다 — '자연산 넙치'는 핵심어 규칙으로 넙치에 이어진다.
+    const target = { name: '자연산 넙치', nameNorm: '자연산넙치', dishType: null, nutritionFrom: null };
+    const without = new FoodNutrientRefService(makeFakes().prisma);
+    expect((await without.resolveIds([target])).get('자연산넙치')).toBe('fish');
+    expect((await without.resolveIds([target], { macros: true })).has('자연산넙치')).toBe(false);
+    const withPer100 = new FoodNutrientRefService(makeFakes({ fishPer100Macros: true }).prisma);
+    expect((await withPer100.resolveIds([target], { macros: true })).get('자연산넙치')).toBe('fish');
   });
 
   it('LLM 이 없으면 규칙만 저장하고 나머지는 그대로 둔다(없음으로 저장하지 않음)', async () => {

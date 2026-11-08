@@ -14,7 +14,7 @@ import { normalizeTerm } from '../../lib/text.js';
 import { synonymVariants } from './engine/parse.js';
 import type { Lexicon } from './engine/index.js';
 import { CATEGORY_WORDS, pickNutritionDonor, type NutritionDonor } from './food-nutrition.service.js';
-import { NUTRIENT_KEYS, parseNutrientsPer100g, type NutrientKey } from './food-nutrients.js';
+import { MACRO_PER100_KEYS, NUTRIENT_KEYS, parseNutrientsPer100g, type NutrientKey } from './food-nutrients.js';
 import { kcalPer100gOf } from './food-serving.js';
 import { MENU_CANDIDATE_LIMIT, pickMenuCandidates } from './menu-nutrition-candidates.js';
 
@@ -24,10 +24,17 @@ export const FOOD_NUTRIENT_REF_VERSION = 1;
 export const FOOD_NUTRIENT_REF_METHODS = ['same', 'borrowed', 'synonym', 'rule', 'llm', 'admin', 'none'] as const;
 export type FoodNutrientRefMethod = (typeof FOOD_NUTRIENT_REF_METHODS)[number];
 
-// 단백질·나트륨은 식단 스냅샷이 먼저라 '비타민·무기질이 있다'의 판단에서 뺀다.
-const VITAMIN_MINERAL_KEYS: readonly NutrientKey[] = NUTRIENT_KEYS.filter(
-  (k) => k !== 'proteinG' && k !== 'sodiumMg' && k !== 'cholesterolMg' && k !== 'saturatedFatG' && k !== 'phosphorusMg',
-);
+// 단백질·나트륨은 식단 스냅샷이 먼저라 '비타민·무기질이 있다'의 판단에서 뺀다. 100g당 탄수화물·지방·당류(MACRO_PER100_KEYS)도
+// 비타민·무기질이 아니라 뺀다 — 탄단지만 있는 행이 비타민 기준 음식이 되면 그 행을 기준으로 비타민이 0 처럼 셈된다.
+const NOT_VITAMIN_MINERAL: ReadonlySet<NutrientKey> = new Set<NutrientKey>([
+  'proteinG',
+  'sodiumMg',
+  'cholesterolMg',
+  'saturatedFatG',
+  'phosphorusMg',
+  ...MACRO_PER100_KEYS,
+]);
+const VITAMIN_MINERAL_KEYS: readonly NutrientKey[] = NUTRIENT_KEYS.filter((k) => !NOT_VITAMIN_MINERAL.has(k));
 
 /** 행이 기준 음식이 될 수 있는지 — 비타민·무기질이 하나라도 있고 100g당 열량을 안다(열량당 밀도를 낼 수 있다). */
 export const isNutrientProfileRow = (row: {

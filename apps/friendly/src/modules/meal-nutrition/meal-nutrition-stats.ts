@@ -73,6 +73,8 @@ export interface StatsInput {
   items: AnalysisItem[];
   rowsById: ReadonlyMap<string, AnalysisCatalogRow>;
   refRowsByName?: ReadonlyMap<string, AnalysisCatalogRow>;
+  /** 탄수화물·지방을 빌릴 기준 음식(catalogFor 의 macros). */
+  macroRowsByName?: ReadonlyMap<string, AnalysisCatalogRow>;
   profile: AnalysisProfile;
   from: string;
   to: string;
@@ -129,7 +131,7 @@ export const statsMealNutrients = (input: StatsInput): MealStatsNutrientsResultT
     const kcal = it.kcal;
     const analyzed = meals[i]! >= 2;
     if (analyzed) analyzedKcal += kcal;
-    const r = resolveItemNutrients(it, kcal, rowsById, refRows);
+    const r = resolveItemNutrients(it, kcal, rowsById, refRows, input.macroRowsByName);
     const carb = itemMacroGrams(r, kcal, 'carbG');
     const fat = itemMacroGrams(r, kcal, 'fatG');
     const protein = r.values.get('protein') ?? null;
@@ -296,8 +298,8 @@ export class MealNutritionStatsService {
     const items: AnalysisItem[] = entries.flatMap((e) =>
       e.items.map((i) => ({ ...i, eatenDate: e.eatenDate, entryId: e.id })),
     );
-    const { rowsById, refRowsByName } = await this.nutrition.catalogFor(items);
+    const { rowsById, refRowsByName, macroRowsByName } = await this.nutrition.catalogFor(items, { macros: true });
     const profile = profileFrom(preference.sex, preference.birthYear, today);
-    return statsMealNutrients({ items, rowsById, refRowsByName, profile, from, to });
+    return statsMealNutrients({ items, rowsById, refRowsByName, macroRowsByName, profile, from, to });
   }
 }

@@ -37,6 +37,8 @@ export interface GroupInput {
   items: GroupItem[];
   rowsById: ReadonlyMap<string, AnalysisCatalogRow>;
   refRowsByName?: ReadonlyMap<string, AnalysisCatalogRow>;
+  /** 탄수화물·지방을 빌릴 기준 음식(catalogFor 의 macros). */
+  macroRowsByName?: ReadonlyMap<string, AnalysisCatalogRow>;
   from: string;
   to: string;
 }
@@ -170,7 +172,7 @@ export const groupMealNutrition = (input: GroupInput): MealStatsNutritionResultT
     // 열량을 모르는 기록은 몫 계산에서 빠진다(횟수·음식에는 든다).
     if (it.kcal === null) continue;
     const kcal = it.kcal;
-    const resolved = resolveItemNutrients(it, kcal, input.rowsById, refRows);
+    const resolved = resolveItemNutrients(it, kcal, input.rowsById, refRows, input.macroRowsByName);
     const carb = itemMacroGrams(resolved, kcal, 'carbG');
     const fat = itemMacroGrams(resolved, kcal, 'fatG');
     const protein = resolved.values.get('protein') ?? null;
@@ -302,7 +304,7 @@ export class MealNutritionGroupsService {
     const items: GroupItem[] = entries.flatMap((e) =>
       e.items.map((i) => ({ ...i, eatenDate: e.eatenDate, entryId: e.id })),
     );
-    const { rowsById, refRowsByName } = await this.nutrition.catalogFor(items);
-    return groupMealNutrition({ items, rowsById, refRowsByName, from, to });
+    const { rowsById, refRowsByName, macroRowsByName } = await this.nutrition.catalogFor(items, { macros: true });
+    return groupMealNutrition({ items, rowsById, refRowsByName, macroRowsByName, from, to });
   }
 }

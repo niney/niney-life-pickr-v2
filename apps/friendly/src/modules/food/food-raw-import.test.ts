@@ -120,6 +120,15 @@ describe('normalizeMfdsRawRows — 100g당 영양소(2026-11-07)', () => {
     const { seeds: plain } = normalizeMfdsRawRows(rawFileRowsToRecords(HEADER, rows));
     expect(plain.every((s) => s.nutrientsPer100g == null)).toBe(true);
   });
+
+  it('100g당 탄수화물·지방·당류도 남긴다(2026-11-08) — 1인분이 없는 원재료의 탄단지·열량 구성용', () => {
+    const header = ['식품코드', '식품명', '식품대분류명', '대표식품명', '에너지(kcal)', '단백질(g)', '지방(g)', '탄수화물(g)', '당류(g)'];
+    const { seeds: fish } = normalizeMfdsRawRows(
+      rawFileRowsToRecords(header, [['S9', '넙치_육_생것_대표_평균', '어패류 및 기타 수산물', '넙치', '137', '20', '6', '0', '']]),
+    );
+    // 빈 당류 칸은 뺀다(0 과 다르다 — 모름).
+    expect(fish[0]?.nutrientsPer100g).toEqual({ proteinG: 20, fatG: 6, carbG: 0 });
+  });
 });
 
 describe('curatedSeeds', () => {

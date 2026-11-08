@@ -160,6 +160,22 @@ const per100Of = (
   return serving !== null && row.servingG && row.servingG > 0 ? (serving * 100) / row.servingG : null;
 };
 
+/**
+ * 열량 1kcal 당 탄수화물·지방·당류(g) — 카탈로그 1인분(1인분 탄단지 ÷ 1인분 열량)이 먼저, 없으면 100g당(원재료·표준 음식의
+ * 100g당 값 ÷ 100g당 열량, 2026-11-08). 1인분이 없는 원재료(회·참치·닭가슴살·과일)는 100g당으로만 낼 수 있다. 모르면 null.
+ */
+const macroPerKcal = (c: AnalysisCatalogRow, key: 'carbG' | 'fatG' | 'sugarG'): number | null => {
+  const serving = c[key];
+  if (serving !== null && serving !== undefined && c.kcal !== null && c.kcal > 0) return serving / c.kcal;
+  const per100 = parseNutrientsPer100g(c.nutrientsPer100gJson)[key];
+  const kcal100 = kcalPer100gOf(c);
+  return per100 !== undefined && kcal100 !== null && kcal100 > 0 ? per100 / kcal100 : null;
+};
+
+// 탄수화물·지방을 이 행에서 바로 어림할 수 있는지(1인분이든 100g당이든) — 아니면 탄단지 기준 음식을 찾는다.
+const hasMacroGrams = (row: AnalysisCatalogRow): boolean =>
+  macroPerKcal(row, 'carbG') !== null && macroPerKcal(row, 'fatG') !== null;
+
 const isDrinkRow = (row: AnalysisCatalogRow | null, itemDishType: string | null): boolean =>
   (itemDishType !== null && DRINK_DISH_TYPES.has(itemDishType)) ||
   (row !== null &&
@@ -179,6 +195,13 @@ export interface ItemNutrients {
   /** 기준 행의 100g당 값과 먹은 양의 100g 배수(먹은 열량 ÷ 100g당 열량) — 점검 밖 성분(포화지방·콜레스테롤)을 같은 풀이로 꺼낸다. */
   per100: NutrientsPer100g;
   factor: number | null;
+  /**
+   * 탄수화물·지방·당류(그리고 포화지방·콜레스테롤)를 빌릴 기준 음식 — 탄단지를 아는 후보 안에서 찾은 것(macroRows). 행 자신이
+   * 비타민은 가졌지만 탄단지가 빈 경우(공기밥 ← 쌀밥)에도 찾는다. 비타민 풀이(ref·values)에는 쓰지 않는다.
+   */
+  macroRef: AnalysisCatalogRow | null;
+  macroPer100: NutrientsPer100g;
+  macroFactor: number | null;
 }
 
 /**
@@ -191,15 +214,15 @@ export const resolveItemNutrients = (
   kcal: number,
   rowsById: ReadonlyMap<string, AnalysisCatalogRow>,
   refRows: ReadonlyMap<string, AnalysisCatalogRow>,
+  macroRows?: ReadonlyMap<string, AnalysisCatalogRow>,
 ): ItemNutrients => {
   const row = it.foodId ? (rowsById.get(it.foodId) ?? null) : null;
+  const itemNorm = it.nameNorm || normalizeTerm(it.name);
   const drink = isDrinkRow(row, it.dishType);
   const own = row && isNutrientProfileRow(row) ? row : null;
   const ref = own
     ? null
-    : ((row?.nameNorm ? refRows.get(row.nameNorm) : undefined) ??
-      refRows.get(it.nameNorm || normalizeTerm(it.name)) ??
-      null);
+    : ((row?.nameNorm ? refRows.get(row.nameNorm) : undefined) ?? refRows.get(itemNorm) ?? null);
   const basis = own ?? ref ?? row;
   const per100: NutrientsPer100g = basis ? parseNutrientsPer100g(basis.nutrientsPer100gJson) : {};
   const kcal100 = basis ? kcalPer100gOf(basis) : null;
@@ -223,29 +246,49 @@ export const resolveItemNutrients = (
     }
     if (value !== null) values.set(def.key, value);
   }
-  return { row, ref, drink, hasVitamins, values, per100, factor };
+  const macroRef =
+    (row?.nameNorm ? macroRows?.get(row.nameNorm) : undefined) ?? macroRows?.get(itemNorm) ?? null;
+  const macroKcal100 = macroRef ? kcalPer100gOf(macroRef) : null;
+  return {
+    row,
+    ref,
+    drink,
+    hasVitamins,
+    values,
+    per100,
+    factor,
+    macroRef,
+    macroPer100: macroRef ? parseNutrientsPer100g(macroRef.nutrientsPer100gJson) : {},
+    macroFactor: macroKcal100 && macroKcal100 > 0 ? kcal / macroKcal100 : null,
+  };
 };
 
 /**
- * 탄수화물·지방·당류(g) — 식단 항목 스냅샷에 없어 카탈로그 1인분의 열량당 비율 × 먹은 열량으로 어림한다(항목의 카탈로그 행 →
- * 영양 기준 음식 순). 1인분 영양은 적재 때 같은 변형에서 함께 온 값이라 비율이 맞는다. 모르면 null.
+ * 탄수화물·지방·당류(g) — 식단 항목 스냅샷에 없어 열량당 비율 × 먹은 열량으로 어림한다(항목의 카탈로그 행 → 영양 기준 음식 →
+ * 탄단지 기준 음식 순, 각 행은 1인분 → 100g당 순 — macroPerKcal). 1인분 영양은 적재 때 같은 변형에서 함께 온 값이라 비율이
+ * 맞는다. 모르면 null.
  */
 export const itemMacroGrams = (
   r: ItemNutrients,
   kcal: number,
   key: 'carbG' | 'fatG' | 'sugarG',
 ): number | null => {
-  for (const c of [r.row, r.ref]) {
-    const v = c?.[key];
-    if (c && v !== null && v !== undefined && c.kcal !== null && c.kcal > 0) return (v / c.kcal) * kcal;
+  for (const c of [r.row, r.ref, r.macroRef]) {
+    const d = c ? macroPerKcal(c, key) : null;
+    if (d !== null) return d * kcal;
   }
   return null;
 };
 
-/** 점검 밖 100g당 성분(포화지방·콜레스테롤) — 비타민·무기질과 같은 기준 행 × 먹은 양. 모르면 null(음료도 0 으로 보지 않는다). */
+/**
+ * 점검 밖 100g당 성분(포화지방·콜레스테롤) — 비타민·무기질과 같은 기준 행 × 먹은 양, 그 행이 모르면 탄단지 기준 음식으로.
+ * 모르면 null(음료도 0 으로 보지 않는다).
+ */
 export const itemPer100Amount = (r: ItemNutrients, key: 'saturatedFatG' | 'cholesterolMg'): number | null => {
   const v = r.per100[key];
-  return v !== undefined && r.factor !== null ? v * r.factor : null;
+  if (v !== undefined && r.factor !== null) return v * r.factor;
+  const m = r.macroPer100[key];
+  return m !== undefined && r.macroFactor !== null ? m * r.macroFactor : null;
 };
 
 const round = (v: number, digits = 1): number => {
@@ -805,18 +848,28 @@ export class MealNutritionService {
     };
   }
 
-  /** 항목들의 카탈로그 행과 영양 기준 음식 행 — 영양소 점검과 통계의 묶음별 몫(MealNutritionGroupsService)이 같이 쓴다. */
-  async catalogFor(items: readonly AnalysisItem[]): Promise<{
+  /**
+   * 항목들의 카탈로그 행과 영양 기준 음식 행 — 영양소 점검과 통계(묶음별 몫·영양소별 하루 평균)가 같이 쓴다.
+   * macros: 탄수화물·지방을 빌릴 기준 음식도(통계만 — 점검은 탄단지를 보지 않는다).
+   */
+  async catalogFor(
+    items: readonly AnalysisItem[],
+    opts: { macros?: boolean } = {},
+  ): Promise<{
     rowsById: Map<string, AnalysisCatalogRow>;
     refRowsByName: Map<string, AnalysisCatalogRow>;
+    macroRowsByName: Map<string, AnalysisCatalogRow>;
   }> {
     const ids = [...new Set(items.map((i) => i.foodId).filter((id): id is string => !!id))];
     const rows = ids.length
       ? await this.prisma.foodItem.findMany({ where: { id: { in: ids } }, select: CATALOG_SELECT })
       : [];
     const rowsById = new Map<string, AnalysisCatalogRow>(rows.map((r) => [r.id, r]));
-    const refRowsByName = await this.refRows(items, rowsById);
-    return { rowsById, refRowsByName };
+    const [refRowsByName, macroRowsByName] = await Promise.all([
+      this.refRows(items, rowsById),
+      opts.macros ? this.macroRefRows(items, rowsById) : Promise.resolve(new Map<string, AnalysisCatalogRow>()),
+    ]);
+    return { rowsById, refRowsByName, macroRowsByName };
   }
 
   /**
@@ -840,8 +893,36 @@ export class MealNutritionService {
         targets.push({ name: it.name, nameNorm: it.nameNorm || normalizeTerm(it.name), dishType: it.dishType, nutritionFrom: null });
       }
     }
-    if (targets.length === 0) return out;
-    const ids = await this.deps.refs.resolveIds(targets);
+    return this.rowsForRefs(await this.deps.refs.resolveIds(targets));
+  }
+
+  /**
+   * 탄수화물·지방 기준 음식 행 — 탄단지(1인분 탄수화물·지방·열량)를 모르는 카탈로그 행과 카탈로그 밖 이름을 탄단지를 아는
+   * 기준 음식에 잇는다. 비타민 기준과 달리 행 자신이 비타민을 가져도 묻는다(공기밥 ← 쌀밥: 비타민만 빌려 와 탄단지가 비었다).
+   */
+  private async macroRefRows(
+    items: readonly AnalysisItem[],
+    rowsById: ReadonlyMap<string, AnalysisCatalogRow>,
+  ): Promise<Map<string, AnalysisCatalogRow>> {
+    if (!this.deps.refs) return new Map();
+    const targets: NutrientRefTarget[] = [];
+    for (const it of items) {
+      if (it.kcal === null) continue;
+      const row = it.foodId ? rowsById.get(it.foodId) : undefined;
+      if (row) {
+        if (hasMacroGrams(row) || isDrinkRow(row, it.dishType) || !row.nameNorm) continue;
+        targets.push({ name: row.name, nameNorm: row.nameNorm, dishType: row.dishType, nutritionFrom: row.nutritionFrom });
+      } else if (!isDrinkRow(null, it.dishType)) {
+        targets.push({ name: it.name, nameNorm: it.nameNorm || normalizeTerm(it.name), dishType: it.dishType, nutritionFrom: null });
+      }
+    }
+    if (targets.length === 0) return new Map();
+    return this.rowsForRefs(await this.deps.refs.resolveIds(targets, { macros: true }));
+  }
+
+  /** 이름 → 기준 음식 id 를 이름 → 행으로. */
+  private async rowsForRefs(ids: ReadonlyMap<string, string>): Promise<Map<string, AnalysisCatalogRow>> {
+    const out = new Map<string, AnalysisCatalogRow>();
     if (ids.size === 0) return out;
     const refRows = await this.prisma.foodItem.findMany({
       where: { id: { in: [...new Set(ids.values())] } },

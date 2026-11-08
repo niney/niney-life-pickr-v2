@@ -191,6 +191,78 @@ describe('statsMealNutrients', () => {
     expect(rowOf(r, 'carb').intakePerDay).toBe(164);
   });
 
+  it('탄단지를 모르는 행은 탄단지 기준 음식의 열량당 비율로 — 비타민만 빌린 공기밥은 쌀밥의 탄수화물·지방으로', () => {
+    // 공기밥 1인분 349kcal(210g) — 비타민은 있고(쌀밥에서 빌림) 탄수화물·지방은 비어 있다. 쌀밥 100g 166kcal: 탄 37.3g·지 0.3g.
+    const rows = new Map<string, AnalysisCatalogRow>([
+      ['gongi', row('gongi', '공기밥', 349, 210, { per100: { calciumMg: 3 } })],
+    ]);
+    const macroRowsByName = new Map<string, AnalysisCatalogRow>([
+      ['공기밥', row('rice', '쌀밥', 166, 100, { carbG: 37.3, fatG: 0.3, per100: { calciumMg: 3, saturatedFatG: 0.1 } })],
+    ]);
+    const days = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04'];
+    const items: AnalysisItem[] = days.flatMap((d) =>
+      ['l', 'd'].map((s) => ({
+        eatenDate: d,
+        entryId: `${d}-${s}`,
+        name: '공기밥',
+        foodId: 'gongi',
+        dishType: null,
+        kcal: 300,
+        proteinG: 5,
+        sodiumMg: 2,
+      })),
+    );
+    const base = statsMealNutrients({ items, rowsById: rows, profile: adult, from: '2026-11-01', to: '2026-11-04' });
+    expect(rowOf(base, 'carb')).toMatchObject({ intakePerDay: null, coverage: 0 });
+    const r = statsMealNutrients({
+      items,
+      rowsById: rows,
+      macroRowsByName,
+      profile: adult,
+      from: '2026-11-01',
+      to: '2026-11-04',
+    });
+    // 하루 두 공기(600kcal) × 쌀밥 탄수화물 37.3g/166kcal = 134.8g, 지방 1.08g.
+    expect(rowOf(r, 'carb')).toMatchObject({ intakePerDay: 135, coverage: 1 });
+    expect(rowOf(r, 'fat')).toMatchObject({ intakePerDay: 1.08, coverage: 1 });
+    // 포화지방도 행 자신이 모르면 같은 기준 음식의 100g당 값 × 먹은 양.
+    expect(rowOf(r, 'saturatedFat').intakePerDay).toBe(0.36);
+    // 비타민 풀이는 그대로 행 자신(공기밥)의 값 — 칼슘 하루 600kcal ÷ 166kcal × 3mg.
+    expect(rowOf(r, 'calcium').intakePerDay).toBe(rowOf(base, 'calcium').intakePerDay);
+  });
+
+  it('1인분이 없는 원재료는 100g당 탄수화물·지방으로 — 광어회(넙치 100g 137kcal: 탄 0g·지 6g)', () => {
+    const rows = new Map<string, AnalysisCatalogRow>([
+      [
+        'fish',
+        {
+          ...row('fish', '넙치', 0, 100, { per100: { calciumMg: 61, carbG: 0, fatG: 6, proteinG: 20 } }),
+          kcal: null,
+          servingG: null,
+          kcalPer100g: 137,
+        },
+      ],
+    ]);
+    const items: AnalysisItem[] = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04'].flatMap((d) =>
+      ['l', 'd'].map((s) => ({
+        eatenDate: d,
+        entryId: `${d}-${s}`,
+        name: '광어회',
+        foodId: 'fish',
+        dishType: null,
+        kcal: 274,
+        proteinG: 40,
+        sodiumMg: 100,
+      })),
+    );
+    const r = statsMealNutrients({ items, rowsById: rows, profile: adult, from: '2026-11-01', to: '2026-11-04' });
+    // 하루 두 접시(548kcal) × 지방 6g/137kcal = 24g, 탄수화물 0g.
+    expect(rowOf(r, 'fat')).toMatchObject({ intakePerDay: 24, coverage: 1 });
+    expect(rowOf(r, 'carb')).toMatchObject({ intakePerDay: 0, coverage: 1 });
+    // 열량 구성 — 단백질 40g×4 = 160 · 지방 12g×9 = 108 (한 접시).
+    expect(rowOf(r, 'fat').energyShare).toBe(0.403);
+  });
+
   it('청소년은 포화지방 성인 기준을 붙이지 않고, 만 12세 미만은 적정 비율을 아예 붙이지 않는다', () => {
     const teen = run(ITEMS, profileFrom('female', 2010, TO));
     expect(rowOf(teen, 'saturatedFat').energyRange).toBeNull();

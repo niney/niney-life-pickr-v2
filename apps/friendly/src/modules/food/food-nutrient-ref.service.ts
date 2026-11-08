@@ -20,6 +20,7 @@ import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import { loadLexicon, type Lexicon } from './engine/index.js';
+import { parseNutrientsPer100g } from './food-nutrients.js';
 import {
   FOOD_NUTRIENT_REF_METHODS,
   FOOD_NUTRIENT_REF_VERSION,
@@ -64,7 +65,23 @@ const ROW_SELECT = {
   kcalPer100g: true,
   nutritionFrom: true,
   nutrientsPer100gJson: true,
+  carbG: true,
+  fatG: true,
 } as const;
+
+// 탄수화물·지방 기준 후보 — 1인분 탄수화물·지방·열량을 다 아는 행만. 비타민만 빌린 행(공기밥 ← 쌀밥)은 비타민 기준 후보지만
+// 탄단지가 비어, 이 후보에서 빠져야 같은 이름(자신)이 아니라 동의 표의 쌀밥으로 간다.
+// 1인분 탄단지가 없어도 100g당 탄수화물·지방이 있으면(원재료 — 2026-11-08) 후보다. 후보는 이미 100g당 열량을 아는 행이다.
+const hasMacros = (r: {
+  carbG: number | null;
+  fatG: number | null;
+  kcal: number | null;
+  nutrientsPer100gJson: string | null;
+}): boolean => {
+  if (r.carbG !== null && r.fatG !== null && r.kcal !== null && r.kcal > 0) return true;
+  const per100 = parseNutrientsPer100g(r.nutrientsPer100gJson);
+  return per100.carbG !== undefined && per100.fatG !== undefined;
+};
 
 export interface FoodNutrientRefServiceOptions {
   /** 없으면 규칙만(테스트·점검 전용 인스턴스). */
@@ -100,9 +117,16 @@ const isLinkableName = (name: string): boolean => {
   return n.length >= MIN_NAME_LENGTH && name.trim().length <= MAX_NAME_LENGTH;
 };
 
+interface RefContext {
+  index: NutrientRefIndex;
+  /** 탄수화물·지방 기준 후보만의 색인(resolveIds 의 macros). */
+  macroIndex: NutrientRefIndex;
+  lex: Lexicon;
+}
+
 export class FoodNutrientRefService {
-  private indexCache: { index: NutrientRefIndex; lex: Lexicon; at: number } | null = null;
-  private indexLoading: Promise<{ index: NutrientRefIndex; lex: Lexicon }> | null = null;
+  private indexCache: (RefContext & { at: number }) | null = null;
+  private indexLoading: Promise<RefContext> | null = null;
   private readonly failures: FailureBackoff;
   private readonly gate: AsyncGate;
   private readonly inflight = new Set<string>();
@@ -116,7 +140,7 @@ export class FoodNutrientRefService {
   }
 
   /** 기준 후보(영양소 + 100g당 열량이 있는 활성 행)와 어휘 — 10분 메모. 카탈로그 적재·어드민 수정 뒤엔 invalidate. */
-  async context(): Promise<{ index: NutrientRefIndex; lex: Lexicon }> {
+  async context(): Promise<RefContext> {
     const c = this.indexCache;
     if (c && Date.now() - c.at < INDEX_TTL_MS) return c;
     this.indexLoading ??= (async () => {
@@ -128,7 +152,8 @@ export class FoodNutrientRefService {
           }),
           loadLexicon(this.prisma),
         ]);
-        const candidates: NutrientRefCandidate[] = rows.filter(isNutrientProfileRow).map((r) => ({
+        const profiles = rows.filter(isNutrientProfileRow);
+        const toCandidate = (r: (typeof rows)[number]): NutrientRefCandidate => ({
           id: r.id,
           name: r.name,
           nameNorm: r.nameNorm,
@@ -138,8 +163,12 @@ export class FoodNutrientRefService {
           kcal: r.kcal,
           servingG: r.servingG,
           kcalPer100g: r.kcalPer100g,
-        }));
-        const value = { index: buildNutrientRefIndex(candidates), lex };
+        });
+        const value: RefContext = {
+          index: buildNutrientRefIndex(profiles.map(toCandidate)),
+          macroIndex: buildNutrientRefIndex(profiles.filter(hasMacros).map(toCandidate)),
+          lex,
+        };
         this.indexCache = { ...value, at: Date.now() };
         return value;
       } finally {
@@ -156,12 +185,19 @@ export class FoodNutrientRefService {
   /**
    * 점검용 — 이름(정규화) → 기준 음식 행 id. 어드민 지정이 먼저(해제면 없음), 그다음 저장된 판정, 없으면 규칙을 그 자리에서.
    * 저장된 id 가 더는 기준 후보가 아니면(비활성·영양소 삭제) 규칙으로 다시 본다.
+   * macros: 탄수화물·지방을 빌릴 기준 — 같은 판정·규칙을 탄단지를 아는 후보 안에서만 본다(통계의 탄단지·열량 구성). 저장된
+   * 기준 음식이 탄단지를 모르면 규칙으로 다시 찾는다.
    */
-  async resolveIds(targets: readonly NutrientRefTarget[]): Promise<Map<string, string>> {
+  async resolveIds(
+    targets: readonly NutrientRefTarget[],
+    opts: { macros?: boolean } = {},
+  ): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     const uniq = dedupeTargets(targets);
     if (uniq.length === 0) return out;
-    const { index, lex } = await this.context();
+    const ctx = await this.context();
+    const index = opts.macros ? ctx.macroIndex : ctx.index;
+    const { lex } = ctx;
     // 연결 표 조회가 실패해도(마이그레이션 전 DB 등) 점검은 규칙만으로 계속한다 — 보조 단계가 점검을 막지 않게.
     const stored = await this.prisma.foodNutrientRef
       .findMany({

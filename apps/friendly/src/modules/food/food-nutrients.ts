@@ -4,6 +4,9 @@
 // proteinG·sodiumMg 는 100g당 단백질·나트륨이다 — 영양소 점검은 식단 항목에 저장된 1인분 스냅샷을 먼저 쓰고, 스냅샷이
 // 빈 항목(1인분이 없는 원재료·영양 기준 음식으로 추정한 항목)만 이 값을 쓴다. magnesiumMg·zincMg·folateUg(μg DFE)는
 // K-FIND 식품영양성분 DB 전체판(음식 DB 엑셀)과 국가표준식품성분표에만 있다 — 표준데이터(CSV·API) 24성분에는 없다.
+// carbG·fatG·sugarG(2026-11-08)는 **100g당** 탄수화물·지방·당류다(FoodItem.carbG 같은 1인분 열과 이름은 같지만 단위가
+// 다르다). 1인분이 없는 원재료(회·참치·닭가슴살·과일)는 이것으로만 탄단지·열량 구성을 낼 수 있다 — 통계의 탄단지 계산이
+// 1인분 값이 없을 때 쓴다(meal-nutrition itemMacroGrams). 비타민·무기질 판단(isNutrientProfileRow)에서는 뺀다.
 
 export const NUTRIENT_KEYS = [
   'fiberG',
@@ -24,9 +27,14 @@ export const NUTRIENT_KEYS = [
   'magnesiumMg',
   'zincMg',
   'folateUg',
+  'carbG',
+  'fatG',
+  'sugarG',
 ] as const;
 export type NutrientKey = (typeof NUTRIENT_KEYS)[number];
 export type NutrientsPer100g = Partial<Record<NutrientKey, number>>;
+/** 100g당 탄수화물·지방·당류 — 비타민·무기질이 아니라 탄단지(열량 구성)용. */
+export const MACRO_PER100_KEYS = ['carbG', 'fatG', 'sugarG'] as const satisfies readonly NutrientKey[];
 
 // 정규화 레코드(camelCase) 열 — 표준데이터 API 실측(2026-10-04, 김치찌개): fibtg·ca·fe·p·k·vitaRae(μg RAE)·vitd·thia·
 // ribf·nia·vitc·chole·fasat·prot·nat. 빈 문자열은 값 없음, "0.00" 은 0 이다. mg·zn·folDfe 는 API 에 없는 **파일 전용**
@@ -50,6 +58,10 @@ export const MFDS_NUTRIENT_API_FIELD: Readonly<Record<NutrientKey, string>> = {
   magnesiumMg: 'mg',
   zincMg: 'zn',
   folateUg: 'folDfe',
+  // 표준데이터 API·배포본의 100g당 탄수화물·지방·당류 열(음식 적재의 1인분 환산도 같은 열을 읽는다).
+  carbG: 'chocdf',
+  fatG: 'fatce',
+  sugarG: 'sugar',
 };
 
 // 배포 파일(CSV/XLSX) 한글 열 → 정규화 레코드 열. 공백·μ 표기 차이는 느슨한 머리글 비교(looseNutrientHeader)가 흡수한다.
@@ -74,6 +86,10 @@ export const MFDS_NUTRIENT_CSV_HEADER: Readonly<Record<string, string>> = {
   '마그네슘(mg)': 'mg',
   '아연(mg)': 'zn',
   '엽산(μg DFE)': 'folDfe',
+  // 100g당 탄수화물·지방·당류 — 원재료 배포본(15100065)에도 있다.
+  '탄수화물(g)': 'chocdf',
+  '지방(g)': 'fatce',
+  '당류(g)': 'sugar',
 };
 
 // 배포 CSV 첫 머리글의 BOM(U+FEFF) — 리터럴 대신 코드포인트로(에디터·린터가 안 보이는 문자를 싫어한다).
