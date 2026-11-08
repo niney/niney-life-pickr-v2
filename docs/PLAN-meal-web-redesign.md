@@ -45,6 +45,8 @@
   치기 전: 이 끼니에 자주 먹은 음식 + 최근 끼니 통째로. 치는 중: '그대로 넣기' → 내 기록(`/meals/items/frequent?q=`, 1자부터·최근 1년)
   → 음식 목록(`/food/search`, 2자부터 — 내가 먹은 음식 먼저·1인분 열량). 줄을 누르면 넣고 다시 누르면 뺀다(빠른 추가 칩과 같은
   `toggleQuickItem`), 이름 있는 줄은 그 줄만 바꾸고 닫는다. 김치·나물은 반찬으로(`MEAL_SIDE_DEFAULT_DISH_TYPES`, 서버 1인분 열량도 같은 규칙).
+  넣고 빼는 규칙·조회는 2026-11-08 부터 `@repo/shared` 의 `useMealFoodSheet`·`meal/foodSearch.ts` 로 옮겨 앱 시트와 같이 쓴다(이 파일은
+  화면·키보드·Esc 만).
 
 ## 진행
 

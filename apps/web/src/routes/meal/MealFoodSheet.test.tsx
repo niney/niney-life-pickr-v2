@@ -256,6 +256,72 @@ describe('음식 찾기 시트 — 휴대폰', () => {
     expect(input).toHaveValue('');
   });
 
+  it('한 끼 안의 같은 이름은 한 번만 넣고, 엔터로 이미 넣은 이름은 빼지 않는다', async () => {
+    server.use(
+      http.get('/api/v1/meals', () =>
+        HttpResponse.json({
+          items: [
+            {
+              ...recentEntry,
+              id: 'e2',
+              items: [
+                entryItem('i1', '공기밥', 300),
+                entryItem('i2', '공기밥', 300),
+                entryItem('i3', '된장찌개', 200),
+              ],
+            },
+          ],
+          nextCursor: null,
+        }),
+      ),
+    );
+    renderNew();
+    fireEvent.click(await screen.findByRole('button', { name: '음식 찾기' }));
+    // 같은 이름을 두 번 토글하면 넣었다가 도로 뺐다.
+    fireEvent.click(
+      await within(sheet()).findByRole('button', { name: /공기밥, 공기밥, 된장찌개/ }),
+    );
+    expect(names()).toEqual(['공기밥', '된장찌개']);
+
+    const input = within(sheet()).getByLabelText('음식 찾기');
+    fireEvent.change(input, { target: { value: '공기밥' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(names()).toEqual(['공기밥', '된장찌개']);
+    expect(input).toHaveValue('');
+    expect(within(sheet()).getByRole('button', { name: '2개 · 완료' })).toBeInTheDocument();
+  });
+
+  it('음식 목록이 찾은 게 모두 내 기록에 있으면 "찾지 못했어요" 대신 음식 목록 묶음을 감춘다', async () => {
+    server.use(
+      http.get('/api/v1/food/search', ({ request }) => {
+        asked.search.push(new URL(request.url).searchParams.get('q'));
+        return HttpResponse.json({
+          items: [
+            {
+              id: 'f-kbb',
+              name: '김치볶음밥',
+              repName: null,
+              dishType: 'stir_fry',
+              mainIngredient: null,
+              cuisine: 'korean',
+              popularity: 9,
+              servingKcal: 700,
+              myCount: 3,
+            },
+          ],
+        });
+      }),
+    );
+    renderNew();
+    fireEvent.click(await screen.findByRole('button', { name: '음식 찾기' }));
+    fireEvent.change(within(sheet()).getByLabelText('음식 찾기'), { target: { value: '김치' } });
+    expect(await within(sheet()).findByText('내 기록')).toBeInTheDocument();
+    await waitFor(() => expect(asked.search).toContain('김치'));
+    await waitFor(() => expect(within(sheet()).queryByText('찾는 중…')).not.toBeInTheDocument());
+    expect(within(sheet()).queryByText('음식 목록')).not.toBeInTheDocument();
+    expect(within(sheet()).queryByText('목록에서 찾지 못했어요.')).not.toBeInTheDocument();
+  });
+
   it('이름 있는 줄은 그 줄만 바꾸고 닫는다', async () => {
     renderNew();
     fireEvent.click(await screen.findByRole('button', { name: '음식 찾기' }));
