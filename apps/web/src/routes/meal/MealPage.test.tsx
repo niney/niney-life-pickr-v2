@@ -16,6 +16,7 @@ const ENTRIES_URL = '/api/v1/meals';
 const CALENDAR_URL = '/api/v1/meals/calendar';
 const STATS_URL = '/api/v1/meals/stats';
 const STATS_NUTRITION_URL = '/api/v1/meals/stats/nutrition';
+const STATS_NUTRIENTS_URL = '/api/v1/meals/stats/nutrients';
 
 // 통계 — 묶음별 영양 몫(나트륨: 찌개 60% · 김치(반찬) 30% · 밥 10%).
 const groupNutrient = (key: string, label: string, unit: string, amount: number, share: number) => ({
@@ -79,6 +80,135 @@ const statsNutrition = {
   ],
   byMainIngredient: [],
   byCuisine: [],
+};
+
+// 통계 — 영양소별 하루 평균(영양 탭과 같은 셈을 이 기간에). 6일 중 두 끼 이상 4일(8/20 은 한 끼, 8/21 은 기록 없음).
+const nutrientRow = (over: Record<string, unknown>) => ({
+  group: 'core',
+  parent: null,
+  coverage: 1,
+  reference: null,
+  percent: null,
+  energyShare: null,
+  energyRange: null,
+  status: null,
+  recordGap: false,
+  note: null,
+  daily: [],
+  topFoods: [],
+  ...over,
+});
+const statsNutrients = {
+  from: '2026-08-17',
+  to: '2026-08-22',
+  days: 6,
+  analyzedDays: 4,
+  status: 'ok',
+  insufficientReason: null,
+  profile: { sex: null, ageGroup: '30-49', basis: 'default' },
+  dates: ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22'],
+  meals: [2, 2, 3, 1, 0, 2],
+  rows: [
+    nutrientRow({
+      key: 'kcal',
+      label: '열량',
+      unit: 'kcal',
+      intakePerDay: 1600,
+      reference: { kind: 'eer', amount: 1900 },
+      percent: 84,
+      daily: [1500, 1700, 1600, 600, null, 1600],
+    }),
+    nutrientRow({
+      key: 'carb',
+      label: '탄수화물',
+      unit: 'g',
+      intakePerDay: 210,
+      coverage: 0.9,
+      energyShare: 0.52,
+      energyRange: { min: 0.55, max: 0.65 },
+    }),
+    nutrientRow({ key: 'sugar', label: '당류', unit: 'g', parent: 'carb', intakePerDay: 30, coverage: 0.4, energyShare: 0.07 }),
+    nutrientRow({
+      key: 'protein',
+      label: '단백질',
+      unit: 'g',
+      intakePerDay: 55,
+      reference: { kind: 'rni', amount: 65 },
+      percent: 85,
+      status: 'borderline',
+      energyShare: 0.14,
+      energyRange: { min: 0.07, max: 0.2 },
+    }),
+    nutrientRow({
+      key: 'fat',
+      label: '지방',
+      unit: 'g',
+      intakePerDay: 60,
+      coverage: 0.9,
+      energyShare: 0.33,
+      energyRange: { min: 0.15, max: 0.3 },
+    }),
+    nutrientRow({
+      key: 'saturatedFat',
+      label: '포화지방',
+      unit: 'g',
+      parent: 'fat',
+      intakePerDay: 18,
+      coverage: 0.8,
+      energyShare: 0.1,
+      energyRange: { min: null, max: 0.07 },
+    }),
+    nutrientRow({
+      key: 'sodium',
+      label: '나트륨',
+      unit: 'mg',
+      intakePerDay: 3400,
+      reference: { kind: 'cdrr', amount: 2300 },
+      percent: 148,
+      status: 'high',
+      daily: [3600, 3900, 2100, 1200, null, 4000],
+      topFoods: [
+        { name: '김치찌개', share: 0.6, count: 2 },
+        { name: '배추김치', share: 0.3, count: 2 },
+      ],
+    }),
+    nutrientRow({ key: 'cholesterol', label: '콜레스테롤', unit: 'mg', intakePerDay: 250, coverage: 0.8 }),
+    // 비타민·무기질은 판정 순이 아니게 넣는다 — 화면이 영양 탭처럼 부족 → 기록 더 필요 → 충분으로 다시 늘어놓는다.
+    nutrientRow({
+      key: 'vitaminC',
+      label: '비타민 C',
+      unit: 'mg',
+      group: 'micro',
+      intakePerDay: 120,
+      reference: { kind: 'rni', amount: 100 },
+      percent: 120,
+      status: 'ok',
+    }),
+    nutrientRow({
+      key: 'iron',
+      label: '철',
+      unit: 'mg',
+      group: 'micro',
+      intakePerDay: 8.5,
+      reference: { kind: 'rni', amount: 10 },
+      percent: 85,
+      status: 'borderline',
+      recordGap: true,
+      note: '기록이 빠진 끼니를 채우면 기준에 닿을 수 있는 수준이에요.',
+    }),
+    nutrientRow({
+      key: 'calcium',
+      label: '칼슘',
+      unit: 'mg',
+      group: 'micro',
+      intakePerDay: 420,
+      reference: { kind: 'rni', amount: 700 },
+      percent: 60,
+      status: 'low',
+      daily: [400, 450, 410, 100, null, 420],
+    }),
+  ],
+  notes: ['성별·출생연도를 설정하면 내 기준으로 더 정확히 봐요(지금은 30-49세 성인 기준).'],
 };
 // 사진은 JWT 가 필요해 blob 으로 받는다 — 토큰 경로도 핸들러가 필요하다.
 const PHOTO_THUMB_URL = '/api/v1/meals/photos/:token/thumb';
@@ -309,6 +439,7 @@ describe('MealPage', () => {
         return HttpResponse.json(stats);
       }),
       http.get(STATS_NUTRITION_URL, () => HttpResponse.json(statsNutrition)),
+      http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json(statsNutrients)),
     );
     renderPage(undefined, '/meal/stats');
     expect(await screen.findByText('찌개·전골')).toBeInTheDocument();
@@ -419,43 +550,9 @@ describe('MealPage', () => {
         asked.push(new URL(request.url).search);
         return HttpResponse.json(statsNutrition);
       }),
-      // 카드의 많음·부족 표시 — 최근 14일 영양소 점검(카드를 처음 열 때 부른다).
-      http.get('/api/v1/meals/nutrition', () =>
-        HttpResponse.json({
-          from: '2026-08-09',
-          to: '2026-08-22',
-          days: 14,
-          analyzedDays: 9,
-          mealCount: 20,
-          profile: { sex: null, ageGroup: '30-49', basis: 'default' },
-          energy: { intakePerDay: 1600, requirement: 1900, percent: 84 },
-          coverage: 1,
-          status: 'ok',
-          insufficientReason: null,
-          nutrients: [
-            {
-              key: 'sodium',
-              label: '나트륨',
-              unit: 'mg',
-              intakePerDay: 3400,
-              reference: { kind: 'cdrr', amount: 2300 },
-              upperLimit: null,
-              percent: 148,
-              coverage: 1,
-              status: 'high',
-              supplementCandidate: false,
-              recordGap: false,
-              topSources: [],
-              foodSuggestions: [],
-              sideSuggestions: [],
-              typicalFoods: [],
-              note: null,
-            },
-          ],
-          notMeasured: [],
-          notes: [],
-        }),
-      ),
+      // 막대 위 한 줄과 카드의 많음·부족 표시 — 이 기간 영양소별 하루 평균(영양 탭과 같은 셈). 최근 14일 점검은 부르지
+      // 않는다(핸들러가 없어 부르면 실패한다).
+      http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json(statsNutrients)),
     );
     renderPage(undefined, '/meal/stats');
     const dish = await screen.findByRole('region', { name: '조리 형태' });
@@ -464,11 +561,12 @@ describe('MealPage', () => {
     expect(asked).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: '나트륨' }));
-    // 막대는 몫(합 100%)이라 많은지 모른다 — 위에 최근 14일 하루 평균과 판정을 붙인다.
+    // 막대는 몫(합 100%)이라 많은지 모른다 — 위에 이 기간 하루 평균과 판정을 붙인다.
     const summary = await screen.findByText(/나트륨 하루 평균/);
     expect(summary).toHaveTextContent('나트륨 하루 평균 3,400mg — 만성질환위험감소섭취량 2,300mg의 148%많음');
-    expect(within(summary).getByRole('link', { name: '영양 자세히' })).toHaveAttribute('href', '/meal/nutrition');
-    expect(screen.getByText(/막대는 고른 기간\(1달\) 먹은 나트륨이 어디서 왔는지예요/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/두 끼 이상 기록한 4일 평균이고, 막대는 고른 기간\(1달\) 먹은 나트륨이 어디서 왔는지예요/),
+    ).toBeInTheDocument();
     expect(within(dish).getAllByRole('button').map((b) => b.textContent)).toEqual([
       '찌개·전골60%',
       '김치·절임·젓갈30%',
@@ -489,14 +587,113 @@ describe('MealPage', () => {
     expect(within(card).getByText('탄 30% · 단 20% · 지 50%')).toBeInTheDocument();
     expect(within(card).getByText('탄 50% · 단 20% · 지 30%')).toBeInTheDocument();
     expect(within(card).getByText('김치찌개 2')).toBeInTheDocument();
-    // 최근 14일 점검에서 나트륨이 많음이고 이 묶음이 열량 몫보다 크게 채웠으면 문장으로 잇는다(줄 옆 표시는 없다).
-    expect(await within(card).findByText(/이 묶음이 60%를 채웠어요/)).toHaveTextContent('나트륨 많음(최근 14일) — 이 묶음이 60%를 채웠어요.');
+    // 이 기간 판정에서 나트륨이 많음이고 이 묶음이 열량 몫보다 크게 채웠으면 문장으로 잇는다(줄 옆 표시는 없다).
+    expect(await within(card).findByText(/이 묶음이 60%를 채웠어요/)).toHaveTextContent('나트륨 많음(이 기간) — 이 묶음이 60%를 채웠어요.');
     expect(within(rows[4]!).queryByText('많음')).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(within(dish).queryByRole('region', { name: '찌개·전골 영양' })).not.toBeInTheDocument();
   });
 
+  it('통계 영양소 — 영양 탭과 같은 줄(판정 칩·"양 / 기준 (N%)"·막대), 줄을 누르면 그 줄 아래로 흐름, 비타민·무기질은 판정 순·부족만 펼침', async () => {
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(STATS_URL, () => HttpResponse.json(stats)),
+      http.get(STATS_NUTRITION_URL, () => HttpResponse.json(statsNutrition)),
+      http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json(statsNutrients)),
+    );
+    renderPage(undefined, '/meal/stats');
+    // 제목에 기간 — 모양이 영양 탭과 같아도 숫자가 다른 까닭(영양 탭은 최근 14일)이 보이게.
+    const card = await screen.findByRole('region', { name: '영양소 · 1달' });
+    expect(within(card).getByText(/1달 중/)).toHaveTextContent('1달 중 4일 · 끼니 10개');
+    expect(within(card).getByRole('link', { name: '설정에서 성별·출생연도 넣기' })).toHaveAttribute(
+      'href',
+      '/meal/settings',
+    );
+    const row = (name: RegExp) => within(card).getByRole('button', { name });
+    // 위 묶음은 서버 차례 그대로 — 열량, 탄수화물(당류), 단백질, 지방(포화지방), 나트륨, 콜레스테롤.
+    const texts = within(card)
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '');
+    const at = (label: string) => texts.findIndex((t) => t.startsWith(label));
+    expect(['열량', '탄수화물', '당류', '단백질', '지방', '포화지방', '나트륨', '콜레스테롤'].map(at)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7,
+    ]);
+    // 섭취기준이 있는 줄은 영양 탭과 같은 판정 칩·문구, 탄수화물·지방은 판정 없이 열량 중 비율과 적정 범위.
+    expect(row(/^열량/)).toHaveTextContent('열량1,600kcal / 필요량 1,900kcal (84%)');
+    expect(row(/^나트륨/)).toHaveTextContent(
+      '나트륨많음3,400mg / 만성질환위험감소섭취량 2,300mg (148%)주로 김치찌개·배추김치에서',
+    );
+    expect(row(/^단백질/)).toHaveTextContent('단백질조금 부족55g / 권장섭취량 65g (85%)열량의 14% (적정 7~20%)');
+    expect(row(/^탄수화물/)).toHaveTextContent('탄수화물210g · 열량의 52% (적정 55~65%)');
+    // 값을 아는 기록이 90% 아래면 정보 비율을, 60% 아래면 비율·막대 없이 양과 정보 비율만.
+    expect(row(/^포화지방/)).toHaveTextContent('포화지방18g · 열량의 10% (성인 7% 미만)정보 80%');
+    expect(row(/^콜레스테롤/)).toHaveTextContent('콜레스테롤250mg정보 80%');
+    expect(row(/^당류/)).toHaveTextContent('당류30g정보 40%');
+    // 막대 — 기준 대비(0~150%, 판정 색 — 열량은 판정이 없어 먹색), 열량 비율 줄은 범위 막대(띠 = 적정 범위).
+    const meter = (name: RegExp) => row(name).querySelector<HTMLElement>('.meal-meter');
+    expect(meter(/^열량/)).not.toHaveAttribute('data-tone');
+    expect(parseFloat(meter(/^열량/)!.querySelector<HTMLElement>('span')!.style.width)).toBeCloseTo(56); // 84 ÷ 150
+    expect(meter(/^나트륨/)).toHaveAttribute('data-tone', 'high');
+    expect(meter(/^단백질/)).toHaveAttribute('data-tone', 'borderline');
+    const carb = row(/^탄수화물/).querySelector('.meal-range');
+    expect(carb?.querySelector('.meal-range-band')).toHaveStyle({ left: '55%', width: '10%' });
+    expect(carb?.querySelector('.meal-range-fill')).toHaveStyle({ width: '52%' });
+    expect(row(/^포화지방/).querySelector('.meal-range-band')).toHaveStyle({ left: '0%', width: '7%' });
+    expect(row(/^당류/).querySelector('.meal-meter, .meal-range')).toBeNull();
+    expect(row(/^콜레스테롤/).querySelector('.meal-meter, .meal-range')).toBeNull();
+    // 좁은 화면(jsdom) — 처음엔 펼친 줄이 없다.
+    expect(within(card).queryByRole('region', { name: '나트륨 흐름' })).not.toBeInTheDocument();
+
+    fireEvent.click(row(/^나트륨/));
+    expect(row(/^나트륨/)).toHaveAttribute('aria-expanded', 'true');
+    const flow = within(card).getByRole('region', { name: '나트륨 흐름' });
+    // 두 끼 이상 기록한 4일 중 기준(2,300mg)을 넘은 날 3일 — 한 끼만 적은 8/20 은 세지 않는다.
+    expect(within(flow).getByText('만성질환위험감소섭취량을 넘은 날 — 4일 중 3일')).toBeInTheDocument();
+    // 기준선 이름은 막대를 가리지 않게 범례로(흐린 막대 설명과 함께).
+    expect(flow.querySelector('.meal-flow-legend')).toHaveTextContent(
+      '만성질환위험감소섭취량 2,300mg한 끼만 기록한 날(평균에서 뺌)',
+    );
+    const bars = flow.querySelectorAll('.meal-flow-bar');
+    expect([...bars].map((b) => b.getAttribute('data-state'))).toEqual([
+      'full',
+      'full',
+      'full',
+      'partial',
+      'empty',
+      'full',
+    ]);
+    fireEvent.click(bars[3]!);
+    expect(within(flow).getByText('8/20 · 1,200mg · 1끼 — 한 끼만 기록해 평균에서 뺐어요')).toBeInTheDocument();
+    expect(within(flow).getByText('나트륨을 많이 준 음식')).toBeInTheDocument();
+    expect(within(flow).getByText('60% · 2번')).toBeInTheDocument();
+    fireEvent.click(row(/^나트륨/));
+    expect(within(card).queryByRole('region', { name: '나트륨 흐름' })).not.toBeInTheDocument();
+
+    // 비타민·무기질 — 영양 탭처럼 판정 순, 부족·많음만 펼쳐 두고 나머지는 판정 수와 함께 접는다.
+    expect(row(/^칼슘/).querySelector('.meal-meter')).toHaveAttribute('data-tone', 'low');
+    expect(within(card).queryByRole('button', { name: /^철/ })).not.toBeInTheDocument();
+    const more = within(card).getByRole('button', { name: /나머지 2가지 더 보기/ });
+    expect(more).toHaveTextContent('나머지 2가지 더 보기기록 더 필요 1 · 충분 1');
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(more).toHaveTextContent(/^접기$/);
+    const after = within(card)
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '');
+    expect(after.findIndex((t) => t.startsWith('철'))).toBeLessThan(after.findIndex((t) => t.startsWith('비타민 C')));
+    // '기록 더 필요'는 점선 칩, '충분'은 초록 칩·막대 — 칩 글자가 늘 붙어 색만으로 말하지 않는다.
+    expect(within(row(/^철/)).getByText('기록 더 필요')).toHaveAttribute('data-dashed', 'true');
+    expect(row(/^철/)).toHaveTextContent('기록이 빠진 끼니를 채우면 기준에 닿을 수 있는 수준이에요.');
+    expect(within(row(/^비타민 C/)).getByText('충분')).toBeInTheDocument();
+    expect(row(/^비타민 C/).querySelector('.meal-meter')).toHaveAttribute('data-tone', 'ok');
+    fireEvent.click(row(/^칼슘/));
+    const calcium = within(card).getByRole('region', { name: '칼슘 흐름' });
+    // 비타민·무기질은 주마다 — 6일은 주가 하나라 흐름 대신 안내.
+    expect(within(calcium).getByText(/1주는 평균이 하나라 흐름은 1달·3달에서 보여요/)).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: '영양' })).toHaveAttribute('href', '/meal/nutrition');
+  });
   it('좁은 화면의 조건 단추 — 접고 펼침을 알리고, 건 조건 수를 단추에 보인다', async () => {
     server.use(http.get(ENTRIES_URL, () => HttpResponse.json({ items: [entry()], nextCursor: null })));
     renderPage();

@@ -52,7 +52,6 @@ export const MealGroupBars = ({
   side,
   flags,
   average,
-  onOpen,
 }: {
   title: string;
   /** 끼니 수 기준 막대(통계 API — 주식만). */
@@ -67,8 +66,6 @@ export const MealGroupBars = ({
   flags: ReadonlyMap<string, MealNutrientDisplayKey>;
   /** 이 기간 내 열량 구성(내 평균) — 카드가 묶음 구성과 견준다. */
   average: MealMacroCompositionType | null;
-  /** 카드를 처음 열 때 — 판정 표시(영양소 점검)를 그때 부른다. */
-  onOpen: () => void;
 }) => {
   const idPrefix = useId();
   const sectionRef = useRef<HTMLElement>(null);
@@ -137,7 +134,6 @@ export const MealGroupBars = ({
                 onPointerEnter={(event) => {
                   if (event.pointerType !== 'mouse') return;
                   setHover(r.key);
-                  onOpen();
                 }}
                 onPointerLeave={(event) => {
                   if (event.pointerType === 'mouse') setHover((h) => (h === r.key ? null : h));
@@ -148,15 +144,11 @@ export const MealGroupBars = ({
                   className="meal-bar-row meal-bar-btn"
                   aria-expanded={isOpen}
                   aria-controls={isOpen ? cardId : undefined}
-                  onClick={() => {
-                    setPinned((p) => (p === r.key ? null : r.key));
-                    onOpen();
-                  }}
+                  onClick={() => setPinned((p) => (p === r.key ? null : r.key))}
                   // 키보드로 옮겨 왔을 때만 미리 보인다 — 누르거나 손가락으로 건드린 포커스는 고정(onClick)이 맡는다.
                   onFocus={(event) => {
                     if (!isKeyboardFocus(event.currentTarget)) return;
                     setHover(r.key);
-                    onOpen();
                   }}
                   onBlur={() => setHover((h) => (h === r.key ? null : h))}
                 >
@@ -209,7 +201,7 @@ const GroupCard = ({
     );
   }
   const kcal = group.nutrients.find((n) => n.key === 'kcal');
-  // 영양소 점검(최근 14일)과 잇기 — 줄 옆에 '많음'을 붙이면 '이 묶음의 나트륨이 많다'로 읽혀(튀김 6% 옆 '많음'), 이 묶음이
+  // 이 기간 판정(통계의 영양 표와 같은 — 영양 탭 점검을 이 기간에 돌린 값)과 잇기 — 줄 옆에 '많음'을 붙이면 '이 묶음의 나트륨이 많다'로 읽혀(튀김 6% 옆 '많음'), 이 묶음이
   // 크게 채운 경우만 문장으로 밝힌다. 많은 영양소는 열량 몫보다 크게 채웠을 때, 모자란 영양소는 20% 이상 채웠을 때.
   const links = [...group.nutrients, ...group.highlights]
     .filter((n) => n.key !== 'kcal')
@@ -289,7 +281,7 @@ const GroupCard = ({
           <b className={MEAL_NUTRIENT_TONE[l.d]}>
             {l.label} {MEAL_NUTRIENT_STATUS_LABEL[l.d]}
           </b>
-          (최근 14일) — 이 묶음이 {pct(l.share)}를 채웠어요.
+          (이 기간) — 이 묶음이 {pct(l.share)}를 채웠어요.
         </p>
       ))}
       <p className="meal-group-fine">

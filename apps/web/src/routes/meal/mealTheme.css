@@ -809,7 +809,45 @@ html.dark:has(.meal-app) {
   .meal-bar-summary { font-size: 0.9375rem; font-weight: 600; line-height: 1.5; }
   .meal-bar-summary b { font-weight: 800; font-variant-numeric: tabular-nums; }
   .meal-bar-summary .meal-flag { margin-left: 0.35rem; vertical-align: 0.1em; }
-  .meal-bar-summary-link { margin-left: 0.6rem; font-size: 0.8125rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+
+  /* 통계 영양소(2026-11-08) — 영양 탭 '영양소 점검'과 같은 줄 부품(MealNutrientLine)을 줄 전체 단추로 감싼다(고른 줄은 옅은
+     바탕). 흐름은 넓은 화면은 오른쪽 카드, 좁은 화면은 그 줄 아래 얇은 테두리 상자. 탄수화물·지방 비율은 아래 범위 막대로 */
+  .meal-nline-btn { display: block; width: calc(100% + 1rem); margin: 0 -0.5rem; padding: 0.45rem 0.5rem; text-align: left; border-radius: 6px; }
+  .meal-nline-btn:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }
+  .meal-nline-btn[aria-pressed='true'], .meal-nline-btn[aria-expanded='true'] { background: color-mix(in oklab, var(--foreground) 7%, transparent); }
+  .meal-nline-btn:focus-visible, .meal-nline-more:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+  .meal-nline-group { padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  .meal-nline-more { display: flex; flex-wrap: wrap; width: 100%; align-items: baseline; justify-content: space-between; gap: 0.25rem 0.75rem; margin-top: 0.35rem; padding: 0.4rem 0; font-size: 0.8125rem; font-weight: 700; text-align: left; }
+  .meal-nline-detail { margin: 0.25rem 0 0.6rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
+  /* 범위 막대 — 가는 바탕선 위에 적정 범위 띠(옅은 먹), 내 비율만큼 가는 먹 막대. 기준 대비 막대(굵은 막대·회색 바탕)와 모양을 갈라
+     '열량 중 %'를 '기준의 %'로 읽지 않게 한다. */
+  .meal-range { position: relative; display: block; height: 0.6rem; }
+  .meal-range::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.5px solid var(--border); }
+  .meal-range-band { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: color-mix(in oklab, var(--foreground) 16%, transparent); }
+  .meal-range-fill { position: absolute; left: 0; top: 50%; height: 0.3rem; transform: translateY(-50%); border-radius: 0 2px 2px 0; background: var(--foreground); }
+  .meal-flow-plot { position: relative; display: flex; height: 7.5rem; gap: 2px; border-bottom: 1.5px solid var(--foreground); }
+  .meal-flow-bar { display: flex; flex: 1; min-width: 0; align-items: flex-end; cursor: pointer; }
+  .meal-flow-bar > span { display: block; width: 100%; background: var(--foreground); border-radius: 3px 3px 0 0; }
+  .meal-flow-bar[data-state='partial'] > span { background: var(--meal-faint); opacity: 0.5; }
+  .meal-flow-bar[data-active='true'] { background: color-mix(in oklab, var(--foreground) 9%, transparent); }
+  .meal-flow-ref { position: absolute; left: 0; right: 0; z-index: 1; border-top: 1.5px dashed var(--muted-foreground); pointer-events: none; }
+  .meal-flow-legend { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; margin-top: 0.35rem; font-size: 0.6875rem; color: var(--muted-foreground); }
+  .meal-flow-key { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .meal-flow-key::before { content: ''; display: inline-block; flex: none; }
+  .meal-flow-key[data-kind='ref']::before { width: 1rem; border-top: 1.5px dashed var(--muted-foreground); }
+  .meal-flow-key[data-kind='partial']::before { width: 0.6rem; height: 0.6rem; border-radius: 2px; background: var(--meal-faint); opacity: 0.5; }
+  .meal-flow-axis { display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.6875rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .meal-flow-cap { margin-top: 0.5rem; min-height: 1.25rem; font-size: 0.8125rem; font-weight: 700; }
+  .meal-flow-hint { margin-top: 0.15rem; font-size: 0.6875rem; color: var(--muted-foreground); }
+  .meal-flow-table { margin-top: 0.5rem; font-size: 0.75rem; }
+  .meal-flow-table > summary { width: fit-content; cursor: pointer; font-weight: 700; }
+  .meal-flow-table table { width: 100%; margin-top: 0.35rem; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .meal-flow-table th, .meal-flow-table td { padding: 0.2rem 0.35rem; text-align: right; border-bottom: 1px solid var(--border); }
+  .meal-flow-table th[scope='row'], .meal-flow-table thead th:first-child { text-align: left; font-weight: 600; }
+  .meal-flow-table tr[data-state='partial'] td, .meal-flow-table tr[data-state='empty'] td { color: var(--muted-foreground); }
+  .meal-nut-foods { margin-top: 1rem; }
+  .meal-nut-foods-title { margin-bottom: 0.25rem; font-size: 0.8125rem; font-weight: 800; }
+  .meal-nut-foods-fine { margin-top: 0.35rem; font-size: 0.6875rem; color: var(--muted-foreground); }
 
   @media (prefers-reduced-motion: no-preference) {
     .meal-bar > span, .meal-week-bar { transition: height 0.3s ease, width 0.3s ease; }

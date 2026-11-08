@@ -11,8 +11,8 @@ import {
   useInfiniteMealEntries,
   useMealCalendar,
   useMealEntries,
-  useMealNutrition,
   useMealStats,
+  useMealStatsNutrients,
   useMealStatsNutrition,
 } from '@repo/shared';
 import {
@@ -42,6 +42,7 @@ import { flaggedNutrients } from './mealNutrientTone';
 import { MEAL_PATH } from './mealPaths';
 import { MealPageHeader } from './MealPageHeader';
 import { MealPhotoImg } from './MealPhotoImg';
+import { MealStatsNutrients } from './MealStatsNutrients';
 
 // 내 식단의 기록·달력·통계 화면(식단 셸 /meal/records·calendar·stats). 차트 라이브러리를 쓰지 않는 리포 관례대로
 // 막대는 div 폭으로 그린다.
@@ -591,13 +592,15 @@ const MealStats = () => {
   }, [days]);
   const stats = useMealStats(from, to);
   // 분포 막대 기준(끼니 수·열량·나트륨)과 막대 카드 — 묶음별 영양 몫은 통계를 열 때 함께 받아 두어 올리자마자 뜬다.
-  // 카드의 많음·부족 표시(최근 14일 영양소 점검)는 카드를 처음 열 때 부른다.
   const [metric, setMetric] = useState<MealBarMetric>('count');
-  const [cardSeen, setCardSeen] = useState(false);
   const groups = useMealStatsNutrition(from, to);
-  // 열량·나트륨 막대는 위에 최근 14일 판정 한 줄을 붙이므로 그 기준을 고르면 함께 부른다.
-  const check = useMealNutrition(14, cardSeen || metric !== 'count');
-  const flags = useMemo(() => flaggedNutrients(check.data), [check.data]);
+  // 영양소별 하루 평균 — 영양 탭 점검과 같은 셈(두 끼 이상 기록한 날, 같은 섭취기준·판정)을 이 기간에. 영양정보 표·막대 위
+  // 한 줄·묶음 카드의 많음·부족 표시가 같이 써서, 통계 화면 안에서는 모두 고른 기간 한 가지로 말한다.
+  const nutrients = useMealStatsNutrients(from, to);
+  const flags = useMemo(
+    () => flaggedNutrients(nutrients.data?.status, nutrients.data?.rows),
+    [nutrients.data],
+  );
   const rangeLabel = RANGES.find((r) => r.key === rangeKey)?.label ?? '';
 
   if (stats.isLoading) return <Loading />;
@@ -713,12 +716,13 @@ const MealStats = () => {
         <p className="meal-empty">이 기간에는 기록이 없어요.</p>
       ) : (
         <>
+          <MealStatsNutrients data={nutrients.data} loading={nutrients.isLoading} rangeLabel={rangeLabel} />
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <MealBarSummary
                 metric={metric}
-                analysis={check.data}
-                loading={check.isLoading}
+                data={nutrients.data}
+                loading={nutrients.isLoading}
                 rangeLabel={rangeLabel}
               />
               <div className="meal-seg meal-seg-sm" role="group" aria-label="막대 기준">
@@ -745,7 +749,6 @@ const MealStats = () => {
                 side="right"
                 flags={flags}
                 average={groups.data?.composition ?? null}
-                onOpen={() => setCardSeen(true)}
               />
               <MealGroupBars
                 title="주재료"
@@ -757,7 +760,6 @@ const MealStats = () => {
                 side="left"
                 flags={flags}
                 average={groups.data?.composition ?? null}
-                onOpen={() => setCardSeen(true)}
               />
               <MealGroupBars
                 title="요리 계통"
@@ -769,7 +771,6 @@ const MealStats = () => {
                 side="right"
                 flags={flags}
                 average={groups.data?.composition ?? null}
-                onOpen={() => setCardSeen(true)}
               />
               <section className="meal-sec" aria-labelledby="meal-top-foods">
                 <div className="meal-sec-head">

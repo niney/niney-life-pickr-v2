@@ -14,19 +14,17 @@ import {
 import {
   MEAL_NUTRIENT_DATA_SOURCES,
   MEAL_NUTRIENT_REFERENCE_LABEL,
-  MEAL_NUTRIENT_STATUS_LABEL,
   MEAL_NUTRIENT_STATUS_ORDER,
-  NUTRIENT_BAR_MAX_PERCENT,
   formatNutrientAmount,
   mealNutrientDisplayStatus,
   mealNutrientProfileLabel,
-  nutrientBarWidth,
-  type MealNutrientDisplayKey,
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { MealLink } from './MealLink';
+import { MealNutrientLine, MealNutrientMeter } from './MealNutrientLine';
+import { nutrientVsRefText } from './mealNutrientTone';
 import { MEAL_PATH } from './mealPaths';
 
 // 영양 — 최근 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 견주고(서버 계산), 모자란 영양소를 음식·영양제
@@ -34,17 +32,6 @@ import { MEAL_PATH } from './mealPaths';
 // 저장본을 준다("다시 받기"만 새로). 차트 라이브러리를 쓰지 않는 리포 관례대로 막대는 div 폭으로 그린다.
 
 const PERIODS = [7, 14, 28] as const;
-
-// 판정 글자색 — 식단 홈 영양정보 라벨과 같은 말투(많음 빨강 · 부족 갈색 · 충분 초록). '기록 더 필요'(recordGap)는
-// 판정이 부족이어도 빠진 끼니 탓일 수 있다 — 점선 테두리의 옅은 색으로 잠정임을 보인다. 막대 색은 data-tone(meal-meter).
-const STATUS_TONE: Record<MealNutrientDisplayKey, string> = {
-  low: 'meal-short',
-  borderline: 'meal-short',
-  recordGap: 'meal-faint',
-  ok: 'meal-ok',
-  high: 'meal-over',
-  unknown: 'meal-faint',
-};
 
 const amount = (v: number, unit: string) => `${formatNutrientAmount(v)}${unit}`;
 
@@ -168,27 +155,25 @@ const NutrientRow = ({ n }: { n: MealNutrientResultType }) => {
   const sides = n.sideSuggestions;
   return (
     <li className="space-y-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-bold">{n.label}</span>
-        <span className={cn('meal-flag', STATUS_TONE[shown])} data-dashed={shown === 'recordGap' ? 'true' : undefined}>
-          {MEAL_NUTRIENT_STATUS_LABEL[shown]}
-        </span>
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-          {n.intakePerDay !== null ? amount(n.intakePerDay, n.unit) : '-'} /{' '}
-          {MEAL_NUTRIENT_REFERENCE_LABEL[n.reference.kind]} {amount(n.reference.amount, n.unit)}
-          {n.percent !== null ? ` (${n.percent}%)` : ''}
-        </span>
-      </div>
-      <div
-        className="meal-meter"
-        data-tone={shown}
-        role="img"
-        aria-label={`${n.label} 기준 대비 ${n.percent ?? '알 수 없음'}%`}
-      >
-        <span style={{ width: `${nutrientBarWidth(n.percent)}%` }} />
-        {/* 기준선(100%) */}
-        <i className="meal-meter-ref" style={{ left: `${(100 / NUTRIENT_BAR_MAX_PERCENT) * 100}%` }} />
-      </div>
+      {/* 줄 모양(이름·판정 칩·"양 / 기준 (N%)"·막대)은 통계 영양소와 같은 부품. 막대 색은 판정(data-tone). */}
+      <MealNutrientLine
+        label={n.label}
+        status={shown}
+        value={nutrientVsRefText(
+          n.intakePerDay,
+          n.unit,
+          MEAL_NUTRIENT_REFERENCE_LABEL[n.reference.kind],
+          n.reference.amount,
+          n.percent,
+        )}
+        bar={
+          <MealNutrientMeter
+            percent={n.percent}
+            tone={shown}
+            ariaLabel={`${n.label} 기준 대비 ${n.percent ?? '알 수 없음'}%`}
+          />
+        }
+      />
       {n.note ? <p className="text-xs text-muted-foreground">{n.note}</p> : null}
       {short && (n.foodSuggestions.length > 0 || sides.length > 0 || n.typicalFoods.length > 0) ? (
         <p className="text-xs text-muted-foreground">
