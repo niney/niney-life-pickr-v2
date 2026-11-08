@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import type {
   FrequentMealItemType,
   MealEntryType,
   MealNutrientResultType,
   MealNutritionAnalysisType,
+  MealPreferenceType,
   MealRecommendationType,
   MealSlotType,
 } from '@repo/api-contract';
@@ -97,6 +98,10 @@ export const MealHomePage = () => {
       <header className="mb-6 md:mb-8">
         <h1 className="meal-title">{dayTitle(today)}</h1>
       </header>
+      {/* 최근 90일 기록이 없으면(처음 쓰는 사람·오래 쉰 사람) 대시보드 위에 시작 단계를 둔다. */}
+      {ctx.data && ctx.data.entryCount === 0 ? (
+        <StartGuide preference={ctx.data.preference ?? null} onStart={() => start({})} />
+      ) : null}
       <div className="meal-dash">
         <Today
           entries={dayEntries}
@@ -120,6 +125,75 @@ export const MealHomePage = () => {
         />
       </div>
     </>
+  );
+};
+
+// ── 시작하기 ────────────────────────────────────────────────────────────────
+// 첫 기록 · 성별·출생연도(영양소 기준) · 추천. 넣어 둔 단계는 표시만 남긴다.
+const StartGuide = ({
+  preference,
+  onStart,
+}: {
+  preference: MealPreferenceType | null;
+  onStart: () => void;
+}) => {
+  const profileDone = Boolean(preference?.sex && preference?.birthYear);
+  return (
+    <section className="meal-start" aria-labelledby="meal-start">
+      <h2 id="meal-start" className="meal-sec-title">
+        식단 시작하기
+      </h2>
+      <ol className="meal-start-steps">
+        <li>
+          <span className="meal-start-no" aria-hidden>
+            1
+          </span>
+          <div className="min-w-0">
+            <p className="font-bold">첫 끼니 기록하기</p>
+            <p className="text-sm text-muted-foreground">
+              사진을 넣으면 음식을 찾아 채워요. 직접 적어도 돼요.
+              <span className="hidden md:inline">
+                {' '}
+                화면 아무 데나 사진을 끌어다 놓아도 시작해요.
+              </span>
+            </p>
+          </div>
+          <button type="button" className="meal-btn" onClick={onStart}>
+            기록하기
+          </button>
+        </li>
+        <li data-done={profileDone ? 'true' : undefined}>
+          <span className="meal-start-no" aria-hidden>
+            {profileDone ? <Check className="size-4" /> : 2}
+          </span>
+          <div className="min-w-0">
+            <p className="font-bold">성별·출생연도 넣기</p>
+            <p className="text-sm text-muted-foreground">영양소 기준을 내 나이·성별에 맞춰요.</p>
+          </div>
+          {profileDone ? (
+            <span className="meal-ok text-sm font-bold">넣었어요</span>
+          ) : (
+            <Link to={MEAL_PATH.settings} className="meal-btn-line">
+              설정
+            </Link>
+          )}
+        </li>
+        <li>
+          <span className="meal-start-no" aria-hidden>
+            3
+          </span>
+          <div className="min-w-0">
+            <p className="font-bold">다음 끼니 추천받기</p>
+            <p className="text-sm text-muted-foreground">
+              기록이 적어도 좋아하는 음식·알레르기 설정으로 골라 드려요.
+            </p>
+          </div>
+          <Link to={MEAL_PATH.recommend} className="meal-btn-line">
+            추천
+          </Link>
+        </li>
+      </ol>
+    </section>
   );
 };
 

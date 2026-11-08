@@ -226,7 +226,7 @@ describe('MealPage', () => {
       }),
     );
     renderPage(undefined, '/meal/calendar');
-    const day = await screen.findByRole('button', { name: '5' });
+    const day = await screen.findByRole('button', { name: /월 5일,/ });
     expect(limits).not.toContain('0');
     expect(dayQueries).toHaveLength(0);
     fireEvent.click(day);
@@ -344,6 +344,19 @@ describe('MealPage', () => {
     expect(screen.getByPlaceholderText('음식·장소·메모 검색')).toBe(input);
   });
 
+  it('좁은 화면의 조건 단추 — 접고 펼침을 알리고, 건 조건 수를 단추에 보인다', async () => {
+    server.use(http.get(ENTRIES_URL, () => HttpResponse.json({ items: [entry()], nextCursor: null })));
+    renderPage();
+    await screen.findByText('김치찌개');
+    const toggle = screen.getByRole('button', { name: '조건' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '저녁' }));
+    fireEvent.click(screen.getByRole('button', { name: '외식' }));
+    expect(screen.getByRole('button', { name: '조건 2' })).toBe(toggle);
+  });
+
   it('달력 — 다른 날짜를 고르면 새 응답이 올 때까지 이전 날짜 기록을 흐리게 둔다', async () => {
     const gate = deferred();
     server.use(
@@ -371,11 +384,11 @@ describe('MealPage', () => {
       }),
     );
     renderPage(undefined, '/meal/calendar');
-    fireEvent.click(await screen.findByRole('button', { name: '5' }));
+    fireEvent.click(await screen.findByRole('button', { name: /월 5일,/ }));
     const first = await screen.findByText(/오일식당/);
     expect(first.closest('.opacity-60')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '6' }));
+    fireEvent.click(screen.getByRole('button', { name: /월 6일,/ }));
     // 6일 응답 전 — 5일 기록이 남아 있되 흐리게.
     await waitFor(() => expect(screen.getByText(/오일식당/).closest('.opacity-60')).not.toBeNull());
     gate.open();
@@ -402,7 +415,7 @@ describe('MealPage', () => {
     renderPage();
     const firstSrc = (await screen.findByAltText('식단 사진')).getAttribute('src');
     fireEvent.click(screen.getAllByRole('link', { name: '달력' })[0]!);
-    await screen.findByRole('button', { name: '5' });
+    await screen.findByRole('button', { name: /월 5일,/ });
     expect(screen.queryByAltText('식단 사진')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('link', { name: '기록' })[0]!);

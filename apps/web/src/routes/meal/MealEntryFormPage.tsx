@@ -44,6 +44,7 @@ import {
   startFreshMealDraft,
 } from './mealDraftStart';
 import { useMealFrame, useMealLeave, useMealOpen } from './mealPanel';
+import { receiveMealPhotos } from './mealPhotoHandoff';
 import { MEAL_PATH } from './mealPaths';
 
 // 식단 입력(웹) — 새 기록 / 기존 기록 수정. 사진을 넣으면 음식을 인식해 채우고(useMealPhotoIntake), 손으로
@@ -201,6 +202,14 @@ const MealEntryForm = ({ entryId, notice }: { entryId: string | null; notice?: R
   // 휴대폰은 음식을 '음식 찾기' 시트에서 넣는다(입력칸 아래 자동완성은 키보드에 가린다).
   const compact = useMediaQuery('(max-width: 47.99rem)', false);
   const [sheet, setSheet] = useState<MealFoodSheetMode | null>(null);
+
+  // 식단 어디서든 끌어다 놓거나 붙여넣은 사진(MealPhotoDrop)을 이 기록에 넣는다 — 맡아 둔 사진이 있으면 열자마자.
+  // 받는 창구는 문서 밖(모듈) 상태라 effect, 최신 넣기 함수는 ref 로 읽어 다시 달지 않는다.
+  const addPhotosRef = useRef(photoIntake.addFiles);
+  useEffect(() => {
+    addPhotosRef.current = photoIntake.addFiles;
+  });
+  useEffect(() => receiveMealPhotos((files) => void addPhotosRef.current(files)), []);
 
   const saving = create.isPending || update.isPending;
   // 사진을 올리거나 인식하는 동안은 저장을 막는다(앱과 같이) — 끝나야 사진·인식 결과가 함께 저장된다.

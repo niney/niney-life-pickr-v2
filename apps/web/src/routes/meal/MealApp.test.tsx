@@ -315,7 +315,30 @@ describe('MealHomePage — 식단 홈', () => {
 
     expect(await screen.findByText('최근 기록 빈도가 늘었어요')).toBeInTheDocument();
     expect(screen.getByText('3일')).toBeInTheDocument();
+    // 기록이 있으면 시작 안내는 없다.
+    expect(screen.queryByRole('heading', { name: '식단 시작하기' })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '제육볶음' })).toBeInTheDocument();
+  });
+
+  it('최근 기록이 없으면 시작 안내 — 첫 기록·성별·출생연도(넣었으면 표시만)·추천', async () => {
+    server.use(
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({
+          entryCount: 0,
+          recentFoods: [],
+          preference: { sex: 'female', birthYear: 1990 },
+          latest: null,
+        }),
+      ),
+    );
+    renderHome();
+    const guide = (await screen.findByRole('heading', { name: '식단 시작하기' })).closest('section')!;
+    expect(within(guide).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(guide).getByText('넣었어요')).toBeInTheDocument();
+    expect(within(guide).queryByRole('link', { name: '설정' })).not.toBeInTheDocument();
+    expect(within(guide).getByRole('link', { name: '추천' })).toHaveAttribute('href', '/meal/recommend');
+    fireEvent.click(within(guide).getByRole('button', { name: '기록하기' }));
+    expect(await screen.findByText('새 기록 화면')).toBeInTheDocument();
   });
 
   it('빈 끼니 칸을 누르면 그 끼니로 새 기록을 시작한다', async () => {

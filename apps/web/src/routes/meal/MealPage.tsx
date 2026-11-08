@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Camera, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Loader2, SlidersHorizontal } from 'lucide-react';
 import type {
   MealEntrySourceType,
   MealEntryType,
@@ -92,6 +92,9 @@ const MealList = () => {
   const [slot, setSlot] = useState<MealSlotType | null>(null);
   const [mealType, setMealType] = useState<MealTypeType | null>(null);
   const [source, setSource] = useState<MealEntrySourceType | null>(null);
+  // 좁은 화면은 검색칸만 두고 날짜·끼니·방식 조건은 접어 둔다(펼치면 목록 위를 250px 넘게 차지했다). 데스크톱은 늘 펼친다.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreId = useId();
   // 타이머는 외부 시스템이라 effect — 다음 키 입력이 오면 앞선 예약을 취소한다.
   useEffect(() => {
     const next = q.trim();
@@ -123,6 +126,7 @@ const MealList = () => {
   const ids = useMemo(() => items.map((entry) => entry.id), [items]);
   const today = toLocalDateKey(new Date());
   const filtered = Boolean(q.trim() || from || to || slot || mealType || source);
+  const conditions = [from || to, slot, mealType, source].filter(Boolean).length;
   const isDesktop = useIsDesktopLg();
   const groups = useMemo(() => {
     const out: { date: string; entries: MealEntryType[] }[] = [];
@@ -147,75 +151,93 @@ const MealList = () => {
     <div className={MEAL_SPLIT_CLASS}>
       {/* 데스크톱은 찾기와 최근 7일을 오른쪽에 붙여 둔다 — 목록이 첫 화면부터 시작하게. */}
       <div className={MEAL_SIDE_CLASS}>
-        <section className="meal-filter" aria-label="기록 찾기">
-          <input
-            value={q}
-            onChange={(event) => changeQ(event.target.value)}
-            placeholder="음식·장소·메모 검색"
-            maxLength={80}
-            className="meal-input w-full"
-          />
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <section
+          className="meal-filter"
+          aria-label="기록 찾기"
+          data-open={moreOpen ? 'true' : undefined}
+        >
+          <div className="flex gap-2">
             <input
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-              aria-label="시작 날짜"
-              className="meal-input meal-input-sm min-w-0 flex-1"
+              value={q}
+              onChange={(event) => changeQ(event.target.value)}
+              placeholder="음식·장소·메모 검색"
+              maxLength={80}
+              className="meal-input min-w-0 flex-1"
             />
-            <span aria-hidden>~</span>
-            <input
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-              aria-label="끝 날짜"
-              className="meal-input meal-input-sm min-w-0 flex-1"
-            />
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {MEAL_SLOTS.map((value) => (
-              <FilterChip
-                key={value}
-                label={MEAL_SLOT_LABEL[value]}
-                selected={slot === value}
-                onClick={() => setSlot(slot === value ? null : value)}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {MEAL_TYPES.map((value) => (
-              <FilterChip
-                key={value}
-                label={MEAL_TYPE_LABEL[value]}
-                selected={mealType === value}
-                onClick={() => setMealType(mealType === value ? null : value)}
-              />
-            ))}
-            {SOURCE_FILTERS.map(([value, label]) => (
-              <FilterChip
-                key={value}
-                label={label}
-                selected={source === value}
-                onClick={() => setSource(source === value ? null : value)}
-              />
-            ))}
-          </div>
-          {filtered ? (
             <button
               type="button"
-              className="meal-btn-quiet self-start"
-              onClick={() => {
-                changeQ('');
-                setFrom('');
-                setTo('');
-                setSlot(null);
-                setMealType(null);
-                setSource(null);
-              }}
+              className="meal-btn-line meal-filter-toggle lg:hidden"
+              aria-expanded={moreOpen}
+              aria-controls={moreId}
+              onClick={() => setMoreOpen((open) => !open)}
             >
-              필터 초기화
+              <SlidersHorizontal className="size-4" aria-hidden />
+              조건{conditions > 0 ? ` ${conditions}` : ''}
             </button>
-          ) : null}
+          </div>
+          <div id={moreId} className="meal-filter-more">
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <input
+                type="date"
+                value={from}
+                onChange={(event) => setFrom(event.target.value)}
+                aria-label="시작 날짜"
+                className="meal-input meal-input-sm min-w-0 flex-1"
+              />
+              <span aria-hidden>~</span>
+              <input
+                type="date"
+                value={to}
+                onChange={(event) => setTo(event.target.value)}
+                aria-label="끝 날짜"
+                className="meal-input meal-input-sm min-w-0 flex-1"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {MEAL_SLOTS.map((value) => (
+                <FilterChip
+                  key={value}
+                  label={MEAL_SLOT_LABEL[value]}
+                  selected={slot === value}
+                  onClick={() => setSlot(slot === value ? null : value)}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {MEAL_TYPES.map((value) => (
+                <FilterChip
+                  key={value}
+                  label={MEAL_TYPE_LABEL[value]}
+                  selected={mealType === value}
+                  onClick={() => setMealType(mealType === value ? null : value)}
+                />
+              ))}
+              {SOURCE_FILTERS.map(([value, label]) => (
+                <FilterChip
+                  key={value}
+                  label={label}
+                  selected={source === value}
+                  onClick={() => setSource(source === value ? null : value)}
+                />
+              ))}
+            </div>
+            {filtered ? (
+              <button
+                type="button"
+                className="meal-btn-quiet self-start"
+                onClick={() => {
+                  changeQ('');
+                  setFrom('');
+                  setTo('');
+                  setSlot(null);
+                  setMealType(null);
+                  setSource(null);
+                }}
+              >
+                필터 초기화
+              </button>
+            ) : null}
+          </div>
         </section>
         {isDesktop ? <MealWeekSummary /> : null}
       </div>
@@ -466,6 +488,16 @@ const MealCalendar = () => {
                       type="button"
                       onClick={() => setPicked(isSel ? null : date)}
                       aria-pressed={isSel}
+                      // 화면 읽기 프로그램에는 날짜만이 아니라 그날 기록 요약까지 — 칸에 보이는 점·숫자를 말로.
+                      aria-label={[
+                        `${Number(date.slice(5, 7))}월 ${Number(date.slice(-2))}일`,
+                        date === today ? "오늘" : null,
+                        info ? `${info.count}끼` : "기록 없음",
+                        info?.kcal != null ? `약 ${fmt(info.kcal)}kcal` : null,
+                        info?.hasPhoto ? "사진 있음" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
                       data-today={date === today ? 'true' : undefined}
                       data-recorded={info ? 'true' : undefined}
                       className="meal-cal-day"

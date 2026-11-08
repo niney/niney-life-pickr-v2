@@ -10,6 +10,7 @@ import {
 import { useIsDesktopLg } from '~/lib/useMediaQuery';
 import { MealHomePage } from './MealHomePage';
 import { MealPageHeader } from './MealPageHeader';
+import { MealPhotoDrop } from './MealPhotoDrop';
 import { MealLoading, MealShell } from './MealShell';
 import { MealSurface } from './MealSurface';
 import {
@@ -207,6 +208,7 @@ export default function MealApp() {
             />
           </Routes>
         ) : null}
+        <MealPhotoDrop />
       </div>
     </MealPanelEnvContext.Provider>
   );
