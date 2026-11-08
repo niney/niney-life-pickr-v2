@@ -62,6 +62,11 @@ const objectParticle = (word: string): string => {
   if (c >= 0xac00 && c <= 0xd7a3) return (c - 0xac00) % 28 === 0 ? '를' : '을';
   return '를';
 };
+// 받침이 있으면 '은', 없으면 '는' — '1달은', '1주는'.
+const topicParticle = (word: string): string => {
+  const c = word.charCodeAt(word.length - 1);
+  return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0 ? '은' : '는';
+};
 
 // 에너지적정비율 문구 — '적정 55~65%', 상한만 있는 성인 포화지방은 '성인 7% 미만'.
 const rangeText = (range: MealStatsNutrientRowType['energyRange']): string | null => {
@@ -74,6 +79,32 @@ const rangeText = (range: MealStatsNutrientRowType['energyRange']): string | nul
 const displayOf = (r: MealStatsNutrientRowType, judged: boolean): MealNutrientDisplayKey | null =>
   judged && r.status ? mealNutrientDisplayStatus({ status: r.status, recordGap: r.recordGap }) : null;
 const rankOf = (d: MealNutrientDisplayKey | null): number => (d ? MEAL_NUTRIENT_STATUS_ORDER[d] : 99);
+
+// 직전 같은 길이 기간과 견주기(2026-11-09) — 두 기간 모두 판정이 나온(평균에 든 날 4일 이상) 때만, 하루 평균이 이만큼 넘게
+// 달라진 줄에만 한 줄을 붙인다(21줄에 '비슷해요'를 다 달면 시끄럽다). 하루하루 들쭉날쭉한 기록에 음식 표준값 어림까지 얹혀 있어
+// 10% 안쪽은 뜻이 없다(실데이터 5% 문턱에서는 단백질 5%·지방 8% 같은 잡음까지 '줄었어요'로 보였다).
+const CHANGE_MIN = 0.1;
+
+/** 줄 아래 변화 한 줄 — '직전 1달보다 하루 800mg(31%) 늘었어요 · 직전엔 충분'. 견줄 수 없거나 차이가 작으면 null. */
+const changeText = (
+  r: MealStatsNutrientRowType,
+  p: MealStatsNutrientRowType | undefined,
+  prevLabel: string,
+): string | null => {
+  if (!p || r.intakePerDay === null || p.intakePerDay === null || p.intakePerDay <= 0) return null;
+  // 정보가 모자란 쪽이 있으면 양이 실제보다 적게 잡혀 차이가 정보 차이일 수 있다.
+  if (r.coverage < MEAL_NUTRIENT_MIN_COVERAGE || p.coverage < MEAL_NUTRIENT_MIN_COVERAGE) return null;
+  const diff = r.intakePerDay - p.intakePerDay;
+  const rel = diff / p.intakePerDay;
+  if (Math.abs(rel) < CHANGE_MIN) return null;
+  const now = displayOf(r, true);
+  const before = displayOf(p, true);
+  const status = before && now !== before ? ` · 직전엔 ${MEAL_NUTRIENT_STATUS_LABEL[before]}` : '';
+  return (
+    `${prevLabel}보다 하루 ${formatNutrientAmount(Math.abs(diff))}${r.unit}(${Math.round(Math.abs(rel) * 100)}%) ` +
+    `${diff > 0 ? '늘었어요' : '줄었어요'}${status}`
+  );
+};
 
 interface RowView {
   status: MealNutrientDisplayKey | null;
@@ -131,11 +162,14 @@ export const MealStatsNutrients = ({
   data,
   loading,
   rangeLabel,
+  previous,
 }: {
   data: MealStatsNutrientsResultType | undefined;
   loading: boolean;
   /** 통계에서 고른 기간(1주·1달·3달). */
   rangeLabel: string;
+  /** 직전 같은 길이 기간 — 받았을 때만 줄마다 견준다. */
+  previous?: MealStatsNutrientsResultType;
 }) => {
   const titleId = useId();
   const restId = useId();
@@ -171,6 +205,16 @@ export const MealStatsNutrients = ({
   }
 
   const judged = data.status === 'ok';
+  // 직전 기간 — 이번 기간이 판정이 나왔을 때만 본다. 직전도 판정이 나왔으면 줄마다 견주고, 모자라면 그 사실만 알린다.
+  const prevLabel = `직전 ${rangeLabel}`;
+  const prevData = judged && previous && previous.days === data.days ? previous : null;
+  const prevByKey = prevData?.status === 'ok' ? new Map(prevData.rows.map((p) => [p.key, p])) : null;
+  const compareNote =
+    prevData === null
+      ? null
+      : prevByKey
+        ? `${prevLabel}(평균에 든 날 ${prevData.analyzedDays}일)보다 하루 평균이 ${Math.round(CHANGE_MIN * 100)}% 넘게 달라진 영양소는 줄 아래에 적었어요.`
+        : `${prevLabel}${topicParticle(rangeLabel)} 평균에 든 날이 ${prevData.analyzedDays > 0 ? `${prevData.analyzedDays}일뿐이라` : '없어'} 견주지 않았어요.`;
   const core = data.rows.filter((r) => r.group === 'core');
   // 아래 묶음 — 영양 탭처럼 판정 순(같은 판정은 원래 차례 — sort 는 안정 정렬).
   const micro = data.rows
@@ -208,6 +252,7 @@ export const MealStatsNutrients = ({
         <StatsRow
           row={r}
           view={viewOf(r, judged)}
+          change={prevByKey ? changeText(r, prevByKey.get(r.key), prevLabel) : null}
           active={active}
           wide={wide}
           detailId={detailId}
@@ -227,6 +272,7 @@ export const MealStatsNutrients = ({
             {rangeLabel} 중 <b>{data.analyzedDays}일</b> · 끼니 {meals}개
           </span>
           <span className="text-muted-foreground">{mealNutrientProfileLabel(data.profile)}</span>
+          {compareNote ? <span className="basis-full text-xs text-muted-foreground">{compareNote}</span> : null}
         </div>
         {warnings.length > 0 ? (
           <div className="meal-note meal-note-block text-xs" data-tone="warn">
@@ -320,10 +366,11 @@ const RangeBar = ({ share, range }: { share: number; range: MealStatsNutrientRow
 };
 
 // 줄 하나 — 영양 탭과 같은 줄 부품을 줄 전체 단추로 감싼다(넓은 화면은 오른쪽 카드에 보일 것을 고르는 단추, 좁은 화면은
-// 아래로 펼치는 단추). 누를 수 있다는 표시로 값 뒤에 작은 화살표.
+// 아래로 펼치는 단추). 누를 수 있다는 표시로 값 뒤에 작은 화살표. change 는 직전 기간보다 달라진 정도(맨 아래 한 줄).
 const StatsRow = ({
   row,
   view,
+  change,
   active,
   wide,
   detailId,
@@ -331,6 +378,7 @@ const StatsRow = ({
 }: {
   row: MealStatsNutrientRowType;
   view: RowView;
+  change: string | null;
   active: boolean;
   wide: boolean;
   detailId: string;
@@ -364,6 +412,7 @@ const StatsRow = ({
       />
       {view.note ? <span className="block text-xs text-muted-foreground">{view.note}</span> : null}
       {view.meta ? <span className="block text-xs text-muted-foreground">{view.meta}</span> : null}
+      {change ? <span className="block text-xs text-muted-foreground">{change}</span> : null}
     </button>
   );
 };

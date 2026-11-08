@@ -703,6 +703,74 @@ describe('MealPage', () => {
     expect(within(calcium).getByText(/1주는 평균이 하나라 흐름은 1달·3달에서 보여요/)).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: '영양' })).toHaveAttribute('href', '/meal/nutrition');
   });
+  it('통계 영양소 — 직전 같은 길이 기간보다 10% 넘게 달라진 줄에만 변화 한 줄(판정이 바뀌면 직전 판정도), 직전 기록이 모자라면 알리기만', async () => {
+    const shift = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + n);
+      return toLocalDateKey(d);
+    };
+    const today = shift(0);
+    const asked: string[] = [];
+    let previousOk = true;
+    // 직전 기간 — 나트륨 2,200mg(충분) → 이번 3,400mg(많음), 열량 1,400 → 1,600, 탄수화물 180 → 210, 지방 56 → 60(7%, 10% 안쪽),
+    // 단백질 54 → 55. 당류는 정보 40%라 견주지 않는다.
+    const changed: Record<string, Record<string, unknown>> = {
+      sodium: { intakePerDay: 2200, percent: 96, status: 'ok' },
+      kcal: { intakePerDay: 1400 },
+      carb: { intakePerDay: 180 },
+      fat: { intakePerDay: 56 },
+      protein: { intakePerDay: 54 },
+      sugar: { intakePerDay: 10 },
+    };
+    const before = {
+      ...statsNutrients,
+      analyzedDays: 5,
+      rows: statsNutrients.rows.map((r) => ({ ...r, ...changed[(r as unknown as { key: string }).key] })),
+    };
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(STATS_URL, () => HttpResponse.json(stats)),
+      http.get(STATS_NUTRITION_URL, () => HttpResponse.json(statsNutrition)),
+      http.get(STATS_NUTRIENTS_URL, ({ request }) => {
+        const url = new URL(request.url);
+        const to = url.searchParams.get('to');
+        asked.push(`${url.searchParams.get('from')}~${to}`);
+        if (to === today) return HttpResponse.json(statsNutrients);
+        return HttpResponse.json(
+          previousOk
+            ? before
+            : { ...before, status: 'insufficient', analyzedDays: 2, insufficientReason: '기록이 모자라요.' },
+        );
+      }),
+    );
+    renderPage(undefined, '/meal/stats');
+    const card = await screen.findByRole('region', { name: '영양소 · 1달' });
+    expect(await within(card).findByText(/직전 1달\(/)).toHaveTextContent(
+      '직전 1달(평균에 든 날 5일)보다 하루 평균이 10% 넘게 달라진 영양소는 줄 아래에 적었어요.',
+    );
+    // 직전 1달 = 이번 30일 바로 앞 30일.
+    expect(asked).toContain(`${shift(-59)}~${shift(-30)}`);
+    const row = (name: RegExp) => within(card).getByRole('button', { name });
+    expect(row(/^나트륨/)).toHaveTextContent('직전 1달보다 하루 1,200mg(55%) 늘었어요 · 직전엔 충분');
+    expect(row(/^열량/)).toHaveTextContent('직전 1달보다 하루 200kcal(14%) 늘었어요');
+    expect(row(/^탄수화물/)).toHaveTextContent('직전 1달보다 하루 30g(17%) 늘었어요');
+    // 10% 안쪽(지방·단백질)·정보가 모자란 줄(당류)·그대로인 줄(칼슘)은 붙이지 않는다.
+    expect(row(/^지방/)).not.toHaveTextContent('직전');
+    expect(row(/^단백질/)).not.toHaveTextContent('직전');
+    expect(row(/^당류/)).not.toHaveTextContent('직전');
+    expect(row(/^칼슘/)).not.toHaveTextContent('직전');
+
+    // 직전 기간이 판정을 못 내면(평균에 든 날 4일 미만) 줄마다 견주지 않고 그 사실만 알린다.
+    previousOk = false;
+    fireEvent.click(screen.getByRole('button', { name: '1주' }));
+    const week = await screen.findByRole('region', { name: '영양소 · 1주' });
+    expect(await within(week).findByText(/견주지 않았어요/)).toHaveTextContent(
+      '직전 1주는 평균에 든 날이 2일뿐이라 견주지 않았어요.',
+    );
+    expect(asked).toContain(`${shift(-13)}~${shift(-7)}`);
+    expect(within(week).getByRole('button', { name: /^나트륨/ })).not.toHaveTextContent('직전');
+  });
+
   it("기록 목록 — 한 끼만 적힌 지난날은 남은 끼니마다 '안 먹음'을 묻고, 다 표시해야 묻기 대신 취소할 수 있는 표시만 남는다", async () => {
     let skips: { date: string; slot: string }[] = [];
     const asked: string[] = [];

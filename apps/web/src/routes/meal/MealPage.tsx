@@ -629,6 +629,15 @@ const MealStats = () => {
   // 영양소별 하루 평균 — 영양 탭 점검과 같은 셈(두 끼 이상 기록한 날, 같은 섭취기준·판정)을 이 기간에. 영양정보 표·막대 위
   // 한 줄·묶음 카드의 많음·부족 표시가 같이 써서, 통계 화면 안에서는 모두 고른 기간 한 가지로 말한다.
   const nutrients = useMealStatsNutrients(from, to);
+  // 직전 같은 길이 기간(1주면 그 앞 7일) — 영양소 줄마다 하루 평균이 얼마나 달라졌는지 견준다(2026-11-09). 같은 조회를 앞 기간으로.
+  const prev = useMemo(() => {
+    const end = new Date();
+    end.setDate(end.getDate() - days);
+    const start = new Date();
+    start.setDate(start.getDate() - (2 * days - 1));
+    return { from: toLocalDateKey(start), to: toLocalDateKey(end) };
+  }, [days]);
+  const previous = useMealStatsNutrients(prev.from, prev.to);
   const flags = useMemo(
     () => flaggedNutrients(nutrients.data?.status, nutrients.data?.rows),
     [nutrients.data],
@@ -694,7 +703,13 @@ const MealStats = () => {
         <p className="meal-empty">이 기간에는 기록이 없어요.</p>
       ) : (
         <>
-          <MealStatsNutrients data={nutrients.data} loading={nutrients.isLoading} rangeLabel={rangeLabel} />
+          <MealStatsNutrients
+            data={nutrients.data}
+            loading={nutrients.isLoading}
+            rangeLabel={rangeLabel}
+            // 기간을 바꾸는 동안 남아 있는 앞 기간 값끼리 견주지 않게 — 둘 다 새로 받은 뒤에만.
+            previous={nutrients.isPlaceholderData || previous.isPlaceholderData ? undefined : previous.data}
+          />
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <MealBarSummary
