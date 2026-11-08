@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MEAL_MAX_ITEMS_PER_ENTRY } from '@repo/api-contract';
 import {
   ApiError,
   beginMealDraftPhotoPreparation,
@@ -27,7 +28,6 @@ import {
   runMealDraftPhotoFlushSingleFlight,
   runMealDraftSaveSingleFlight,
   type MealDraftIdentity,
-  type MealDraftItem,
   type Theme,
   useCreateMealEntry,
   useDeleteMealPhoto,
@@ -54,6 +54,7 @@ import {
   type MealType,
 } from '@repo/utils';
 import { Note } from '~/components/common/Cards';
+import { MealFoodSheet, type MealFoodSheetMode } from './MealFoodSheet';
 import { MealItemRow } from './MealItemRow';
 import { MealPhotoThumb } from './MealPhotoThumb';
 import { MealPendingPhotoThumb } from './MealPendingPhotoThumb';
@@ -74,19 +75,6 @@ import {
 //
 // 인식은 "실패해도 흐름을 막지 않는다": 실패하면 경고만 남기고 사용자는 그대로 손으로 적는다.
 // 사진 없이 손으로만 적는 경로도 같은 화면이다(추천 "이거 먹었어요" 도 여기로 들어온다).
-
-const newItem = (name = ''): Omit<MealDraftItem, 'clientId'> => ({
-  name,
-  foodId: null,
-  dishType: null,
-  mainIngredient: null,
-  cuisine: null,
-  portion: null,
-  isMain: true,
-  confidence: null,
-  source: 'manual',
-  candidates: [],
-});
 
 // 'HH:MM' 표시 — eatenAt(ISO) 은 UTC 지만 표시는 로컬.
 const timeLabel = (iso: string): string => {
@@ -119,6 +107,12 @@ export const MealEntryEditor = ({
       ? `${mealDateLabel(draft.eatenDate, today)} · ${mealDateTitle(draft.eatenDate, today)}`
       : mealDateTitle(draft.eatenDate, today);
   const [timeSheetOpen, setTimeSheetOpen] = useState(false);
+  // 음식 찾기 시트 — 닫는 동안(iOS 시트가 내려가는 동안)에도 내용이 남게 모드는 그대로 두고 open 만 끈다.
+  const [foodSheet, setFoodSheet] = useState<{ mode: MealFoodSheetMode; open: boolean }>({
+    mode: { kind: 'add' },
+    open: false,
+  });
+  const openFoodSheet = (mode: MealFoodSheetMode) => setFoodSheet({ mode, open: true });
   const upload = useUploadMealPhoto();
   const deletePhoto = useDeleteMealPhoto();
   const recognize = useRecognizeMeal();
@@ -798,7 +792,7 @@ export const MealEntryEditor = ({
 
         {/* 음식 */}
         <MealSection>
-          <MealSectionTitle title="먹은 음식" sub="이름을 고치거나 추가할 수 있어요" />
+          <MealSectionTitle title="먹은 음식" sub="음식 추가로 여러 개를 넣고, 이름을 누르면 바꿀 수 있어요" />
           {/* 빠른 추가 — 자주 먹는 음식(고른 끼니 우선)과 기본 목록. 누르면 넣고, 이미 있으면 뺀다.
               반찬은 반찬으로 들어간다(주식이면 통상 1인분으로 커진다). */}
           {quickItems.length > 0 ? (
@@ -823,20 +817,28 @@ export const MealEntryEditor = ({
                   item={item}
                   onChange={(patch) => draft.updateItem(item.clientId, patch)}
                   onRemove={() => draft.removeItem(item.clientId)}
+                  // 빈 줄은 이어서 여러 개 넣는 '찾기', 이름 있는 줄은 그 줄만 바꾸는 '바꾸기'(웹과 같다).
+                  onOpenSearch={() =>
+                    openFoodSheet(
+                      item.name.trim() ? { kind: 'replace', clientId: item.clientId } : { kind: 'add' },
+                    )
+                  }
                 />
               ))}
             </View>
           )}
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => draft.addItem(newItem())}
-            style={styles.addItemBtn}
-          >
-            <MaterialCommunityIcons name="plus" size={18} color={theme.colors.primary} />
-            <Text style={{ color: theme.colors.primary, fontSize: mealFont.callout, fontWeight: '600' }}>
-              음식 추가
-            </Text>
-          </Pressable>
+          {draft.items.length < MEAL_MAX_ITEMS_PER_ENTRY ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openFoodSheet({ kind: 'add' })}
+              style={styles.addItemBtn}
+            >
+              <MaterialCommunityIcons name="plus" size={18} color={theme.colors.primary} />
+              <Text style={{ color: theme.colors.primary, fontSize: mealFont.callout, fontWeight: '600' }}>
+                음식 추가
+              </Text>
+            </Pressable>
+          ) : null}
         </MealSection>
 
         {/* 언제·어떻게 */}
@@ -984,6 +986,13 @@ export const MealEntryEditor = ({
           </Text>
         </Pressable>
       </View>
+
+      <MealFoodSheet
+        open={foodSheet.open}
+        mode={foodSheet.mode}
+        slot={draft.slot}
+        onClose={() => setFoodSheet((sheet) => ({ ...sheet, open: false }))}
+      />
 
       <MealTimeSheet
         open={timeSheetOpen}

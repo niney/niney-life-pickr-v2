@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   useCopyMealPhoto,
-  useFoodSearch,
   useMealDraftStore,
   useRecentMealItem,
   useTheme,
@@ -22,40 +21,38 @@ import { MealPhotoThumb } from './MealPhotoThumb';
 import { Chip, ChipRow } from './mealUi';
 import { mealFont, mealRadius } from './mealTokens';
 
-// 식단 항목 한 줄 — 이름(자동완성) + 인식 후보 전환 + 주식/반찬 + 양 + 삭제.
+// 식단 항목 한 줄 — 이름(누르면 음식 찾기 시트) + 인식 후보 전환 + 주식/반찬 + 양 + 삭제.
 // 정산 Step3Edit 의 편집 리스트와 같은 결: 인식 결과를 확정하지 않고 사용자가 고쳐서 저장한다.
 //
-// 자동완성은 이름 입력이 포커스 상태이고 2자 이상일 때만 뜬다(요청 절약). 카탈로그 항목을 고르면
-// foodId·분류를 함께 채워 통계가 바로 분류를 얻는다. 자유 입력도 그대로 저장된다.
+// 이름은 줄 안 입력칸이 아니라 시트에서 고친다(2026-11-08, 웹 휴대폰과 같이) — 줄 안 자동완성은 키보드에 가리고 두
+// 글자부터·음식 목록만이었다. 양 칩은 키우고 인분 직접 입력칸은 뺐다(값이 있으면 표시만, 양 칩을 누르면 지운다).
 
 export const MealItemRow = ({
   item,
   onChange,
   onRemove,
+  onOpenSearch,
 }: {
   item: MealDraftItem;
   onChange: (patch: Partial<MealDraftItem>) => void;
   onRemove: () => void;
+  /** 이름 단추 — 음식 찾기 시트를 연다(이름 있는 줄은 그 줄 바꾸기). */
+  onOpenSearch: () => void;
 }) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [focused, setFocused] = useState(false);
-  const [servingsText, setServingsText] = useState(item.servings == null ? '' : String(item.servings));
-  useEffect(() => {
-    setServingsText(item.servings == null ? '' : String(item.servings));
-  }, [item.servings]);
-  const search = useFoodSearch(item.name, { limit: 6, enabled: focused && item.name.trim().length >= 2 });
-  const suggestions = focused ? (search.data?.items ?? []) : [];
+  const name = item.name.trim();
 
-  // "지난번엔 어떻게 먹었나" — 이름을 **다 치고 난 뒤**에만 부른다(타이핑 중에는 안 부른다).
-  const settledName = !focused && item.name.trim().length >= 2 ? item.name.trim() : null;
-  const recent = useRecentMealItem(settledName);
+  // "지난번엔 어떻게 먹었나" — 이름이 정해진 줄만(시트에서 고른 뒤).
+  const recent = useRecentMealItem(name.length >= 2 ? name : null);
   const past = recent.data?.found ? recent.data : null;
 
   // 사진은 자동으로 붙이지 않는다 — 오늘 먹은 게 지난번과 같게 생겼을 리 없다. 사용자가 누를 때만.
   const draft = useMealDraftStore();
   const copyPhoto = useCopyMealPhoto();
-  const [applied, setApplied] = useState(false);
+  // 적용 표시는 그 이름에만 — 시트에서 다른 음식으로 바꾸면 새 이름의 '지난번'을 다시 고를 수 있다.
+  const [appliedFor, setAppliedFor] = useState<string | null>(null);
+  const applied = appliedFor === name;
   const photoFull = draft.photos.length >= MEAL_MAX_PHOTOS_PER_ENTRY;
 
   const applyPast = (): void => {
@@ -70,7 +67,7 @@ export const MealItemRow = ({
         onSuccess: (photo) => draft.addPhoto({ token: photo.token, localUri: null }),
       });
     }
-    setApplied(true);
+    setAppliedFor(name);
   };
 
   // 인식이 준 대안(후보) — 첫 후보가 현재 이름과 같으면 굳이 다시 보여주지 않는다.
@@ -80,27 +77,27 @@ export const MealItemRow = ({
   return (
     <View style={styles.row}>
       <View style={styles.nameRow}>
-        <TextInput
-          value={item.name}
-          onChangeText={(name) =>
-            onChange({
-              name,
-              foodId: null,
-              catalogMatchedBy: 'none',
-              catalogMatchScore: null,
-              selectedCandidateRank: null,
-            })
-          }
-          onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 150)}
-          placeholder="음식 이름"
-          placeholderTextColor={theme.colors.textMuted}
-          style={styles.nameInput}
-          accessibilityLabel="음식 이름"
-        />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="항목 삭제"
+          accessibilityLabel={name ? `${item.name} 바꾸기` : '음식 찾기'}
+          onPress={onOpenSearch}
+          style={({ pressed }) => [styles.nameBtn, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          {name ? (
+            <Text style={styles.nameText} numberOfLines={2}>
+              {item.name}
+            </Text>
+          ) : (
+            <View style={styles.nameEmpty}>
+              <MaterialCommunityIcons name="magnify" size={18} color={theme.colors.textMuted} />
+              <Text style={styles.nameEmptyText}>음식 찾기</Text>
+            </View>
+          )}
+          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.textMuted} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${name || '빈'} 항목 삭제`}
           onPress={onRemove}
           hitSlop={6}
           style={styles.removeBtn}
@@ -109,7 +106,7 @@ export const MealItemRow = ({
         </Pressable>
       </View>
 
-      {past && !focused ? (
+      {past ? (
         <View style={styles.pastRow}>
           {past.photoToken ? <MealPhotoThumb token={past.photoToken} size={36} /> : null}
           <Text style={styles.pastText} numberOfLines={1}>
@@ -130,34 +127,6 @@ export const MealItemRow = ({
               <Text style={styles.pastBtnText}>지난번대로</Text>
             </Pressable>
           )}
-        </View>
-      ) : null}
-
-      {suggestions.length > 0 ? (
-        <View style={styles.suggestBox}>
-          {suggestions.map((s) => (
-            <Pressable
-              key={s.id}
-              accessibilityRole="button"
-              onPress={() => {
-                onChange({
-                  name: s.name,
-                  foodId: s.id,
-                  dishType: s.dishType,
-                  mainIngredient: s.mainIngredient,
-                  cuisine: s.cuisine,
-                  source: 'catalog',
-                  catalogMatchedBy: 'food_id',
-                  catalogMatchScore: 1,
-                });
-                setFocused(false);
-              }}
-              style={styles.suggestRow}
-            >
-              <Text style={styles.suggestName}>{s.name}</Text>
-              {s.dishType ? <Text style={styles.suggestMeta}>{FOOD_DISH_TYPE_LABEL[s.dishType]}</Text> : null}
-            </Pressable>
-          ))}
         </View>
       ) : null}
 
@@ -184,11 +153,17 @@ export const MealItemRow = ({
       ) : null}
 
       <ChipRow style={styles.metaRow}>
-        <Chip label={item.isMain ? '주식' : '반찬'} selected={item.isMain} onPress={() => onChange({ isMain: !item.isMain })} />
+        <Chip label="주식" large selected={item.isMain} onPress={() => onChange({ isMain: true })} />
+        <Chip label="반찬·곁들임" large selected={!item.isMain} onPress={() => onChange({ isMain: false })} />
+        {item.dishType ? <Text style={styles.badge}>{FOOD_DISH_TYPE_LABEL[item.dishType]}</Text> : null}
+        {lowConfidence ? <Text style={styles.warn}>확인 필요</Text> : null}
+      </ChipRow>
+      <ChipRow style={styles.metaRow}>
         {MEAL_PORTIONS.map((p) => (
           <Chip
             key={p}
             label={MEAL_PORTION_LABEL[p]}
+            large
             selected={item.portion === p}
             onPress={() =>
               onChange({
@@ -199,35 +174,8 @@ export const MealItemRow = ({
             }
           />
         ))}
-        {item.dishType ? <Text style={styles.badge}>{FOOD_DISH_TYPE_LABEL[item.dishType]}</Text> : null}
-        {lowConfidence ? <Text style={styles.warn}>확인 필요</Text> : null}
+        {item.servings != null ? <Text style={styles.badge}>{item.servings}인분</Text> : null}
       </ChipRow>
-      <View style={styles.servingRow}>
-        <Text style={styles.servingLabel}>인분 직접 입력 (선택)</Text>
-        <TextInput
-          value={servingsText}
-          onChangeText={(value) => {
-            setServingsText(value);
-            const parsed = Number(value.replace(',', '.'));
-            onChange({
-              servings:
-                value.trim() && Number.isFinite(parsed) && parsed >= 0.25 && parsed <= 10
-                  ? parsed
-                  : null,
-              portion: value.trim() ? null : item.portion,
-              portionSource: value.trim() ? 'user_serving' : item.portion ? 'vision_ordinal' : null,
-            });
-          }}
-          onBlur={() => {
-            if (item.servings == null) setServingsText('');
-          }}
-          keyboardType="decimal-pad"
-          placeholder="예: 0.5 / 1 / 1.5"
-          placeholderTextColor={theme.colors.textMuted}
-          style={styles.servingInput}
-          accessibilityLabel="인분 수 직접 입력"
-        />
-      </View>
     </View>
   );
 };
@@ -243,25 +191,23 @@ const createStyles = (theme: Theme) =>
       backgroundColor: theme.colors.surface,
     },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    nameInput: {
+    nameBtn: {
       flex: 1,
-      fontSize: mealFont.body,
-      color: theme.colors.text,
-      paddingVertical: 6,
-    },
-    removeBtn: { padding: 6 },
-    suggestBox: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.border,
+      minWidth: 0,
+      minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
       borderRadius: mealRadius.small,
       backgroundColor: theme.colors.surfaceAlt,
-      overflow: 'hidden',
     },
-    suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8 },
-    suggestName: { flex: 1, fontSize: mealFont.callout, color: theme.colors.text },
-    suggestMeta: { fontSize: mealFont.caption, color: theme.colors.textMuted },
+    nameText: { flex: 1, fontSize: mealFont.body, fontWeight: '600', color: theme.colors.text },
+    nameEmpty: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    nameEmptyText: { fontSize: mealFont.body, color: theme.colors.textMuted },
+    removeBtn: { padding: 6 },
     pastRow: {
-      marginTop: 6,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
@@ -279,16 +225,4 @@ const createStyles = (theme: Theme) =>
     metaRow: { alignItems: 'center' },
     badge: { fontSize: mealFont.caption, color: theme.colors.textMuted },
     warn: { fontSize: mealFont.caption, color: theme.colors.danger },
-    servingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    servingLabel: { fontSize: mealFont.caption, color: theme.colors.textMuted },
-    servingInput: {
-      flex: 1,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.border,
-      borderRadius: mealRadius.small,
-      paddingHorizontal: 9,
-      paddingVertical: 6,
-      color: theme.colors.text,
-      fontSize: mealFont.caption,
-    },
   });

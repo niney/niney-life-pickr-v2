@@ -162,6 +162,7 @@ export const Chip = ({
   icon,
   trailingIcon,
   accessibilityLabel,
+  large = false,
 }: {
   label?: string;
   selected?: boolean;
@@ -171,6 +172,8 @@ export const Chip = ({
   icon?: MealIconName;
   trailingIcon?: MealIconName;
   accessibilityLabel?: string;
+  /** 손가락으로 자주 누르는 자리(식단 항목의 주식/반찬·양) — 키운 칩. */
+  large?: boolean;
 }) => {
   const theme = useTheme();
   const danger = tone === 'danger';
@@ -191,6 +194,7 @@ export const Chip = ({
       disabled={disabled || !onPress}
       style={({ pressed }) => [
         styles.chip,
+        large ? styles.chipLarge : null,
         {
           borderColor: selected ? theme.colors.primary : theme.colors.border,
           backgroundColor: selected ? theme.colors.primary : 'transparent',
@@ -199,7 +203,7 @@ export const Chip = ({
       ]}
     >
       {icon ? <MaterialCommunityIcons name={icon} size={15} color={color} /> : null}
-      {label ? <Text style={[styles.chipText, { color }]}>{label}</Text> : null}
+      {label ? <Text style={[styles.chipText, large ? styles.chipTextLarge : null, { color }]}>{label}</Text> : null}
       {trailingIcon ? <MaterialCommunityIcons name={trailingIcon} size={15} color={color} /> : null}
     </Pressable>
   );
@@ -429,6 +433,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipText: { fontSize: mealFont.footnote, fontWeight: '500' },
+  chipLarge: { minHeight: 40, paddingHorizontal: 15, paddingVertical: 9, justifyContent: 'center' },
+  chipTextLarge: { fontSize: mealFont.callout },
   button: {
     minHeight: 46,
     flexDirection: 'row',
