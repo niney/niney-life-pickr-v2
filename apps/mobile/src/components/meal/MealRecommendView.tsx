@@ -12,6 +12,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
   MEAL_ALLERGEN_LABEL,
+  type MealRecommendationSideType,
   type MealRecommendationType,
   type MealSlotType,
   type MealTypeType,
@@ -52,7 +53,19 @@ import { mealFont, mealRadius, useMealFabInsets } from './mealTokens';
 //
 // "먹은 메뉴 기록"은 추천을 그대로 기록으로 넘긴다 — draft 에 음식을 넣고 입력 화면으로 보낸다.
 
-export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType }) => {
+// 추천 카드의 곁들임 한 줄 — "곁들이면 좋아요 · 파프리카(비타민 C) · 당근(비타민 A)".
+const sidesText = (sides: ReadonlyArray<MealRecommendationSideType>): string =>
+  `곁들이면 좋아요 · ${sides.map((s) => `${s.name}(${s.nutrients.join('·')})`).join(' · ')}`;
+
+export const MealRecommendView = ({
+  initialSlot,
+  onOpenAnalysis,
+}: {
+  initialSlot?: MealSlotType;
+  // 곁들임 줄의 '영양 보기' — 분석은 같은 화면(app/meal/index.tsx)의 탭이라 그 화면이 탭을 바꿔 준다
+  // (router.push('/meal?tab=…') 는 같은 화면을 한 겹 더 쌓는다).
+  onOpenAnalysis?: () => void;
+}) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
@@ -361,11 +374,24 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
               title={`${mealDateLabel(shown.targetDate, today)} ${MEAL_SLOT_LABEL[shown.targetSlot]} 추천`}
               sub={shown.summary || null}
             />
-            {/* 끼니로 못 채운 부족 영양소의 곁들임(서버가 정한 것) — 예전 서버 응답(sides 없음)도 견딘다. */}
+            {/* 끼니로 못 채운 부족 영양소의 곁들임(서버가 정한 것) — 예전 서버 응답(sides 없음)도 견딘다.
+                '영양 보기'는 분석 탭의 영양소 점검으로 — 웹은 줄 끝 링크지만 앱은 누르기 쉽게 줄 전체를 누르게 한다. */}
             {(shown.sides ?? []).length > 0 ? (
-              <Note tone="muted">
-                {`곁들이면 좋아요 · ${shown.sides.map((s) => `${s.name}(${s.nutrients.join('·')})`).join(' · ')}`}
-              </Note>
+              onOpenAnalysis ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${sidesText(shown.sides)}. 영양 보기`}
+                  accessibilityHint="분석 탭의 영양소 점검을 엽니다"
+                  onPress={onOpenAnalysis}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Note tone="muted" trailing={<Text style={styles.sidesLink}>영양 보기 ›</Text>}>
+                    {sidesText(shown.sides)}
+                  </Note>
+                </Pressable>
+              ) : (
+                <Note tone="muted">{sidesText(shown.sides)}</Note>
+              )
             ) : null}
             {/* 서버 안내와 알레르기 주의를 한 띠에 — 주황 띠 두 개가 위아래로 겹쳐 있었다. */}
             {warnings.length > 0 ? (
@@ -668,4 +694,5 @@ const createStyles = (theme: Theme) =>
       marginBottom: 4,
     },
     pastBannerText: { flex: 1, fontSize: mealFont.caption, color: theme.colors.text },
+    sidesLink: { fontSize: mealFont.caption, lineHeight: 17, color: theme.colors.primary, fontWeight: '600' },
   });

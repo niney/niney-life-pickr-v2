@@ -24,7 +24,7 @@ import {
 } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
 import { hapticLight, hapticSelection } from '~/lib/haptics';
-import { MealAnalysisView } from '~/components/meal/MealAnalysisView';
+import { MealAnalysisView, type MealAnalysisFocus } from '~/components/meal/MealAnalysisView';
 import { MealCalendarView } from '~/components/meal/MealCalendarView';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
 import { MealRecommendView } from '~/components/meal/MealRecommendView';
@@ -125,6 +125,11 @@ export default function MealScreen() {
   const initialSlot = isMealSlot(requestedSlot) ? requestedSlot : undefined;
   const initial = useMemo(() => initialFromParam(requestedTab), [requestedTab]);
   const [tab, setTab] = useState<Tab>(initial.tab);
+  // 분석 탭을 열 때 내려가 있을 섹션 — 추천 카드의 '영양 보기'·옛 ?tab=nutrition 은 영양소 점검으로.
+  // 위 탭 전환으로 오가면 처음(맨 위)부터.
+  const [analysisFocus, setAnalysisFocus] = useState<MealAnalysisFocus | null>(
+    requestedTab === 'nutrition' ? 'nutrition' : null,
+  );
   const [recordsView, setRecordsView] = useState<RecordsView>(initial.recordsView);
   const [searchText, setSearchText] = useState('');
   const [appliedQ, setAppliedQ] = useState('');
@@ -271,6 +276,7 @@ export default function MealScreen() {
               value={tab}
               onChange={(v) => {
                 if (v !== tab) hapticSelection();
+                setAnalysisFocus(null);
                 setTab(v as Tab);
               }}
               options={TABS.map((t) => ({ value: t.value, label: t.label }))}
@@ -504,9 +510,17 @@ export default function MealScreen() {
           ) : tab === 'records' ? (
             <MealCalendarView onOpenEntry={(id) => router.push(`/meal/${id}` as never)} />
           ) : tab === 'analysis' ? (
-            <MealAnalysisView />
+            <MealAnalysisView focus={analysisFocus} />
           ) : (
-            <MealRecommendView key={initialSlot ?? 'auto'} initialSlot={initialSlot} />
+            <MealRecommendView
+              key={initialSlot ?? 'auto'}
+              initialSlot={initialSlot}
+              onOpenAnalysis={() => {
+                hapticSelection();
+                setAnalysisFocus('nutrition');
+                setTab('analysis');
+              }}
+            />
           )}
 
           <MealScalePressable

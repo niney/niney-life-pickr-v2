@@ -80,12 +80,31 @@ export const StateBlock = ({
 };
 
 // 안내 띠 — warn(저장본 표시 등) / muted(직전 발표분 폴백 등).
-export const Note = ({ tone = 'muted', children }: { tone?: 'warn' | 'muted'; children: ReactNode }) => {
+// trailing — 오른쪽 끝에 붙는 짧은 표시(예: '영양 보기 ›'). 본문 안에 이어 쓰면 한글이 글자 단위로 줄바꿈돼
+// 링크 글자가 두 줄로 갈라지므로, 본문은 왼쪽 칸에서 줄바꿈하고 trailing 은 한 덩어리로 오른쪽에 둔다.
+export const Note = ({
+  tone = 'muted',
+  children,
+  trailing,
+}: {
+  tone?: 'warn' | 'muted';
+  children: ReactNode;
+  trailing?: ReactNode;
+}) => {
   const theme = useTheme();
   const warn = tone === 'warn';
   return (
-    <View style={[styles.note, { backgroundColor: warn ? 'rgba(245,158,11,0.12)' : theme.colors.surfaceAlt }]}>
-      <Text style={[styles.noteText, { color: warn ? '#b45309' : theme.colors.textMuted }]}>{children}</Text>
+    <View
+      style={[
+        styles.note,
+        trailing ? styles.noteRow : null,
+        { backgroundColor: warn ? 'rgba(245,158,11,0.12)' : theme.colors.surfaceAlt },
+      ]}
+    >
+      <Text style={[styles.noteText, trailing ? styles.noteTextFill : null, { color: warn ? '#b45309' : theme.colors.textMuted }]}>
+        {children}
+      </Text>
+      {trailing}
     </View>
   );
 };
@@ -117,7 +136,9 @@ const styles = StyleSheet.create({
   stateText: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
   retry: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 },
   note: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
+  noteRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   noteText: { fontSize: 12, lineHeight: 17 },
+  noteTextFill: { flex: 1 },
   tile: { flex: 1, minWidth: '45%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, gap: 2 },
   tileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   tileLabel: { fontSize: 11 },
