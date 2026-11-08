@@ -587,9 +587,6 @@ html.dark:has(.meal-app) {
   .meal-meter[data-tone='recordGap'] > span, .meal-meter[data-tone='unknown'] > span { background: var(--meal-faint); }
   .meal-rank-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
   .meal-rank-row:last-child { border-bottom: 0; }
-  .meal-days-chart { display: flex; height: 4.5rem; align-items: flex-end; gap: 2px; border-bottom: 1.5px solid var(--foreground); }
-  .meal-days-chart > span { flex: 1; min-width: 0; background: var(--foreground); }
-  .meal-days-chart > span[data-empty='true'] { background: var(--border); }
 
   /* ── 기록 목록 ── 날짜마다 먹줄, 끼니 줄은 바탕 위에(누르면 흰 종이) */
   .meal-filter { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -848,6 +845,15 @@ html.dark:has(.meal-app) {
   .meal-nut-foods { margin-top: 1rem; }
   .meal-nut-foods-title { margin-bottom: 0.25rem; font-size: 0.8125rem; font-weight: 800; }
   .meal-nut-foods-fine { margin-top: 0.35rem; font-size: 0.6875rem; color: var(--muted-foreground); }
+
+  /* 끼니 '안 먹음'(2026-11-08) — 홈의 어제 빈 끼니 묻기, 기록 목록의 날짜별 표시·묻기. 묻는 곳은 한 끼만 적혀 평균에서 빠지는 날뿐. */
+  .meal-skip-nudge { margin-bottom: 1.25rem; }
+  .meal-skip-slots { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem; }
+  .meal-skip-slots > li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+  .meal-skip-slot { min-width: 2.5rem; font-weight: 800; }
+  .meal-day-skips { display: flex; flex-direction: column; gap: 0.35rem; padding-top: 0.5rem; }
+  .meal-day-skip { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
+  .meal-day-skip-ask { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.55rem 0.75rem; background: var(--muted); border-radius: 6px; }
 
   @media (prefers-reduced-motion: no-preference) {
     .meal-bar > span, .meal-week-bar { transition: height 0.3s ease, width 0.3s ease; }

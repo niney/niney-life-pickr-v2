@@ -31,6 +31,7 @@ import {
   useMealRecommendationFeedback,
   useMealRecommendationEvent,
   useMealRecommendations,
+  useMealStats,
 } from '@repo/shared';
 import {
   FOOD_CUISINE_LABEL,
@@ -99,6 +100,10 @@ export const MealRecommendTab = () => {
   const shownEventIds = shownEventIdsOf(useQueryClient());
 
   const today = toLocalDateKey(now);
+  // 최근 30일 추천 반응 — 고른 추천이 실제 기록으로 이어졌는지(통계 화면에서 옮겨 왔다, 2026-11-08). 통계 '1달'과 같은 기간이라
+  // 같은 조회(캐시)를 쓴다.
+  const monthAgo = toLocalDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29));
+  const reaction = useMealStats(monthAgo, today).data?.recommendation;
   const notRemoved = (
     r: MealRecommendationType | null | undefined,
   ): MealRecommendationType | null => (r && !removedIds.has(r.id) ? r : null);
@@ -403,6 +408,12 @@ export const MealRecommendTab = () => {
             {deleteError ? (
               <p className="pt-1 text-xs text-destructive">
                 {deleteError instanceof Error ? deleteError.message : '추천을 삭제하지 못했어요.'}
+              </p>
+            ) : null}
+            {reaction && reaction.chosenCount > 0 ? (
+              <p className="border-t pt-2 text-xs text-muted-foreground">
+                최근 30일 — 고른 추천 {reaction.chosenCount}건 · 기록까지 {reaction.loggedCount}건(
+                {Math.round(reaction.acceptanceRate * 100)}%) · 평가 {reaction.ratedCount}건
               </p>
             ) : null}
           </CardContent>

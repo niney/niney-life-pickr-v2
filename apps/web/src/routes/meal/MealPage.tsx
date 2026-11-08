@@ -4,6 +4,7 @@ import { Camera, ChevronLeft, ChevronRight, Loader2, SlidersHorizontal } from 'l
 import type {
   MealEntrySourceType,
   MealEntryType,
+  MealSkipSlotType,
   MealSlotType,
   MealTypeType,
 } from '@repo/api-contract';
@@ -11,6 +12,7 @@ import {
   useInfiniteMealEntries,
   useMealCalendar,
   useMealEntries,
+  useMealSkips,
   useMealStats,
   useMealStatsNutrients,
   useMealStatsNutrition,
@@ -42,6 +44,7 @@ import { flaggedNutrients } from './mealNutrientTone';
 import { MEAL_PATH } from './mealPaths';
 import { MealPageHeader } from './MealPageHeader';
 import { MealPhotoImg } from './MealPhotoImg';
+import { MealDaySkips } from './MealSkip';
 import { MealStatsNutrients } from './MealStatsNutrients';
 
 // 내 식단의 기록·달력·통계 화면(식단 셸 /meal/records·calendar·stats). 차트 라이브러리를 쓰지 않는 리포 관례대로
@@ -81,6 +84,12 @@ export const MealStatsPage = () => (
 
 // ── 기록 ────────────────────────────────────────────────────────────────────
 const SEARCH_DEBOUNCE_MS = 250;
+// '안 먹음' 표시를 함께 받는 기간 상한(서버 MEAL_STATS_MAX_DAYS 400 안쪽) — 더 오래된 묶음엔 표시를 그리지 않는다.
+const SKIP_RANGE_DAYS = 365;
+const daysBefore = (key: string, n: number): string => {
+  const [y = 1970, m = 1, d = 1] = key.split('-').map(Number);
+  return toLocalDateKey(new Date(y, m - 1, d - n));
+};
 
 const SOURCE_FILTERS = [
   ['photo', '사진'],
@@ -144,6 +153,16 @@ const MealList = () => {
     }
     return out;
   }, [items]);
+  // 보이는 날짜 묶음의 '안 먹음' 표시 — 조건 없이 볼 때만(끼니·방식으로 거른 목록에선 빈 끼니를 따질 수 없다).
+  const newest = groups[0]?.date ?? '';
+  const oldest = groups[groups.length - 1]?.date ?? '';
+  const skipFrom = newest && oldest < daysBefore(newest, SKIP_RANGE_DAYS) ? daysBefore(newest, SKIP_RANGE_DAYS) : oldest;
+  const skipsQuery = useMealSkips(skipFrom, newest, !filtered && groups.length > 0);
+  const skipsByDate = useMemo(() => {
+    const out = new Map<string, MealSkipSlotType[]>();
+    for (const s of skipsQuery.data?.skips ?? []) out.set(s.date, [...(out.get(s.date) ?? []), s.slot]);
+    return out;
+  }, [skipsQuery.data]);
 
   const status = list.isLoading ? (
     <Loading />
@@ -273,6 +292,7 @@ const MealList = () => {
                 today={today}
                 entries={group.entries}
                 siblings={ids}
+                skips={!filtered && skipsQuery.data ? (skipsByDate.get(group.date) ?? []) : null}
               />
             ))}
             {/* 이전 조건의 목록을 보여 주는 동안엔 '더 보기'를 숨긴다 — 그 다음 쪽은 이전 조건의 것이다. */}
@@ -301,11 +321,14 @@ const DayGroup = ({
   today,
   entries,
   siblings,
+  skips,
 }: {
   date: string;
   today: string;
   entries: MealEntryType[];
   siblings: string[];
+  /** 그날의 '안 먹음' 끼니 — null 이면(조건으로 거른 목록·불러오기 전) 표시·묻기를 그리지 않는다. */
+  skips: MealSkipSlotType[] | null;
 }) => {
   const sum = summarizeMealNutrition(entries.flatMap((entry) => entry.items));
   return (
@@ -324,6 +347,15 @@ const DayGroup = ({
           </li>
         ))}
       </ul>
+      {skips ? (
+        <MealDaySkips
+          date={date}
+          past={date < today}
+          meals={entries.length}
+          recorded={entries.map((entry) => entry.slot)}
+          skips={skips}
+        />
+      ) : null}
     </section>
   );
 };
@@ -608,8 +640,6 @@ const MealStats = () => {
   const data = stats.data;
   if (!data) return null;
 
-  const maxDay = Math.max(1, ...data.byDate.map((d) => d.count));
-
   return (
     <div className="space-y-9">
       <div className="meal-seg" role="group" aria-label="통계 기간">
@@ -659,58 +689,6 @@ const MealStats = () => {
           </p>
         ) : null}
       </div>
-
-      <section className="meal-sec" aria-labelledby="meal-weekly-insights-title">
-        <div className="meal-sec-head">
-          <h2 id="meal-weekly-insights-title" className="meal-sec-title">
-            주간 인사이트
-          </h2>
-        </div>
-        <p className="-mt-2 mb-3 text-xs text-muted-foreground">
-          최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {data.insights.map((insight) => (
-            <div
-              key={insight.key}
-              className="meal-note meal-note-block"
-              data-tone={INSIGHT_TONE[insight.tone] ?? 'info'}
-            >
-              <p className="font-bold">{insight.title}</p>
-              <p className="text-xs leading-relaxed text-muted-foreground">{insight.detail}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="meal-sec" aria-labelledby="meal-reco-stats-title">
-        <div className="meal-sec-head">
-          <h2 id="meal-reco-stats-title" className="meal-sec-title">
-            추천 반응
-          </h2>
-        </div>
-        <p className="-mt-2 mb-3 text-xs text-muted-foreground">
-          선택한 추천이 실제 기록으로 이어졌는지 보여 줘요.
-        </p>
-        <div className="meal-figures meal-figures-4">
-          <Figure
-            label="추천 선택"
-            value={`${data.recommendation.chosenCount}건`}
-            sub={`노출 ${data.recommendation.shownCount}건 · ${Math.round(data.recommendation.pickRate * 100)}%`}
-          />
-          <Figure label="추천 기록" value={`${data.recommendation.loggedCount}건`} />
-          <Figure
-            label="추천 평가"
-            value={`${data.recommendation.ratedCount}건`}
-            sub={`후보별 ${data.recommendation.candidateRatedCount}건`}
-          />
-          <Figure
-            label="추천 수락률"
-            value={`${Math.round(data.recommendation.acceptanceRate * 100)}%`}
-            sub="선택 대비 기록"
-          />
-        </div>
-      </section>
 
       {data.entryCount === 0 ? (
         <p className="meal-empty">이 기간에는 기록이 없어요.</p>
@@ -796,29 +774,32 @@ const MealStats = () => {
             </div>
           </div>
 
-          <section className="meal-sec" aria-labelledby="meal-by-date">
-            <div className="meal-sec-head">
-              <h2 id="meal-by-date" className="meal-sec-title">
-                날짜별 끼니 수
-              </h2>
-            </div>
-            <div className="meal-days-chart">
-              {data.byDate.map((d) => (
-                <span
-                  key={d.date}
-                  title={`${d.date} · ${d.count}끼`}
-                  data-empty={d.count === 0 ? 'true' : undefined}
-                  style={{ height: `${Math.max(4, (d.count / maxDay) * 100)}%` }}
-                />
-              ))}
-            </div>
-            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-              <span>{data.byDate[0]?.date.slice(5)}</span>
-              <span>{data.byDate[data.byDate.length - 1]?.date.slice(5)}</span>
-            </div>
-          </section>
         </>
       )}
+
+      {/* 기록 기반 관찰은 영양소·분포 다음 — 숫자를 먼저 보고 말로 정리한다(2026-11-08). 추천 반응은 추천 탭으로 옮겼다. */}
+      <section className="meal-sec" aria-labelledby="meal-weekly-insights-title">
+        <div className="meal-sec-head">
+          <h2 id="meal-weekly-insights-title" className="meal-sec-title">
+            주간 인사이트
+          </h2>
+        </div>
+        <p className="-mt-2 mb-3 text-xs text-muted-foreground">
+          최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {data.insights.map((insight) => (
+            <div
+              key={insight.key}
+              className="meal-note meal-note-block"
+              data-tone={INSIGHT_TONE[insight.tone] ?? 'info'}
+            >
+              <p className="font-bold">{insight.title}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">{insight.detail}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

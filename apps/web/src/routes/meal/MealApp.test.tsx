@@ -20,6 +20,7 @@ const STATS_URL = '/api/v1/meals/stats';
 const NUTRITION_URL = '/api/v1/meals/nutrition';
 const CONTEXT_URL = '/api/v1/meals/recommendations/context';
 const FREQUENT_URL = '/api/v1/meals/items/frequent';
+const SKIPS_URL = '/api/v1/meals/skips';
 
 const signIn = () =>
   useAuthStore.setState({
@@ -355,6 +356,70 @@ describe('MealHomePage — 식단 홈', () => {
     fireEvent.click(await screen.findByRole('button', { name: '제육볶음' }));
     expect(await screen.findByText('새 기록 화면')).toBeInTheDocument();
     expect(useMealDraftStore.getState().items.map((i) => i.name)).toEqual(['제육볶음']);
+  });
+
+  // 어제가 한 끼만 적혀 영양 평균에서 빠지면 빈 끼니를 묻는다(달력의 끼니 칸으로 알아낸다).
+  const yesterday = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return toLocalDateKey(d);
+  })();
+  const withYesterdayLunch = (handlers: Parameters<typeof server.use> = []) =>
+    server.use(
+      http.get(CALENDAR_URL, ({ request }) =>
+        HttpResponse.json({
+          month: new URL(request.url).searchParams.get('month'),
+          days: [
+            { date: yesterday, count: 1, slots: ['lunch'], hasPhoto: false, kcal: 600 },
+            { date: today, count: 1, slots: ['lunch'], hasPhoto: false, kcal: 450 },
+          ],
+        }),
+      ),
+      ...handlers,
+    );
+
+  it("어제가 한 끼만 적혀 있으면 빈 끼니마다 기록하기·안 먹음 — 기록하기는 어제 그 끼니로 시작한다", async () => {
+    withYesterdayLunch([http.get(SKIPS_URL, () => HttpResponse.json({ skips: [] }))]);
+    renderHome();
+    const nudge = await screen.findByRole('region', { name: '어제 빈 끼니' });
+    expect(nudge).toHaveTextContent('어제는 점심만 적혀 있어 영양 평균에서 빠져요.');
+    const rows = within(nudge).getAllByRole('listitem').map((li) => li.textContent);
+    expect(rows).toEqual(['아침기록하기안 먹음', '저녁기록하기안 먹음']);
+    fireEvent.click(within(within(nudge).getAllByRole('listitem')[1]!).getByRole('button', { name: '기록하기' }));
+    expect(await screen.findByText('새 기록 화면')).toBeInTheDocument();
+    const draft = useMealDraftStore.getState();
+    expect([draft.slot, draft.eatenDate]).toEqual(['dinner', yesterday]);
+    expect(new Date(draft.eatenAt).getHours()).toBe(19);
+  });
+
+  it('안 먹음을 누르면 표시하고 그 자리에 되돌리기를 남긴다 — 되돌리면 다시 묻는다', async () => {
+    let skips: { date: string; slot: string }[] = [];
+    const calls: string[] = [];
+    withYesterdayLunch([
+      http.get(SKIPS_URL, () => HttpResponse.json({ skips })),
+      http.put(SKIPS_URL, async ({ request }) => {
+        const body = (await request.json()) as { date: string; slot: string };
+        calls.push(`PUT ${body.date} ${body.slot}`);
+        skips = [body];
+        return HttpResponse.json(body);
+      }),
+      http.delete(SKIPS_URL, ({ request }) => {
+        const q = new URL(request.url).searchParams;
+        calls.push(`DELETE ${q.get('date')} ${q.get('slot')}`);
+        skips = [];
+        return new HttpResponse(null, { status: 204 });
+      }),
+    ]);
+    renderHome();
+    const nudge = await screen.findByRole('region', { name: '어제 빈 끼니' });
+    fireEvent.click(within(within(nudge).getAllByRole('listitem')[1]!).getByRole('button', { name: '안 먹음' }));
+    expect(await screen.findByText(/어제 저녁을 안 먹음으로 표시했어요/)).toHaveTextContent(
+      '어제 저녁을 안 먹음으로 표시했어요. 어제도 영양 평균에 들어가요.',
+    );
+    expect(calls).toEqual([`PUT ${yesterday} dinner`]);
+    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
+    expect(await screen.findByText('어제는 점심만 적혀 있어 영양 평균에서 빠져요.')).toBeInTheDocument();
+    expect(calls).toEqual([`PUT ${yesterday} dinner`, `DELETE ${yesterday} dinner`]);
   });
 });
 

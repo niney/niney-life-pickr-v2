@@ -24,30 +24,42 @@ export const emptyMealItem = (): Omit<MealDraftItem, 'clientId'> => ({
   candidates: [],
 });
 
-// 지금 끼니면 지금 시각, 다른 끼니면 오늘 그 끼니의 보통 시각(저녁 칸을 오후 3시에 눌러도 19:00 으로).
-const eatenAtFor = (slot: MealSlotType, now: Date): Date => {
-  if (slot === guessMealSlot(now)) return now;
+// 지금 끼니면 지금 시각, 다른 끼니면 그 끼니의 보통 시각(저녁 칸을 오후 3시에 눌러도 19:00 으로). 다른 날(홈의 어제 빈 끼니)이면
+// 그 날 그 끼니의 보통 시각.
+const eatenAtFor = (slot: MealSlotType, now: Date, date?: string): Date => {
+  const sameDay = !date || date === toLocalDateKey(now);
+  if (sameDay && slot === guessMealSlot(now)) return now;
+  let at = new Date(now);
+  if (!sameDay) {
+    const [y = 1970, m = 1, d = 1] = date.split('-').map(Number);
+    at = new Date(y, m - 1, d, 12, 0, 0, 0);
+  }
   const minutes = parseTimeOfDay(MEAL_SLOT_DEFAULT_TIME[slot]);
-  if (minutes === null) return now;
-  const at = new Date(now);
+  if (minutes === null) return at;
   at.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
   return at;
 };
 
-/** 새 기록 draft 를 준비한다 — 끼니(선택)·음식(선택). 이동은 호출하는 쪽이 한다. */
+/** 새 기록 draft 를 준비한다 — 끼니(선택)·음식(선택)·날짜(선택, 'YYYY-MM-DD' — 없으면 오늘). 이동은 호출하는 쪽이 한다. */
 export const prepareMealEntry = (
-  opts: { slot?: MealSlotType; quick?: FrequentMealItemType } = {},
+  opts: { slot?: MealSlotType; quick?: FrequentMealItemType; date?: string } = {},
 ): void => {
   const store = useMealDraftStore.getState();
   const inProgress = store.entryId === null && store.eatenDate !== '';
   const now = new Date();
   if (!inProgress) {
     const slot = opts.slot ?? guessMealSlot(now);
-    const at = eatenAtFor(slot, now);
+    const at = eatenAtFor(slot, now, opts.date);
     store.start({ eatenAt: at.toISOString(), eatenDate: toLocalDateKey(at), slot });
     if (!opts.quick) useMealDraftStore.getState().addItem(emptyMealItem());
-  } else if (opts.slot && store.slot !== opts.slot) {
-    store.setField('slot', opts.slot);
+  } else {
+    if (opts.slot && store.slot !== opts.slot) store.setField('slot', opts.slot);
+    // 쓰다 둔 새 기록이 다른 날이면 고른 날로 옮긴다(끼니를 옮기는 것과 같은 규칙).
+    if (opts.date && store.eatenDate !== opts.date) {
+      const at = eatenAtFor(opts.slot ?? store.slot, now, opts.date);
+      store.setField('eatenAt', at.toISOString());
+      store.setField('eatenDate', opts.date);
+    }
   }
   if (opts.quick) {
     const key = mealItemNameKey(opts.quick.name);

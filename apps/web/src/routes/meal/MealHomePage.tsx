@@ -33,6 +33,7 @@ import { prepareMealEntry } from './mealDraftStart';
 import { MEAL_NUTRIENT_TONE } from './mealNutrientTone';
 import { useMealOpen } from './mealPanel';
 import { MEAL_PATH } from './mealPaths';
+import { MealSkipNudge } from './MealSkip';
 
 // 식단 홈(2026-11-08 리뉴얼) — 간단명료한 대시보드. 오늘(끼니 4칸 + 열량), 다음 끼니 추천, 영양정보 라벨(최근 14일
 // 하루 평균), 최근 7일, 한 줄 습관, 자주 먹은 음식. 새 API 없이 기존 조회를 함께 부른다.
@@ -89,10 +90,13 @@ export const MealHomePage = () => {
     return { date, kcal: d?.kcal ?? null, count: d?.count ?? 0 };
   });
 
-  const start = (opts: { slot?: MealSlotType; quick?: FrequentMealItemType }) => {
+  const start = (opts: { slot?: MealSlotType; quick?: FrequentMealItemType; date?: string }) => {
     prepareMealEntry(opts);
     open(MEAL_PATH.new);
   };
+  // 어제 — 한 끼만 적혀 영양 평균에서 빠지면 빈 끼니를 묻는다(달력 조회에 끼니 칸이 이미 있다).
+  const yesterday = shiftDate(today, -1);
+  const yesterdayInfo = byDate.get(yesterday);
 
   return (
     <>
@@ -103,6 +107,12 @@ export const MealHomePage = () => {
       {ctx.data && ctx.data.entryCount === 0 ? (
         <StartGuide preference={ctx.data.preference ?? null} onStart={() => start({})} />
       ) : null}
+      <MealSkipNudge
+        date={yesterday}
+        meals={yesterdayInfo?.count ?? 0}
+        recorded={yesterdayInfo?.slots ?? []}
+        onRecord={(slot) => start({ slot, date: yesterday })}
+      />
       <div className="meal-dash">
         <Today
           entries={dayEntries}

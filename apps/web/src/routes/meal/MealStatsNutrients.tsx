@@ -151,8 +151,8 @@ export const MealStatsNutrients = ({
         영양소 <span className="font-normal text-muted-foreground">· {rangeLabel}</span>
       </CardTitle>
       <p className="text-sm text-muted-foreground">
-        두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요. 판정은 영양 탭과 같은 셈이고, 기간만 위에서
-        고른 대로예요.
+        두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요('안 먹음'으로 표시한 끼니도 한 끼로 세요).
+        판정은 영양 탭과 같은 셈이고, 기간만 위에서 고른 대로예요.
       </p>
     </CardHeader>
   );
@@ -213,7 +213,7 @@ export const MealStatsNutrients = ({
           detailId={detailId}
           onPick={() => pick(r.key)}
         />
-        {!wide && active ? <InlineDetail id={detailId} row={r} dates={data.dates} meals={data.meals} /> : null}
+        {!wide && active ? <InlineDetail id={detailId} row={r} days={data} /> : null}
       </li>
     );
   };
@@ -300,7 +300,7 @@ export const MealStatsNutrients = ({
       {list}
       <div className="sticky top-10">
         {selected && data.analyzedDays > 0 ? (
-          <DetailCard id={detailId} row={selected} dates={data.dates} meals={data.meals} />
+          <DetailCard id={detailId} row={selected} days={data} />
         ) : null}
       </div>
     </div>
@@ -376,34 +376,41 @@ interface Bar {
   value: number | null;
   // full = 평균에 든 날(주), partial = 한 끼만 기록한 날(평균에서 뺌), empty = 기록 없음.
   state: 'full' | 'partial' | 'empty';
-  // 날마다면 그날 끼니 수, 주마다면 두 끼 이상 기록한 날 수.
+  // 날마다면 그날 끼니 수, 주마다면 평균에 든 날 수.
   count: number;
+  // 날마다 — 그날 기록이 없는 끼니에 붙은 '안 먹음' 수.
+  skipped: number;
 }
+
+// 흐름에 쓰는 날짜별 값 — 서버가 dates 와 같은 순서로 준다. 평균에 든 날(counted)은 서버 판정 그대로 쓴다('안 먹음'도 한 칸).
+type FlowDays = Pick<MealStatsNutrientsResultType, 'dates' | 'meals' | 'skipped' | 'counted'>;
 
 const isWeekly = (row: MealStatsNutrientRowType, dates: string[]): boolean =>
   row.group === 'micro' || dates.length > DAILY_MAX_DAYS;
 
-const dailyBars = (row: MealStatsNutrientRowType, dates: string[], meals: number[]): Bar[] =>
-  dates.map((d, i) => {
-    const m = meals[i] ?? 0;
+const dailyBars = (row: MealStatsNutrientRowType, days: FlowDays): Bar[] =>
+  days.dates.map((d, i) => {
+    const m = days.meals[i] ?? 0;
     return {
       key: d,
       label: shortDate(d),
       value: row.daily[i] ?? null,
-      state: m === 0 ? 'empty' : m < 2 ? 'partial' : 'full',
+      state: m === 0 ? 'empty' : days.counted[i] ? 'full' : 'partial',
       count: m,
+      skipped: days.skipped[i] ?? 0,
     };
   });
 
-// 주마다 — 끝(오늘)에서부터 7일씩 묶어 두 끼 이상 기록한 날만 평균(점검과 같은 셈). 맨 앞 묶음은 7일이 안 될 수 있다.
-const weeklyBars = (row: MealStatsNutrientRowType, dates: string[], meals: number[]): Bar[] => {
+// 주마다 — 끝(오늘)에서부터 7일씩 묶어 평균에 든 날만 평균(점검과 같은 셈). 맨 앞 묶음은 7일이 안 될 수 있다.
+const weeklyBars = (row: MealStatsNutrientRowType, days: FlowDays): Bar[] => {
+  const { dates } = days;
   const out: Bar[] = [];
   for (let end = dates.length; end > 0; end -= WEEK) {
     const start = Math.max(0, end - WEEK);
     let sum = 0;
     let n = 0;
     for (let i = start; i < end; i += 1) {
-      if ((meals[i] ?? 0) < 2) continue;
+      if (!days.counted[i]) continue;
       sum += row.daily[i] ?? 0;
       n += 1;
     }
@@ -413,6 +420,7 @@ const weeklyBars = (row: MealStatsNutrientRowType, dates: string[], meals: numbe
       value: n > 0 ? sum / n : null,
       state: n > 0 ? 'full' : 'empty',
       count: n,
+      skipped: 0,
     });
   }
   return out;
@@ -425,7 +433,9 @@ const describeBar = (b: Bar, unit: string, weekly: boolean): string => {
       : `${b.label} · 하루 평균 ${amountText(b.value, unit)} (두 끼 이상 기록한 ${b.count}일)`;
   }
   if (b.state === 'empty') return `${b.label} · 기록 없음`;
-  const head = `${b.label} · ${b.value === null ? '값을 아는 기록 없음' : amountText(b.value, unit)} · ${b.count}끼`;
+  const head =
+    `${b.label} · ${b.value === null ? '값을 아는 기록 없음' : amountText(b.value, unit)} · ${b.count}끼` +
+    (b.skipped > 0 ? ` + 안 먹음 ${b.skipped}` : '');
   return b.state === 'partial' ? `${head} — 한 끼만 기록해 평균에서 뺐어요` : head;
 };
 
@@ -447,9 +457,9 @@ const flowSummary = (row: MealStatsNutrientRowType, bars: Bar[], weekly: boolean
   return `가장 많은 ${unit} ${best.label} · ${amountText(best.value, row.unit)}`;
 };
 
-const DetailBody = ({ row, dates, meals }: { row: MealStatsNutrientRowType; dates: string[]; meals: number[] }) => {
-  const weekly = isWeekly(row, dates);
-  const bars = weekly ? weeklyBars(row, dates, meals) : dailyBars(row, dates, meals);
+const DetailBody = ({ row, days }: { row: MealStatsNutrientRowType; days: FlowDays }) => {
+  const weekly = isWeekly(row, days.dates);
+  const bars = weekly ? weeklyBars(row, days) : dailyBars(row, days);
   return (
     <>
       {weekly && bars.length < 2 ? (
@@ -465,45 +475,29 @@ const DetailBody = ({ row, dates, meals }: { row: MealStatsNutrientRowType; date
 };
 
 // 넓은 화면 — 영양 탭의 조언 카드 자리에 같은 흰 카드로.
-const DetailCard = ({
-  id,
-  row,
-  dates,
-  meals,
-}: {
-  id: string;
-  row: MealStatsNutrientRowType;
-  dates: string[];
-  meals: number[];
-}) => (
+const DetailCard = ({ id, row, days }: { id: string; row: MealStatsNutrientRowType; days: FlowDays }) => (
   <Card id={id} role="region" aria-label={`${row.label} 흐름`}>
     <CardHeader>
       <div className="flex items-baseline justify-between gap-2">
         <CardTitle className="text-base">{row.label}</CardTitle>
-        <span className="text-xs text-muted-foreground">{isWeekly(row, dates) ? '주마다 하루 평균' : '날마다 합계'}</span>
+        <span className="text-xs text-muted-foreground">
+          {isWeekly(row, days.dates) ? '주마다 하루 평균' : '날마다 합계'}
+        </span>
       </div>
     </CardHeader>
     <CardContent>
-      <DetailBody row={row} dates={dates} meals={meals} />
+      <DetailBody row={row} days={days} />
     </CardContent>
   </Card>
 );
 
 // 좁은 화면 — 누른 줄 바로 아래 얇은 테두리 상자.
-const InlineDetail = ({
-  id,
-  row,
-  dates,
-  meals,
-}: {
-  id: string;
-  row: MealStatsNutrientRowType;
-  dates: string[];
-  meals: number[];
-}) => (
+const InlineDetail = ({ id, row, days }: { id: string; row: MealStatsNutrientRowType; days: FlowDays }) => (
   <div id={id} role="region" aria-label={`${row.label} 흐름`} className="meal-nline-detail">
-    <p className="mb-2 text-xs text-muted-foreground">{isWeekly(row, dates) ? '주마다 하루 평균' : '날마다 합계'}</p>
-    <DetailBody row={row} dates={dates} meals={meals} />
+    <p className="mb-2 text-xs text-muted-foreground">
+      {isWeekly(row, days.dates) ? '주마다 하루 평균' : '날마다 합계'}
+    </p>
+    <DetailBody row={row} days={days} />
   </div>
 );
 

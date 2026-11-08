@@ -17,6 +17,7 @@ const CALENDAR_URL = '/api/v1/meals/calendar';
 const STATS_URL = '/api/v1/meals/stats';
 const STATS_NUTRITION_URL = '/api/v1/meals/stats/nutrition';
 const STATS_NUTRIENTS_URL = '/api/v1/meals/stats/nutrients';
+const SKIPS_URL = '/api/v1/meals/skips';
 
 // 통계 — 묶음별 영양 몫(나트륨: 찌개 60% · 김치(반찬) 30% · 밥 10%).
 const groupNutrient = (key: string, label: string, unit: string, amount: number, share: number) => ({
@@ -108,6 +109,9 @@ const statsNutrients = {
   profile: { sex: null, ageGroup: '30-49', basis: 'default' },
   dates: ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22'],
   meals: [2, 2, 3, 1, 0, 2],
+  skipped: [0, 0, 0, 0, 0, 0],
+  // 평균에 든 날 — 서버 판정(두 끼 이상, '안 먹음'도 한 칸).
+  counted: [true, true, true, false, false, true],
   rows: [
     nutrientRow({
       key: 'kcal',
@@ -445,11 +449,15 @@ describe('MealPage', () => {
     expect(await screen.findByText('찌개·전골')).toBeInTheDocument();
     expect(screen.getByText('2일')).toBeInTheDocument();
     expect(screen.getByText('25%')).toBeInTheDocument();
-    expect(screen.getByText('추천 수락률')).toBeInTheDocument();
-    expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getByText('주간 인사이트')).toBeInTheDocument();
     expect(screen.getByText('최근 기록 빈도가 늘었어요')).toBeInTheDocument();
     expect(screen.getByText(/기록 기반 관찰/)).toBeInTheDocument();
+    // 정리(2026-11-08): 추천 반응은 추천 탭으로, 날짜별 끼니 수는 영양소의 열량 흐름에 맡겼다. 주간 인사이트는 영양소 다음.
+    expect(screen.queryByText('추천 수락률')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '날짜별 끼니 수' })).not.toBeInTheDocument();
+    const nutrientsCard = await screen.findByRole('region', { name: '영양소 · 1달' });
+    const insightsHead = screen.getByRole('heading', { name: '주간 인사이트' });
+    expect(nutrientsCard.compareDocumentPosition(insightsHead) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const before = ranges.length;
     fireEvent.click(screen.getByRole('button', { name: '1주' }));
@@ -694,6 +702,46 @@ describe('MealPage', () => {
     expect(within(calcium).getByText(/1주는 평균이 하나라 흐름은 1달·3달에서 보여요/)).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: '영양' })).toHaveAttribute('href', '/meal/nutrition');
   });
+  it("기록 목록 — 한 끼만 적힌 지난날은 빈 끼니마다 '안 먹음'을 묻고, 표시하면 묻기 대신 취소할 수 있는 표시가 남는다", async () => {
+    let skips: { date: string; slot: string }[] = [];
+    const asked: string[] = [];
+    const put: unknown[] = [];
+    const deleted: string[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [entry()], nextCursor: null })),
+      http.get(SKIPS_URL, ({ request }) => {
+        asked.push(new URL(request.url).search);
+        return HttpResponse.json({ skips });
+      }),
+      http.put(SKIPS_URL, async ({ request }) => {
+        const body = (await request.json()) as { date: string; slot: string };
+        put.push(body);
+        skips = [...skips, body];
+        return HttpResponse.json(body);
+      }),
+      http.delete(SKIPS_URL, ({ request }) => {
+        const q = new URL(request.url).searchParams;
+        deleted.push(`${q.get('date')}|${q.get('slot')}`);
+        skips = skips.filter((s) => !(s.date === q.get('date') && s.slot === q.get('slot')));
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderPage();
+    const day = await screen.findByRole('region', { name: /8월 20일.* 기록|2026-08-20 기록|기록$/ });
+    // 보이는 날짜 묶음의 표시만 받는다.
+    await waitFor(() => expect(asked).toContain('?from=2026-08-20&to=2026-08-20'));
+    // 점심만 적힌 지난날 — 아침·저녁을 묻는다.
+    expect(await within(day).findByText(/한 끼만 적혀 영양 평균에서 빠져요/)).toBeInTheDocument();
+    fireEvent.click(within(day).getByRole('button', { name: '저녁 안 먹음' }));
+    await waitFor(() => expect(put).toEqual([{ date: '2026-08-20', slot: 'dinner' }]));
+    // 표시하면 평균에 드는 날이 되어 묻기는 사라지고, 취소할 수 있는 표시가 남는다.
+    const cancel = await within(day).findByRole('button', { name: '저녁 안 먹음 취소' });
+    expect(within(day).queryByText(/한 끼만 적혀 영양 평균에서 빠져요/)).not.toBeInTheDocument();
+    fireEvent.click(cancel);
+    await waitFor(() => expect(deleted).toEqual(['2026-08-20|dinner']));
+    expect(await within(day).findByText(/한 끼만 적혀 영양 평균에서 빠져요/)).toBeInTheDocument();
+  });
+
   it('좁은 화면의 조건 단추 — 접고 펼침을 알리고, 건 조건 수를 단추에 보인다', async () => {
     server.use(http.get(ENTRIES_URL, () => HttpResponse.json({ items: [entry()], nextCursor: null })));
     renderPage();
@@ -1095,6 +1143,31 @@ describe('MealPage — 추천·설정 탭', () => {
     expect(screen.getByRole('button', { name: /다시 추천/ })).toBeInTheDocument();
     // 노출은 처음 보인 최신 추천만 — 목록에서 다시 연 예전 추천은 새 노출이 아니다.
     await waitFor(() => expect(shownIds).toEqual(['r3']));
+  });
+
+  it('최근 추천 아래 최근 30일 반응 한 줄 — 고른 추천·기록까지·평가(통계 화면에서 옮겨 왔다)', async () => {
+    const asked: string[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: recommendation }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [recommendation] })),
+      http.post(`${RECOMMENDATIONS_URL}/:id/events`, () => HttpResponse.json({ ok: true })),
+      http.get(STATS_URL, ({ request }) => {
+        const url = new URL(request.url);
+        asked.push(`${url.searchParams.get('from')}~${url.searchParams.get('to')}`);
+        return HttpResponse.json(stats);
+      }),
+    );
+    renderPage(undefined, '/meal/recommend');
+    expect(await screen.findByText(/최근 30일 — 고른 추천/)).toHaveTextContent(
+      '최근 30일 — 고른 추천 2건 · 기록까지 1건(50%) · 평가 1건',
+    );
+    // 통계 '1달'과 같은 기간(오늘 포함 30일) — 같은 조회를 함께 쓴다.
+    const [from, to] = asked[0]!.split('~');
+    const days = (Date.parse(to!) - Date.parse(from!)) / 86_400_000 + 1;
+    expect(days).toBe(30);
   });
 
   // 회귀: 노출 이벤트가 성공할 때마다 추천 조회(context·목록)를 통째로 다시 받았고, 탭을 다시 열 때마다(재마운트)

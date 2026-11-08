@@ -66,7 +66,8 @@ export const MealNutritionTab = () => {
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요.
+            두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요('안 먹음'으로 표시한 끼니도 한
+            끼로 세요).
           </p>
         </CardHeader>
         <CardContent>
