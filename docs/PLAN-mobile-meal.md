@@ -65,6 +65,8 @@ niney@life.com 에 최근 14일 기록이 있어 아래 예시 값으로 맞춰 
   내 기록·최근 1년)와 항목별 `kcal`. 앱 `MealItemRow` 자동완성은 지금 이 값을 안 쓴다(타입만 늘었다). 웹 `MealFoodSheet.tsx` 가 기준 —
   치기 전 자주 먹은 음식·최근 끼니 통째로, 치는 중 '그대로 넣기' → 내 기록 → 음식 목록, 김치·나물은 반찬으로
   (`MEAL_SIDE_DEFAULT_DISH_TYPES`). 레이아웃 리뉴얼과 함께 하는 게 낫다([PLAN-meal-web-redesign.md](PLAN-meal-web-redesign.md)).
+- **통계 묶음별 영양**: `GET /meals/stats/nutrition?from&to`(공용 훅 `useMealStatsNutrition`) — 웹은 분포 막대 기준(끼니 수·열량·
+  나트륨)과 막대를 누르면 펼치는 묶음 카드(`MealGroupBars.tsx`). 앱 분석 탭 분포에 같은 기준·카드를 붙일 수 있다(앱은 누르면 펼침만).
 
 ## 3. 끝났다고 볼 기준
 
