@@ -512,6 +512,17 @@ export const MealGroupNutrient = z.object({
 });
 export type MealGroupNutrientType = z.infer<typeof MealGroupNutrient>;
 
+// 열량 구성 — 탄수화물·단백질·지방에서 온 열량의 비율(1g = 4·4·9kcal, 셋을 더하면 1). 셋을 다 아는 기록만으로 낸다 —
+// 단백질은 거의 모든 기록에 있지만 탄수화물·지방은 일부라, 따로 더하면 탄수화물·지방을 모르는 묶음이 단백질 쪽으로 쏠린다.
+export const MealMacroComposition = z.object({
+  carb: z.number(),
+  protein: z.number(),
+  fat: z.number(),
+  // 셋을 다 아는 기록 수.
+  count: z.number().int(),
+});
+export type MealMacroCompositionType = z.infer<typeof MealMacroComposition>;
+
 export const MealGroupNutrition = z.object({
   key: z.string(),
   label: z.string(),
@@ -529,6 +540,8 @@ export const MealGroupNutrition = z.object({
   highlights: z.array(MealGroupNutrient),
   // 많이 먹은 음식(최대 4).
   foods: z.array(z.object({ name: z.string(), count: z.number().int() })),
+  // 이 묶음의 열량 구성 — 셋을 다 아는 기록이 없으면 null.
+  composition: MealMacroComposition.nullable(),
 });
 export type MealGroupNutritionType = z.infer<typeof MealGroupNutrition>;
 
@@ -538,6 +551,8 @@ export const MealStatsNutritionResult = z.object({
   itemCount: z.number().int(),
   // 몫의 분모 — 이 기간 내가 먹은 양(값을 아는 기록 합).
   totals: z.array(MealGroupNutrient.omit({ share: true })),
+  // 이 기간 내 열량 구성(내 평균) — 묶음 카드가 견준다.
+  composition: MealMacroComposition.nullable(),
   byDishType: z.array(MealGroupNutrition),
   byMainIngredient: z.array(MealGroupNutrition),
   byCuisine: z.array(MealGroupNutrition),

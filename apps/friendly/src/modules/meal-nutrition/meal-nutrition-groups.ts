@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import type {
   MealGroupNutrientType,
   MealGroupNutritionType,
+  MealMacroCompositionType,
   MealStatsNutritionResultType,
 } from '@repo/api-contract';
 import { FOOD_CUISINE_LABEL, FOOD_DISH_TYPE_LABEL, FOOD_MAIN_INGREDIENT_LABEL } from '@repo/utils';
@@ -75,6 +76,21 @@ interface Sum {
   coveredKcal: number;
 }
 
+// 열량 구성 — 탄수화물·단백질·지방에서 온 열량(kcal). 셋을 다 아는 기록만 더한다.
+interface Comp {
+  carbKcal: number;
+  proteinKcal: number;
+  fatKcal: number;
+  count: number;
+}
+const newComp = (): Comp => ({ carbKcal: 0, proteinKcal: 0, fatKcal: 0, count: 0 });
+const addComp = (c: Comp, v: { carb: number; protein: number; fat: number }): void => {
+  c.carbKcal += v.carb * 4;
+  c.proteinKcal += v.protein * 4;
+  c.fatKcal += v.fat * 9;
+  c.count += 1;
+};
+
 interface GroupAcc {
   key: string;
   mainCount: number;
@@ -85,6 +101,7 @@ interface GroupAcc {
   macros: Map<MacroKey, Sum>;
   micros: Map<KdriNutrient, Sum>;
   foods: Map<string, number>;
+  comp: Comp;
 }
 
 const newGroup = (key: string): GroupAcc => ({
@@ -97,6 +114,7 @@ const newGroup = (key: string): GroupAcc => ({
   macros: new Map(),
   micros: new Map(),
   foods: new Map(),
+  comp: newComp(),
 });
 
 const add = <K>(map: Map<K, Sum>, key: K, amount: number, kcal: number): void => {
@@ -114,9 +132,20 @@ const roundAmount = (v: number, unit: string): number => {
 };
 const roundShare = (v: number): number => Math.round(v * 1000) / 1000;
 
+const finishComp = (c: Comp): MealMacroCompositionType | null => {
+  const sum = c.carbKcal + c.proteinKcal + c.fatKcal;
+  if (c.count === 0 || sum <= 0) return null;
+  return {
+    carb: roundShare(c.carbKcal / sum),
+    protein: roundShare(c.proteinKcal / sum),
+    fat: roundShare(c.fatKcal / sum),
+    count: c.count,
+  };
+};
+
 export const groupMealNutrition = (input: GroupInput): MealStatsNutritionResultType => {
   const refRows = input.refRowsByName ?? new Map<string, AnalysisCatalogRow>();
-  const totals = { macros: new Map<MacroKey, Sum>(), micros: new Map<KdriNutrient, Sum>() };
+  const totals = { macros: new Map<MacroKey, Sum>(), micros: new Map<KdriNutrient, Sum>(), comp: newComp() };
   const groups: Record<Axis, Map<string, GroupAcc>> = {
     dishType: new Map(),
     mainIngredient: new Map(),
@@ -144,13 +173,17 @@ export const groupMealNutrition = (input: GroupInput): MealStatsNutritionResultT
     const resolved = resolveItemNutrients(it, kcal, input.rowsById, refRows);
     const carb = itemMacroGrams(resolved, kcal, 'carbG');
     const fat = itemMacroGrams(resolved, kcal, 'fatG');
+    const protein = resolved.values.get('protein') ?? null;
     const macroValues: Array<[MacroKey, number | null]> = [
       ['kcal', kcal],
       ['carb', carb],
-      ['protein', resolved.values.get('protein') ?? null],
+      ['protein', protein],
       ['fat', fat],
       ['sodium', resolved.values.get('sodium') ?? null],
     ];
+    // 열량 구성은 셋을 다 아는 기록만 — 따로 더하면 탄수화물·지방을 모르는 기록의 단백질만 들어가 쏠린다.
+    const comp = carb !== null && fat !== null && protein !== null ? { carb, protein, fat } : null;
+    if (comp) addComp(totals.comp, comp);
     for (const [key, v] of macroValues) if (v !== null) add(totals.macros, key, v, kcal);
     for (const def of MICRO_DEFS) {
       const v = resolved.values.get(def.key);
@@ -160,6 +193,7 @@ export const groupMealNutrition = (input: GroupInput): MealStatsNutritionResultT
       g.knownCount += 1;
       g.kcal += kcal;
       if (carb !== null || fat !== null) g.macroKnownCount += 1;
+      if (comp) addComp(g.comp, comp);
       for (const [key, v] of macroValues) if (v !== null) add(g.macros, key, v, kcal);
       for (const def of MICRO_DEFS) {
         const v = resolved.values.get(def.key);
@@ -211,6 +245,7 @@ export const groupMealNutrition = (input: GroupInput): MealStatsNutritionResultT
             .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
             .slice(0, MAX_FOODS)
             .map(([name, count]) => ({ name, count })),
+          composition: finishComp(g.comp),
         };
       })
       // 열량 몫이 큰 순(같으면 주식 횟수) — 화면은 고른 막대 기준으로 다시 정렬한다.
@@ -228,6 +263,7 @@ export const groupMealNutrition = (input: GroupInput): MealStatsNutritionResultT
       const s = totals.macros.get(m.key);
       return s ? [{ key: m.key, label: m.label, unit: m.unit, amount: roundAmount(s.amount, m.unit) }] : [];
     }),
+    composition: finishComp(totals.comp),
     byDishType: finish('dishType'),
     byMainIngredient: finish('mainIngredient'),
     byCuisine: finish('cuisine'),

@@ -23017,6 +23017,31 @@
                         "additionalProperties": false
                       }
                     },
+                    "composition": {
+                      "type": "object",
+                      "properties": {
+                        "carb": {
+                          "type": "number"
+                        },
+                        "protein": {
+                          "type": "number"
+                        },
+                        "fat": {
+                          "type": "number"
+                        },
+                        "count": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "carb",
+                        "protein",
+                        "fat",
+                        "count"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
                     "byDishType": {
                       "type": "array",
                       "items": {
@@ -23124,6 +23149,31 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "composition": {
+                            "type": "object",
+                            "properties": {
+                              "carb": {
+                                "type": "number"
+                              },
+                              "protein": {
+                                "type": "number"
+                              },
+                              "fat": {
+                                "type": "number"
+                              },
+                              "count": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "carb",
+                              "protein",
+                              "fat",
+                              "count"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -23136,7 +23186,8 @@
                           "kcalPerItem",
                           "nutrients",
                           "highlights",
-                          "foods"
+                          "foods",
+                          "composition"
                         ],
                         "additionalProperties": false
                       }
@@ -23248,6 +23299,31 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "composition": {
+                            "type": "object",
+                            "properties": {
+                              "carb": {
+                                "type": "number"
+                              },
+                              "protein": {
+                                "type": "number"
+                              },
+                              "fat": {
+                                "type": "number"
+                              },
+                              "count": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "carb",
+                              "protein",
+                              "fat",
+                              "count"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -23260,7 +23336,8 @@
                           "kcalPerItem",
                           "nutrients",
                           "highlights",
-                          "foods"
+                          "foods",
+                          "composition"
                         ],
                         "additionalProperties": false
                       }
@@ -23372,6 +23449,31 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "composition": {
+                            "type": "object",
+                            "properties": {
+                              "carb": {
+                                "type": "number"
+                              },
+                              "protein": {
+                                "type": "number"
+                              },
+                              "fat": {
+                                "type": "number"
+                              },
+                              "count": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "carb",
+                              "protein",
+                              "fat",
+                              "count"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -23384,7 +23486,8 @@
                           "kcalPerItem",
                           "nutrients",
                           "highlights",
-                          "foods"
+                          "foods",
+                          "composition"
                         ],
                         "additionalProperties": false
                       }
@@ -23395,6 +23498,7 @@
                     "to",
                     "itemCount",
                     "totals",
+                    "composition",
                     "byDishType",
                     "byMainIngredient",
                     "byCuisine"

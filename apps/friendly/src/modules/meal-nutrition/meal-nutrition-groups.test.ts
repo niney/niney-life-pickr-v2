@@ -115,4 +115,29 @@ describe('groupMealNutrition', () => {
     expect(result().byMainIngredient.find((g) => g.key === 'chicken')).toMatchObject({ label: '닭', mainCount: 1 });
     expect(result().byCuisine.find((g) => g.key === 'korean')).toMatchObject({ mainCount: 2, sideCount: 1 });
   });
+
+  it('열량 구성 — 탄수화물·단백질·지방(4·4·9kcal) 비율, 내 평균도 같은 규칙', () => {
+    // 치킨: 탄수화물 40g(160) · 단백질 80g(320) · 지방 60g(540) = 1,020kcal.
+    expect(group('fried').composition).toEqual({ carb: 0.157, protein: 0.314, fat: 0.529, count: 1 });
+    // 내 평균: 탄수화물 492 · 단백질 364 · 지방 688.5kcal(치킨·라면·김치).
+    expect(result().composition).toEqual({ carb: 0.319, protein: 0.236, fat: 0.446, count: 3 });
+    expect(group('unknown').composition).toBeNull();
+  });
+
+  it('열량 구성은 셋을 다 아는 기록만 — 단백질만 아는 기록은 몫에는 들고 구성에서는 빠진다', () => {
+    const r = groupMealNutrition({
+      items: [
+        item({ name: '라면', foodId: 'ramen', dishType: 'rice', kcal: 500, proteinG: 10, sodiumMg: 1800 }),
+        // 카탈로그에 없는 이름 — 단백질 스냅샷만 있고 탄수화물·지방을 모른다.
+        item({ entryId: 'e2', name: '엄마표 볶음밥', dishType: 'rice', kcal: 300, proteinG: 30, sodiumMg: 600 }),
+      ],
+      rowsById: ROWS,
+      from: '2026-10-10',
+      to: '2026-11-08',
+    });
+    const rice = r.byDishType.find((g) => g.key === 'rice')!;
+    // 라면만: 탄수화물 320 · 단백질 40 · 지방 144kcal.
+    expect(rice.composition).toEqual({ carb: 0.635, protein: 0.079, fat: 0.286, count: 1 });
+    expect(rice.nutrients.find((n) => n.key === 'protein')?.amount).toBe(40);
+  });
 });
