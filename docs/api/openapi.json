@@ -5066,7 +5066,7 @@
     },
     "/api/v1/food/search": {
       "get": {
-        "summary": "음식 카탈로그 자동완성 — 이름·별칭 검색, 일치도·인기순, 최대 20건",
+        "summary": "음식 카탈로그 자동완성 — 이름·별칭 검색, 내가 먹은 음식 먼저·일치도·인기순, 1인분 열량 포함, 최대 20건",
         "tags": [
           "food"
         ],
@@ -5185,6 +5185,14 @@
                           },
                           "popularity": {
                             "type": "integer"
+                          },
+                          "servingKcal": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "myCount": {
+                            "type": "integer",
+                            "minimum": 0
                           }
                         },
                         "required": [
@@ -5194,7 +5202,9 @@
                           "dishType",
                           "mainIngredient",
                           "cuisine",
-                          "popularity"
+                          "popularity",
+                          "servingKcal",
+                          "myCount"
                         ],
                         "additionalProperties": false
                       }
@@ -15161,6 +15171,29 @@
                             "maxLength": 1000,
                             "nullable": true
                           },
+                          "sides": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "nutrients": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "nutrients"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "default": []
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time"
@@ -16359,6 +16392,29 @@
                           "type": "string",
                           "maxLength": 1000,
                           "nullable": true
+                        },
+                        "sides": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "nutrients": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "nutrients"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "default": []
                         },
                         "createdAt": {
                           "type": "string",
@@ -17605,6 +17661,29 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "sides": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "nutrients": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "nutrients"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "default": []
+                          },
                           "feedback": {
                             "type": "object",
                             "properties": {
@@ -18024,6 +18103,16 @@
             "in": "query",
             "name": "limit",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
           }
         ],
         "security": [
@@ -18150,6 +18239,10 @@
                               "history",
                               "default"
                             ]
+                          },
+                          "kcal": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -20680,6 +20773,29 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "sides": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "nutrients": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "nutrients"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "default": []
+                          },
                           "feedback": {
                             "type": "object",
                             "properties": {
@@ -21073,6 +21189,29 @@
                     "notice": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "sides": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "nutrients": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "nutrients"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "default": []
                     },
                     "feedback": {
                       "type": "object",
@@ -21633,6 +21772,29 @@
                         "notice": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "sides": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "nutrients": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "nutrients"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "default": []
                         },
                         "feedback": {
                           "type": "object",
@@ -22247,6 +22409,29 @@
                     "notice": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "sides": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "nutrients": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "nutrients"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "default": []
                     },
                     "feedback": {
                       "type": "object",

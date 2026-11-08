@@ -55,7 +55,12 @@ import {
   parseMealRecommendationFeedback,
   parseMealRecommendationItems,
 } from '../meal-recommendation/meal-recommendation.feedback.js';
-import { FREQUENT_WINDOW_DAYS, MEAL_QUICK_DEFAULT_NAMES, rankFrequentMealItems } from './meal-frequent.js';
+import {
+  FREQUENT_SEARCH_WINDOW_DAYS,
+  FREQUENT_WINDOW_DAYS,
+  MEAL_QUICK_DEFAULT_NAMES,
+  rankFrequentMealItems,
+} from './meal-frequent.js';
 import { mealMutationBarrier } from './meal-mutation-barrier.js';
 import type { MealPhotoFileRef, MealPhotoService } from './meal-photo.service.js';
 
@@ -385,12 +390,20 @@ export class MealService {
     }
   }
 
-  /** 입력 화면 빠른 추가 — 최근 90일 자주 먹은 음식(끼니 우선) + 기본 목록(공기밥·김치…). */
+  /**
+   * 입력 화면 빠른 추가 — 최근 90일 자주 먹은 음식(끼니 우선) + 기본 목록(공기밥·김치…).
+   * q 를 주면 음식 찾기의 '내 기록' — 이름에 그 말이 든 최근 1년 기록과 이름이 맞는 기본 목록만.
+   */
   async frequentItems(userId: string, query: FrequentMealItemsQueryType): Promise<FrequentMealItemsResultType> {
     const now = new Date();
-    const since = new Date(now.getTime() - FREQUENT_WINDOW_DAYS * 86_400_000);
+    const qNorm = query.q ? normalizeTerm(query.q) : '';
+    const windowDays = qNorm ? FREQUENT_SEARCH_WINDOW_DAYS : FREQUENT_WINDOW_DAYS;
+    const since = new Date(now.getTime() - windowDays * 86_400_000);
     const rows = await this.prisma.mealItem.findMany({
-      where: { entry: { userId, eatenAt: { gte: since } } },
+      where: {
+        entry: { userId, eatenAt: { gte: since } },
+        ...(qNorm ? { nameNorm: { contains: qNorm } } : {}),
+      },
       select: {
         name: true,
         nameNorm: true,
@@ -402,16 +415,36 @@ export class MealService {
         portion: true,
         servings: true,
         portionSource: true,
+        kcal: true,
         entry: { select: { id: true, eatenAt: true, eatenDate: true, slot: true } },
       },
       orderBy: { entry: { eatenAt: 'desc' } },
       take: FREQUENT_MAX_ROWS,
     });
-    const defaultNorms = MEAL_QUICK_DEFAULT_NAMES.map((name) => normalizeTerm(name));
-    const catalog = await this.prisma.foodItem.findMany({
-      where: { nameNorm: { in: defaultNorms }, active: true },
-      select: { id: true, name: true, nameNorm: true, dishType: true, mainIngredient: true, cuisine: true },
-    });
+    const defaultNames = MEAL_QUICK_DEFAULT_NAMES.filter((name) => !qNorm || normalizeTerm(name).includes(qNorm));
+    const defaultNorms = defaultNames.map((name) => normalizeTerm(name));
+    const [catalog, lexicon] = await Promise.all([
+      this.prisma.foodItem.findMany({
+        where: { nameNorm: { in: defaultNorms }, active: true },
+        select: {
+          id: true,
+          name: true,
+          nameNorm: true,
+          mainIngredient: true,
+          cuisine: true,
+          source: true,
+          sourceCategory: true,
+          dishType: true,
+          servingG: true,
+          kcal: true,
+          kcalPer100g: true,
+          proteinG: true,
+          sodiumMg: true,
+          nutritionFrom: true,
+        },
+      }),
+      this.food.servingLexicon(),
+    ]);
     const byNorm = new Map(catalog.map((c) => [c.nameNorm, c]));
     const items = rankFrequentMealItems(
       rows.map((r) => ({
@@ -429,14 +462,17 @@ export class MealService {
         portion: enumOrNull(MealPortion, r.portion),
         servings: r.servings,
         portionSource: enumOrNull(MealPortionSource, r.portionSource),
+        kcal: r.kcal,
       })),
       {
         ...(query.slot ? { slot: query.slot } : {}),
         limit: query.limit,
         now,
         // 카탈로그에 없으면(운영 카탈로그 차이) 이름만 준다 — 저장할 때 서버가 이름으로 다시 매칭한다.
-        defaults: MEAL_QUICK_DEFAULT_NAMES.map((name, i) => {
+        defaults: defaultNames.map((name, i) => {
           const c = byNorm.get(defaultNorms[i]!);
+          // 기본 목록은 반찬으로 들어간다 — 열량도 반찬 1인분.
+          const kcal = c ? mealServingNutrition(c, { isMain: false }, lexicon).kcal : null;
           return {
             name: c?.name ?? name,
             nameNorm: defaultNorms[i]!,
@@ -444,6 +480,7 @@ export class MealService {
             dishType: enumOrNull<FoodDishTypeType>(FoodDishType, c?.dishType ?? null),
             mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, c?.mainIngredient ?? null),
             cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, c?.cuisine ?? null),
+            kcal: kcal === null ? null : Math.round(kcal),
           };
         }),
       },

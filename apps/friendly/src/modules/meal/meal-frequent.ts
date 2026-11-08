@@ -28,6 +28,8 @@ export const MEAL_QUICK_DEFAULT_NAMES = [
 ] as const;
 
 export const FREQUENT_WINDOW_DAYS = 90;
+// 음식 찾기(이름으로 찾는 내 기록)는 더 길게 본다 — 몇 달 전에 먹은 것도 이름을 치면 나와야 한다.
+export const FREQUENT_SEARCH_WINDOW_DAYS = 365;
 const HALF_LIFE_DAYS = 30;
 const SLOT_BOOST = 2;
 
@@ -46,6 +48,8 @@ export interface FrequentOccurrence {
   portion: MealPortionType | null;
   servings: number | null;
   portionSource: MealPortionSourceType | null;
+  /** 그 기록에 붙은 열량(양 배수 포함). */
+  kcal?: number | null;
 }
 
 /** 기본 목록 한 줄 — 카탈로그에서 찾은 연결(없으면 이름만). */
@@ -56,6 +60,8 @@ export interface FrequentDefault {
   dishType: FoodDishTypeType | null;
   mainIngredient: FoodMainIngredientType | null;
   cuisine: FoodCuisineType | null;
+  /** 반찬 1인분 열량. */
+  kcal?: number | null;
 }
 
 interface Group {
@@ -123,6 +129,7 @@ export const rankFrequentMealItems = (
       count: entries.length,
       lastEatenDate: g.latest.eatenDate,
       from: 'history',
+      kcal: g.latest.kcal ?? null,
     });
     taken.add(key);
   }
@@ -143,6 +150,7 @@ export const rankFrequentMealItems = (
       count: 0,
       lastEatenDate: null,
       from: 'default',
+      kcal: d.kcal ?? null,
     });
     taken.add(d.nameNorm);
   }

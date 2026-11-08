@@ -224,6 +224,8 @@ export type RecentMealItemResultType = z.infer<typeof RecentMealItemResult>;
 export const FrequentMealItemsQuery = z.object({
   slot: MealSlot.optional(),
   limit: z.coerce.number().int().min(1).max(20).default(12),
+  // 음식 찾기 — 이름에 이 말이 든 내 기록만(최근 1년). 기본 목록도 이름이 맞는 것만.
+  q: z.string().trim().min(1).max(40).optional(),
 });
 export type FrequentMealItemsQueryType = z.infer<typeof FrequentMealItemsQuery>;
 
@@ -242,6 +244,8 @@ export const FrequentMealItem = z.object({
   count: z.number().int().nonnegative(),
   lastEatenDate: DateString.nullable(),
   from: z.enum(['history', 'default']),
+  // 넣으면 붙을 열량 — 내 기록은 지난번 그 양 그대로의 값, 기본 목록은 반찬 1인분. 모르면 null.
+  kcal: z.number().nullable().optional(),
 });
 export type FrequentMealItemType = z.infer<typeof FrequentMealItem>;
 

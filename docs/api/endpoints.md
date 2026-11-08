@@ -64,7 +64,7 @@
 
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
-| GET | `/api/v1/food/search` | 로그인 | 120/분 | `q`*, `limit` | 음식 카탈로그 자동완성 — 이름·별칭 검색, 일치도·인기순, 최대 20건 |
+| GET | `/api/v1/food/search` | 로그인 | 120/분 | `q`*, `limit` | 음식 카탈로그 자동완성 — 이름·별칭 검색, 내가 먹은 음식 먼저·일치도·인기순, 1인분 열량 포함, 최대 20건 |
 | GET | `/api/v1/food/:id/restaurants` | 로그인 | 60/분 | `lat`, `lng`, `radiusM`, `limit` | 이 음식을 파는 식당 역검색 — 수집 메뉴·리뷰 언급 근거, 좌표 주면 반경 내만 |
 
 ## health
@@ -121,7 +121,7 @@
 | GET | `/api/v1/meals/data/export` | 로그인 | 10/시간 |  | 내 식단 데이터 JSON 내보내기 — 기록·선호·추천 이력, 사진 바이너리 제외 |
 | GET | `/api/v1/meals/data/photos/retention` | 로그인 |  | `before` | 사진 정리 대상 미리보기 — before 이전 기록 사진·미연결 업로드 수와 용량 |
 | DELETE | `/api/v1/meals/data/photos/retention` | 로그인 |  | body | 오래된 식단 사진 일괄 삭제 — 텍스트 기록은 유지, 확인 문구 필수 |
-| GET | `/api/v1/meals/items/frequent` | 로그인 |  | `slot`, `limit` | 빠른 추가용 자주 먹은 음식 — 최근 90일 끼니 우선 순위 + 기본 목록(공기밥·김치 등) |
+| GET | `/api/v1/meals/items/frequent` | 로그인 |  | `slot`, `limit`, `q` | 빠른 추가용 자주 먹은 음식 — 최근 90일 끼니 우선 순위 + 기본 목록(공기밥·김치 등) |
 | GET | `/api/v1/meals/items/recent` | 로그인 |  | `name`* | 음식명으로 지난번 섭취 조회 — 마지막 날짜·양·분류·그때 사진 토큰 |
 | GET | `/api/v1/meals/nutrition` | 로그인 | 30/분 | `days` | 영양소 점검 — 최근 N일 식단 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 비교 |
 | GET | `/api/v1/meals/nutrition/advice` | 로그인 |  |  | 내 최근 영양제 조언 — 없으면 advice=null, 지금 점검과 판정이 달라졌으면 stale=true |

@@ -80,7 +80,43 @@ describe('food routes (격리 DB)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<FoodSearchResultType>();
     expect(body.items.map((i) => i.name)).toEqual(['김치찌개', '된장찌개']);
-    expect(body.items[0]).toMatchObject({ dishType: 'stew', popularity: 10 });
+    expect(body.items[0]).toMatchObject({ dishType: 'stew', popularity: 10, myCount: 0 });
+  });
+
+  it('검색 — 내가 식단에 적은 음식을 앞에 두고(횟수), 넣을 때와 같은 1인분 열량을 붙인다', async () => {
+    // 1인분 중량이 100g 넘는 행은 카탈로그 1인분 그대로다.
+    await app.prisma.foodItem.updateMany({ where: { name: '된장찌개' }, data: { kcal: 180, servingG: 400 } });
+    const at = new Date(Date.now() - 2 * 86_400_000);
+    const saved = await app.inject({
+      method: 'POST',
+      url: '/api/v1/meals',
+      headers: userAuth,
+      payload: {
+        eatenAt: at.toISOString(),
+        eatenDate: at.toISOString().slice(0, 10),
+        slot: 'dinner',
+        source: 'manual',
+        items: [{ name: '된장찌개', isMain: true, source: 'manual' }],
+      },
+    });
+    expect(saved.statusCode).toBe(201);
+
+    const mine = (
+      await app.inject({ method: 'GET', url: `${SEARCH}?q=찌개&limit=5`, headers: userAuth })
+    ).json<FoodSearchResultType>();
+    // 인기는 김치찌개가 높지만 내가 먹은 된장찌개가 앞에 온다.
+    expect(mine.items.map((i) => [i.name, i.myCount])).toEqual([
+      ['된장찌개', 1],
+      ['김치찌개', 0],
+    ]);
+    expect(mine.items[0]?.servingKcal).toBe(180);
+    expect(mine.items[1]?.servingKcal).toBeNull();
+
+    // 남의 기록은 순서에 영향이 없다.
+    const other = (
+      await app.inject({ method: 'GET', url: `${SEARCH}?q=찌개&limit=5`, headers: adminAuth })
+    ).json<FoodSearchResultType>();
+    expect(other.items.map((i) => i.name)).toEqual(['김치찌개', '된장찌개']);
   });
 
   it('어드민 목록은 ADMIN 만, 필터·정렬·페이지', async () => {

@@ -1220,7 +1220,21 @@ describe('meal routes (격리 DB)', () => {
       ['깍두기', 'default', false],
     ]);
     expect(items.some((i) => i.name === '남의음식')).toBe(false);
+    expect(items.every((i) => 'kcal' in i)).toBe(true);
     expect((await app.inject({ method: 'GET', url: `${ENTRIES}/items/frequent` })).statusCode).toBe(401);
+
+    // 음식 찾기의 '내 기록' — 이름에 든 말로 거르고, 기본 목록도 이름이 맞는 것만.
+    const byName = async (q: string) =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: `${ENTRIES}/items/frequent?q=${encodeURIComponent(q)}`,
+          headers: quickAuth,
+        })
+      ).json<{ items: Array<Record<string, unknown>> }>().items;
+    expect((await byName('제육')).map((i) => [i.name, i.from])).toEqual([['제육볶음', 'history']]);
+    expect((await byName('김치')).map((i) => [i.name, i.from])).toEqual([['배추김치', 'default']]);
+    expect(await byName('남의')).toEqual([]);
   });
 
   it('지난번 기록 조회 — 양·분류·그때 사진을 돌려준다', async () => {

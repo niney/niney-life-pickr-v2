@@ -220,10 +220,10 @@ export const useRecentMealItem = (name: string | null | undefined) =>
  * 입력 화면 빠른 추가 칩 — 자주 먹은 음식(고른 끼니 우선) + 기본 목록. 끼니를 바꿔도 칩 줄이
  * 비었다가 다시 차지 않게 이전 결과를 보여 두고, 기록을 저장하면 다른 목록과 함께 무효화된다.
  */
-export const useFrequentMealItems = (slot: MealSlotType | null | undefined, enabled = true) =>
+export const useFrequentMealItems = (slot: MealSlotType | null | undefined, enabled = true, q?: string) =>
   useQuery({
-    queryKey: [...KEY, 'frequent', slot ?? null],
-    queryFn: () => mealApi.frequentItems(slot ?? undefined),
+    queryKey: [...KEY, 'frequent', slot ?? null, q?.trim() || null],
+    queryFn: () => mealApi.frequentItems(slot ?? undefined, undefined, q?.trim() || undefined),
     enabled,
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,

@@ -7,6 +7,7 @@ import {
   FoodSource,
   MealAllergen,
   FOOD_RESTAURANT_DATA_NOTICE,
+  MEAL_SIDE_DEFAULT_DISH_TYPES,
   type FoodAdminCreateInputType,
   type FoodAdminListQueryType,
   type FoodAdminListResultType,
@@ -28,7 +29,7 @@ import {
 import { haversineM } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { DEFAULT_LEXICON, loadLexicon, synonymVariants, type Lexicon } from './engine/index.js';
-import type { ServingCatalogRow } from './food-serving.js';
+import { mealServingNutrition, type ServingCatalogRow } from './food-serving.js';
 import {
   inferFoodAllergens,
   parseFoodAllergenStatus,
@@ -84,6 +85,8 @@ export const foodNameVariants = (norm: string, lex: Lexicon = DEFAULT_LEXICON): 
   return [...out];
 };
 const SEARCH_CANDIDATE_MULTIPLIER = 4;
+// 자동완성에서 '내가 먹은 음식'으로 앞에 놓는 기간.
+const MY_FOOD_WINDOW_DAYS = 180;
 
 // 현재 판매를 직접 보장할 수 없는 역검색에서는 가까운 리뷰 한 건보다 메뉴판과
 // 리뷰가 함께 확인된 근거를 먼저 보여 준다. 같은 근거 등급 안에서만 거리를 쓴다.
@@ -180,7 +183,10 @@ export const toFoodItem = (r: PrismaFoodItem): FoodItemType => ({
   updatedAt: r.updatedAt.toISOString(),
 });
 
-export const toFoodSearchItem = (r: PrismaFoodItem): FoodSearchItemType => ({
+export const toFoodSearchItem = (
+  r: PrismaFoodItem,
+  extra: { servingKcal: number | null; myCount: number } = { servingKcal: null, myCount: 0 },
+): FoodSearchItemType => ({
   id: r.id,
   name: r.name,
   repName: r.repName,
@@ -188,6 +194,8 @@ export const toFoodSearchItem = (r: PrismaFoodItem): FoodSearchItemType => ({
   mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, r.mainIngredient),
   cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, r.cuisine),
   popularity: r.popularity,
+  servingKcal: extra.servingKcal,
+  myCount: extra.myCount,
 });
 
 // 별칭 정규화 — 빈 값·자기 이름과 같은 값·중복 제거.
@@ -269,36 +277,71 @@ export class FoodService {
   constructor(private readonly prisma: PrismaClient) {}
 
   // ── 사용자 자동완성 ──────────────────────────────────────────────────────
-  async search(q: string, limit: number): Promise<FoodSearchItemType[]> {
+  // 일치도(정확 → 앞 → 포함)·인기순. userId 를 주면 내가 최근 180일 적은 음식을 앞에 놓는다(인기순 후보 창 밖이어도
+  // 이름이 맞으면 넣는다). 결과마다 식단에 넣을 때와 같은 규칙의 1인분 열량을 붙인다.
+  async search(q: string, limit: number, userId?: string): Promise<FoodSearchItemType[]> {
     const raw = q.trim();
     const norm = normalizeTerm(raw);
     if (!norm) return [];
-    const rows = await this.prisma.foodItem.findMany({
-      where: {
-        active: true,
-        OR: [
-          { nameNorm: { contains: norm } },
-          { name: { contains: raw } },
-          { aliasNormsJson: { contains: `"${norm}` } },
-        ],
-      },
-      orderBy: [{ popularity: 'desc' }, { name: 'asc' }],
-      take: Math.max(limit * SEARCH_CANDIDATE_MULTIPLIER, 40),
-    });
+    const match: Prisma.FoodItemWhereInput = {
+      active: true,
+      OR: [
+        { nameNorm: { contains: norm } },
+        { name: { contains: raw } },
+        { aliasNormsJson: { contains: `"${norm}` } },
+      ],
+    };
+    const [rows, mine, lexicon] = await Promise.all([
+      this.prisma.foodItem.findMany({
+        where: match,
+        orderBy: [{ popularity: 'desc' }, { name: 'asc' }],
+        take: Math.max(limit * SEARCH_CANDIDATE_MULTIPLIER, 40),
+      }),
+      userId ? this.myFoodCounts(userId) : Promise.resolve(new Map<string, number>()),
+      this.servingLexicon(),
+    ]);
+    const seen = new Set(rows.map((r) => r.id));
+    const missing = [...mine.keys()].filter((id) => !seen.has(id));
+    const extra = missing.length
+      ? await this.prisma.foodItem.findMany({ where: { AND: [match, { id: { in: missing } }] } })
+      : [];
     const rank = (r: PrismaFoodItem): number => {
       if (r.nameNorm === norm) return 0;
       if (r.nameNorm.startsWith(norm)) return 1;
       if (r.nameNorm.includes(norm)) return 2;
       return 3;
     };
-    return rows
-      .map((r) => ({ r, k: rank(r) }))
+    return [...rows, ...extra]
+      .map((r) => ({ r, k: rank(r), mine: mine.get(r.id) ?? 0 }))
       .sort(
         (a, b) =>
-          a.k - b.k || b.r.popularity - a.r.popularity || a.r.name.localeCompare(b.r.name, 'ko'),
+          b.mine - a.mine ||
+          a.k - b.k ||
+          b.r.popularity - a.r.popularity ||
+          a.r.name.localeCompare(b.r.name, 'ko'),
       )
       .slice(0, limit)
-      .map(({ r }) => toFoodSearchItem(r));
+      .map(({ r, mine: myCount }) => {
+        const isMain = !MEAL_SIDE_DEFAULT_DISH_TYPES.includes(r.dishType ?? '');
+        const kcal = mealServingNutrition(r, { isMain }, lexicon).kcal;
+        return toFoodSearchItem(r, {
+          servingKcal: kcal === null ? null : Math.round(kcal),
+          myCount,
+        });
+      });
+  }
+
+  /** 내가 최근 MY_FOOD_WINDOW_DAYS 일 식단에 적은 카탈로그 음식별 횟수. */
+  private async myFoodCounts(userId: string): Promise<Map<string, number>> {
+    const since = new Date(Date.now() - MY_FOOD_WINDOW_DAYS * 86_400_000);
+    const groups = await this.prisma.mealItem.groupBy({
+      by: ['foodId'],
+      where: { foodId: { not: null }, entry: { userId, eatenAt: { gte: since } } },
+      _count: { _all: true },
+    });
+    return new Map(
+      groups.flatMap((g) => (g.foodId ? [[g.foodId, g._count._all] as [string, number]] : [])),
+    );
   }
 
   // ── 매칭(인식 결과·수동 입력 → 카탈로그) ─────────────────────────────────

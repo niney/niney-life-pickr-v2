@@ -73,12 +73,12 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.foodSearch },
     schema: {
       tags: ['food'],
-      summary: '음식 카탈로그 자동완성 — 이름·별칭 검색, 일치도·인기순, 최대 20건',
+      summary: '음식 카탈로그 자동완성 — 이름·별칭 검색, 내가 먹은 음식 먼저·일치도·인기순, 1인분 열량 포함, 최대 20건',
       security: [{ bearerAuth: [] }],
       querystring: FoodSearchQuery,
       response: { 200: FoodSearchResult },
     },
-    handler: async (req) => ({ items: await food.search(req.query.q, req.query.limit) }),
+    handler: async (req) => ({ items: await food.search(req.query.q, req.query.limit, req.user.userId) }),
   });
 
   // ── 어드민: 카탈로그 ──────────────────────────────────────────────────

@@ -140,7 +140,7 @@ export const FoodSearchQuery = z.object({
 });
 export type FoodSearchQueryType = z.infer<typeof FoodSearchQuery>;
 
-// 자동완성 한 줄 — 분류 배지까지만(영양·출처 상세는 어드민/상세 조회).
+// 자동완성 한 줄 — 분류 배지와 한 끼 열량까지(영양·출처 상세는 어드민/상세 조회).
 export const FoodSearchItem = z.object({
   id: z.string(),
   name: z.string(),
@@ -149,6 +149,10 @@ export const FoodSearchItem = z.object({
   mainIngredient: FoodMainIngredient.nullable(),
   cuisine: FoodCuisine.nullable(),
   popularity: z.number().int(),
+  // 식단에 넣을 때와 같은 규칙의 1인분 열량(주식이면 통상 1인분 환산, 김치·나물은 반찬 1인분). 모르면 null.
+  servingKcal: z.number().nullable(),
+  // 내가 최근 180일 이 음식을 식단에 적은 횟수 — 이 값이 있으면 앞에 놓는다.
+  myCount: z.number().int().nonnegative(),
 });
 export type FoodSearchItemType = z.infer<typeof FoodSearchItem>;
 

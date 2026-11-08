@@ -142,10 +142,12 @@ export const mealApi = {
     ),
 
   // 입력 화면 빠른 추가 — 자주 먹은 음식(고른 끼니 우선) + 기록이 적을 때 채우는 기본 목록.
-  frequentItems: (slot?: MealSlotType, limit?: number) => {
+  // q 를 주면 음식 찾기의 '내 기록'(이름에 그 말이 든 최근 1년 기록 + 이름이 맞는 기본 목록).
+  frequentItems: (slot?: MealSlotType, limit?: number, q?: string) => {
     const params = new URLSearchParams();
     if (slot) params.set('slot', slot);
     if (limit !== undefined) params.set('limit', String(limit));
+    if (q) params.set('q', q);
     const qs = params.toString();
     return apiFetch<FrequentMealItemsResultType>(`${Routes.Meal.frequentItems}${qs ? `?${qs}` : ''}`);
   },

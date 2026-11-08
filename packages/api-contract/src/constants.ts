@@ -35,6 +35,9 @@ export const VOTE_VOTERS_FULL_MESSAGE_PREFIX = '참여 인원이 가득 찼어�
 // ── 식단 ─────────────────────────────────────────────────────────────────────
 export const MEAL_MAX_PHOTOS_PER_ENTRY = 5;
 export const MEAL_MAX_ITEMS_PER_ENTRY = 20;
+// 처음 넣을 때 반찬(곁들임)으로 넣는 조리 형태 — 김치·나물을 주식으로 넣으면 통상 1인분으로 커져 열량이 부푼다.
+// 음식 찾기(웹)가 넣는 기본값과 검색 결과의 1인분 열량(서버)이 같은 규칙을 쓴다.
+export const MEAL_SIDE_DEFAULT_DISH_TYPES: readonly string[] = ['kimchi', 'namul'];
 
 // 추천 이력 전체 삭제 — 추천과 그 반응 이벤트를 지운다(다음 추천 학습·수락률 통계에서도 빠진다). 식단 기록·
 // 일일 추천 한도는 그대로. 화면은 확인창을 거친 뒤 이 문구를 실어 보낸다(실수 호출 방지).
