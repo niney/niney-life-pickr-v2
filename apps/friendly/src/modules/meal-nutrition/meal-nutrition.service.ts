@@ -7,6 +7,7 @@ import type {
   MealNutritionAnalysisType,
   MealSexType,
 } from '@repo/api-contract';
+import { isCountedMealDay } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { foodPortionGrams, loadLexicon, type Lexicon } from '../food/engine/index.js';
 import {
@@ -19,6 +20,7 @@ import { isNutrientProfileRow, type NutrientRefTarget } from '../food/food-nutri
 import type { FoodNutrientRefService } from '../food/food-nutrient-ref.service.js';
 import { parseJsonStringArray } from '../food/food.service.js';
 import { MealPreferenceService } from '../meal/meal-preference.service.js';
+import { skippedByDate } from '../meal/meal-skip.service.js';
 import { commonMealNorms } from '../meal-recommendation/common-meals.js';
 import {
   allergenData,
@@ -406,6 +408,8 @@ export interface AnalyzeInput {
   from: string;
   to: string;
   days: number;
+  /** 날짜 → 기록이 없는 끼니에 붙은 '안 먹음' 수 — 평균에 넣을 날을 고를 때 기록과 함께 센다(없으면 예전처럼 두 끼 이상). */
+  skipsByDate?: ReadonlyMap<string, number>;
   // 영양소별 흔한 한 끼·곁들임 제안(서비스가 미리 고른 것).
   suggestions?: ReadonlyMap<KdriNutrient, string[]>;
   sides?: ReadonlyMap<KdriNutrient, string[]>;
@@ -430,8 +434,11 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
     set.add(it.entryId);
     entriesByDate.set(it.eatenDate, set);
   }
+  // 평균에 넣는 날 — 두 끼 이상 기록했거나, 한 끼 기록에 나머지를 '안 먹음'으로 표시한 날(@repo/utils isCountedMealDay).
   const analyzedDates = new Set(
-    [...entriesByDate.entries()].filter(([, ids]) => ids.size >= 2).map(([d]) => d),
+    [...entriesByDate.entries()]
+      .filter(([d, ids]) => isCountedMealDay(ids.size, input.skipsByDate?.get(d) ?? 0))
+      .map(([d]) => d),
   );
   const analyzedDays = analyzedDates.size;
   const mealCount = new Set(items.map((i) => i.entryId)).size;
@@ -491,7 +498,8 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
   const insufficientReason =
     unsupported ??
     (analyzedDays < MIN_ANALYZED_DAYS
-      ? `최근 ${input.days}일 중 두 끼 이상 기록한 날이 ${analyzedDays}일이에요. ${MIN_ANALYZED_DAYS}일 이상 기록하면 볼 수 있어요.`
+      ? `최근 ${input.days}일 중 두 끼 이상 기록한 날이 ${analyzedDays}일이에요. ${MIN_ANALYZED_DAYS}일 이상 기록하면 볼 수 있어요` +
+        `(안 먹은 끼니는 '안 먹음'으로 표시하면 한 끼로 세요).`
       : null);
   const requirement = energyRequirement(profile.sex, profile.ageGroup);
   const energyPerDay = analyzedDays > 0 ? energyKcal / analyzedDays : null;
@@ -785,6 +793,7 @@ export class MealNutritionService {
         select: {
           id: true,
           eatenDate: true,
+          slot: true,
           items: {
             select: {
               name: true,
@@ -812,7 +821,13 @@ export class MealNutritionService {
         sodiumMg: i.sodiumMg,
       })),
     );
-    const { rowsById, refRowsByName } = await this.catalogFor(items);
+    const [{ rowsById, refRowsByName }, skips] = await Promise.all([
+      this.catalogFor(items),
+      this.prisma.mealSkip.findMany({
+        where: { userId, date: { gte: from, lte: today } },
+        select: { date: true, slot: true },
+      }),
+    ]);
     const profile = profileFrom(preference.sex, preference.birthYear, today);
     const base = analyzeMealNutrition({
       items,
@@ -822,6 +837,7 @@ export class MealNutritionService {
       from,
       to: today,
       days,
+      skipsByDate: skippedByDate(skips, entries),
     });
     const wanted = base.nutrients.filter((n) => n.status === 'low' || n.status === 'borderline');
     if (wanted.length === 0) return base;

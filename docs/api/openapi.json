@@ -14097,6 +14097,10 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "skips": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
                         "dailyQuotas": {
                           "type": "integer",
                           "minimum": 0
@@ -14121,6 +14125,7 @@
                         "recommendations",
                         "recommendationEvents",
                         "nutritionAdvices",
+                        "skips",
                         "dailyQuotas",
                         "importLedgers",
                         "preference",
@@ -17871,6 +17876,31 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "skips": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "slot": {
+                            "type": "string",
+                            "enum": [
+                              "breakfast",
+                              "lunch",
+                              "dinner"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "slot"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -17881,7 +17911,8 @@
                     "entries",
                     "orphanPhotos",
                     "preference",
-                    "recommendations"
+                    "recommendations",
+                    "skips"
                   ],
                   "additionalProperties": false
                 }
@@ -22528,6 +22559,198 @@
         }
       }
     },
+    "/api/v1/meals/skips": {
+      "get": {
+        "summary": "끼니 안 먹음 표시 목록 — 기간(from~to) 안의 날짜·끼니",
+        "tags": [
+          "meal"
+        ],
+        "description": "기간은 from~to(포함) 최대 400일 — 넘으면 400. 날짜·끼니 순.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "skips": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "slot": {
+                            "type": "string",
+                            "enum": [
+                              "breakfast",
+                              "lunch",
+                              "dinner"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "slot"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "skips"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "끼니 안 먹음 표시 — 그 날 그 끼니를 먹지 않았다고 남긴다(이미 있으면 그대로)",
+        "tags": [
+          "meal"
+        ],
+        "description": "아침·점심·저녁만. 앞으로 올 날은 400, 그 날·끼니에 이미 기록이 있으면 409(기록이 이긴다). 나중에 같은 날·끼니를 기록하면 표시는 지워진다. 영양소 점검·통계는 기록과 이 표시를 합쳐 두 칸 이상인 날을 하루 평균에 넣는다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "slot": {
+                    "type": "string",
+                    "enum": [
+                      "breakfast",
+                      "lunch",
+                      "dinner"
+                    ]
+                  }
+                },
+                "required": [
+                  "date",
+                  "slot"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "slot": {
+                      "type": "string",
+                      "enum": [
+                        "breakfast",
+                        "lunch",
+                        "dinner"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "slot"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "끼니 안 먹음 표시 지우기(없으면 그대로)",
+        "tags": [
+          "meal"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "date",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "breakfast",
+                "lunch",
+                "dinner"
+              ]
+            },
+            "in": "query",
+            "name": "slot",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/v1/meals/stats": {
       "get": {
         "summary": "기간 식단 통계 — 분류별 분포·자주 먹은 음식·연속 기록·영양 평균·인사이트",
@@ -23046,6 +23269,18 @@
                         "type": "integer"
                       }
                     },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    },
+                    "counted": {
+                      "type": "array",
+                      "items": {
+                        "type": "boolean"
+                      }
+                    },
                     "rows": {
                       "type": "array",
                       "items": {
@@ -23261,6 +23496,8 @@
                     "profile",
                     "dates",
                     "meals",
+                    "skipped",
+                    "counted",
                     "rows",
                     "notes"
                   ],

@@ -4,8 +4,9 @@ import type {
   MealStatsNutrientRowType,
   MealStatsNutrientsResultType,
 } from '@repo/api-contract';
-import { dateKeyRange } from '@repo/utils';
+import { dateKeyRange, isCountedMealDay } from '@repo/utils';
 import { MealPreferenceService } from '../meal/meal-preference.service.js';
+import { skippedByDate } from '../meal/meal-skip.service.js';
 import { ENERGY_RATIO_RANGE, SATURATED_FAT_MAX_RATIO_ADULT, isAdultAgeGroup } from './kdri.js';
 import { NUTRIENT_DEFS } from './meal-nutrition.defs.js';
 import {
@@ -60,7 +61,7 @@ const MAX_TOP_FOODS = 5;
 
 interface Acc {
   daily: (number | null)[];
-  // 두 끼 이상 기록한 날의 합과, 그 값을 아는 기록의 열량(정보 비율의 분자).
+  // 평균에 넣는 날(두 끼 이상 기록 — '안 먹음'도 한 칸)의 합과, 그 값을 아는 기록의 열량(정보 비율의 분자).
   analyzedSum: number;
   analyzedKcal: number;
   // 기간 모든 기록의 합과, 그 값을 아는 기록의 열량(열량 중 비율·음식 몫의 분모).
@@ -78,6 +79,8 @@ export interface StatsInput {
   profile: AnalysisProfile;
   from: string;
   to: string;
+  /** 날짜 → 기록이 없는 끼니에 붙은 '안 먹음' 수 — 하루 평균에 넣을 날을 고를 때 기록과 함께 센다. */
+  skipsByDate?: ReadonlyMap<string, number>;
 }
 
 const round = (v: number, digits: number): number => {
@@ -100,6 +103,9 @@ export const statsMealNutrients = (input: StatsInput): MealStatsNutrientsResultT
     entries.set(it.eatenDate, set);
   }
   const meals = dates.map((d) => entries.get(d)?.size ?? 0);
+  const skipped = dates.map((d) => input.skipsByDate?.get(d) ?? 0);
+  // 평균에 넣는 날 — 점검(analyzeMealNutrition)과 같은 규칙(@repo/utils isCountedMealDay). 화면이 흐름의 막대를 이 값으로 가른다.
+  const counted = dates.map((_, i) => isCountedMealDay(meals[i]!, skipped[i]!));
   const analysis = analyzeMealNutrition({
     items,
     rowsById,
@@ -108,6 +114,7 @@ export const statsMealNutrients = (input: StatsInput): MealStatsNutrientsResultT
     from: input.from,
     to: input.to,
     days: dates.length,
+    skipsByDate: input.skipsByDate,
   });
 
   const keys: MealStatsNutrientKeyType[] = [
@@ -129,7 +136,7 @@ export const statsMealNutrients = (input: StatsInput): MealStatsNutrientsResultT
     // 열량을 모르는 기록은 점검처럼 빠진다(끼니 수에는 든다).
     if (i === undefined || it.kcal === null) continue;
     const kcal = it.kcal;
-    const analyzed = meals[i]! >= 2;
+    const analyzed = counted[i]!;
     if (analyzed) analyzedKcal += kcal;
     const r = resolveItemNutrients(it, kcal, rowsById, refRows, input.macroRowsByName);
     const carb = itemMacroGrams(r, kcal, 'carbG');
@@ -261,6 +268,8 @@ export const statsMealNutrients = (input: StatsInput): MealStatsNutrientsResultT
     profile: analysis.profile,
     dates,
     meals,
+    skipped,
+    counted,
     rows: [...CORE, ...NUTRIENT_DEFS.map((d) => d.key).filter((k) => !CORE.includes(k))].map(row),
     notes: analysis.notes,
   };
@@ -274,13 +283,14 @@ export class MealNutritionStatsService {
   ) {}
 
   async nutrients(userId: string, from: string, to: string, today: string): Promise<MealStatsNutrientsResultType> {
-    const [preference, entries] = await Promise.all([
+    const [preference, entries, skips] = await Promise.all([
       new MealPreferenceService(this.prisma).get(userId),
       this.prisma.mealEntry.findMany({
         where: { userId, eatenDate: { gte: from, lte: to } },
         select: {
           id: true,
           eatenDate: true,
+          slot: true,
           items: {
             select: {
               name: true,
@@ -294,12 +304,25 @@ export class MealNutritionStatsService {
           },
         },
       }),
+      this.prisma.mealSkip.findMany({
+        where: { userId, date: { gte: from, lte: to } },
+        select: { date: true, slot: true },
+      }),
     ]);
     const items: AnalysisItem[] = entries.flatMap((e) =>
       e.items.map((i) => ({ ...i, eatenDate: e.eatenDate, entryId: e.id })),
     );
     const { rowsById, refRowsByName, macroRowsByName } = await this.nutrition.catalogFor(items, { macros: true });
     const profile = profileFrom(preference.sex, preference.birthYear, today);
-    return statsMealNutrients({ items, rowsById, refRowsByName, macroRowsByName, profile, from, to });
+    return statsMealNutrients({
+      items,
+      rowsById,
+      refRowsByName,
+      macroRowsByName,
+      profile,
+      from,
+      to,
+      skipsByDate: skippedByDate(skips, entries),
+    });
   }
 }

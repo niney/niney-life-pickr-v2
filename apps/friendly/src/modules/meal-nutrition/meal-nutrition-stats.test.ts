@@ -98,6 +98,8 @@ describe('statsMealNutrients', () => {
     expect(r).toMatchObject({ days: 6, analyzedDays: 4, status: 'ok', insufficientReason: null });
     expect(r.dates).toEqual(['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']);
     expect(r.meals).toEqual([2, 2, 2, 2, 1, 0]);
+    expect(r.skipped).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(r.counted).toEqual([true, true, true, true, false, false]);
     for (const n of analysis.nutrients) {
       const s = rowOf(r, n.key);
       expect([s.intakePerDay, s.percent, s.status, s.coverage, s.recordGap]).toEqual([
@@ -180,6 +182,28 @@ describe('statsMealNutrients', () => {
     ]);
     // 콜레스테롤: 계란말이 4 × 400 = 1,600 · 라면 9 × 11 = 99.
     expect(rowOf(r, 'cholesterol').topFoods.map((f) => f.name)).toEqual(['계란말이', '라면']);
+  });
+
+  it("한 끼만 적은 날도 나머지를 '안 먹음'으로 표시하면 평균에 든다 — counted·skipped 로 화면에 알린다", () => {
+    const r = statsMealNutrients({
+      items: ITEMS,
+      rowsById: ROWS,
+      profile: adult,
+      from: FROM,
+      to: TO,
+      skipsByDate: new Map([
+        ['2026-11-05', 2],
+        ['2026-11-06', 1],
+      ]),
+    });
+    expect(r.skipped).toEqual([0, 0, 0, 0, 2, 1]);
+    // 11/6 은 기록이 없어 표시만으로는 넣지 않는다.
+    expect(r.counted).toEqual([true, true, true, true, true, false]);
+    expect(r.analyzedDays).toBe(5);
+    // 하루 평균 열량 — (1,200 × 4 + 500) ÷ 5.
+    expect(rowOf(r, 'kcal').intakePerDay).toBe(1060);
+    // 많이 준 음식·흐름은 그대로(모든 기록).
+    expect(rowOf(r, 'kcal').daily).toEqual([1200, 1200, 1200, 1200, 500, null]);
   });
 
   it('두 끼 이상 기록한 날이 4일 미만이면 판정은 보류 — 양은 그대로 준다', () => {

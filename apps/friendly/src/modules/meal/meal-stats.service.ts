@@ -9,6 +9,7 @@ import {
   MEAL_TYPE_LABEL,
   dateKeyRange,
   daysBetween,
+  isCountedMealDay,
   type FoodCuisine,
   type FoodDishType,
   type FoodMainIngredient,
@@ -16,6 +17,7 @@ import {
   type MealType,
 } from '@repo/utils';
 import { parseMealRecommendationFeedback } from '../meal-recommendation/meal-recommendation.feedback.js';
+import { skippedByDate } from './meal-skip.service.js';
 import { computeWeeklyMealInsights } from './meal-stats.insights.js';
 
 // 기간 통계 — 집계 로직은 순수 함수(computeMealStats)로 두고 서비스는 조회만 한다.
@@ -73,6 +75,8 @@ export const computeMealStats = (
   to: string,
   today: string,
   recommendationRows: RecommendationStatRow[] = [],
+  // 끼니 '안 먹음' 표시 — 하루 평균에 넣을 날을 고를 때 기록과 함께 센다.
+  skips: ReadonlyArray<{ date: string; slot: string }> = [],
 ): MealStatsResultType => {
   const days = dateKeyRange(from, to);
   const bySlot = new Map<string, number>();
@@ -136,8 +140,12 @@ export const computeMealStats = (
   // 사실을 함께 내려보낸다(UI 가 "78% 반영"이라고 밝힌다). 하루 평균은 기간 전체가 아니라 **두 끼 이상 기록한 날**의
   // 기록만 그 날 수로 나눈다 — 안 적은 날은 안 먹은 날이 아니고, 한 끼만 적은 날이 섞이면 평균이 낮아 보인다. 영양 탭의
   // 영양소 점검·통계의 영양 표와 같은 셈이라 세 곳의 '하루 평균 열량'이 같은 기간이면 같다(2026-11-08, 예전엔 기록한 모든 날).
+  // '안 먹음'으로 표시한 끼니도 한 칸으로 센다(한 끼 기록 + 나머지 '안 먹음'이면 그날 먹은 전부 — @repo/utils isCountedMealDay).
   // 정보 비율(coverage·주식 근거)은 기간의 모든 기록으로 본다.
-  const averagedDays = new Set([...byDate].filter(([, entries]) => entries >= 2).map(([date]) => date));
+  const skipped = skippedByDate(skips, rows);
+  const averagedDays = new Set(
+    [...byDate].filter(([date, entries]) => isCountedMealDay(entries, skipped.get(date) ?? 0)).map(([date]) => date),
+  );
   let sumKcal = 0;
   let sumProtein = 0;
   let sumSodium = 0;
@@ -277,7 +285,7 @@ export class MealStatsService {
   }
 
   async stats(userId: string, from: string, to: string, today: string): Promise<MealStatsResultType> {
-    const [rows, recommendationRows] = await Promise.all([
+    const [rows, recommendationRows, skips] = await Promise.all([
       this.load(userId, from, to),
       this.prisma.mealRecommendation.findMany({
         // 노출·닫기 이벤트는 legacy feedbackJson 없이도 존재한다. feedback 행만 읽으면
@@ -285,7 +293,11 @@ export class MealStatsService {
         where: { userId, targetDate: { gte: from, lte: to } },
         select: { feedbackJson: true, targetDate: true, events: { select: { kind: true } } },
       }),
+      this.prisma.mealSkip.findMany({
+        where: { userId, date: { gte: from, lte: to } },
+        select: { date: true, slot: true },
+      }),
     ]);
-    return computeMealStats(rows, from, to, today, recommendationRows);
+    return computeMealStats(rows, from, to, today, recommendationRows, skips);
   }
 }

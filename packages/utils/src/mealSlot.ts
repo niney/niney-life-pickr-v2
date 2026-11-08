@@ -22,6 +22,14 @@ export const MEAL_SLOT_ORDER: Record<MealSlot, number> = {
   late_night: 4,
 };
 
+// 하루 평균에 넣는 날(2026-11-08) — 영양소 점검·통계(서버)와 '안 먹음' 묻기(웹)가 같은 규칙을 쓴다. 기록이 있고, 기록한 끼니
+// 수와 기록이 없는 끼니에 붙은 '안 먹음' 표시를 합쳐 두 칸 이상인 날. 한 끼만 적은 날은 나머지를 안 적었을 공산이 커 빼지만,
+// 나머지 끼니를 '안 먹음'으로 표시했으면 그날 먹은 전부라 넣는다. 기록이 없는 날은 '안 먹음'만으로는 넣지 않는다(먹은 것을
+// 하나도 모른다). '안 먹음'이 없으면 예전 규칙(두 끼 이상 기록한 날)과 같다.
+export const MEAL_COUNTED_DAY_MIN = 2;
+export const isCountedMealDay = (meals: number, skipped: number): boolean =>
+  meals > 0 && meals + skipped >= MEAL_COUNTED_DAY_MIN;
+
 export const MEAL_TYPES = ['home', 'dining_out', 'delivery', 'convenience', 'other'] as const;
 export type MealType = (typeof MEAL_TYPES)[number];
 

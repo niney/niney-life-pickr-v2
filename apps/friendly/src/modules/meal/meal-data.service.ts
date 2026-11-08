@@ -428,7 +428,17 @@ export class MealDataService {
       if (!last || page.length < EXPORT_PAGE_SIZE) break;
       recCursor = { createdAt: last.createdAt, id: last.id };
     }
-    yield ']}';
+    // 끼니 '안 먹음' 표시 — 날짜·끼니 순(행이 작아 한 번에).
+    const skipRows = await this.prisma.mealSkip.findMany({
+      where: { userId },
+      select: { date: true, slot: true },
+      orderBy: { date: 'asc' },
+    });
+    const slotRank = (slot: string): number => ['breakfast', 'lunch', 'dinner'].indexOf(slot);
+    const skips = MealDataExport.shape.skips.parse(
+      skipRows.sort((a, b) => a.date.localeCompare(b.date) || slotRank(a.slot) - slotRank(b.slot)),
+    );
+    yield `],"skips":${JSON.stringify(skips)}}`;
   }
 
   /**
@@ -1252,6 +1262,7 @@ export class MealDataService {
         const recommendationEvents = await tx.mealRecommendationEvent.deleteMany({ where: { userId } });
         const recommendations = await tx.mealRecommendation.deleteMany({ where: { userId } });
         const nutritionAdvices = await tx.mealNutritionAdvice.deleteMany({ where: { userId } });
+        const skips = await tx.mealSkip.deleteMany({ where: { userId } });
         const preference = await tx.mealPreference.deleteMany({ where: { userId } });
         const dailyQuotas = await tx.mealDailyQuota.deleteMany({ where: { userId } });
         // 전체 삭제 뒤 같은 archiveId를 다시 복원할 수 있어야 하므로 멱등 원장도 비운다.
@@ -1266,6 +1277,7 @@ export class MealDataService {
             recommendations: recommendations.count,
             recommendationEvents: recommendationEvents.count,
             nutritionAdvices: nutritionAdvices.count,
+            skips: skips.count,
             dailyQuotas: dailyQuotas.count,
             importLedgers: importLedgers.count,
             preference: preference.count,

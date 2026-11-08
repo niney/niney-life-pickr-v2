@@ -41,6 +41,9 @@ export const MEAL_SIDE_DEFAULT_DISH_TYPES: readonly string[] = ['kimchi', 'namul
 // 영양소 점검 — 그 영양소 값을 아는 기록의 열량 비율이 이보다 낮으면 판단을 미룬다. 서버 점검과 통계의 영양 표가
 // 같은 문턱을 쓴다(표는 이 아래면 양을 흐리게, 비율·판정 대신 '정보 N%').
 export const MEAL_NUTRIENT_MIN_COVERAGE = 0.6;
+// '안 먹음'으로 표시할 수 있는 끼니(2026-11-08) — 빈 칸이 '안 적음'인지 '안 먹음'인지 가리는 표시. 간식·야식은 먹지 않는 게
+// 보통이라 빈칸이 기록 누락이 아니어서 뺀다.
+export const MEAL_SKIPPABLE_SLOTS = ['breakfast', 'lunch', 'dinner'] as const;
 
 // 추천 이력 전체 삭제 — 추천과 그 반응 이벤트를 지운다(다음 추천 학습·수락률 통계에서도 빠진다). 식단 기록·
 // 일일 추천 한도는 그대로. 화면은 확인창을 거친 뒤 이 문구를 실어 보낸다(실수 호출 방지).

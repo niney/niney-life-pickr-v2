@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatTimeOfDay,
+  isCountedMealDay,
   mealDateLabel,
   mealDateTitle,
   mealPortionFactor,
@@ -67,5 +68,21 @@ describe('mealDateTitle', () => {
 
   it('형식이 틀리면 받은 값을 그대로 돌려준다', () => {
     expect(mealDateTitle('어제', '2026-10-25')).toBe('어제');
+  });
+});
+
+// 하루 평균에 넣는 날 — 영양소 점검·통계와 웹의 '안 먹음' 묻기가 같이 쓴다.
+describe('isCountedMealDay', () => {
+  it('두 끼 이상 기록했거나, 한 끼 기록에 나머지를 안 먹음으로 표시한 날만', () => {
+    expect(isCountedMealDay(2, 0)).toBe(true);
+    expect(isCountedMealDay(3, 0)).toBe(true);
+    expect(isCountedMealDay(1, 0)).toBe(false);
+    expect(isCountedMealDay(1, 1)).toBe(true);
+    expect(isCountedMealDay(1, 2)).toBe(true);
+  });
+
+  it('기록이 없는 날은 안 먹음만으로는 넣지 않는다', () => {
+    expect(isCountedMealDay(0, 3)).toBe(false);
+    expect(isCountedMealDay(0, 0)).toBe(false);
   });
 });

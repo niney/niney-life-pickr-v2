@@ -42,6 +42,7 @@ model User {
   mealRecommendationEvents MealRecommendationEvent[]
   mealDailyQuotas          MealDailyQuota[]
   mealDataImports          MealDataImport[]
+  mealSkips                MealSkip[]
   tarotReadings            TarotReading[]
   sajuProfiles             SajuProfile[]
   sajuReadings             SajuReading[]
@@ -2211,6 +2212,23 @@ model MealDailyQuota {
   @@id([userId, date, purpose])
   @@index([date, purpose])
   @@map("meal_daily_quotas")
+}
+
+// 끼니 '안 먹음' 표시(2026-11-08) — 빈 칸이 '안 적음'인지 '안 먹음'인지 가린다. 영양소 점검·통계의 하루 평균은 기록과 이
+// 표시를 함께 세어 평균에 넣을 날을 고른다(@repo/utils isCountedMealDay). 같은 날·끼니에 기록이 생기면 지운다(MealService).
+model MealSkip {
+  id        String   @id @default(cuid())
+  userId    String
+  // 'YYYY-MM-DD' — MealEntry.eatenDate 와 같은 날짜 키.
+  date      String
+  // breakfast | lunch | dinner (MEAL_SKIPPABLE_SLOTS).
+  slot      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, slot])
+  @@map("meal_skips")
 }
 
 // 같은 휴대용 백업을 여러 번 선택해도 데이터를 중복 생성하지 않게 하는 사용자별 원장.

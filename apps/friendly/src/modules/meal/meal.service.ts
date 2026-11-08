@@ -682,6 +682,8 @@ export class MealService {
           items: { createMany: { data: itemData } },
         },
       });
+      // 같은 날·끼니의 '안 먹음' 표시는 기록이 이긴다 — 먹었다고 적었으니 지운다.
+      await tx.mealSkip.deleteMany({ where: { userId, date: input.eatenDate, slot: input.slot } });
       if (input.photoTokens.length > 0) {
         await this.deps.photos.attachToEntry(userId, created.id, input.photoTokens, tx);
       }
@@ -751,7 +753,7 @@ export class MealService {
   ): Promise<MealEntryType> {
     const existing = await this.prisma.mealEntry.findFirst({
       where: { id, userId },
-      select: { id: true, eatenDate: true },
+      select: { id: true, eatenDate: true, slot: true },
     });
     if (!existing) throw new MealServiceError('not_found', '기록을 찾을 수 없습니다.');
     // 다른 날로 옮길 때만 그 날의 끼니 상한을 본다(같은 날 수정은 수가 늘지 않는다).
@@ -786,6 +788,12 @@ export class MealService {
       }
       if (Object.keys(data).length > 0) {
         await tx.mealEntry.update({ where: { id }, data });
+      }
+      // 다른 날·끼니로 옮겼으면 그 날·끼니의 '안 먹음' 표시를 지운다(기록이 이긴다).
+      if (input.eatenDate !== undefined || input.slot !== undefined) {
+        await tx.mealSkip.deleteMany({
+          where: { userId, date: input.eatenDate ?? existing.eatenDate, slot: input.slot ?? existing.slot },
+        });
       }
       if (input.photoTokens !== undefined) {
         detachedFiles = await this.deps.photos.attachToEntry(userId, id, input.photoTokens, tx);

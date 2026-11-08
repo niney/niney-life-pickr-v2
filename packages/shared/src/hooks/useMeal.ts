@@ -17,6 +17,7 @@ import type {
   MealDataBackupType,
   MealRecommendationFeedbackInputType,
   MealRecommendationEventInputType,
+  MealSkipType,
   MealSlotType,
   RecognizeMealInputType,
   UpdateMealEntryInputType,
@@ -40,6 +41,8 @@ const invalidateEntries = (qc: ReturnType<typeof useQueryClient>): void => {
   void qc.invalidateQueries({ queryKey: [...KEY, 'time-presets'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'frequent'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'nutrition'] });
+  // 같은 날·끼니를 기록하면 서버가 '안 먹음' 표시를 지운다.
+  void qc.invalidateQueries({ queryKey: [...KEY, 'skips'] });
 };
 
 // 전체 내보내기는 사용자 동작 때만 큰 JSON 을 받도록 mutation 으로 제공한다.
@@ -136,7 +139,8 @@ export const useMealStats = (from: string, to: string, enabled = true) =>
 /** 통계의 묶음별 영양 몫 — 막대 기준(열량·나트륨)과 막대 카드가 쓴다. 기록을 저장하면 다른 식단 조회와 함께 무효화된다. */
 export const useMealStatsNutrition = (from: string, to: string, enabled = true) =>
   useQuery({
-    queryKey: [...KEY, 'stats-nutrition', from, to],
+    // ['meal','stats'] 아래에 둬 기록 저장·'안 먹음' 표시 때 통계와 함께 무효화된다(예전 'stats-nutrition' 키는 빠졌다).
+    queryKey: [...KEY, 'stats', 'nutrition', from, to],
     queryFn: () => mealApi.statsNutrition(from, to),
     enabled: enabled && !!from && !!to,
     staleTime: 60_000,
@@ -149,12 +153,45 @@ export const useMealStatsNutrition = (from: string, to: string, enabled = true) 
  */
 export const useMealStatsNutrients = (from: string, to: string, enabled = true) =>
   useQuery({
-    queryKey: [...KEY, 'stats-nutrients', from, to],
+    queryKey: [...KEY, 'stats', 'nutrients', from, to],
     queryFn: () => mealApi.statsNutrients(from, to),
     enabled: enabled && !!from && !!to,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
+
+/** 기간의 끼니 '안 먹음' 표시 — 홈의 어제 빈 끼니 묻기·기록 목록의 표시. */
+export const useMealSkips = (from: string, to: string, enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'skips', from, to],
+    queryFn: () => mealApi.skips(from, to),
+    enabled: enabled && !!from && !!to && from <= to,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+// '안 먹음'을 바꾸면 평균에 넣는 날이 달라진다 — 표시 목록·통계·영양소 점검을 다시 받는다.
+const invalidateSkips = (qc: ReturnType<typeof useQueryClient>): void => {
+  void qc.invalidateQueries({ queryKey: [...KEY, 'skips'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'stats'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'nutrition'] });
+};
+
+export const useSetMealSkip = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (skip: MealSkipType) => mealApi.setSkip(skip),
+    onSuccess: () => invalidateSkips(qc),
+  });
+};
+
+export const useClearMealSkip = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (skip: MealSkipType) => mealApi.clearSkip(skip),
+    onSuccess: () => invalidateSkips(qc),
+  });
+};
 
 export interface CreateMealEntryMutationVariables {
   input: CreateMealEntryInputType;

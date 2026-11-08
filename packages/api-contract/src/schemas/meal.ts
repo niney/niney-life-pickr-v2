@@ -5,6 +5,7 @@ import {
   MEAL_MAX_PHOTOS_PER_ENTRY,
   MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
   MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
+  MEAL_SKIPPABLE_SLOTS,
 } from '../constants.js';
 import { MealAllergen } from './allergen.js';
 import { FoodCuisine, FoodDishType, FoodMainIngredient } from './food.js';
@@ -850,12 +851,31 @@ export const MealStatsNutrientsResult = z.object({
     basis: z.enum(['user', 'default']),
   }),
   dates: z.array(DateString),
-  // 날짜마다 기록한 끼니 수(dates 와 같은 순서) — 2 이상인 날만 평균에 든다.
+  // 날짜마다 기록한 끼니 수(dates 와 같은 순서).
   meals: z.array(z.number().int()),
+  // 날짜마다 기록이 없는 끼니에 붙은 '안 먹음' 수(dates 와 같은 순서).
+  skipped: z.array(z.number().int()),
+  // 하루 평균에 든 날인지(dates 와 같은 순서) — 기록이 있고 기록 + '안 먹음'이 두 칸 이상(@repo/utils isCountedMealDay).
+  counted: z.array(z.boolean()),
   rows: z.array(MealStatsNutrientRow),
   notes: z.array(z.string()),
 });
 export type MealStatsNutrientsResultType = z.infer<typeof MealStatsNutrientsResult>;
+
+// ── 끼니 '안 먹음' 표시(2026-11-08) ────────────────────────────────────────────
+// 빈 칸이 '안 적음'인지 '안 먹음'인지 가린다. 영양소 점검·통계의 하루 평균은 기록과 이 표시를 함께 세어 평균에 넣을 날을
+// 고른다(한 끼만 먹고 나머지를 '안 먹음'으로 표시한 날도 평균에 든다). 같은 날·끼니에 기록이 생기면 서버가 지운다.
+export const MealSkipSlot = z.enum(MEAL_SKIPPABLE_SLOTS);
+export type MealSkipSlotType = z.infer<typeof MealSkipSlot>;
+
+export const MealSkip = z.object({ date: DateString, slot: MealSkipSlot }).strict();
+export type MealSkipType = z.infer<typeof MealSkip>;
+
+export const MealSkipsQuery = z.object({ from: DateString, to: DateString });
+export type MealSkipsQueryType = z.infer<typeof MealSkipsQuery>;
+
+export const MealSkipsResult = z.object({ skips: z.array(MealSkip) });
+export type MealSkipsResultType = z.infer<typeof MealSkipsResult>;
 
 export const MealSupplementAdviceItem = z.object({
   nutrient: MealNutrientKey,
@@ -1165,6 +1185,8 @@ export const MealDataExport = z.object({
   // 저장한 적이 없으면 null. 기본 선호를 개인 데이터인 것처럼 만들어 내보내지 않는다.
   preference: MealPreference.nullable(),
   recommendations: z.array(MealDataExportRecommendation),
+  // 끼니 '안 먹음' 표시(날짜·끼니 순). 휴대용 백업(MealDataBackup)에는 아직 담지 않는다.
+  skips: z.array(MealSkip),
 });
 export type MealDataExportType = z.infer<typeof MealDataExport>;
 
@@ -1397,6 +1419,8 @@ export const DeleteMealDataResult = z.object({
     recommendationEvents: z.number().int().nonnegative(),
     // 영양제 조언 이력(영양소 점검 결과 스냅샷 포함).
     nutritionAdvices: z.number().int().nonnegative(),
+    // 끼니 '안 먹음' 표시.
+    skips: z.number().int().nonnegative(),
     dailyQuotas: z.number().int().nonnegative(),
     importLedgers: z.number().int().nonnegative(),
     preference: z.number().int().nonnegative(),

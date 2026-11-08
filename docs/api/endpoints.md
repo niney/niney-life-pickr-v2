@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 210개 — 공개 91 · 선택 인증 16 · 로그인 103. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 213개 — 공개 91 · 선택 인증 16 · 로그인 106. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -141,6 +141,9 @@
 | DELETE | `/api/v1/meals/recommendations/:id` | 로그인 |  |  | 추천 삭제 — 반응 이벤트도 함께, 이 추천으로 만든 식단 기록은 유지 |
 | POST | `/api/v1/meals/recommendations/:id/events` | 로그인 |  | body | 추천 반응 이벤트 기록 — 노출·후보 선택·평가·식당 열기·닫기(logged 는 거부) |
 | POST | `/api/v1/meals/recommendations/:id/feedback` | 로그인 |  | body | 추천 피드백 반영 — 고른 음식·세트 평가(±1)·이 추천으로 만든 식단 기록 연결 |
+| GET | `/api/v1/meals/skips` | 로그인 |  | `from`*, `to`* | 끼니 안 먹음 표시 목록 — 기간(from~to) 안의 날짜·끼니 |
+| PUT | `/api/v1/meals/skips` | 로그인 |  | body | 끼니 안 먹음 표시 — 그 날 그 끼니를 먹지 않았다고 남긴다(이미 있으면 그대로) |
+| DELETE | `/api/v1/meals/skips` | 로그인 |  | `date`*, `slot`* | 끼니 안 먹음 표시 지우기(없으면 그대로) |
 | GET | `/api/v1/meals/stats` | 로그인 |  | `from`*, `to`* | 기간 식단 통계 — 분류별 분포·자주 먹은 음식·연속 기록·영양 평균·인사이트 |
 | GET | `/api/v1/meals/stats/nutrients` | 로그인 | 30/분 | `from`*, `to`* | 통계 — 영양소별 하루 평균·날마다 흐름·많이 준 음식(고른 기간을 영양 탭과 같은 셈·기준으로) |
 | GET | `/api/v1/meals/stats/nutrition` | 로그인 | 30/분 | `from`*, `to`* | 통계 — 묶음(조리 형태·주재료·요리 계통)별 영양 몫: 이 기간 먹은 열량·탄단지·나트륨·비타민·무기질 중 그 묶음 몫 |

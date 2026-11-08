@@ -28,6 +28,8 @@ import {
   type MealPreferenceType,
   type MealPhotoRetentionPreviewType,
   type MealSlotType,
+  type MealSkipType,
+  type MealSkipsResultType,
   type MealStatsNutrientsResultType,
   type MealStatsNutritionResultType,
   type MealStatsResultType,
@@ -125,6 +127,14 @@ export const mealApi = {
     apiFetch<MealStatsNutritionResultType>(
       `${Routes.Meal.statsNutrition}?${new URLSearchParams({ from, to }).toString()}`,
     ),
+
+  // 끼니 '안 먹음' 표시 — 기간 목록·표시·지우기.
+  skips: (from: string, to: string) =>
+    apiFetch<MealSkipsResultType>(`${Routes.Meal.skips}?${new URLSearchParams({ from, to }).toString()}`),
+  setSkip: (skip: MealSkipType) =>
+    apiFetch<MealSkipType>(Routes.Meal.skips, { method: 'PUT', body: JSON.stringify(skip) }),
+  clearSkip: (skip: MealSkipType) =>
+    apiFetch<void>(`${Routes.Meal.skips}?${new URLSearchParams(skip).toString()}`, { method: 'DELETE' }),
 
   // 통계 — 영양소별 하루 평균·날마다 흐름·많이 준 음식(영양 탭과 같은 셈을 고른 기간에).
   statsNutrients: (from: string, to: string) =>

@@ -191,6 +191,28 @@ describe('computeMealStats', () => {
     expect(r.nutrition.coverage).toBe(1);
   });
 
+  it("한 끼만 적었어도 나머지를 '안 먹음'으로 표시한 날은 평균에 든다 — 같은 끼니에 기록이 있으면 표시는 세지 않는다", () => {
+    const meal = (eatenDate: string, slot: string, kcal: number) => ({
+      eatenDate,
+      slot,
+      mealType: null,
+      items: [{ name: '밥', nameNorm: '밥', dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal, proteinG: 10, sodiumMg: 100 }],
+    });
+    const r = computeMealStats(
+      [meal('2026-08-20', 'lunch', 600), meal('2026-08-21', 'lunch', 500)],
+      '2026-08-20',
+      '2026-08-21',
+      '2026-08-21',
+      [],
+      [
+        { date: '2026-08-20', slot: 'dinner' },
+        // 기록한 점심에 붙은 표시 — 세지 않아 8/21 은 그대로 한 끼만 적은 날.
+        { date: '2026-08-21', slot: 'lunch' },
+      ],
+    );
+    expect(r.nutrition.avgKcalPerDay).toBe(600);
+  });
+
   it('두 끼 이상 기록한 날이 없으면 하루 평균은 null', () => {
     const r = computeMealStats(
       [
