@@ -30,6 +30,7 @@ import {
 import { cn } from '~/lib/utils';
 import { MealLink } from './MealLink';
 import { prepareMealEntry } from './mealDraftStart';
+import { MEAL_NUTRIENT_TONE } from './mealNutrientTone';
 import { useMealOpen } from './mealPanel';
 import { MEAL_PATH } from './mealPaths';
 
@@ -365,14 +366,6 @@ const FLAG_ORDER: Record<MealNutrientDisplayKey, number> = {
   ok: 9,
   unknown: 9,
 };
-const FLAG_CLASS: Record<MealNutrientDisplayKey, string> = {
-  high: 'meal-over',
-  low: 'meal-short',
-  borderline: 'meal-short',
-  recordGap: 'meal-faint',
-  ok: 'meal-ok',
-  unknown: 'meal-faint',
-};
 const MAX_FLAGGED = 7;
 
 const amountOf = (n: MealNutrientResultType): string =>
@@ -441,7 +434,7 @@ const LabelRows = ({ analysis }: { analysis: MealNutritionAnalysisType }) => {
           </span>
           <span className="whitespace-nowrap">
             <span className="meal-label-pct">{n.percent ?? '—'}%</span>
-            <span className={cn('meal-label-flag', FLAG_CLASS[d])}>
+            <span className={cn('meal-label-flag', MEAL_NUTRIENT_TONE[d])}>
               {MEAL_NUTRIENT_STATUS_LABEL[d]}
             </span>
           </span>

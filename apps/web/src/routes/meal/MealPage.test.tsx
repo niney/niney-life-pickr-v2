@@ -15,6 +15,68 @@ import MealApp from './MealApp';
 const ENTRIES_URL = '/api/v1/meals';
 const CALENDAR_URL = '/api/v1/meals/calendar';
 const STATS_URL = '/api/v1/meals/stats';
+const STATS_NUTRITION_URL = '/api/v1/meals/stats/nutrition';
+
+// 통계 — 묶음별 영양 몫(나트륨: 찌개 60% · 김치(반찬) 30% · 밥 10%).
+const groupNutrient = (key: string, label: string, unit: string, amount: number, share: number) => ({
+  key,
+  label,
+  unit,
+  amount,
+  share,
+});
+const statsNutrition = {
+  from: '2026-07-24',
+  to: '2026-08-22',
+  itemCount: 5,
+  totals: [{ key: 'kcal', label: '열량', unit: 'kcal', amount: 1500 }],
+  byDishType: [
+    {
+      key: 'stew',
+      label: '찌개·전골',
+      mainCount: 2,
+      sideCount: 0,
+      knownCount: 2,
+      macroKnownCount: 2,
+      kcalPerItem: 300,
+      nutrients: [
+        groupNutrient('kcal', '열량', 'kcal', 600, 0.4),
+        groupNutrient('carb', '탄수화물', 'g', 40, 0.2),
+        groupNutrient('protein', '단백질', 'g', 30, 0.3),
+        groupNutrient('fat', '지방', 'g', 25, 0.5),
+        groupNutrient('sodium', '나트륨', 'mg', 3600, 0.6),
+      ],
+      highlights: [groupNutrient('calcium', '칼슘', 'mg', 400, 0.55)],
+      foods: [{ name: '김치찌개', count: 2 }],
+    },
+    {
+      key: 'rice',
+      label: '밥·죽',
+      mainCount: 1,
+      sideCount: 0,
+      knownCount: 1,
+      macroKnownCount: 0,
+      kcalPerItem: 750,
+      nutrients: [groupNutrient('kcal', '열량', 'kcal', 750, 0.5), groupNutrient('sodium', '나트륨', 'mg', 600, 0.1)],
+      highlights: [],
+      foods: [{ name: '공기밥', count: 1 }],
+    },
+    {
+      key: 'kimchi',
+      label: '김치·절임·젓갈',
+      mainCount: 0,
+      sideCount: 2,
+      knownCount: 2,
+      macroKnownCount: 2,
+      kcalPerItem: 75,
+      nutrients: [groupNutrient('kcal', '열량', 'kcal', 150, 0.1), groupNutrient('sodium', '나트륨', 'mg', 1800, 0.3)],
+      highlights: [],
+      foods: [{ name: '배추김치', count: 2 }],
+    },
+  ],
+  byMainIngredient: [],
+  byCuisine: [],
+};
 // 사진은 JWT 가 필요해 blob 으로 받는다 — 토큰 경로도 핸들러가 필요하다.
 const PHOTO_THUMB_URL = '/api/v1/meals/photos/:token/thumb';
 
@@ -243,6 +305,7 @@ describe('MealPage', () => {
         ranges.push(`${url.searchParams.get('from')}~${url.searchParams.get('to')}`);
         return HttpResponse.json(stats);
       }),
+      http.get(STATS_NUTRITION_URL, () => HttpResponse.json(statsNutrition)),
     );
     renderPage(undefined, '/meal/stats');
     expect(await screen.findByText('찌개·전골')).toBeInTheDocument();
@@ -342,6 +405,84 @@ describe('MealPage', () => {
     gate.open();
     expect(await screen.findByText(/조건에 맞는 기록이 없어요/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('음식·장소·메모 검색')).toBe(input);
+  });
+
+  it('통계 막대 — 기준을 나트륨으로 바꾸면 몫 순(반찬만인 묶음 포함), 막대를 누르면 그 묶음이 채운 영양 카드', async () => {
+    const asked: string[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(STATS_URL, () => HttpResponse.json(stats)),
+      http.get(STATS_NUTRITION_URL, ({ request }) => {
+        asked.push(new URL(request.url).search);
+        return HttpResponse.json(statsNutrition);
+      }),
+      // 카드의 많음·부족 표시 — 최근 14일 영양소 점검(카드를 처음 열 때 부른다).
+      http.get('/api/v1/meals/nutrition', () =>
+        HttpResponse.json({
+          from: '2026-08-09',
+          to: '2026-08-22',
+          days: 14,
+          analyzedDays: 9,
+          mealCount: 20,
+          profile: { sex: null, ageGroup: '30-49', basis: 'default' },
+          energy: { intakePerDay: 1600, requirement: 1900, percent: 84 },
+          coverage: 1,
+          status: 'ok',
+          insufficientReason: null,
+          nutrients: [
+            {
+              key: 'sodium',
+              label: '나트륨',
+              unit: 'mg',
+              intakePerDay: 3400,
+              reference: { kind: 'cdrr', amount: 2300 },
+              upperLimit: null,
+              percent: 148,
+              coverage: 1,
+              status: 'high',
+              supplementCandidate: false,
+              recordGap: false,
+              topSources: [],
+              foodSuggestions: [],
+              sideSuggestions: [],
+              typicalFoods: [],
+              note: null,
+            },
+          ],
+          notMeasured: [],
+          notes: [],
+        }),
+      ),
+    );
+    renderPage(undefined, '/meal/stats');
+    const dish = await screen.findByRole('region', { name: '조리 형태' });
+    // 끼니 수(기본) — 통계 API 그대로.
+    expect(within(dish).getAllByRole('button').map((b) => b.textContent)).toEqual(['찌개·전골2', '밥·죽1']);
+    expect(asked).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '나트륨' }));
+    expect(within(dish).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      '찌개·전골60%',
+      '김치·절임·젓갈30%',
+      '밥·죽10%',
+    ]);
+
+    fireEvent.click(within(dish).getByRole('button', { name: /찌개·전골/ }));
+    const card = within(dish).getByRole('region', { name: '찌개·전골 영양' });
+    expect(within(dish).getByRole('button', { name: /찌개·전골/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(card).getByText('주식 2번')).toBeInTheDocument();
+    // 지방 50%·나트륨 60% 는 열량 몫(40%)의 1.2 배를 넘어 치우친 영양소로 표시된다.
+    const rows = within(card).getAllByRole('listitem');
+    expect(rows.map((li) => li.getAttribute('data-over'))).toEqual([null, null, null, 'true', 'true']);
+    expect(rows[1]).toHaveTextContent('탄수화물20%');
+    expect(within(card).getByText(/칼슘 55%/)).toBeInTheDocument();
+    expect(within(card).getByText('김치찌개 2')).toBeInTheDocument();
+    // 최근 14일 점검에서 나트륨이 많음이고 이 묶음이 열량 몫보다 크게 채웠으면 문장으로 잇는다(줄 옆 표시는 없다).
+    expect(await within(card).findByText(/이 묶음이 60%를 채웠어요/)).toHaveTextContent('나트륨 많음(최근 14일) — 이 묶음이 60%를 채웠어요.');
+    expect(within(rows[4]!).queryByText('많음')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(within(dish).queryByRole('region', { name: '찌개·전골 영양' })).not.toBeInTheDocument();
   });
 
   it('좁은 화면의 조건 단추 — 접고 펼침을 알리고, 건 조건 수를 단추에 보인다', async () => {

@@ -570,7 +570,7 @@ html.dark:has(.meal-app) {
   .meal-figure-sub { margin-top: 0.15rem; font-size: 0.75rem; color: var(--muted-foreground); }
 
   /* 막대(통계 분포) — 둥근 끝 없이 먹색 */
-  .meal-bar-row { display: grid; grid-template-columns: 6rem minmax(0, 1fr) 2rem; align-items: center; gap: 0.6rem; font-size: 0.875rem; }
+  .meal-bar-row { display: grid; grid-template-columns: 6rem minmax(0, 1fr) 2.75rem; align-items: center; gap: 0.6rem; font-size: 0.875rem; }
   .meal-meter { position: relative; display: block; height: 0.5rem; background: var(--border); }
   .meal-meter > span { position: absolute; inset: 0 auto 0 0; background: var(--foreground); }
   .meal-meter[data-tone='low'] > span, .meal-meter[data-tone='borderline'] > span { background: var(--meal-short); }
@@ -746,6 +746,36 @@ html.dark:has(.meal-app) {
 
   /* 시트는 식단 틀(.meal-app) 밖에 그려진다 — 포커스 표시를 따로 단다 */
   .meal-sheet :focus-visible { outline: 2px solid var(--foreground); outline-offset: 2px; }
+
+  /* ── 통계 묶음 막대와 영양 카드 ── 막대 줄이 단추, 카드는 넓은 화면에선 옆 칸 위에 겹치고 좁은 화면에선 줄 아래로 */
+  .meal-bar-item { position: relative; }
+  .meal-bar-btn { width: calc(100% + 0.7rem); margin: 0 -0.35rem; padding: 0.3rem 0.35rem; text-align: left; border-radius: var(--radius); }
+  .meal-bar-btn:hover, .meal-bar-btn[aria-expanded='true'] { background: var(--card); }
+  .meal-group-pop { position: static; padding: 0.4rem 0 0.6rem; }
+  @media (min-width: 48rem) {
+    /* 옆 칸으로 건너는 틈은 카드의 투명한 여백(padding)이 메운다 — 마우스가 틈에서 빠져 카드가 닫히지 않게. */
+    .meal-group-pop { position: absolute; z-index: 25; top: -0.6rem; width: min(100%, 22rem); padding: 0; }
+    .meal-group-pop[data-side='right'] { left: 100%; padding-left: 1rem; }
+    .meal-group-pop[data-side='left'] { right: 100%; padding-right: 1rem; }
+  }
+  .meal-group-card { background: var(--card); border: var(--meal-line) solid var(--foreground); box-shadow: 0 12px 32px -14px rgb(0 0 0 / 0.35); }
+  .meal-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0.8rem; background: var(--foreground); color: var(--card); }
+  .meal-group-title { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+  .meal-group-count { font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+  .meal-group-kcal { padding: 0.55rem 0.8rem 0.4rem; font-size: 0.875rem; }
+  .meal-group-kcal b { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .meal-group-colhead { padding: 0.3rem 0.8rem; font-size: 0.6875rem; font-weight: 800; border-top: 1px solid var(--foreground); border-bottom: var(--meal-line-heavy) solid var(--foreground); }
+  .meal-group-row { display: grid; grid-template-columns: 4.25rem minmax(0, 1fr) 2.75rem auto; align-items: center; gap: 0.5rem; padding: 0.35rem 0.8rem; font-size: 0.8125rem; border-bottom: 1px solid var(--border); }
+  .meal-group-name { font-weight: 600; }
+  .meal-group-pct { text-align: right; font-variant-numeric: tabular-nums; }
+  /* 열량 몫보다 크게 채운 영양소 — 이 묶음이 치우친 쪽을 굵게·먹색 막대로, 나머지 막대는 옅게 */
+  .meal-group-row .meal-meter > span { background: var(--meal-faint); }
+  .meal-group-row[data-over='true'] .meal-meter > span { background: var(--foreground); }
+  .meal-group-row[data-over='true'] .meal-group-name, .meal-group-row[data-over='true'] .meal-group-pct { font-weight: 800; }
+  .meal-group-note { padding: 0.45rem 0.8rem 0; font-size: 0.75rem; line-height: 1.5; color: var(--muted-foreground); }
+  .meal-group-note b { font-weight: 800; color: var(--foreground); }
+  .meal-group-note .meal-flag, .meal-group-row .meal-flag { margin-left: 0.25rem; }
+  .meal-group-fine { padding: 0.45rem 0.8rem 0.6rem; font-size: 0.6875rem; color: var(--meal-faint); }
 
   @media (prefers-reduced-motion: no-preference) {
     .meal-bar > span, .meal-week-bar { transition: height 0.3s ease, width 0.3s ease; }

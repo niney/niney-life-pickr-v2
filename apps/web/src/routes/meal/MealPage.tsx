@@ -11,7 +11,9 @@ import {
   useInfiniteMealEntries,
   useMealCalendar,
   useMealEntries,
+  useMealNutrition,
   useMealStats,
+  useMealStatsNutrition,
 } from '@repo/shared';
 import {
   FOOD_CUISINE_LABEL,
@@ -32,7 +34,10 @@ import {
 import { useIsDesktopLg } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
 import { MEAL_MAIN_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
+import { MEAL_BAR_METRICS, type MealBarMetric } from './mealBarMetrics';
+import { MealGroupBars } from './MealGroupBars';
 import { MealLink } from './MealLink';
+import { flaggedNutrients } from './mealNutrientTone';
 import { MEAL_PATH } from './mealPaths';
 import { MealPageHeader } from './MealPageHeader';
 import { MealPhotoImg } from './MealPhotoImg';
@@ -491,13 +496,13 @@ const MealCalendar = () => {
                       // 화면 읽기 프로그램에는 날짜만이 아니라 그날 기록 요약까지 — 칸에 보이는 점·숫자를 말로.
                       aria-label={[
                         `${Number(date.slice(5, 7))}월 ${Number(date.slice(-2))}일`,
-                        date === today ? "오늘" : null,
-                        info ? `${info.count}끼` : "기록 없음",
+                        date === today ? '오늘' : null,
+                        info ? `${info.count}끼` : '기록 없음',
                         info?.kcal != null ? `약 ${fmt(info.kcal)}kcal` : null,
-                        info?.hasPhoto ? "사진 있음" : null,
+                        info?.hasPhoto ? '사진 있음' : null,
                       ]
                         .filter(Boolean)
-                        .join(", ")}
+                        .join(', ')}
                       data-today={date === today ? 'true' : undefined}
                       data-recorded={info ? 'true' : undefined}
                       className="meal-cal-day"
@@ -584,6 +589,14 @@ const MealStats = () => {
     return { from: toLocalDateKey(start), to: toLocalDateKey(end) };
   }, [days]);
   const stats = useMealStats(from, to);
+  // 분포 막대 기준(끼니 수·열량·나트륨)과 막대 카드 — 묶음별 영양 몫은 통계를 열 때 함께 받아 두어 올리자마자 뜬다.
+  // 카드의 많음·부족 표시(최근 14일 영양소 점검)는 카드를 처음 열 때 부른다.
+  const [metric, setMetric] = useState<MealBarMetric>('count');
+  const [cardSeen, setCardSeen] = useState(false);
+  const groups = useMealStatsNutrition(from, to);
+  const check = useMealNutrition(14, cardSeen);
+  const flags = useMemo(() => flaggedNutrients(check.data), [check.data]);
+  const metricHint = MEAL_BAR_METRICS.find((m) => m.key === metric)?.hint ?? '';
 
   if (stats.isLoading) return <Loading />;
   if (stats.error) return <ErrorBox onRetry={() => void stats.refetch()} />;
@@ -698,31 +711,80 @@ const MealStats = () => {
         <p className="meal-empty">이 기간에는 기록이 없어요.</p>
       ) : (
         <>
-          <div className="grid gap-x-8 gap-y-9 md:grid-cols-2">
-            <Bars title="조리 형태" rows={data.byDishType} labels={FOOD_DISH_TYPE_LABEL} />
-            <Bars title="주재료" rows={data.byMainIngredient} labels={FOOD_MAIN_INGREDIENT_LABEL} />
-            <Bars title="요리 계통" rows={data.byCuisine} labels={FOOD_CUISINE_LABEL} />
-            <section className="meal-sec" aria-labelledby="meal-top-foods">
-              <div className="meal-sec-head">
-                <h2 id="meal-top-foods" className="meal-sec-title">
-                  자주 먹은 음식
-                </h2>
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                막대: {metricHint}. 막대에 올리거나 누르면 그 묶음이 채운 영양이 보여요.
+              </p>
+              <div className="meal-seg meal-seg-sm" role="group" aria-label="막대 기준">
+                {MEAL_BAR_METRICS.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    aria-pressed={metric === m.key}
+                    onClick={() => setMetric(m.key)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
               </div>
-              {data.topFoods.length === 0 ? (
-                <p className="text-sm text-muted-foreground">아직 반복된 음식이 없어요.</p>
-              ) : (
-                <ul>
-                  {data.topFoods.map((f) => (
-                    <li key={f.name} className="meal-rank-row">
-                      <span className="truncate font-bold">{f.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {f.count}회 · 마지막 {f.lastEatenDate.slice(5)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            </div>
+            <div className="grid gap-x-8 gap-y-9 md:grid-cols-2">
+              <MealGroupBars
+                title="조리 형태"
+                counts={data.byDishType}
+                labels={FOOD_DISH_TYPE_LABEL}
+                groups={groups.data?.byDishType}
+                groupsLoading={groups.isLoading}
+                metric={metric}
+                side="right"
+                flags={flags}
+                onOpen={() => setCardSeen(true)}
+              />
+              <MealGroupBars
+                title="주재료"
+                counts={data.byMainIngredient}
+                labels={FOOD_MAIN_INGREDIENT_LABEL}
+                groups={groups.data?.byMainIngredient}
+                groupsLoading={groups.isLoading}
+                metric={metric}
+                side="left"
+                flags={flags}
+                onOpen={() => setCardSeen(true)}
+              />
+              <MealGroupBars
+                title="요리 계통"
+                counts={data.byCuisine}
+                labels={FOOD_CUISINE_LABEL}
+                groups={groups.data?.byCuisine}
+                groupsLoading={groups.isLoading}
+                metric={metric}
+                side="right"
+                flags={flags}
+                onOpen={() => setCardSeen(true)}
+              />
+              <section className="meal-sec" aria-labelledby="meal-top-foods">
+                <div className="meal-sec-head">
+                  <h2 id="meal-top-foods" className="meal-sec-title">
+                    자주 먹은 음식
+                  </h2>
+                </div>
+                {data.topFoods.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">아직 반복된 음식이 없어요.</p>
+                ) : (
+                  <ul>
+                    {data.topFoods.map((f) => (
+                      <li key={f.name} className="meal-rank-row">
+                        <span className="truncate font-bold">{f.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {f.count}회 · 마지막 {f.lastEatenDate.slice(5)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
           </div>
 
           <section className="meal-sec" aria-labelledby="meal-by-date">
@@ -760,40 +822,6 @@ const Figure = ({ label, value, sub }: { label: string; value: string; sub?: str
     {sub ? <p className="meal-figure-sub">{sub}</p> : null}
   </div>
 );
-
-const Bars = ({
-  title,
-  rows,
-  labels,
-}: {
-  title: string;
-  rows: { key: string; label: string; count: number }[];
-  labels: Record<string, string>;
-}) => {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  return (
-    <section className="meal-sec" aria-label={title}>
-      <div className="meal-sec-head">
-        <h2 className="meal-sec-title">{title}</h2>
-      </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">표시할 자료가 없어요.</p>
-      ) : (
-        <ul className="space-y-2">
-          {rows.slice(0, 8).map((r) => (
-            <li key={r.key} className="meal-bar-row">
-              <span className="truncate">{labels[r.key] ?? r.label}</span>
-              <span className="meal-meter" aria-hidden>
-                <span style={{ width: `${(r.count / max) * 100}%` }} />
-              </span>
-              <span className="text-right tabular-nums">{r.count}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-};
 
 const Loading = () => (
   <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
