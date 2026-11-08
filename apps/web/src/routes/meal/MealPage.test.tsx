@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION } from '@repo/api-contract';
 import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/shared';
+import { mealDateTitle, toLocalDateKey } from '@repo/utils';
 import { server } from '~/test/msw';
 import MealApp from './MealApp';
 
@@ -110,7 +111,7 @@ const statsNutrients = {
   dates: ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22'],
   meals: [2, 2, 3, 1, 0, 2],
   skipped: [0, 0, 0, 0, 0, 0],
-  // 평균에 든 날 — 서버 판정(두 끼 이상, '안 먹음'도 한 칸).
+  // 평균에 든 날 — 서버 판정(두 끼 이상, 또는 한 끼에 남은 끼니가 모두 '안 먹음').
   counted: [true, true, true, false, false, true],
   rows: [
     nutrientRow({
@@ -702,7 +703,7 @@ describe('MealPage', () => {
     expect(within(calcium).getByText(/1주는 평균이 하나라 흐름은 1달·3달에서 보여요/)).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: '영양' })).toHaveAttribute('href', '/meal/nutrition');
   });
-  it("기록 목록 — 한 끼만 적힌 지난날은 빈 끼니마다 '안 먹음'을 묻고, 표시하면 묻기 대신 취소할 수 있는 표시가 남는다", async () => {
+  it("기록 목록 — 한 끼만 적힌 지난날은 남은 끼니마다 '안 먹음'을 묻고, 다 표시해야 묻기 대신 취소할 수 있는 표시만 남는다", async () => {
     let skips: { date: string; slot: string }[] = [];
     const asked: string[] = [];
     const put: unknown[] = [];
@@ -734,12 +735,19 @@ describe('MealPage', () => {
     expect(await within(day).findByText(/한 끼만 적혀 영양 평균에서 빠져요/)).toBeInTheDocument();
     fireEvent.click(within(day).getByRole('button', { name: '저녁 안 먹음' }));
     await waitFor(() => expect(put).toEqual([{ date: '2026-08-20', slot: 'dinner' }]));
-    // 표시하면 평균에 드는 날이 되어 묻기는 사라지고, 취소할 수 있는 표시가 남는다.
-    const cancel = await within(day).findByRole('button', { name: '저녁 안 먹음 취소' });
-    expect(within(day).queryByText(/한 끼만 적혀 영양 평균에서 빠져요/)).not.toBeInTheDocument();
-    fireEvent.click(cancel);
+    // 저녁만 표시하면 아침을 몰라 아직 빠진다 — 표시(취소 단추)와 함께 남은 아침을 계속 묻는다.
+    expect(await within(day).findByRole('button', { name: '저녁 안 먹음 취소' })).toBeInTheDocument();
+    expect(within(day).getByText(/한 끼만 적혀 영양 평균에서 빠져요/)).toBeInTheDocument();
+    expect(within(day).queryByRole('button', { name: '저녁 안 먹음' })).not.toBeInTheDocument();
+    fireEvent.click(within(day).getByRole('button', { name: '아침 안 먹음' }));
+    await waitFor(() => expect(put).toHaveLength(2));
+    // 남은 끼니를 다 표시하면 평균에 드는 날 — 묻기는 사라지고 취소할 수 있는 표시만 남는다.
+    await waitFor(() => expect(within(day).queryByText(/한 끼만 적혀 영양 평균에서 빠져요/)).not.toBeInTheDocument());
+    expect(within(day).getByRole('button', { name: '아침 안 먹음 취소' })).toBeInTheDocument();
+    fireEvent.click(within(day).getByRole('button', { name: '저녁 안 먹음 취소' }));
     await waitFor(() => expect(deleted).toEqual(['2026-08-20|dinner']));
     expect(await within(day).findByText(/한 끼만 적혀 영양 평균에서 빠져요/)).toBeInTheDocument();
+    expect(within(day).getByRole('button', { name: '저녁 안 먹음' })).toBeInTheDocument();
   });
 
   it('좁은 화면의 조건 단추 — 접고 펼침을 알리고, 건 조건 수를 단추에 보인다', async () => {
@@ -1452,6 +1460,94 @@ describe('MealPage — 영양 탭', () => {
       },
       isGuest: false,
     });
+    // 빠진 날 정리는 점검 기간의 달력·'안 먹음'을 함께 받는다 — 기본은 빈 기록(정리할 날 없음). 테스트가 덮어쓴다.
+    server.use(
+      http.get(CALENDAR_URL, ({ request }) =>
+        HttpResponse.json({ month: new URL(request.url).searchParams.get('month'), days: [] }),
+      ),
+      http.get(SKIPS_URL, () => HttpResponse.json({ skips: [] })),
+    );
+  });
+
+  it("한 끼만 적혀 평균에서 빠진 지난날을 모아 그 자리에서 정리한다 — 남은 끼니를 다 표시해야 평균에 들고, 오늘은 묻지 않는다", async () => {
+    await setMealDraftPrincipal('u1');
+    useMealDraftStore.getState().clear();
+    const day = (offset: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return toLocalDateKey(d);
+    };
+    const today = day(0);
+    const calendarDays = [
+      { date: day(-6), count: 1, slots: ['dinner'], hasPhoto: false, kcal: 500 },
+      { date: day(-3), count: 2, slots: ['lunch', 'dinner'], hasPhoto: false, kcal: 1200 },
+      { date: day(-1), count: 1, slots: ['lunch'], hasPhoto: false, kcal: 600 },
+      { date: today, count: 1, slots: ['breakfast'], hasPhoto: false, kcal: 300 },
+    ];
+    let skips: { date: string; slot: string }[] = [];
+    const put: string[] = [];
+    let analyses = 0;
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(NUTRITION_URL, () => {
+        analyses += 1;
+        return HttpResponse.json({
+          ...analysis(14),
+          from: day(-13),
+          to: today,
+          status: 'insufficient',
+          analyzedDays: 1,
+          insufficientReason: '최근 14일 중 두 끼 이상 기록한 날이 1일이에요.',
+        });
+      }),
+      http.get(ADVICE_URL, () => HttpResponse.json({ advice: null })),
+      http.get(CALENDAR_URL, ({ request }) => {
+        const month = new URL(request.url).searchParams.get('month')!;
+        return HttpResponse.json({ month, days: calendarDays.filter((d) => d.date.startsWith(month)) });
+      }),
+      http.get(SKIPS_URL, () => HttpResponse.json({ skips })),
+      http.put(SKIPS_URL, async ({ request }) => {
+        const body = (await request.json()) as { date: string; slot: string };
+        put.push(`${body.date} ${body.slot}`);
+        skips = [...skips, body];
+        return HttpResponse.json(body);
+      }),
+    );
+    renderPage(undefined, '/meal/nutrition');
+
+    const review = await screen.findByRole('region', { name: '평균에서 빠진 날' });
+    // 두 끼 날은 빼고, 오늘(아침만)은 아직 지나지 않은 끼니가 있어 뺀다. 접어 둔 채 날 수만.
+    expect(review).toHaveTextContent('한 끼만 적혀 평균에서 빠진 날 2일');
+    expect(within(review).queryByText(/만 적힘/)).not.toBeInTheDocument();
+    fireEvent.click(within(review).getByRole('button', { name: '정리하기' }));
+    // 최근 날부터.
+    expect(within(review).getAllByText(/만 적힘/).map((el) => el.textContent)).toEqual(['· 점심만 적힘', '· 저녁만 적힘']);
+
+    const dayItem = (date: string) => within(review).getByText(mealDateTitle(date, today)).closest('li')!;
+    const rowsOf = (date: string) =>
+      within(dayItem(date))
+        .getAllByRole('listitem')
+        .map((li) => li.textContent);
+    expect(rowsOf(day(-1))).toEqual(['아침기록하기안 먹음', '저녁기록하기안 먹음']);
+
+    // 어제 저녁만 표시 — 아침을 몰라 아직 빠진다.
+    fireEvent.click(within(within(dayItem(day(-1))).getAllByRole('listitem')[1]!).getByRole('button', { name: '안 먹음' }));
+    expect(await within(dayItem(day(-1))).findByRole('button', { name: '저녁 안 먹음 취소' })).toBeInTheDocument();
+    expect(review).toHaveTextContent('한 끼만 적혀 평균에서 빠진 날 2일');
+
+    // 아침까지 표시하면 평균에 든다 — 그 자리에 남겨 고칠 수 있게 하고, 점검을 다시 받는다.
+    fireEvent.click(within(within(dayItem(day(-1))).getAllByRole('listitem')[0]!).getByRole('button', { name: '안 먹음' }));
+    expect(await within(dayItem(day(-1))).findByText('· 평균에 들어가요')).toBeInTheDocument();
+    expect(rowsOf(day(-1))).toEqual(['아침안 먹음취소', '저녁안 먹음취소']);
+    expect(review).toHaveTextContent('한 끼만 적혀 평균에서 빠진 날 1일');
+    expect(put).toEqual([`${day(-1)} dinner`, `${day(-1)} breakfast`]);
+    await waitFor(() => expect(analyses).toBeGreaterThan(1));
+
+    // [기록하기] — 그날 그 끼니로 새 기록을 시작한다.
+    expect(rowsOf(day(-6))).toEqual(['아침기록하기안 먹음', '점심기록하기안 먹음']);
+    fireEvent.click(within(within(dayItem(day(-6))).getAllByRole('listitem')[1]!).getByRole('button', { name: '기록하기' }));
+    const draft = useMealDraftStore.getState();
+    expect([draft.slot, draft.eatenDate]).toEqual(['lunch', day(-6)]);
   });
 
   it('점검을 모자란 순으로 보여 주고, 조언 받기는 force=false·다시 쓰기는 force=true, 기간을 바꾸면 days 로 다시 조회한다', async () => {

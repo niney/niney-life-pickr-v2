@@ -5,6 +5,7 @@ import type {
   MealNutrientResultType,
   MealNutritionAdviceType,
   MealNutritionAnalysisType,
+  MealSkipSlotType,
 } from '@repo/api-contract';
 import {
   useCreateMealNutritionAdvice,
@@ -22,10 +23,13 @@ import {
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
+import { prepareMealEntry } from './mealDraftStart';
 import { MealLink } from './MealLink';
 import { MealNutrientLine, MealNutrientMeter } from './MealNutrientLine';
 import { nutrientVsRefText } from './mealNutrientTone';
+import { useMealOpen } from './mealPanel';
 import { MEAL_PATH } from './mealPaths';
+import { MealSkipReview } from './MealSkip';
 
 // 영양 — 최근 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 견주고(서버 계산), 모자란 영양소를 음식·영양제
 // (성분·형태, 제품명 없음)로 채우는 조언을 받는다. 조언은 LLM 이라 누를 때만 만들고, 같은 날·같은 기록이면 서버가
@@ -49,6 +53,12 @@ export const MealNutritionTab = () => {
   const [days, setDays] = useState<(typeof PERIODS)[number]>(14);
   // 기간을 바꾸는 동안 이전 기간 결과를 흐리게 둔다 — 로딩으로 바꾸면 긴 목록이 접혔다 펴지며 화면이 튄다.
   const analysis = useMealNutrition(days, true, { keepPrevious: true });
+  const open = useMealOpen();
+  // 빠진 날 정리의 [기록하기] — 그날 그 끼니로 새 기록을 연다(홈의 어제 묻기와 같은 시작).
+  const recordMissing = (date: string, slot: MealSkipSlotType) => {
+    prepareMealEntry({ slot, date });
+    open(MEAL_PATH.new);
+  };
 
   // 데스크톱은 점검과 조언을 나란히 — 조언(이 탭의 결론)이 점검 목록 아래(1,440px)로 밀리지 않게.
   return (
@@ -66,8 +76,8 @@ export const MealNutritionTab = () => {
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요('안 먹음'으로 표시한 끼니도 한
-            끼로 세요).
+            두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요(한 끼만 먹은 날은 남은 끼니를 모두
+            '안 먹음'으로 표시하면 들어가요).
           </p>
         </CardHeader>
         <CardContent>
@@ -83,7 +93,7 @@ export const MealNutritionTab = () => {
               </Button>
             </div>
           ) : (
-            <NutritionAnalysisView data={analysis.data} dim={analysis.isPlaceholderData} />
+            <NutritionAnalysisView data={analysis.data} dim={analysis.isPlaceholderData} onRecord={recordMissing} />
           )}
         </CardContent>
       </Card>
@@ -93,15 +103,28 @@ export const MealNutritionTab = () => {
   );
 };
 
-// dim: 기간 전환 중 이전 기간 결과를 보여 주는 동안(재조회가 끝나면 풀린다).
-const NutritionAnalysisView = ({ data, dim }: { data: MealNutritionAnalysisType; dim?: boolean }) => {
+// dim: 기간 전환 중 이전 기간 결과를 보여 주는 동안(재조회가 끝나면 풀린다). onRecord: 빠진 날 정리의 [기록하기].
+const NutritionAnalysisView = ({
+  data,
+  dim,
+  onRecord,
+}: {
+  data: MealNutritionAnalysisType;
+  dim?: boolean;
+  onRecord: (date: string, slot: MealSkipSlotType) => void;
+}) => {
+  // 한 끼만 적혀 평균에서 빠진 지난날 — 판단을 미룰 때가 가장 쓸모 있어 이유 바로 아래, 점검이 나올 때는 요약 줄 아래.
+  const review = <MealSkipReview from={data.from} to={data.to} onRecord={onRecord} />;
   if (data.status === 'insufficient') {
     return (
-      <div className={cn('meal-empty', dim && 'opacity-60')}>
-        <p>{data.insufficientReason ?? '기록이 더 쌓이면 볼 수 있어요.'}</p>
-        <MealLink to={MEAL_PATH.new} className="meal-btn-line">
-          기록하러 가기
-        </MealLink>
+      <div className={cn('space-y-4', dim && 'opacity-60')}>
+        <div className="meal-empty">
+          <p>{data.insufficientReason ?? '기록이 더 쌓이면 볼 수 있어요.'}</p>
+          <MealLink to={MEAL_PATH.new} className="meal-btn-line">
+            기록하러 가기
+          </MealLink>
+        </div>
+        {review}
       </div>
     );
   }
@@ -123,6 +146,7 @@ const NutritionAnalysisView = ({ data, dim }: { data: MealNutritionAnalysisType;
         ) : null}
         <span className="text-muted-foreground">{mealNutrientProfileLabel(data.profile)}</span>
       </div>
+      {review}
       {data.notes.length > 0 ? (
         <div className="meal-note meal-note-block text-xs" data-tone="warn">
           <ul className="space-y-1">

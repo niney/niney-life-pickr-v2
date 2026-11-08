@@ -392,7 +392,7 @@ describe('MealHomePage — 식단 홈', () => {
     expect(new Date(draft.eatenAt).getHours()).toBe(19);
   });
 
-  it('안 먹음을 누르면 표시하고 그 자리에 되돌리기를 남긴다 — 되돌리면 다시 묻는다', async () => {
+  it('안 먹음은 하나만 눌러선 평균에 들지 않아 남은 끼니를 계속 묻고, 다 채우면 알린 뒤 취소할 수 있게 남긴다', async () => {
     let skips: { date: string; slot: string }[] = [];
     const calls: string[] = [];
     withYesterdayLunch([
@@ -400,26 +400,44 @@ describe('MealHomePage — 식단 홈', () => {
       http.put(SKIPS_URL, async ({ request }) => {
         const body = (await request.json()) as { date: string; slot: string };
         calls.push(`PUT ${body.date} ${body.slot}`);
-        skips = [body];
+        skips = [...skips, body];
         return HttpResponse.json(body);
       }),
       http.delete(SKIPS_URL, ({ request }) => {
         const q = new URL(request.url).searchParams;
         calls.push(`DELETE ${q.get('date')} ${q.get('slot')}`);
-        skips = [];
+        skips = skips.filter((s) => !(s.date === q.get('date') && s.slot === q.get('slot')));
         return new HttpResponse(null, { status: 204 });
       }),
     ]);
     renderHome();
     const nudge = await screen.findByRole('region', { name: '어제 빈 끼니' });
+    const rowsOf = () => within(nudge).getAllByRole('listitem').map((li) => li.textContent);
+    // 저녁만 표시 — 아침을 몰라 아직 빠진다.
     fireEvent.click(within(within(nudge).getAllByRole('listitem')[1]!).getByRole('button', { name: '안 먹음' }));
-    expect(await screen.findByText(/어제 저녁을 안 먹음으로 표시했어요/)).toHaveTextContent(
-      '어제 저녁을 안 먹음으로 표시했어요. 어제도 영양 평균에 들어가요.',
-    );
-    expect(calls).toEqual([`PUT ${yesterday} dinner`]);
-    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
-    expect(await screen.findByText('어제는 점심만 적혀 있어 영양 평균에서 빠져요.')).toBeInTheDocument();
-    expect(calls).toEqual([`PUT ${yesterday} dinner`, `DELETE ${yesterday} dinner`]);
+    expect(await within(nudge).findByRole('button', { name: '저녁 안 먹음 취소' })).toBeInTheDocument();
+    expect(nudge).toHaveTextContent('어제는 점심만 적혀 있어 영양 평균에서 빠져요.');
+    expect(rowsOf()).toEqual(['아침기록하기안 먹음', '저녁안 먹음취소']);
+    // 아침까지 표시하면 평균에 든다 — 알리고, 고칠 수 있게 표시를 남긴다.
+    fireEvent.click(within(within(nudge).getAllByRole('listitem')[0]!).getByRole('button', { name: '안 먹음' }));
+    expect(await within(nudge).findByText('어제도 영양 평균에 들어가요.')).toBeInTheDocument();
+    expect(rowsOf()).toEqual(['아침안 먹음취소', '저녁안 먹음취소']);
+    expect(calls).toEqual([`PUT ${yesterday} dinner`, `PUT ${yesterday} breakfast`]);
+    // 하나를 취소하면 다시 묻는다.
+    fireEvent.click(within(nudge).getByRole('button', { name: '저녁 안 먹음 취소' }));
+    expect(await within(nudge).findByText('어제는 점심만 적혀 있어 영양 평균에서 빠져요.')).toBeInTheDocument();
+    expect(rowsOf()).toEqual(['아침안 먹음취소', '저녁기록하기안 먹음']);
+    expect(calls).toEqual([`PUT ${yesterday} dinner`, `PUT ${yesterday} breakfast`, `DELETE ${yesterday} dinner`]);
+  });
+
+  it('어제 표시해 둔 끼니가 하나뿐이면 다시 열어도 남은 끼니를 묻는다', async () => {
+    withYesterdayLunch([http.get(SKIPS_URL, () => HttpResponse.json({ skips: [{ date: yesterday, slot: 'breakfast' }] }))]);
+    renderHome();
+    const nudge = await screen.findByRole('region', { name: '어제 빈 끼니' });
+    expect(within(nudge).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      '아침안 먹음취소',
+      '저녁기록하기안 먹음',
+    ]);
   });
 });
 

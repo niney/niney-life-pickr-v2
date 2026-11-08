@@ -151,8 +151,8 @@ export const MealStatsNutrients = ({
         영양소 <span className="font-normal text-muted-foreground">· {rangeLabel}</span>
       </CardTitle>
       <p className="text-sm text-muted-foreground">
-        두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요('안 먹음'으로 표시한 끼니도 한 끼로 세요).
-        판정은 영양 탭과 같은 셈이고, 기간만 위에서 고른 대로예요.
+        두 끼 이상 기록한 날의 하루 평균을 한국인 영양소 섭취기준(2020)과 견줘요(한 끼만 먹은 날은 남은 끼니를 모두 '안
+        먹음'으로 표시하면 들어가요). 판정은 영양 탭과 같은 셈이고, 기간만 위에서 고른 대로예요.
       </p>
     </CardHeader>
   );
@@ -382,7 +382,8 @@ interface Bar {
   skipped: number;
 }
 
-// 흐름에 쓰는 날짜별 값 — 서버가 dates 와 같은 순서로 준다. 평균에 든 날(counted)은 서버 판정 그대로 쓴다('안 먹음'도 한 칸).
+// 흐름에 쓰는 날짜별 값 — 서버가 dates 와 같은 순서로 준다. 평균에 든 날(counted)은 서버 판정 그대로 쓴다(한 끼 기록에 남은
+// 끼니가 모두 '안 먹음'인 날도 든다).
 type FlowDays = Pick<MealStatsNutrientsResultType, 'dates' | 'meals' | 'skipped' | 'counted'>;
 
 const isWeekly = (row: MealStatsNutrientRowType, dates: string[]): boolean =>
