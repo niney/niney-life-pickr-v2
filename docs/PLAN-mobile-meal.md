@@ -60,6 +60,11 @@ niney@life.com 에 최근 14일 기록이 있어 아래 예시 값으로 맞춰 
 - **추천 카드 곁들임 줄 → 분석 탭 이동**: 웹에는 '영양 보기' 링크가 있지만 앱에는 없다. 분석 탭은 같은 화면(`app/meal/index.tsx`)의
   탭 상태라 `router.push('/meal?tab=analysis')` 는 같은 화면을 한 겹 더 쌓을 수 있다 — 넣는다면 `MealRecommendView` 가
   `onOpenAnalysis` 콜백을 받고 `app/meal/index.tsx` 가 `setTab('analysis')` 로 넘겨 주는 방식.
+- **음식 찾기(웹 휴대폰과 같은 흐름)**: 2026-11-08 웹 리뉴얼 3단계에서 서버가 준비됐다 — `/food/search` 결과에 `servingKcal`(넣을 때와
+  같은 규칙의 1인분 열량)·`myCount`(최근 180일 내가 적은 횟수, 이 값이 있으면 앞에 온다), `/meals/items/frequent` 에 `q`(이름으로 찾는
+  내 기록·최근 1년)와 항목별 `kcal`. 앱 `MealItemRow` 자동완성은 지금 이 값을 안 쓴다(타입만 늘었다). 웹 `MealFoodSheet.tsx` 가 기준 —
+  치기 전 자주 먹은 음식·최근 끼니 통째로, 치는 중 '그대로 넣기' → 내 기록 → 음식 목록, 김치·나물은 반찬으로
+  (`MEAL_SIDE_DEFAULT_DISH_TYPES`). 레이아웃 리뉴얼과 함께 하는 게 낫다([PLAN-meal-web-redesign.md](PLAN-meal-web-redesign.md)).
 
 ## 3. 끝났다고 볼 기준
 
