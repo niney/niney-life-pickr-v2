@@ -67,6 +67,8 @@ niney@life.com 에 최근 14일 기록이 있어 아래 예시 값으로 맞춰 
   (`MEAL_SIDE_DEFAULT_DISH_TYPES`). 레이아웃 리뉴얼과 함께 하는 게 낫다([PLAN-meal-web-redesign.md](PLAN-meal-web-redesign.md)).
 - **통계 묶음별 영양**: `GET /meals/stats/nutrition?from&to`(공용 훅 `useMealStatsNutrition`) — 웹은 분포 막대 기준(끼니 수·열량·
   나트륨)과 막대를 누르면 펼치는 묶음 카드(`MealGroupBars.tsx`). 앱 분석 탭 분포에 같은 기준·카드를 붙일 수 있다(앱은 누르면 펼침만).
+  카드의 '열량 구성' 두 줄(이 묶음·내 평균, 응답 `composition`)과 열량·나트륨 기준일 때 막대 위 판정 한 줄(`MealBarSummary.tsx` —
+  최근 14일 점검 `useMealNutrition(14)` 의 하루 평균·많음 표시)도 함께 옮긴다. 막대만 보면 '나트륨이 높다'가 안 보인다는 물음에서 나왔다.
 
 ## 3. 끝났다고 볼 기준
 
