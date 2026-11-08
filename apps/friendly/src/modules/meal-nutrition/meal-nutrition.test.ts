@@ -5,6 +5,7 @@ import {
   MEAL_DATA_DELETE_CONFIRMATION,
   type MealNutrientResultType,
   type MealNutritionAnalysisType,
+  type MealStatsNutritionResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
@@ -967,6 +968,31 @@ describe('MealNutritionAdviceService · 라우트 (격리 DB)', () => {
     await expect(after).resolves.toMatchObject({ cached: false, advice: { status: 'insufficient' } });
     const saved = await app.prisma.mealNutritionAdvice.findMany({ where: { userId: 'nut-conflict' } });
     expect(saved.map((a) => a.status)).toEqual(['insufficient']); // 삭제 전 계산의 조언은 저장되지 않았다
+  });
+
+  it('통계 묶음별 영양 몫 라우트 — 로그인 필요, 기간 검사, 기간 기록 전체의 묶음 몫', async () => {
+    const to = kstToday();
+    const url = (from: string, until = to) => `/api/v1/meals/stats/nutrition?from=${from}&to=${until}`;
+    expect((await app.inject({ method: 'GET', url: url(shiftDate(to, -6)) })).statusCode).toBe(401);
+    const auth = authFor('nut-route');
+    expect((await app.inject({ method: 'GET', url: url(to, shiftDate(to, -1)), headers: auth })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: url(shiftDate(to, -400)), headers: auth })).statusCode).toBe(400);
+
+    const res = await app.inject({ method: 'GET', url: url(shiftDate(to, -6)), headers: auth });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<MealStatsNutritionResultType>();
+    // 5일 × 두 끼 × (현미밥 300 + 된장찌개 150) — 두 끼 이상 기록한 날만 고르지 않고 기간 기록 전체.
+    expect(body.itemCount).toBe(20);
+    expect(body.totals.find((t) => t.key === 'kcal')?.amount).toBe(4500);
+    expect(body.totals.find((t) => t.key === 'sodium')?.amount).toBe(18050);
+    // 분류 없이 저장된 기록은 미분류 한 묶음 — 몫 100%.
+    expect(body.byDishType.map((g) => [g.key, g.mainCount, g.nutrients.find((n) => n.key === 'kcal')?.share])).toEqual([
+      ['unknown', 20, 1],
+    ]);
+    expect(body.byDishType[0]?.foods).toEqual([
+      { name: '된장찌개', count: 10 },
+      { name: '현미밥', count: 10 },
+    ]);
   });
 
   it('라우트 — 점검·조언 생성·최근 조언, 로그인 필요, 일일 한도 429', async () => {

@@ -28,6 +28,7 @@ import {
   type MealPreferenceType,
   type MealPhotoRetentionPreviewType,
   type MealSlotType,
+  type MealStatsNutritionResultType,
   type MealStatsResultType,
   type MealTimePresetsResultType,
   type RecentMealItemResultType,
@@ -116,6 +117,12 @@ export const mealApi = {
   stats: (from: string, to: string) =>
     apiFetch<MealStatsResultType>(
       `${Routes.Meal.stats}?${new URLSearchParams({ from, to }).toString()}`,
+    ),
+
+  // 통계 — 묶음(조리 형태·주재료·요리 계통)별 영양 몫.
+  statsNutrition: (from: string, to: string) =>
+    apiFetch<MealStatsNutritionResultType>(
+      `${Routes.Meal.statsNutrition}?${new URLSearchParams({ from, to }).toString()}`,
     ),
 
   // ── 사진 ──

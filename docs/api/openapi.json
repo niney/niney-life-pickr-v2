@@ -22934,6 +22934,479 @@
         }
       }
     },
+    "/api/v1/meals/stats/nutrition": {
+      "get": {
+        "summary": "통계 — 묶음(조리 형태·주재료·요리 계통)별 영양 몫: 이 기간 먹은 열량·탄단지·나트륨·비타민·무기질 중 그 묶음 몫",
+        "tags": [
+          "meal"
+        ],
+        "description": "기간은 from~to(포함) 최대 400일 — 넘으면 400. 반찬도 그 묶음에 들어 몫을 다 더하면 100%다(mainCount 만 주식을 센다). 비타민·무기질은 영양소 점검과 같은 계산(먹은 열량 × 기준 행의 열량당 영양소), 탄수화물·지방은 카탈로그 1인분의 열량당 비율로 어림한다. highlights 는 열량 몫보다 크게 채운 비타민·무기질(최대 3). LLM 없음.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "x-rate-limit": {
+          "max": 30,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "itemCount": {
+                      "type": "integer"
+                    },
+                    "totals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "unit",
+                          "amount"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "byDishType": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "mainCount": {
+                            "type": "integer"
+                          },
+                          "sideCount": {
+                            "type": "integer"
+                          },
+                          "knownCount": {
+                            "type": "integer"
+                          },
+                          "macroKnownCount": {
+                            "type": "integer"
+                          },
+                          "kcalPerItem": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "nutrients": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "share": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "unit",
+                                "amount",
+                                "share"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "highlights": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "share": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "unit",
+                                "amount",
+                                "share"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "foods": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "count"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "mainCount",
+                          "sideCount",
+                          "knownCount",
+                          "macroKnownCount",
+                          "kcalPerItem",
+                          "nutrients",
+                          "highlights",
+                          "foods"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "byMainIngredient": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "mainCount": {
+                            "type": "integer"
+                          },
+                          "sideCount": {
+                            "type": "integer"
+                          },
+                          "knownCount": {
+                            "type": "integer"
+                          },
+                          "macroKnownCount": {
+                            "type": "integer"
+                          },
+                          "kcalPerItem": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "nutrients": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "share": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "unit",
+                                "amount",
+                                "share"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "highlights": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "share": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "unit",
+                                "amount",
+                                "share"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "foods": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "count"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "mainCount",
+                          "sideCount",
+                          "knownCount",
+                          "macroKnownCount",
+                          "kcalPerItem",
+                          "nutrients",
+                          "highlights",
+                          "foods"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "byCuisine": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "mainCount": {
+                            "type": "integer"
+                          },
+                          "sideCount": {
+                            "type": "integer"
+                          },
+                          "knownCount": {
+                            "type": "integer"
+                          },
+                          "macroKnownCount": {
+                            "type": "integer"
+                          },
+                          "kcalPerItem": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "nutrients": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "share": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "unit",
+                                "amount",
+                                "share"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "highlights": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "share": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "unit",
+                                "amount",
+                                "share"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "foods": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "count"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "mainCount",
+                          "sideCount",
+                          "knownCount",
+                          "macroKnownCount",
+                          "kcalPerItem",
+                          "nutrients",
+                          "highlights",
+                          "foods"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "itemCount",
+                    "totals",
+                    "byDishType",
+                    "byMainIngredient",
+                    "byCuisine"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meals/time-presets": {
       "get": {
         "summary": "끼니별 평소 식사 시각 프리셋 — 최근 90일 기록 중앙값, 3건 미만이면 기본값",

@@ -4,10 +4,14 @@ import {
   CreateMealNutritionAdviceInput,
   LatestMealNutritionAdviceResult,
   MealNutritionAdvice,
+  MEAL_STATS_MAX_DAYS,
   MealNutritionAnalysis,
   MealNutritionQuery,
+  MealStatsNutritionResult,
+  MealStatsQuery,
   Routes,
 } from '@repo/api-contract';
+import { daysBetween } from '@repo/utils';
 import { env } from '../../config/env.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
@@ -17,6 +21,7 @@ import {
   MealNutritionAdviceError,
   MealNutritionAdviceService,
 } from './meal-nutrition-advice.service.js';
+import { MealNutritionGroupsService } from './meal-nutrition-groups.js';
 import { MealNutritionService } from './meal-nutrition.service.js';
 
 // 영양소 점검·영양제 조언 — 로그인 사용자 본인 기록만. 점검은 LLM 없이 계산만, 조언은 텍스트 LLM 1콜
@@ -30,6 +35,7 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
   const dailyQuota = new MealDailyQuotaService(app.prisma);
   // 영양 기준 음식(plugins/meal) — 비타민·무기질이 없는 행·이름을 표준 음식의 열량당 영양소로 계산한다.
   const nutrition = new MealNutritionService(app.prisma, { refs: app.foodNutrientRefs });
+  const groups = new MealNutritionGroupsService(app.prisma, nutrition);
   const advice = new MealNutritionAdviceService(app.prisma, aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
@@ -53,6 +59,30 @@ const mealNutritionRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: MealNutritionAnalysis },
     },
     handler: async (req) => nutrition.analyze(req.user.userId, kstToday(), req.query.days),
+  });
+
+  typed.get(Routes.Meal.statsNutrition, {
+    onRequest: [app.authenticate],
+    config: { rateLimit: RATE.mealNutrition },
+    schema: {
+      tags: ['meal'],
+      summary: '통계 — 묶음(조리 형태·주재료·요리 계통)별 영양 몫: 이 기간 먹은 열량·탄단지·나트륨·비타민·무기질 중 그 묶음 몫',
+      description:
+        `기간은 from~to(포함) 최대 ${MEAL_STATS_MAX_DAYS}일 — 넘으면 400. 반찬도 그 묶음에 들어 몫을 다 더하면 100%다(mainCount 만 ` +
+        '주식을 센다). 비타민·무기질은 영양소 점검과 같은 계산(먹은 열량 × 기준 행의 열량당 영양소), 탄수화물·지방은 카탈로그 ' +
+        '1인분의 열량당 비율로 어림한다. highlights 는 열량 몫보다 크게 채운 비타민·무기질(최대 3). LLM 없음.',
+      security: [{ bearerAuth: [] }],
+      querystring: MealStatsQuery,
+      response: { 200: MealStatsNutritionResult },
+    },
+    handler: async (req) => {
+      if (req.query.from > req.query.to) throw app.httpErrors.badRequest('from 이 to 보다 뒤입니다.');
+      const span = daysBetween(req.query.from, req.query.to);
+      if (span === null || span + 1 > MEAL_STATS_MAX_DAYS) {
+        throw app.httpErrors.badRequest(`통계 기간은 최대 ${MEAL_STATS_MAX_DAYS}일입니다.`);
+      }
+      return groups.groups(req.user.userId, req.query.from, req.query.to);
+    },
   });
 
   typed.get(Routes.Meal.nutritionAdvice, {

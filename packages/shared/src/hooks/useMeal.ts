@@ -133,6 +133,16 @@ export const useMealStats = (from: string, to: string, enabled = true) =>
     placeholderData: keepPreviousData,
   });
 
+/** 통계의 묶음별 영양 몫 — 막대 기준(열량·나트륨)과 막대 카드가 쓴다. 기록을 저장하면 다른 식단 조회와 함께 무효화된다. */
+export const useMealStatsNutrition = (from: string, to: string, enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'stats-nutrition', from, to],
+    queryFn: () => mealApi.statsNutrition(from, to),
+    enabled: enabled && !!from && !!to,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+
 export interface CreateMealEntryMutationVariables {
   input: CreateMealEntryInputType;
   /** 요청을 시작한 로그인 주체. 생략한 기존 호출자는 종전처럼 캐시를 반영한다. */

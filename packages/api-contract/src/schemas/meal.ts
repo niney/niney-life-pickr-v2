@@ -496,6 +496,54 @@ export const MealStatsResult = z.object({
 });
 export type MealStatsResultType = z.infer<typeof MealStatsResult>;
 
+// ── 통계 — 묶음별 영양 몫(2026-11-08) ─────────────────────────────────────────
+// 조리 형태·주재료·요리 계통 묶음마다, 이 기간 내가 먹은 영양소 중 그 묶음이 채운 몫. 통계 막대를 열량·나트륨 기준으로
+// 바꾸고, 막대에 올리면(누르면) 그 묶음의 영양 카드를 띄운다. 반찬도 그 묶음에 든다(몫을 다 더하면 100% — 통계 막대의
+// '끼니 수'만 주식을 센다). 탄수화물·지방은 카탈로그 1인분의 열량당 비율 × 먹은 열량으로 어림한다.
+export const MealGroupNutrient = z.object({
+  // 'kcal'·'carb'·'protein'·'fat'·'sodium' 또는 영양소 점검 키(비타민·무기질).
+  key: z.string(),
+  label: z.string(),
+  unit: z.string(),
+  // 이 묶음이 채운 양(기간 합).
+  amount: z.number(),
+  // 이 기간 내가 먹은 그 영양소(값을 아는 기록) 중 이 묶음 몫, 0~1.
+  share: z.number(),
+});
+export type MealGroupNutrientType = z.infer<typeof MealGroupNutrient>;
+
+export const MealGroupNutrition = z.object({
+  key: z.string(),
+  label: z.string(),
+  // 주식·반찬으로 먹은 횟수(항목 수). 통계 막대의 '끼니 수'는 mainCount 와 같은 셈이다.
+  mainCount: z.number().int(),
+  sideCount: z.number().int(),
+  // 열량을 아는 항목 수 / 탄수화물·지방을 어림한 항목 수.
+  knownCount: z.number().int(),
+  macroKnownCount: z.number().int(),
+  // 열량을 아는 항목 하나에 평균 열량.
+  kcalPerItem: z.number().nullable(),
+  // 열량·탄수화물·단백질·지방·나트륨 — 값을 아는 것만.
+  nutrients: z.array(MealGroupNutrient),
+  // 비타민·무기질 중 이 묶음이 열량 몫보다 크게 채운 것(최대 3, 몫이 큰 순).
+  highlights: z.array(MealGroupNutrient),
+  // 많이 먹은 음식(최대 4).
+  foods: z.array(z.object({ name: z.string(), count: z.number().int() })),
+});
+export type MealGroupNutritionType = z.infer<typeof MealGroupNutrition>;
+
+export const MealStatsNutritionResult = z.object({
+  from: DateString,
+  to: DateString,
+  itemCount: z.number().int(),
+  // 몫의 분모 — 이 기간 내가 먹은 양(값을 아는 기록 합).
+  totals: z.array(MealGroupNutrient.omit({ share: true })),
+  byDishType: z.array(MealGroupNutrition),
+  byMainIngredient: z.array(MealGroupNutrition),
+  byCuisine: z.array(MealGroupNutrition),
+});
+export type MealStatsNutritionResultType = z.infer<typeof MealStatsNutritionResult>;
+
 // ── 선호 설정 ───────────────────────────────────────────────────────────────
 
 // 중요도 가중치 0~5. 키는 추천 점수 함수의 feature 이름과 1:1.
