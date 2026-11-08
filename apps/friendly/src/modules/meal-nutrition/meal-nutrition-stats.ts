@@ -61,7 +61,7 @@ const MAX_TOP_FOODS = 5;
 
 interface Acc {
   daily: (number | null)[];
-  // 평균에 넣는 날(두 끼 이상 기록 — '안 먹음'도 한 칸)의 합과, 그 값을 아는 기록의 열량(정보 비율의 분자).
+  // 평균에 넣는 날(두 끼 이상 기록, 또는 한 끼 기록에 남은 끼니가 모두 '안 먹음')의 합과, 그 값을 아는 기록의 열량(정보 비율의 분자).
   analyzedSum: number;
   analyzedKcal: number;
   // 기간 모든 기록의 합과, 그 값을 아는 기록의 열량(열량 중 비율·음식 몫의 분모).

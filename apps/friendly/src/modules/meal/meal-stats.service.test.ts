@@ -191,7 +191,7 @@ describe('computeMealStats', () => {
     expect(r.nutrition.coverage).toBe(1);
   });
 
-  it("한 끼만 적었어도 나머지를 '안 먹음'으로 표시한 날은 평균에 든다 — 같은 끼니에 기록이 있으면 표시는 세지 않는다", () => {
+  it("한 끼만 적었어도 남은 두 끼를 '안 먹음'으로 표시한 날은 평균에 든다 — 하나만 표시했거나 기록한 끼니에 붙은 표시로는 모자라다", () => {
     const meal = (eatenDate: string, slot: string, kcal: number) => ({
       eatenDate,
       slot,
@@ -205,9 +205,11 @@ describe('computeMealStats', () => {
       '2026-08-21',
       [],
       [
+        { date: '2026-08-20', slot: 'breakfast' },
         { date: '2026-08-20', slot: 'dinner' },
-        // 기록한 점심에 붙은 표시 — 세지 않아 8/21 은 그대로 한 끼만 적은 날.
+        // 기록한 점심에 붙은 표시는 세지 않는다 — 8/21 은 저녁 하나만 표시라 아침을 몰라 그대로 빠진다.
         { date: '2026-08-21', slot: 'lunch' },
+        { date: '2026-08-21', slot: 'dinner' },
       ],
     );
     expect(r.nutrition.avgKcalPerDay).toBe(600);

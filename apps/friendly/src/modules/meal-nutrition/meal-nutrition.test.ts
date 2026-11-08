@@ -247,25 +247,34 @@ describe('analyzeMealNutrition', () => {
     expect(a.nutrients.every((n) => n.status === 'unknown' && !n.supplementCandidate)).toBe(true);
   });
 
-  it("한 끼만 적은 날도 나머지 끼니를 '안 먹음'으로 표시했으면 평균에 넣는다(기록이 없는 날은 표시만으로는 안 넣는다)", () => {
+  it("한 끼만 적은 날도 남은 끼니를 모두 '안 먹음'으로 표시했으면 평균에 넣는다(하나만 표시했거나 기록이 없는 날은 안 넣는다)", () => {
     const items = [...twoMealsPerDay(3), ...meal('2026-09-25', 'only-one')];
-    const a = analyzeMealNutrition({
-      items,
-      rowsById: ROWS,
-      profile: profileFrom(null, null, '2026-10-04'),
-      from: '2026-09-21',
-      to: '2026-10-04',
-      days: 14,
-      // 9/25 은 저녁 '안 먹음', 9/24 은 기록 없이 표시만.
-      skipsByDate: new Map([
-        ['2026-09-25', 1],
+    const run = (skipsByDate: Map<string, number>) =>
+      analyzeMealNutrition({
+        items,
+        rowsById: ROWS,
+        profile: profileFrom(null, null, '2026-10-04'),
+        from: '2026-09-21',
+        to: '2026-10-04',
+        days: 14,
+        skipsByDate,
+      });
+    // 9/25 은 아침·저녁 '안 먹음', 9/24 은 기록 없이 표시만.
+    const a = run(
+      new Map([
+        ['2026-09-25', 2],
         ['2026-09-24', 3],
       ]),
-    });
+    );
     expect(a).toMatchObject({ status: 'ok', analyzedDays: 4 });
     // 하루 평균 — 두 끼 날 사흘(900kcal) + 한 끼 날 하루(450kcal) ÷ 4.
     expect(a.energy.intakePerDay).toBe(788);
     expect(a.insufficientReason).toBeNull();
+
+    // 저녁만 표시하면 아침을 몰라 빠진다 — 판단을 미루고, 남은 끼니를 모두 표시하라고 알린다.
+    const half = run(new Map([['2026-09-25', 1]]));
+    expect(half.analyzedDays).toBe(3);
+    expect(half.insufficientReason).toContain("남은 끼니를 모두 '안 먹음'으로 표시하면 들어가요");
   });
 
   it('먹은 g = 저장 열량 ÷ 100g당 열량 — 하루 평균과 기준 대비를 낸다', () => {

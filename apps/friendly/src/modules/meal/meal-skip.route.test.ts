@@ -137,7 +137,7 @@ describe('meal skip routes (격리 DB)', () => {
     expect(await list()).toEqual([]);
   });
 
-  it('한 끼만 적고 나머지를 안 먹음으로 표시한 날은 통계·영양 표의 하루 평균에 든다', async () => {
+  it('한 끼만 적은 날은 남은 두 끼를 모두 안 먹음으로 표시해야 통계·영양 표의 하루 평균에 든다', async () => {
     // 열량이 붙게 카탈로그에 한 끼 음식을 둔다(격리 DB 는 비어 있다).
     await upsertFoodSeeds(app.prisma, [
       {
@@ -167,10 +167,16 @@ describe('meal skip routes (격리 DB)', () => {
     expect([before.meals, before.skipped, before.counted, before.analyzedDays]).toEqual([[1], [0], [false], 0]);
     expect((await statsOf()).nutrition.avgKcalPerDay).toBeNull();
 
-    // 저녁을 '안 먹음'으로 표시하면 그날 먹은 전부라 평균에 든다 — 두 화면 모두.
+    // 저녁만 표시하면 아직 아침을 모른다 — 그대로 빠진다.
     await app.inject({ method: 'PUT', url: SKIPS, headers: auth, payload: { date, slot: 'dinner' } });
+    const half = await nutrientsOf();
+    expect([half.meals, half.skipped, half.counted, half.analyzedDays]).toEqual([[1], [1], [false], 0]);
+    expect((await statsOf()).nutrition.avgKcalPerDay).toBeNull();
+
+    // 아침까지 표시하면 그날 먹은 전부라 평균에 든다 — 두 화면 모두.
+    await app.inject({ method: 'PUT', url: SKIPS, headers: auth, payload: { date, slot: 'breakfast' } });
     const after = await nutrientsOf();
-    expect([after.meals, after.skipped, after.counted, after.analyzedDays]).toEqual([[1], [1], [true], 1]);
+    expect([after.meals, after.skipped, after.counted, after.analyzedDays]).toEqual([[1], [2], [true], 1]);
     expect(after.rows.find((r) => r.key === 'kcal')?.intakePerDay).toBe(kcal);
     expect((await statsOf()).nutrition.avgKcalPerDay).toBe(kcal);
   });

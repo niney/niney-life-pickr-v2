@@ -73,11 +73,16 @@ describe('mealDateTitle', () => {
 
 // 하루 평균에 넣는 날 — 영양소 점검·통계와 웹의 '안 먹음' 묻기가 같이 쓴다.
 describe('isCountedMealDay', () => {
-  it('두 끼 이상 기록했거나, 한 끼 기록에 나머지를 안 먹음으로 표시한 날만', () => {
+  it('두 끼 이상 기록한 날은 안 먹음 표시와 상관없이 넣는다', () => {
     expect(isCountedMealDay(2, 0)).toBe(true);
     expect(isCountedMealDay(3, 0)).toBe(true);
+    expect(isCountedMealDay(2, 1)).toBe(true);
+  });
+
+  it('한 끼만 기록한 날은 남은 두 끼를 모두 안 먹음으로 표시해야 넣는다', () => {
     expect(isCountedMealDay(1, 0)).toBe(false);
-    expect(isCountedMealDay(1, 1)).toBe(true);
+    // 하나만 표시하면 남은 끼니를 모른다 — 아침만 표시하고 저녁을 안 적은 날이 평균에 들면 안 된다.
+    expect(isCountedMealDay(1, 1)).toBe(false);
     expect(isCountedMealDay(1, 2)).toBe(true);
   });
 

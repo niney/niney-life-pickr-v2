@@ -855,7 +855,8 @@ export const MealStatsNutrientsResult = z.object({
   meals: z.array(z.number().int()),
   // 날짜마다 기록이 없는 끼니에 붙은 '안 먹음' 수(dates 와 같은 순서).
   skipped: z.array(z.number().int()),
-  // 하루 평균에 든 날인지(dates 와 같은 순서) — 기록이 있고 기록 + '안 먹음'이 두 칸 이상(@repo/utils isCountedMealDay).
+  // 하루 평균에 든 날인지(dates 와 같은 순서) — 두 끼 이상 기록했거나, 한 끼 기록에 남은 끼니가 모두 '안 먹음'
+  // (@repo/utils isCountedMealDay).
   counted: z.array(z.boolean()),
   rows: z.array(MealStatsNutrientRow),
   notes: z.array(z.string()),
@@ -864,7 +865,7 @@ export type MealStatsNutrientsResultType = z.infer<typeof MealStatsNutrientsResu
 
 // ── 끼니 '안 먹음' 표시(2026-11-08) ────────────────────────────────────────────
 // 빈 칸이 '안 적음'인지 '안 먹음'인지 가린다. 영양소 점검·통계의 하루 평균은 기록과 이 표시를 함께 세어 평균에 넣을 날을
-// 고른다(한 끼만 먹고 나머지를 '안 먹음'으로 표시한 날도 평균에 든다). 같은 날·끼니에 기록이 생기면 서버가 지운다.
+// 고른다(한 끼만 먹고 남은 끼니를 모두 '안 먹음'으로 표시한 날도 평균에 든다). 같은 날·끼니에 기록이 생기면 서버가 지운다.
 export const MealSkipSlot = z.enum(MEAL_SKIPPABLE_SLOTS);
 export type MealSkipSlotType = z.infer<typeof MealSkipSlot>;
 
@@ -1185,7 +1186,7 @@ export const MealDataExport = z.object({
   // 저장한 적이 없으면 null. 기본 선호를 개인 데이터인 것처럼 만들어 내보내지 않는다.
   preference: MealPreference.nullable(),
   recommendations: z.array(MealDataExportRecommendation),
-  // 끼니 '안 먹음' 표시(날짜·끼니 순). 휴대용 백업(MealDataBackup)에는 아직 담지 않는다.
+  // 끼니 '안 먹음' 표시(날짜·끼니 순). 사진 포함 백업(MealDataBackup)에도 담는다(2026-11-09).
   skips: z.array(MealSkip),
 });
 export type MealDataExportType = z.infer<typeof MealDataExport>;
@@ -1248,6 +1249,8 @@ export const MEAL_DATA_BACKUP_MAX_JSON_BYTES = 75 * 1024 * 1024;
 export const MEAL_DATA_BACKUP_MAX_ENTRIES = 5_000;
 export const MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS = 1_000;
 export const MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION = 200;
+// 끼니 '안 먹음' 표시 — 하루 세 칸이라 기록 상한보다 넉넉히(약 9년 치).
+export const MEAL_DATA_BACKUP_MAX_SKIPS = 10_000;
 
 const MealDataBackupRef = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 // 길이만 본다 — 문자 집합은 서버가 Buffer 왕복 비교·sha256 으로 검증한다. 장당 수 MB 문자열에 정규식을 돌리면
@@ -1387,6 +1390,9 @@ export const MealDataBackup = z
     recommendations: z
       .array(MealDataBackupRecommendation)
       .max(MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS),
+    // 끼니 '안 먹음' 표시(2026-11-09, 날짜·끼니 순). 이 필드가 생기기 전에 만든 백업도 그대로 복원한다(없으면 표시 없음).
+    // 복원은 기록이 이긴다 — 그 날·끼니에 기록이 있으면 표시를 넣지 않고, 복원한 기록과 겹치는 기존 표시는 지운다.
+    skips: z.array(MealSkip).max(MEAL_DATA_BACKUP_MAX_SKIPS).optional(),
   })
   .strict();
 export type MealDataBackupType = z.infer<typeof MealDataBackup>;

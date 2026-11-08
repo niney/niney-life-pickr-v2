@@ -9,6 +9,7 @@ import {
   MEAL_DATA_BACKUP_MAX_PHOTO_BYTES,
   MEAL_DATA_BACKUP_MAX_PHOTOS,
   MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS,
+  MEAL_DATA_BACKUP_MAX_SKIPS,
   MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES,
   MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES,
   MEAL_DATA_BACKUP_VERSION,
@@ -18,6 +19,7 @@ import {
   MEAL_MAX_ENTRIES_PER_DAY,
   MEAL_MAX_ENTRIES_PER_USER,
   MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
+  MEAL_SKIPPABLE_SLOTS,
   MealDataBackup,
   MealDataBackupPhoto,
   MealDataExport,
@@ -72,8 +74,16 @@ const RESTORE_EVENT_CHUNK = 5_000;
 // 틈을 못 잡아 복원 내내 밀린다(측정: 대기 최대 = 복원 전체 시간). 재시도 간격보다 길게 쉰다.
 const RESTORE_CHUNK_PAUSE_MS = 110;
 const CLEANUP_CHUNK = 500;
+// 복원하는 '안 먹음' 표시를 한 번에 넣는 수(행이 작아 원장 트랜잭션 안에서 넣는다).
+const RESTORE_SKIP_CHUNK = 1_000;
 
 const MB = 1024 * 1024;
+
+// '안 먹음' 표시 차례 — 날짜, 그 안에서 아침 → 점심 → 저녁(내보내기·백업 공용).
+const sortSkips = <T extends { date: string; slot: string }>(rows: T[]): T[] => {
+  const rank = (slot: string): number => (MEAL_SKIPPABLE_SLOTS as readonly string[]).indexOf(slot);
+  return rows.sort((a, b) => a.date.localeCompare(b.date) || rank(a.slot) - rank(b.slot));
+};
 const PHOTO_LIMIT_TEXT = `장당 ${MEAL_DATA_BACKUP_MAX_PHOTO_BYTES / MB}MB, 합계 ${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / MB}MB`;
 
 export class MealDataError extends Error {
@@ -434,10 +444,7 @@ export class MealDataService {
       select: { date: true, slot: true },
       orderBy: { date: 'asc' },
     });
-    const slotRank = (slot: string): number => ['breakfast', 'lunch', 'dinner'].indexOf(slot);
-    const skips = MealDataExport.shape.skips.parse(
-      skipRows.sort((a, b) => a.date.localeCompare(b.date) || slotRank(a.slot) - slotRank(b.slot)),
-    );
+    const skips = MealDataExport.shape.skips.parse(sortSkips(skipRows));
     yield `],"skips":${JSON.stringify(skips)}}`;
   }
 
@@ -607,7 +614,7 @@ export class MealDataService {
       shell: { ref: string; width: number | null; height: number | null };
     }>;
   }> {
-    const [entryCount, recommendationCount, photoAggregate, orphanCount] = await Promise.all([
+    const [entryCount, recommendationCount, photoAggregate, orphanCount, skipCount] = await Promise.all([
       this.prisma.mealEntry.count({ where: { userId } }),
       this.prisma.mealRecommendation.count({ where: { userId } }),
       this.prisma.mealPhoto.aggregate({
@@ -616,6 +623,7 @@ export class MealDataService {
         _sum: { byteSize: true },
       }),
       this.prisma.mealPhoto.count({ where: { userId, entryId: null } }),
+      this.prisma.mealSkip.count({ where: { userId } }),
     ]);
     const photoCount = photoAggregate._count._all;
     const photoBytes = photoAggregate._sum.byteSize ?? 0;
@@ -630,8 +638,14 @@ export class MealDataService {
         `사진 포함 백업 한도(기록 ${MEAL_DATA_BACKUP_MAX_ENTRIES}개, 추천 ${MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS}개, 사진 ${MEAL_DATA_BACKUP_MAX_PHOTOS}개/${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / MB}MB)를 넘었습니다. 오래된 사진을 먼저 정리해 주세요.`,
       );
     }
+    if (skipCount > MEAL_DATA_BACKUP_MAX_SKIPS) {
+      throw new MealDataError(
+        'backup_too_large',
+        `'안 먹음' 표시가 백업 한도(${MEAL_DATA_BACKUP_MAX_SKIPS.toLocaleString('ko-KR')}개)를 넘었습니다.`,
+      );
+    }
 
-    const [entryRows, preferenceRow, recommendationRows] = await Promise.all([
+    const [entryRows, preferenceRow, recommendationRows, skipRows] = await Promise.all([
       this.prisma.mealEntry.findMany({
         where: { userId },
         include: { items: true, photos: true },
@@ -643,6 +657,7 @@ export class MealDataService {
         include: { events: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
+      this.prisma.mealSkip.findMany({ where: { userId }, select: { date: true, slot: true } }),
     ]);
 
     const entryRefs = new Map(
@@ -748,11 +763,21 @@ export class MealDataService {
       photos: [],
       preference: preferenceRow ? toMealPreference(preferenceRow) : null,
       recommendations,
+      skips: sortSkips(skipRows),
     });
-    const { photos: _none, preference, recommendations: parsedRecommendations, ...headFields } = meta;
+    const {
+      photos: _none,
+      preference,
+      recommendations: parsedRecommendations,
+      skips: parsedSkips,
+      ...headFields
+    } = meta;
     void _none;
     const head = `${JSON.stringify(headFields).slice(0, -1)},"photos":[`;
-    const tail = `],"preference":${JSON.stringify(preference)},"recommendations":${JSON.stringify(parsedRecommendations)}}`;
+    // 스키마 키 차례 그대로(…recommendations, skips) — 응답 스키마 직렬화와 바이트가 같아야 한다.
+    const tail =
+      `],"preference":${JSON.stringify(preference)},"recommendations":${JSON.stringify(parsedRecommendations)}` +
+      `,"skips":${JSON.stringify(parsedSkips ?? [])}}`;
 
     let photoJsonBytes = Math.max(0, photos.length - 1); // 사진 사이 쉼표
     for (const photo of photos) {
@@ -1197,6 +1222,8 @@ export class MealDataService {
             preference = 'restored';
           }
         }
+        // 원장과 같은 트랜잭션 — 끊기면 표시도 남지 않아 따로 정리할 것이 없다.
+        await this.restoreSkips(tx, userId, archive);
 
         const counts = {
           entries: archive.entries.length,
@@ -1227,6 +1254,41 @@ export class MealDataService {
       await cleanup();
       throw error;
     }
+  }
+
+  /**
+   * 백업의 끼니 '안 먹음' 표시를 붙인다(2026-11-09, 예전 백업엔 없다). 기록이 이긴다 — 복원한 기록과 같은 날·끼니의 기존
+   * 표시는 지우고, 기록(기존·복원)이 있는 끼니와 앞으로 올 날의 표시는 넣지 않는다. 이미 있는 표시는 그대로 둔다(합치기).
+   */
+  private async restoreSkips(tx: Prisma.TransactionClient, userId: string, archive: MealDataBackupType): Promise<void> {
+    const key = (date: string, slot: string): string => `${date}|${slot}`;
+    const restoredSlots = new Set(archive.entries.map((entry) => key(entry.eatenDate, entry.slot)));
+    const existing = await tx.mealSkip.findMany({ where: { userId }, select: { id: true, date: true, slot: true } });
+    const stale = existing.filter((skip) => restoredSlots.has(key(skip.date, skip.slot))).map((skip) => skip.id);
+    for (const ids of chunk(stale, CLEANUP_CHUNK)) {
+      await tx.mealSkip.deleteMany({ where: { userId, id: { in: ids } } });
+    }
+
+    const today = this.now().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+    const incoming = (archive.skips ?? []).filter((skip) => skip.date <= today);
+    if (incoming.length === 0) return;
+    const dates = incoming.map((skip) => skip.date).sort();
+    const recorded = await tx.mealEntry.findMany({
+      where: { userId, eatenDate: { gte: dates[0]!, lte: dates[dates.length - 1]! } },
+      select: { eatenDate: true, slot: true },
+    });
+    const taken = new Set([
+      ...recorded.map((entry) => key(entry.eatenDate, entry.slot)),
+      ...existing.map((skip) => key(skip.date, skip.slot)),
+    ]);
+    const data: Array<{ userId: string; date: string; slot: string }> = [];
+    for (const skip of incoming) {
+      const k = key(skip.date, skip.slot);
+      if (taken.has(k)) continue;
+      taken.add(k);
+      data.push({ userId, date: skip.date, slot: skip.slot });
+    }
+    for (const part of chunk(data, RESTORE_SKIP_CHUNK)) await tx.mealSkip.createMany({ data: part });
   }
 
   async deleteAll(

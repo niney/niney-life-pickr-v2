@@ -184,18 +184,15 @@ describe('statsMealNutrients', () => {
     expect(rowOf(r, 'cholesterol').topFoods.map((f) => f.name)).toEqual(['계란말이', '라면']);
   });
 
-  it("한 끼만 적은 날도 나머지를 '안 먹음'으로 표시하면 평균에 든다 — counted·skipped 로 화면에 알린다", () => {
-    const r = statsMealNutrients({
-      items: ITEMS,
-      rowsById: ROWS,
-      profile: adult,
-      from: FROM,
-      to: TO,
-      skipsByDate: new Map([
+  it("한 끼만 적은 날도 남은 끼니를 모두 '안 먹음'으로 표시하면 평균에 든다 — counted·skipped 로 화면에 알린다", () => {
+    const run = (skipsByDate: Map<string, number>) =>
+      statsMealNutrients({ items: ITEMS, rowsById: ROWS, profile: adult, from: FROM, to: TO, skipsByDate });
+    const r = run(
+      new Map([
         ['2026-11-05', 2],
         ['2026-11-06', 1],
       ]),
-    });
+    );
     expect(r.skipped).toEqual([0, 0, 0, 0, 2, 1]);
     // 11/6 은 기록이 없어 표시만으로는 넣지 않는다.
     expect(r.counted).toEqual([true, true, true, true, true, false]);
@@ -204,6 +201,10 @@ describe('statsMealNutrients', () => {
     expect(rowOf(r, 'kcal').intakePerDay).toBe(1060);
     // 많이 준 음식·흐름은 그대로(모든 기록).
     expect(rowOf(r, 'kcal').daily).toEqual([1200, 1200, 1200, 1200, 500, null]);
+
+    // 하나만 표시하면 남은 끼니를 몰라 빠진다.
+    const half = run(new Map([['2026-11-05', 1]]));
+    expect([half.skipped[4], half.counted[4], half.analyzedDays]).toEqual([1, false, 4]);
   });
 
   it('두 끼 이상 기록한 날이 4일 미만이면 판정은 보류 — 양은 그대로 준다', () => {

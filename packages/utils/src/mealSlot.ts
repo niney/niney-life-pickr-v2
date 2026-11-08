@@ -22,13 +22,17 @@ export const MEAL_SLOT_ORDER: Record<MealSlot, number> = {
   late_night: 4,
 };
 
-// 하루 평균에 넣는 날(2026-11-08) — 영양소 점검·통계(서버)와 '안 먹음' 묻기(웹)가 같은 규칙을 쓴다. 기록이 있고, 기록한 끼니
-// 수와 기록이 없는 끼니에 붙은 '안 먹음' 표시를 합쳐 두 칸 이상인 날. 한 끼만 적은 날은 나머지를 안 적었을 공산이 커 빼지만,
-// 나머지 끼니를 '안 먹음'으로 표시했으면 그날 먹은 전부라 넣는다. 기록이 없는 날은 '안 먹음'만으로는 넣지 않는다(먹은 것을
-// 하나도 모른다). '안 먹음'이 없으면 예전 규칙(두 끼 이상 기록한 날)과 같다.
+// 하루 평균에 넣는 날(2026-11-08, 11-09 고침) — 영양소 점검·통계(서버)와 '안 먹음' 묻기(웹)가 같은 규칙을 쓴다. 두 끼 이상
+// 기록한 날, 또는 한 끼만 기록하고 남은 끼니(아침·점심·저녁 중 기록이 없는 칸)를 모두 '안 먹음'으로 표시한 날 — 그날 먹은
+// 전부를 안다. 한 끼만 적은 날은 나머지를 안 적었을 공산이 커 빼고, '안 먹음'이 하나뿐이어도 뺀다(아침을 늘 거르는 사람이
+// 아침만 표시하면 먹고 안 적은 저녁이 빠진 채 평균에 들어 '부족'이 거짓으로 나온다). 기록이 없는 날은 '안 먹음'만으로는 넣지
+// 않는다(먹은 것을 하나도 모른다). '안 먹음'이 없으면 예전 규칙(두 끼 이상 기록한 날)과 같다. 한 끼가 간식·야식이면 아침·
+// 점심·저녁 중 두 칸만 표시해도 드는 근사가 남는다(드물고, 두 끼 이상 규칙도 간식을 한 끼로 센다).
 export const MEAL_COUNTED_DAY_MIN = 2;
+// 아침·점심·저녁 — '안 먹음'으로 표시할 수 있는 끼니 수(@repo/api-contract MEAL_SKIPPABLE_SLOTS).
+const MEAL_MAIN_SLOT_COUNT = 3;
 export const isCountedMealDay = (meals: number, skipped: number): boolean =>
-  meals > 0 && meals + skipped >= MEAL_COUNTED_DAY_MIN;
+  meals >= MEAL_COUNTED_DAY_MIN || (meals > 0 && meals + skipped >= MEAL_MAIN_SLOT_COUNT);
 
 export const MEAL_TYPES = ['home', 'dining_out', 'delivery', 'convenience', 'other'] as const;
 export type MealType = (typeof MEAL_TYPES)[number];

@@ -194,6 +194,8 @@ describe('meal data export/delete routes (격리 DB)', () => {
       { id: 'meal-data-retention-retry', role: 'USER' },
       { id: 'meal-data-restore', role: 'USER' },
       { id: 'meal-data-restore-race', role: 'USER' },
+      { id: 'meal-data-skip-restore', role: 'USER' },
+      { id: 'meal-data-skip-legacy', role: 'USER' },
     ]);
     auth = {
       authorization: `Bearer ${app.jwt.sign({ userId: 'meal-data-user', email: 'data@x.com', role: 'USER' })}`,
@@ -548,6 +550,87 @@ describe('meal data export/delete routes (격리 DB)', () => {
       headers: restoreAuth,
       payload: tampered,
     })).statusCode).toBe(400);
+  });
+
+  it("사진 포함 백업에 '안 먹음'도 담고, 복원은 기록이 이기게 합친다 — 표시가 없던 예전 백업도 그대로 복원된다", async () => {
+    const authOf = (userId: string) => ({
+      authorization: `Bearer ${app.jwt.sign({ userId, email: `${userId}@x.com`, role: 'USER' })}`,
+    });
+    const target = 'meal-data-skip-restore';
+    // 원본 — 8/23 은 점심 기록(픽스처)에 아침·저녁 '안 먹음', 8/24 은 점심 '안 먹음'.
+    await app.prisma.mealSkip.createMany({
+      data: [
+        { userId: 'meal-data-user', date: '2026-08-23', slot: 'dinner' },
+        { userId: 'meal-data-user', date: '2026-08-23', slot: 'breakfast' },
+        { userId: 'meal-data-user', date: '2026-08-24', slot: 'lunch' },
+      ],
+    });
+    try {
+      const backupRes = await app.inject({ method: 'GET', url: '/api/v1/meals/data/backup', headers: auth });
+      expect(backupRes.statusCode).toBe(200);
+      const backup = backupRes.json<MealDataBackupType>();
+      expect(backup.skips).toEqual([
+        { date: '2026-08-23', slot: 'breakfast' },
+        { date: '2026-08-23', slot: 'dinner' },
+        { date: '2026-08-24', slot: 'lunch' },
+      ]);
+
+      // 복원 대상 — 8/23 점심에 이미 '안 먹음'(복원한 점심 기록이 이겨 지워진다), 8/23 저녁은 이미 표시(하나로 남는다),
+      // 8/24 점심엔 기록이 있다(표시를 넣지 않는다).
+      await app.prisma.mealSkip.createMany({
+        data: [
+          { userId: target, date: '2026-08-23', slot: 'lunch' },
+          { userId: target, date: '2026-08-23', slot: 'dinner' },
+        ],
+      });
+      const lunch = await app.inject({
+        method: 'POST',
+        url: '/api/v1/meals',
+        headers: authOf(target),
+        payload: {
+          eatenAt: '2026-08-24T03:00:00.000Z',
+          eatenDate: '2026-08-24',
+          slot: 'lunch',
+          source: 'manual',
+          items: [{ name: '김밥', isMain: true, source: 'manual' }],
+        },
+      });
+      expect(lunch.statusCode).toBe(201);
+
+      const restored = await app.inject({
+        method: 'POST',
+        url: '/api/v1/meals/data/backup/restore',
+        headers: authOf(target),
+        payload: backup,
+      });
+      expect(restored.statusCode).toBe(200);
+      expect(
+        await app.prisma.mealSkip.findMany({
+          where: { userId: target },
+          select: { date: true, slot: true },
+          orderBy: [{ date: 'asc' }, { slot: 'asc' }],
+        }),
+      ).toEqual([
+        { date: '2026-08-23', slot: 'breakfast' },
+        { date: '2026-08-23', slot: 'dinner' },
+      ]);
+
+      // 예전 백업(skips 필드 없음)도 받는다 — 기록은 되살리고 표시는 없다.
+      const legacy = structuredClone(backup);
+      delete legacy.skips;
+      legacy.archiveId = '33333333-3333-4333-8333-333333333333';
+      const legacyRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/meals/data/backup/restore',
+        headers: authOf('meal-data-skip-legacy'),
+        payload: legacy,
+      });
+      expect(legacyRes.statusCode).toBe(200);
+      expect(legacyRes.json<RestoreMealDataResultType>().restored.entries).toBe(1);
+      expect(await app.prisma.mealSkip.count({ where: { userId: 'meal-data-skip-legacy' } })).toBe(0);
+    } finally {
+      await app.prisma.mealSkip.deleteMany({ where: { userId: { in: ['meal-data-user', target] } } });
+    }
   });
 
   it('90일 이전 사진과 오래된 고아만 소유자 범위에서 DB 커밋 후 지우고 텍스트 기록을 남긴다', async () => {

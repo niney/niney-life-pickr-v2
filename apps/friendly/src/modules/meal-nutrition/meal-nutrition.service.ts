@@ -434,7 +434,7 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
     set.add(it.entryId);
     entriesByDate.set(it.eatenDate, set);
   }
-  // 평균에 넣는 날 — 두 끼 이상 기록했거나, 한 끼 기록에 나머지를 '안 먹음'으로 표시한 날(@repo/utils isCountedMealDay).
+  // 평균에 넣는 날 — 두 끼 이상 기록했거나, 한 끼만 기록하고 남은 끼니를 모두 '안 먹음'으로 표시한 날(@repo/utils isCountedMealDay).
   const analyzedDates = new Set(
     [...entriesByDate.entries()]
       .filter(([d, ids]) => isCountedMealDay(ids.size, input.skipsByDate?.get(d) ?? 0))
@@ -499,7 +499,7 @@ export const analyzeMealNutrition = (input: AnalyzeInput): MealNutritionAnalysis
     unsupported ??
     (analyzedDays < MIN_ANALYZED_DAYS
       ? `최근 ${input.days}일 중 두 끼 이상 기록한 날이 ${analyzedDays}일이에요. ${MIN_ANALYZED_DAYS}일 이상 기록하면 볼 수 있어요` +
-        `(안 먹은 끼니는 '안 먹음'으로 표시하면 한 끼로 세요).`
+        `(한 끼만 먹은 날은 남은 끼니를 모두 '안 먹음'으로 표시하면 들어가요).`
       : null);
   const requirement = energyRequirement(profile.sex, profile.ageGroup);
   const energyPerDay = analyzedDays > 0 ? energyKcal / analyzedDays : null;
