@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { MealGroupNutritionType } from '@repo/api-contract';
+import type { MealGroupNutritionType, MealMacroCompositionType } from '@repo/api-contract';
 import { MEAL_NUTRIENT_STATUS_LABEL, type MealNutrientDisplayKey } from '@repo/utils';
 import type { MealBarMetric } from './mealBarMetrics';
 import { MEAL_NUTRIENT_TONE } from './mealNutrientTone';
@@ -51,6 +51,7 @@ export const MealGroupBars = ({
   metric,
   side,
   flags,
+  average,
   onOpen,
 }: {
   title: string;
@@ -64,6 +65,8 @@ export const MealGroupBars = ({
   /** 넓은 화면에서 카드를 띄울 쪽(이 칸의 옆 칸). */
   side: 'left' | 'right';
   flags: ReadonlyMap<string, MealNutrientDisplayKey>;
+  /** 이 기간 내 열량 구성(내 평균) — 카드가 묶음 구성과 견준다. */
+  average: MealMacroCompositionType | null;
   /** 카드를 처음 열 때 — 판정 표시(영양소 점검)를 그때 부른다. */
   onOpen: () => void;
 }) => {
@@ -170,6 +173,7 @@ export const MealGroupBars = ({
                       group={byKey.get(r.key)}
                       loading={groupsLoading}
                       flags={flags}
+                      average={average}
                     />
                   </div>
                 ) : null}
@@ -187,11 +191,13 @@ const GroupCard = ({
   group,
   loading,
   flags,
+  average,
 }: {
   id: string;
   group: MealGroupNutritionType | undefined;
   loading: boolean;
   flags: ReadonlyMap<string, MealNutrientDisplayKey>;
+  average: MealMacroCompositionType | null;
 }) => {
   if (!group) {
     return (
@@ -236,6 +242,7 @@ const GroupCard = ({
           '열량을 아는 기록이 없어요.'
         )}
       </p>
+      <Composition group={group.composition ?? null} average={average} />
       <p className="meal-group-colhead">이 기간 내가 먹은 것 중 이 묶음 몫</p>
       <ul>
         {MACRO_ROWS.map(({ key, label }) => {
@@ -292,3 +299,55 @@ const GroupCard = ({
     </div>
   );
 };
+
+// 열량 구성 — 이 묶음의 열량이 탄수화물·단백질·지방에서 얼마나 왔나(1g = 4·4·9kcal)를 내 평균과 위아래로 견준다.
+// 세 조각이 한 막대에 붙어 있어 색으로 가른다 — 파랑·자홍·보라(충분·부족·많음의 초록·갈색·빨강과 겹치지 않게, 이 순서로
+// 색각 이상·일반 시각 검사를 통과했다 — 파랑과 보라를 붙이면 구분이 안 된다). 색만으로 읽지 않게 범례와 '탄·단·지' 숫자를 함께 둔다.
+const MACRO_PARTS = [
+  { key: 'carb', label: '탄수화물', short: '탄' },
+  { key: 'protein', label: '단백질', short: '단' },
+  { key: 'fat', label: '지방', short: '지' },
+] as const;
+
+const Composition = ({
+  group,
+  average,
+}: {
+  group: MealMacroCompositionType | null;
+  average: MealMacroCompositionType | null;
+}) => (
+  <div className="meal-comp">
+    <div className="meal-comp-head">
+      <span className="meal-comp-title">열량 구성{group ? ` · 기록 ${group.count}개` : ''}</span>
+      <span className="meal-comp-keys" aria-hidden>
+        {MACRO_PARTS.map((p) => (
+          <span key={p.key} className="meal-comp-key" data-part={p.key}>
+            {p.label}
+          </span>
+        ))}
+      </span>
+    </div>
+    {group ? (
+      <>
+        <CompositionRow label="이 묶음" c={group} />
+        {average ? <CompositionRow label="내 평균" c={average} /> : null}
+      </>
+    ) : (
+      <p className="meal-comp-empty">탄수화물·지방을 아는 기록이 없어 열량 구성을 못 냈어요.</p>
+    )}
+  </div>
+);
+
+const CompositionRow = ({ label, c }: { label: string; c: MealMacroCompositionType }) => (
+  <div className="meal-comp-row">
+    <span className="meal-comp-label">{label}</span>
+    <span className="meal-comp-bar" aria-hidden>
+      {MACRO_PARTS.map((p) =>
+        c[p.key] > 0 ? <span key={p.key} data-part={p.key} style={{ flexGrow: c[p.key] }} /> : null,
+      )}
+    </span>
+    <span className="meal-comp-nums">
+      {MACRO_PARTS.map((p) => `${p.short} ${pct(c[p.key])}`).join(' · ')}
+    </span>
+  </div>
+);

@@ -30,6 +30,8 @@ const statsNutrition = {
   to: '2026-08-22',
   itemCount: 5,
   totals: [{ key: 'kcal', label: '열량', unit: 'kcal', amount: 1500 }],
+  // 내 평균 열량 구성.
+  composition: { carb: 0.5, protein: 0.2, fat: 0.3, count: 5 },
   byDishType: [
     {
       key: 'stew',
@@ -48,6 +50,7 @@ const statsNutrition = {
       ],
       highlights: [groupNutrient('calcium', '칼슘', 'mg', 400, 0.55)],
       foods: [{ name: '김치찌개', count: 2 }],
+      composition: { carb: 0.3, protein: 0.2, fat: 0.5, count: 2 },
     },
     {
       key: 'rice',
@@ -461,6 +464,11 @@ describe('MealPage', () => {
     expect(asked).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: '나트륨' }));
+    // 막대는 몫(합 100%)이라 많은지 모른다 — 위에 최근 14일 하루 평균과 판정을 붙인다.
+    const summary = await screen.findByText(/나트륨 하루 평균/);
+    expect(summary).toHaveTextContent('나트륨 하루 평균 3,400mg — 만성질환위험감소섭취량 2,300mg의 148%많음');
+    expect(within(summary).getByRole('link', { name: '영양 자세히' })).toHaveAttribute('href', '/meal/nutrition');
+    expect(screen.getByText(/막대는 고른 기간\(1달\) 먹은 나트륨이 어디서 왔는지예요/)).toBeInTheDocument();
     expect(within(dish).getAllByRole('button').map((b) => b.textContent)).toEqual([
       '찌개·전골60%',
       '김치·절임·젓갈30%',
@@ -472,10 +480,14 @@ describe('MealPage', () => {
     expect(within(dish).getByRole('button', { name: /찌개·전골/ })).toHaveAttribute('aria-expanded', 'true');
     expect(within(card).getByText('주식 2번')).toBeInTheDocument();
     // 지방 50%·나트륨 60% 는 열량 몫(40%)의 1.2 배를 넘어 치우친 영양소로 표시된다.
-    const rows = within(card).getAllByRole('listitem');
+    const rows = within(card).getAllByRole('listitem').filter((li) => li.classList.contains('meal-group-row'));
     expect(rows.map((li) => li.getAttribute('data-over'))).toEqual([null, null, null, 'true', 'true']);
     expect(rows[1]).toHaveTextContent('탄수화물20%');
     expect(within(card).getByText(/칼슘 55%/)).toBeInTheDocument();
+    // 열량 구성 — 이 묶음과 내 평균을 탄·단·지 숫자로도(색만으로 읽지 않게).
+    expect(within(card).getByText('열량 구성 · 기록 2개')).toBeInTheDocument();
+    expect(within(card).getByText('탄 30% · 단 20% · 지 50%')).toBeInTheDocument();
+    expect(within(card).getByText('탄 50% · 단 20% · 지 30%')).toBeInTheDocument();
     expect(within(card).getByText('김치찌개 2')).toBeInTheDocument();
     // 최근 14일 점검에서 나트륨이 많음이고 이 묶음이 열량 몫보다 크게 채웠으면 문장으로 잇는다(줄 옆 표시는 없다).
     expect(await within(card).findByText(/이 묶음이 60%를 채웠어요/)).toHaveTextContent('나트륨 많음(최근 14일) — 이 묶음이 60%를 채웠어요.');

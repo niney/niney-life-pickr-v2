@@ -33,6 +33,11 @@ html:has(.meal-app) {
   --meal-over: #c0301d;
   --meal-line: 2px;
   --meal-line-heavy: 4px;
+  /* 열량 구성 조각 색(통계 카드) — 상태 색(초록·갈색·빨강)과 겹치지 않는 파랑·자홍·보라, 이 순서로 색각 검사 통과.
+     밝은 자홍은 종이 위 2.7:1 이라 조각 숫자(탄·단·지 %)를 글자로 함께 둔다. */
+  --meal-macro-carb: #2a78d6;
+  --meal-macro-protein: #e87ba4;
+  --meal-macro-fat: #6250d6;
 }
 
 html.dark:has(.meal-app) {
@@ -58,6 +63,9 @@ html.dark:has(.meal-app) {
   --meal-ok: #4fbf8c;
   --meal-short: #f2b92e;
   --meal-over: #f06a55;
+  --meal-macro-carb: #3987e5;
+  --meal-macro-protein: #d55181;
+  --meal-macro-fat: #9085e9;
 }
 
 @layer components {
@@ -776,6 +784,32 @@ html.dark:has(.meal-app) {
   .meal-group-note b { font-weight: 800; color: var(--foreground); }
   .meal-group-note .meal-flag, .meal-group-row .meal-flag { margin-left: 0.25rem; }
   .meal-group-fine { padding: 0.45rem 0.8rem 0.6rem; font-size: 0.6875rem; color: var(--meal-faint); }
+
+  /* 열량 구성 막대(탄수화물·단백질·지방) — 조각 사이 2px 틈, 바깥 끝만 둥글게, 숫자는 먹색 글자로 */
+  .meal-comp { padding: 0.5rem 0.8rem 0.6rem; border-top: 1px solid var(--foreground); }
+  .meal-comp-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 0.75rem; margin-bottom: 0.35rem; }
+  .meal-comp-title { font-size: 0.6875rem; font-weight: 800; }
+  .meal-comp-keys { display: inline-flex; gap: 0.6rem; font-size: 0.6875rem; color: var(--muted-foreground); }
+  .meal-comp-key { display: inline-flex; align-items: center; gap: 0.25rem; }
+  .meal-comp-key::before { content: ''; width: 0.55rem; height: 0.55rem; border-radius: 2px; background: var(--meal-comp-color); }
+  .meal-comp-row { display: grid; grid-template-columns: 3.25rem minmax(0, 1fr); align-items: center; gap: 0.15rem 0.5rem; padding: 0.2rem 0; }
+  .meal-comp-label { font-size: 0.75rem; font-weight: 700; }
+  .meal-comp-bar { display: flex; gap: 2px; height: 0.7rem; }
+  .meal-comp-bar > span { flex-basis: 0; min-width: 2px; background: var(--meal-comp-color); }
+  .meal-comp-bar > span:first-child { border-radius: 3px 0 0 3px; }
+  .meal-comp-bar > span:last-child { border-radius: 0 3px 3px 0; }
+  .meal-comp-bar > span:only-child { border-radius: 3px; }
+  .meal-comp-nums { grid-column: 2; font-size: 0.6875rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .meal-comp-empty { font-size: 0.75rem; color: var(--muted-foreground); }
+  .meal-comp [data-part='carb'] { --meal-comp-color: var(--meal-macro-carb); }
+  .meal-comp [data-part='protein'] { --meal-comp-color: var(--meal-macro-protein); }
+  .meal-comp [data-part='fat'] { --meal-comp-color: var(--meal-macro-fat); }
+
+  /* 분포 막대 위 판정 한 줄 — 최근 14일 하루 평균과 기준 대비(많음·부족 표시) */
+  .meal-bar-summary { font-size: 0.9375rem; font-weight: 600; line-height: 1.5; }
+  .meal-bar-summary b { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .meal-bar-summary .meal-flag { margin-left: 0.35rem; vertical-align: 0.1em; }
+  .meal-bar-summary-link { margin-left: 0.6rem; font-size: 0.8125rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
 
   @media (prefers-reduced-motion: no-preference) {
     .meal-bar > span, .meal-week-bar { transition: height 0.3s ease, width 0.3s ease; }

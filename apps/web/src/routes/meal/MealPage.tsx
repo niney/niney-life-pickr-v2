@@ -35,6 +35,7 @@ import { useIsDesktopLg } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
 import { MEAL_MAIN_CLASS, MEAL_SIDE_CLASS, MEAL_SPLIT_CLASS } from './mealLayout';
 import { MEAL_BAR_METRICS, type MealBarMetric } from './mealBarMetrics';
+import { MealBarSummary } from './MealBarSummary';
 import { MealGroupBars } from './MealGroupBars';
 import { MealLink } from './MealLink';
 import { flaggedNutrients } from './mealNutrientTone';
@@ -594,9 +595,10 @@ const MealStats = () => {
   const [metric, setMetric] = useState<MealBarMetric>('count');
   const [cardSeen, setCardSeen] = useState(false);
   const groups = useMealStatsNutrition(from, to);
-  const check = useMealNutrition(14, cardSeen);
+  // 열량·나트륨 막대는 위에 최근 14일 판정 한 줄을 붙이므로 그 기준을 고르면 함께 부른다.
+  const check = useMealNutrition(14, cardSeen || metric !== 'count');
   const flags = useMemo(() => flaggedNutrients(check.data), [check.data]);
-  const metricHint = MEAL_BAR_METRICS.find((m) => m.key === metric)?.hint ?? '';
+  const rangeLabel = RANGES.find((r) => r.key === rangeKey)?.label ?? '';
 
   if (stats.isLoading) return <Loading />;
   if (stats.error) return <ErrorBox onRetry={() => void stats.refetch()} />;
@@ -713,9 +715,12 @@ const MealStats = () => {
         <>
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                막대: {metricHint}. 막대에 올리거나 누르면 그 묶음이 채운 영양이 보여요.
-              </p>
+              <MealBarSummary
+                metric={metric}
+                analysis={check.data}
+                loading={check.isLoading}
+                rangeLabel={rangeLabel}
+              />
               <div className="meal-seg meal-seg-sm" role="group" aria-label="막대 기준">
                 {MEAL_BAR_METRICS.map((m) => (
                   <button
@@ -739,6 +744,7 @@ const MealStats = () => {
                 metric={metric}
                 side="right"
                 flags={flags}
+                average={groups.data?.composition ?? null}
                 onOpen={() => setCardSeen(true)}
               />
               <MealGroupBars
@@ -750,6 +756,7 @@ const MealStats = () => {
                 metric={metric}
                 side="left"
                 flags={flags}
+                average={groups.data?.composition ?? null}
                 onOpen={() => setCardSeen(true)}
               />
               <MealGroupBars
@@ -761,6 +768,7 @@ const MealStats = () => {
                 metric={metric}
                 side="right"
                 flags={flags}
+                average={groups.data?.composition ?? null}
                 onOpen={() => setCardSeen(true)}
               />
               <section className="meal-sec" aria-labelledby="meal-top-foods">
