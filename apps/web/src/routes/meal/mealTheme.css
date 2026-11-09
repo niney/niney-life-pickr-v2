@@ -854,11 +854,15 @@ html.dark:has(.meal-app) {
   .meal-day-skips { display: flex; flex-direction: column; gap: 0.35rem; padding-top: 0.5rem; }
   .meal-day-skip { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
   .meal-day-skip-ask { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.55rem 0.75rem; background: var(--muted); border-radius: 6px; }
-  /* 영양 탭 빠진 날 정리(2026-11-09) — 접어 둔 채 날 수만, 펼치면 최근 날부터 남은 끼니 줄. */
+  /* 영양 탭 빠진 날 정리(2026-11-09) — 접어 둔 채 날 수만, 펼치면 최근 날부터 날마다 빈 끼니 체크 목록과 한 번에 표시. */
   .meal-skip-review { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.6rem 0.75rem; background: var(--muted); border-radius: 6px; }
   .meal-skip-review-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
   .meal-skip-review-body { display: flex; flex-direction: column; gap: 0.6rem; }
+  .meal-skip-review-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25rem 0.75rem; }
   .meal-skip-review-days { display: flex; flex-direction: column; gap: 0.85rem; }
+  .meal-skip-day { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .meal-skip-day > legend { padding: 0; margin-bottom: 0.15rem; }
+  .meal-skip-check { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2rem; font-size: 0.875rem; font-weight: 700; cursor: pointer; }
 
   @media (prefers-reduced-motion: no-preference) {
     .meal-bar > span, .meal-week-bar { transition: height 0.3s ease, width 0.3s ease; }

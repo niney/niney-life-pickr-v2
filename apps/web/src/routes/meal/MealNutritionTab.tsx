@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, Pill, RefreshCw } from 'lucide-react';
 import type {
   MealNutrientResultType,
@@ -59,6 +59,9 @@ export const MealNutritionTab = () => {
     prepareMealEntry({ slot, date });
     open(MEAL_PATH.new);
   };
+  // 홈의 '한 번에 정리'(?skips=open)로 오면 빠진 날 정리를 펼친 채 연다.
+  const [params] = useSearchParams();
+  const openSkips = params.get('skips') === 'open';
 
   // 데스크톱은 점검과 조언을 나란히 — 조언(이 탭의 결론)이 점검 목록 아래(1,440px)로 밀리지 않게.
   return (
@@ -93,7 +96,12 @@ export const MealNutritionTab = () => {
               </Button>
             </div>
           ) : (
-            <NutritionAnalysisView data={analysis.data} dim={analysis.isPlaceholderData} onRecord={recordMissing} />
+            <NutritionAnalysisView
+              data={analysis.data}
+              dim={analysis.isPlaceholderData}
+              onRecord={recordMissing}
+              openSkips={openSkips}
+            />
           )}
         </CardContent>
       </Card>
@@ -104,17 +112,20 @@ export const MealNutritionTab = () => {
 };
 
 // dim: 기간 전환 중 이전 기간 결과를 보여 주는 동안(재조회가 끝나면 풀린다). onRecord: 빠진 날 정리의 [기록하기].
+// openSkips: 빠진 날 정리를 펼친 채 연다(홈 링크).
 const NutritionAnalysisView = ({
   data,
   dim,
   onRecord,
+  openSkips,
 }: {
   data: MealNutritionAnalysisType;
   dim?: boolean;
   onRecord: (date: string, slot: MealSkipSlotType) => void;
+  openSkips: boolean;
 }) => {
   // 한 끼만 적혀 평균에서 빠진 지난날 — 판단을 미룰 때가 가장 쓸모 있어 이유 바로 아래, 점검이 나올 때는 요약 줄 아래.
-  const review = <MealSkipReview from={data.from} to={data.to} onRecord={onRecord} />;
+  const review = <MealSkipReview from={data.from} to={data.to} onRecord={onRecord} defaultExpanded={openSkips} />;
   if (data.status === 'insufficient') {
     return (
       <div className={cn('space-y-4', dim && 'opacity-60')}>

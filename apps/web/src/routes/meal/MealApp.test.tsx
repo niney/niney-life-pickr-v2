@@ -21,6 +21,7 @@ const NUTRITION_URL = '/api/v1/meals/nutrition';
 const CONTEXT_URL = '/api/v1/meals/recommendations/context';
 const FREQUENT_URL = '/api/v1/meals/items/frequent';
 const SKIPS_URL = '/api/v1/meals/skips';
+const SKIPS_BATCH_URL = '/api/v1/meals/skips/batch';
 
 const signIn = () =>
   useAuthStore.setState({
@@ -385,11 +386,47 @@ describe('MealHomePage — 식단 홈', () => {
     expect(nudge).toHaveTextContent('어제는 점심만 적혀 있어 영양 평균에서 빠져요.');
     const rows = within(nudge).getAllByRole('listitem').map((li) => li.textContent);
     expect(rows).toEqual(['아침기록하기안 먹음', '저녁기록하기안 먹음']);
+    // 한 끼만 적힌 날이 어제 하루뿐이면 '한 번에 정리' 줄은 띄우지 않는다(위 묻기로 충분).
+    expect(screen.queryByRole('link', { name: '한 번에 정리' })).not.toBeInTheDocument();
     fireEvent.click(within(within(nudge).getAllByRole('listitem')[1]!).getByRole('button', { name: '기록하기' }));
     expect(await screen.findByText('새 기록 화면')).toBeInTheDocument();
     const draft = useMealDraftStore.getState();
     expect([draft.slot, draft.eatenDate]).toEqual(['dinner', yesterday]);
     expect(new Date(draft.eatenAt).getHours()).toBe(19);
+  });
+
+  it('지난 2주에 한 끼만 적혀 평균에서 빠진 날이 둘 이상이면 영양 탭 정리(펼친 채)로 가는 한 줄을 띄운다', async () => {
+    const daysAgo = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return toLocalDateKey(d);
+    };
+    server.use(
+      http.get(CALENDAR_URL, ({ request }) =>
+        HttpResponse.json({
+          month: new URL(request.url).searchParams.get('month'),
+          days: [
+            { date: daysAgo(2), count: 1, slots: ['lunch'], hasPhoto: false, kcal: 600 },
+            { date: daysAgo(4), count: 1, slots: ['dinner'], hasPhoto: false, kcal: 700 },
+            { date: daysAgo(9), count: 1, slots: ['lunch'], hasPhoto: false, kcal: 500 },
+            { date: today, count: 1, slots: ['lunch'], hasPhoto: false, kcal: 450 },
+          ],
+        }),
+      ),
+      // 9일 전은 남은 끼니가 모두 '안 먹음'이라 이미 평균에 든다.
+      http.get(SKIPS_URL, () =>
+        HttpResponse.json({
+          skips: [
+            { date: daysAgo(9), slot: 'breakfast' },
+            { date: daysAgo(9), slot: 'dinner' },
+          ],
+        }),
+      ),
+    );
+    renderHome();
+    const link = await screen.findByRole('link', { name: '한 번에 정리' });
+    expect(link).toHaveAttribute('href', '/meal/nutrition?skips=open');
+    expect(link.closest('p')).toHaveTextContent('지난 2주에 한 끼만 적혀 영양 평균에서 빠진 날이 2일 있어요.');
   });
 
   it('안 먹음은 하나만 눌러선 평균에 들지 않아 남은 끼니를 계속 묻고, 다 채우면 알린 뒤 취소할 수 있게 남긴다', async () => {
@@ -428,6 +465,38 @@ describe('MealHomePage — 식단 홈', () => {
     expect(await within(nudge).findByText('어제는 점심만 적혀 있어 영양 평균에서 빠져요.')).toBeInTheDocument();
     expect(rowsOf()).toEqual(['아침안 먹음취소', '저녁기록하기안 먹음']);
     expect(calls).toEqual([`PUT ${yesterday} dinner`, `PUT ${yesterday} breakfast`, `DELETE ${yesterday} dinner`]);
+  });
+
+  it('남은 끼니가 둘 이상이면 [남은 끼니 모두 안 먹음] 한 번으로 다 채워 평균에 넣는다', async () => {
+    let skips: { date: string; slot: string }[] = [];
+    const posted: unknown[] = [];
+    withYesterdayLunch([
+      http.get(SKIPS_URL, () => HttpResponse.json({ skips })),
+      http.post(SKIPS_BATCH_URL, async ({ request }) => {
+        const body = (await request.json()) as { set?: { date: string; slot: string }[] };
+        posted.push(body);
+        skips = [...skips, ...(body.set ?? [])];
+        return HttpResponse.json({ added: body.set ?? [], cleared: 0 });
+      }),
+    ]);
+    renderHome();
+    const nudge = await screen.findByRole('region', { name: '어제 빈 끼니' });
+    fireEvent.click(within(nudge).getByRole('button', { name: '남은 끼니 모두 안 먹음' }));
+    expect(await within(nudge).findByText('어제도 영양 평균에 들어가요.')).toBeInTheDocument();
+    expect(posted).toEqual([
+      {
+        set: [
+          { date: yesterday, slot: 'breakfast' },
+          { date: yesterday, slot: 'dinner' },
+        ],
+      },
+    ]);
+    expect(within(nudge).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      '아침안 먹음취소',
+      '저녁안 먹음취소',
+    ]);
+    // 다 채운 뒤엔 '모두' 단추가 없다.
+    expect(within(nudge).queryByRole('button', { name: '남은 끼니 모두 안 먹음' })).not.toBeInTheDocument();
   });
 
   it('어제 표시해 둔 끼니가 하나뿐이면 다시 열어도 남은 끼니를 묻는다', async () => {

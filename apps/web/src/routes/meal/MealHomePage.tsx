@@ -33,7 +33,7 @@ import { prepareMealEntry } from './mealDraftStart';
 import { MEAL_NUTRIENT_TONE } from './mealNutrientTone';
 import { useMealOpen } from './mealPanel';
 import { MEAL_PATH } from './mealPaths';
-import { MealSkipNudge } from './MealSkip';
+import { MealMissedDaysLink, MealSkipNudge } from './MealSkip';
 
 // 식단 홈(2026-11-08 리뉴얼) — 간단명료한 대시보드. 오늘(끼니 4칸 + 열량), 다음 끼니 추천, 영양정보 라벨(최근 14일
 // 하루 평균), 최근 7일, 한 줄 습관, 자주 먹은 음식. 새 API 없이 기존 조회를 함께 부른다.
@@ -113,6 +113,8 @@ export const MealHomePage = () => {
         recorded={yesterdayInfo?.slots ?? []}
         onRecord={(slot) => start({ slot, date: yesterday })}
       />
+      {/* 지난 2주에 한 끼만 적힌 날이 둘 이상이면 영양 탭 '빠진 날 정리'(체크 목록)로 — 한 번에 정리. */}
+      <MealMissedDaysLink />
       <div className="meal-dash">
         <Today
           entries={dayEntries}
