@@ -878,6 +878,25 @@ export type MealSkipsQueryType = z.infer<typeof MealSkipsQuery>;
 export const MealSkipsResult = z.object({ skips: z.array(MealSkip) });
 export type MealSkipsResultType = z.infer<typeof MealSkipsResult>;
 
+// 여러 칸 한 번에(2026-11-09) — 영양 탭 '빠진 날 정리'의 "남은 끼니 모두 안 먹음"(기간 전체·날마다)과 그 되돌리기. set 은 표시
+// (기록이 있는 칸·이미 표시된 칸은 건너뛴다 — 기록이 이긴다), clear 는 지우기. set·clear 각각 한 번에 최대 MEAL_SKIPS_BATCH_MAX 칸.
+export const MEAL_SKIPS_BATCH_MAX = 100;
+export const MealSkipsBatchInput = z
+  .object({
+    set: z.array(MealSkip).max(MEAL_SKIPS_BATCH_MAX).optional(),
+    clear: z.array(MealSkip).max(MEAL_SKIPS_BATCH_MAX).optional(),
+  })
+  .strict();
+export type MealSkipsBatchInputType = z.infer<typeof MealSkipsBatchInput>;
+
+export const MealSkipsBatchResult = z.object({
+  // 이번에 새로 표시한 칸(날짜·끼니 순) — 되돌리기는 이 목록을 clear 로 보낸다(전부터 있던 표시는 건드리지 않게).
+  added: z.array(MealSkip),
+  // 지운 칸 수.
+  cleared: z.number().int().nonnegative(),
+});
+export type MealSkipsBatchResultType = z.infer<typeof MealSkipsBatchResult>;
+
 export const MealSupplementAdviceItem = z.object({
   nutrient: MealNutrientKey,
   label: z.string(),

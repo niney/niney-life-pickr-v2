@@ -343,6 +343,8 @@ export const Meal = {
   statsNutrition: `${API_PREFIX}/meals/stats/nutrition`,
   statsNutrients: `${API_PREFIX}/meals/stats/nutrients`,
   skips: `${API_PREFIX}/meals/skips`,
+  // 여러 칸 한 번에 표시·지우기(POST { set, clear }).
+  skipsBatch: `${API_PREFIX}/meals/skips/batch`,
   // 사진 업로드(multipart, 필드 file) — 서버가 토큰 발급.
   photos: `${API_PREFIX}/meals/photos`,
   // 원본/썸네일 조회(JWT 필요 — <img src> 직접 불가) + 삭제.

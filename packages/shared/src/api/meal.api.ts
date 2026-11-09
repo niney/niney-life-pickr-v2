@@ -29,6 +29,8 @@ import {
   type MealPhotoRetentionPreviewType,
   type MealSlotType,
   type MealSkipType,
+  type MealSkipsBatchInputType,
+  type MealSkipsBatchResultType,
   type MealSkipsResultType,
   type MealStatsNutrientsResultType,
   type MealStatsNutritionResultType,
@@ -135,6 +137,9 @@ export const mealApi = {
     apiFetch<MealSkipType>(Routes.Meal.skips, { method: 'PUT', body: JSON.stringify(skip) }),
   clearSkip: (skip: MealSkipType) =>
     apiFetch<void>(`${Routes.Meal.skips}?${new URLSearchParams(skip).toString()}`, { method: 'DELETE' }),
+  // 여러 칸 한 번에 — set 표시·clear 지우기. 새로 표시한 칸(added)을 돌려준다(되돌리기용).
+  batchSkips: (input: MealSkipsBatchInputType) =>
+    apiFetch<MealSkipsBatchResultType>(Routes.Meal.skipsBatch, { method: 'POST', body: JSON.stringify(input) }),
 
   // 통계 — 영양소별 하루 평균·날마다 흐름·많이 준 음식(영양 탭과 같은 셈을 고른 기간에).
   statsNutrients: (from: string, to: string) =>

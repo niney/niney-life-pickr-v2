@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { MealEntryType, MealSkipsResultType, MealStatsNutrientsResultType, MealStatsResultType } from '@repo/api-contract';
+import type {
+  MealEntryType,
+  MealSkipsBatchResultType,
+  MealSkipsResultType,
+  MealStatsNutrientsResultType,
+  MealStatsResultType,
+} from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
@@ -179,5 +185,73 @@ describe('meal skip routes (격리 DB)', () => {
     expect([after.meals, after.skipped, after.counted, after.analyzedDays]).toEqual([[1], [2], [true], 1]);
     expect(after.rows.find((r) => r.key === 'kcal')?.intakePerDay).toBe(kcal);
     expect((await statsOf()).nutrition.avgKcalPerDay).toBe(kcal);
+  });
+
+  it('여러 칸 한 번에 — 기록이 있는 칸·이미 표시된 칸·중복은 건너뛰고 새로 표시한 칸만 돌려주며, 되돌리기는 그 칸만 지운다', async () => {
+    const BATCH = '/api/v1/meals/skips/batch';
+    const d1 = shift(today, -20);
+    const d2 = shift(today, -21);
+    await createEntry(d1, 'lunch');
+    // 전부터 있던 표시 — 되돌리기가 지우면 안 된다.
+    await app.inject({ method: 'PUT', url: SKIPS, headers: auth, payload: { date: d2, slot: 'breakfast' } });
+    expect((await app.inject({ method: 'POST', url: BATCH, payload: { set: [{ date: d1, slot: 'dinner' }] } })).statusCode).toBe(
+      401,
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: BATCH,
+      headers: auth,
+      payload: {
+        set: [
+          { date: d1, slot: 'breakfast' },
+          { date: d1, slot: 'dinner' },
+          // 기록이 있는 점심 — 건너뛴다(기록이 이긴다).
+          { date: d1, slot: 'lunch' },
+          // 이미 있는 표시 — 건너뛴다.
+          { date: d2, slot: 'breakfast' },
+          { date: d2, slot: 'dinner' },
+          { date: d2, slot: 'dinner' },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const { added, cleared } = res.json<MealSkipsBatchResultType>();
+    expect([added, cleared]).toEqual([
+      [
+        { date: d2, slot: 'dinner' },
+        { date: d1, slot: 'breakfast' },
+        { date: d1, slot: 'dinner' },
+      ],
+      0,
+    ]);
+    expect(await list(d2, d1)).toEqual([
+      { date: d2, slot: 'breakfast' },
+      { date: d2, slot: 'dinner' },
+      { date: d1, slot: 'breakfast' },
+      { date: d1, slot: 'dinner' },
+    ]);
+    // 점심만 적은 d1 은 남은 끼니가 모두 표시돼 평균에 든다.
+    const nutrients = (
+      await app.inject({ method: 'GET', url: `/api/v1/meals/stats/nutrients?from=${d1}&to=${d1}`, headers: auth })
+    ).json<MealStatsNutrientsResultType>();
+    expect(nutrients.counted).toEqual([true]);
+
+    // 되돌리기 — 새로 표시한 칸만 지운다(전부터 있던 d2 아침은 그대로).
+    const undo = await app.inject({ method: 'POST', url: BATCH, headers: auth, payload: { clear: added } });
+    expect(undo.json<MealSkipsBatchResultType>()).toEqual({ added: [], cleared: 3 });
+    expect(await list(d2, d1)).toEqual([{ date: d2, slot: 'breakfast' }]);
+
+    // 앞으로 올 날이 섞이면 통째로 받지 않고, 둘 다 비었거나 100칸을 넘거나 간식이면 400.
+    const status = async (payload: unknown) =>
+      (await app.inject({ method: 'POST', url: BATCH, headers: auth, payload })).statusCode;
+    expect(await status({ set: [{ date: d1, slot: 'breakfast' }, { date: shift(today, 1), slot: 'breakfast' }] })).toBe(400);
+    expect(await list(d1, d1)).toEqual([]);
+    expect(await status({})).toBe(400);
+    expect(await status({ set: [], clear: [] })).toBe(400);
+    expect(
+      await status({ set: Array.from({ length: 101 }, (_, i) => ({ date: shift(today, -(i % 60) - 30), slot: 'breakfast' })) }),
+    ).toBe(400);
+    expect(await status({ set: [{ date: d1, slot: 'snack' }] })).toBe(400);
   });
 });

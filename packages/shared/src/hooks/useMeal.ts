@@ -18,6 +18,7 @@ import type {
   MealRecommendationFeedbackInputType,
   MealRecommendationEventInputType,
   MealSkipType,
+  MealSkipsBatchInputType,
   MealSlotType,
   RecognizeMealInputType,
   UpdateMealEntryInputType,
@@ -189,6 +190,15 @@ export const useClearMealSkip = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (skip: MealSkipType) => mealApi.clearSkip(skip),
+    onSuccess: () => invalidateSkips(qc),
+  });
+};
+
+/** 여러 칸 한 번에 — '남은 끼니 모두 안 먹음'(날마다·기간 전체)과 그 되돌리기. */
+export const useBatchMealSkips = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MealSkipsBatchInputType) => mealApi.batchSkips(input),
     onSuccess: () => invalidateSkips(qc),
   });
 };

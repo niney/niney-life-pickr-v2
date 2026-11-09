@@ -1,8 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
+  MEAL_SKIPS_BATCH_MAX,
   MEAL_STATS_MAX_DAYS,
   MealSkip,
+  MealSkipsBatchInput,
+  MealSkipsBatchResult,
   MealSkipsQuery,
   MealSkipsResult,
   Routes,
@@ -75,6 +78,30 @@ const mealSkipRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req, reply) => {
       await skips.clear(req.user.userId, req.query);
       return reply.code(204).send();
+    },
+  });
+
+  typed.post(Routes.Meal.skipsBatch, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      summary: '끼니 안 먹음 여러 칸 한 번에 — 표시(set)·지우기(clear)',
+      description:
+        `set·clear 각각 한 번에 최대 ${MEAL_SKIPS_BATCH_MAX}칸. clear 를 먼저 지우고 set 을 표시한다. set 은 기록이 있는 칸·이미 ` +
+        '표시된 칸을 건너뛰고(기록이 이긴다) 앞으로 올 날이 섞이면 400, 둘 다 비면 400. 이번에 새로 표시한 칸(added)을 ' +
+        '돌려준다 — 되돌리기는 그 목록을 clear 로 보낸다.',
+      security: [{ bearerAuth: [] }],
+      body: MealSkipsBatchInput,
+      response: { 200: MealSkipsBatchResult },
+    },
+    handler: async (req) => {
+      if (!req.body.set?.length && !req.body.clear?.length) throw app.httpErrors.badRequest('바꿀 끼니가 없습니다.');
+      try {
+        return await skips.batch(req.user.userId, req.body, kstToday());
+      } catch (e) {
+        if (e instanceof MealSkipError) throw app.httpErrors.badRequest(e.message);
+        throw e;
+      }
     },
   });
 };

@@ -22803,6 +22803,134 @@
         }
       }
     },
+    "/api/v1/meals/skips/batch": {
+      "post": {
+        "summary": "끼니 안 먹음 여러 칸 한 번에 — 표시(set)·지우기(clear)",
+        "tags": [
+          "meal"
+        ],
+        "description": "set·clear 각각 한 번에 최대 100칸. clear 를 먼저 지우고 set 을 표시한다. set 은 기록이 있는 칸·이미 표시된 칸을 건너뛰고(기록이 이긴다) 앞으로 올 날이 섞이면 400, 둘 다 비면 400. 이번에 새로 표시한 칸(added)을 돌려준다 — 되돌리기는 그 목록을 clear 로 보낸다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "set": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "slot": {
+                          "type": "string",
+                          "enum": [
+                            "breakfast",
+                            "lunch",
+                            "dinner"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "slot"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 100
+                  },
+                  "clear": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "slot": {
+                          "type": "string",
+                          "enum": [
+                            "breakfast",
+                            "lunch",
+                            "dinner"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "slot"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 100
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "added": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "slot": {
+                            "type": "string",
+                            "enum": [
+                              "breakfast",
+                              "lunch",
+                              "dinner"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "slot"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cleared": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "added",
+                    "cleared"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meals/stats": {
       "get": {
         "summary": "기간 식단 통계 — 분류별 분포·자주 먹은 음식·연속 기록·영양 평균·인사이트",

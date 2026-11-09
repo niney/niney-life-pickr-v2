@@ -74,4 +74,54 @@ export class MealSkipService {
       this.prisma.mealSkip.deleteMany({ where: { userId, date: skip.date, slot: skip.slot } }),
     );
   }
+
+  /**
+   * 여러 칸 한 번에(2026-11-09) — clear 를 먼저 지우고 set 을 표시한다. set 은 기록이 있는 칸(기록이 이긴다)·이미 표시된 칸을
+   * 건너뛰고, 앞으로 올 날이 섞이면 통째로 받지 않는다. 한 트랜잭션이고, 되돌리기용으로 이번에 새로 표시한 칸만 돌려준다.
+   */
+  async batch(
+    userId: string,
+    input: { set?: readonly MealSkipType[]; clear?: readonly MealSkipType[] },
+    today: string,
+  ): Promise<{ added: MealSkipType[]; cleared: number }> {
+    const keyOf = (s: { date: string; slot: string }): string => `${s.date}|${s.slot}`;
+    const uniq = (list: readonly MealSkipType[] = []): MealSkipType[] => [
+      ...new Map(list.map((s) => [keyOf(s), { date: s.date, slot: s.slot }])).values(),
+    ];
+    const set = uniq(input.set);
+    const clear = uniq(input.clear);
+    if (set.some((s) => s.date > today)) {
+      throw new MealSkipError('future', '앞으로 올 끼니는 안 먹음으로 표시할 수 없어요.');
+    }
+    return mealMutationBarrier.runExclusive(userId, () =>
+      this.prisma.$transaction(async (tx) => {
+        const cleared =
+          clear.length > 0
+            ? (await tx.mealSkip.deleteMany({ where: { userId, OR: clear.map((s) => ({ date: s.date, slot: s.slot })) } }))
+                .count
+            : 0;
+        if (set.length === 0) return { added: [], cleared };
+        const dates = [...new Set(set.map((s) => s.date))];
+        const recorded = await tx.mealEntry.findMany({
+          where: { userId, eatenDate: { in: dates } },
+          select: { eatenDate: true, slot: true },
+        });
+        const existing = await tx.mealSkip.findMany({
+          where: { userId, date: { in: dates } },
+          select: { date: true, slot: true },
+        });
+        const taken = new Set([
+          ...recorded.map((e) => keyOf({ date: e.eatenDate, slot: e.slot })),
+          ...existing.map(keyOf),
+        ]);
+        const added = set
+          .filter((s) => !taken.has(keyOf(s)))
+          .sort((a, b) => a.date.localeCompare(b.date) || slotRank(a.slot) - slotRank(b.slot));
+        if (added.length > 0) {
+          await tx.mealSkip.createMany({ data: added.map((s) => ({ userId, date: s.date, slot: s.slot })) });
+        }
+        return { added, cleared };
+      }),
+    );
+  }
 }
