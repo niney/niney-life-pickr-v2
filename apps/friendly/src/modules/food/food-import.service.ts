@@ -886,13 +886,32 @@ export const upsertFoodSeeds = async (
         data.servingG = seedWithRules.servingG;
       }
       const n = seedWithRules.nutrition;
+      // 빌려 온 영양(nutritionFrom)은 직접 값이 오면 통째로 물러난다 — 1인분·100g당 열량·비타민·무기질 모두 시드 값으로,
+      // 시드에 없는 칸은 비운다(빌려준 음식의 값과 섞이지 않게). "빈 칸만 채우기"면 적재 순서에 따라 값이 갈렸다: 운영에서
+      // 외식 어휘 '토마토'가 먼저 '연두부 토마토'의 1인분(155g 110kcal)을 빌려 온 뒤 원재료 토마토(100g 21kcal)가 들어와도
+      // 빌린 값이 남았다(2026-11-09).
+      const seedHasDirectNutrition =
+        (n != null && [n.kcal, n.carbG, n.proteinG, n.fatG, n.sodiumMg, n.sugarG].some((v) => v != null)) ||
+        seedWithRules.kcalPer100g != null;
+      const replaceBorrowed = existing.nutritionFrom !== null && seedHasDirectNutrition;
       // 기본은 "빈 필드만 채우기"다(다른 출처가 덮어쓰지 않게). refreshNutrition 은 정규화 규칙을
       // 고친 뒤 기존 값을 바로잡기 위한 명시적 재적재용 — 시드에 값이 있을 때만 덮어쓴다.
       const canWriteNutrition =
         n &&
         (opts.refreshNutrition ||
           (existing.kcal === null && existing.proteinG === null && existing.carbG === null));
-      if (n && canWriteNutrition) {
+      if (replaceBorrowed) {
+        data.servingG = seedWithRules.servingG ?? null;
+        data.kcal = n?.kcal ?? null;
+        data.carbG = n?.carbG ?? null;
+        data.proteinG = n?.proteinG ?? null;
+        data.fatG = n?.fatG ?? null;
+        data.sodiumMg = n?.sodiumMg ?? null;
+        data.sugarG = n?.sugarG ?? null;
+        data.kcalPer100g = seedWithRules.kcalPer100g ?? null;
+        data.nutrientsPer100gJson = serializeNutrientsPer100g(seedWithRules.nutrientsPer100g);
+        data.nutritionFrom = null;
+      } else if (n && canWriteNutrition) {
         data.kcal = n.kcal;
         data.carbG = n.carbG;
         data.proteinG = n.proteinG;
@@ -910,6 +929,7 @@ export const upsertFoodSeeds = async (
       }
       // 100g당 열량은 1인분 영양과 독립적으로 채운다(servingG 가 없어 1인분 환산이 안 된 행도 가진다).
       if (
+        !replaceBorrowed &&
         seedWithRules.kcalPer100g != null &&
         (opts.refreshNutrition || existing.kcalPer100g === null)
       ) {
@@ -917,15 +937,18 @@ export const upsertFoodSeeds = async (
       }
       // 비타민·무기질은 **빈 키만** 채운다(이미 있는 값·빌려온 값은 그대로) — 영양소 점검 도입(2026-10-04) 전 적재분과
       // 새 열(마그네슘·아연·엽산, 2026-11-07)이 재적재로 기존 행에 더해진다. refreshNutrition 은 시드 값으로 덮는다.
-      if (opts.refreshNutrition) {
-        const nutrientsJson = serializeNutrientsPer100g(seedWithRules.nutrientsPer100g);
-        if (nutrientsJson) data.nutrientsPer100gJson = nutrientsJson;
-      } else if (opts.refreshNutrients) {
-        const next = overwriteNutrientsPer100g(existing.nutrientsPer100gJson, seedWithRules.nutrientsPer100g);
-        if (next) data.nutrientsPer100gJson = next;
-      } else {
-        const merged = mergeNutrientsPer100g(existing.nutrientsPer100gJson, seedWithRules.nutrientsPer100g);
-        if (merged) data.nutrientsPer100gJson = merged;
+      // 빌려 온 값을 물린 행(replaceBorrowed)은 위에서 시드 값으로 이미 정했다.
+      if (!replaceBorrowed) {
+        if (opts.refreshNutrition) {
+          const nutrientsJson = serializeNutrientsPer100g(seedWithRules.nutrientsPer100g);
+          if (nutrientsJson) data.nutrientsPer100gJson = nutrientsJson;
+        } else if (opts.refreshNutrients) {
+          const next = overwriteNutrientsPer100g(existing.nutrientsPer100gJson, seedWithRules.nutrientsPer100g);
+          if (next) data.nutrientsPer100gJson = next;
+        } else {
+          const merged = mergeNutrientsPer100g(existing.nutrientsPer100gJson, seedWithRules.nutrientsPer100g);
+          if (merged) data.nutrientsPer100gJson = merged;
+        }
       }
       if (!existing.sourceCategory && seedWithRules.sourceCategory) {
         data.sourceCategory = seedWithRules.sourceCategory;

@@ -119,8 +119,10 @@ export const backfillNutrition = async (
     where: { active: true, kcal: { not: null } },
     select,
   })) as NutritionDonor[];
+  // 100g당 직접 값(kcalPer100g)이 있는 행은 빌려 오지 않는다 — 1인분은 식단 저장(food-serving)이 통상 중량으로 정하고,
+  // 빌려 오면 직접 값을 빌려준 요리의 값으로 덮는다(운영 원재료 '자두' ← 요리 '상큼하자두', 2026-11-09 발견).
   const targets = await prisma.foodItem.findMany({
-    where: { active: true, kcal: null },
+    where: { active: true, kcal: null, kcalPer100g: null },
     select: { id: true, name: true, nameNorm: true, dishType: true },
   });
 

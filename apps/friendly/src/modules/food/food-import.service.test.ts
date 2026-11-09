@@ -20,7 +20,7 @@ import {
   upsertFoodSeeds,
 } from './food-import.service.js';
 import { foodImportRegistry } from './food-import-registry.js';
-import { backfillBorrowedNutrients } from './food-nutrition.service.js';
+import { backfillBorrowedNutrients, backfillNutrition } from './food-nutrition.service.js';
 import { FoodService, foodNameSimilarity, foodNameVariants } from './food.service.js';
 
 // 정규화는 순수 함수 — 픽스처(실응답 형식을 본뜬 최소 행)로 네트워크 없이 검증. upsert·검색·매칭은
@@ -382,6 +382,68 @@ describe('upsertFoodSeeds + FoodService (격리 DB)', () => {
     // 같은 격리 DB 를 쓰는 아래 집계 테스트가 행 수를 센다.
     await app.prisma.foodItem.deleteMany({
       where: { nameNorm: { in: ['나물비빔밥', '빈영양', '산채비빔밥집메뉴', '쌀밥', '공기밥'] } },
+    });
+  });
+
+  it('빌려 온 영양은 직접 값이 오면 통째로 물러나고, 100g당 직접 값이 있는 행은 빌려 오지 않는다(운영 토마토·자두)', async () => {
+    const rowOf = (name: string) => app.prisma.foodItem.findUnique({ where: { nameNorm: name } });
+    // 운영 모양 — 외식 어휘가 먼저 들어와 같은 계열 요리의 1인분을 빌려 왔다.
+    await upsertFoodSeeds(app.prisma, [
+      {
+        name: '연두부 시험토마토',
+        source: 'mfds-recipe',
+        sourceId: 'C1',
+        servingG: 155,
+        nutrition: { kcal: 110, carbG: 9, proteinG: 6, fatG: 5, sodiumMg: 300, sugarG: 6 },
+        kcalPer100g: 71,
+      },
+      { name: '시험토마토', source: 'menu-canonical', sourceId: '시험토마토' },
+    ]);
+    await backfillNutrition(app.prisma);
+    expect(await rowOf('시험토마토')).toMatchObject({ nutritionFrom: '연두부 시험토마토', kcal: 110, kcalPer100g: 71 });
+
+    // 원재료(100g당 값만)가 나중에 들어오면 빌린 1인분·100g당 열량은 물러나고 시드 값만 남는다.
+    await upsertFoodSeeds(app.prisma, [
+      {
+        name: '시험토마토',
+        source: 'mfds-raw',
+        sourceId: 'R1',
+        sourceCategory: '채소류',
+        kcalPer100g: 21,
+        nutrientsPer100g: { potassiumMg: 250, proteinG: 0.9 },
+      },
+    ]);
+    const tomato = await rowOf('시험토마토');
+    expect(tomato).toMatchObject({
+      nutritionFrom: null,
+      servingG: null,
+      kcal: null,
+      carbG: null,
+      sodiumMg: null,
+      kcalPer100g: 21,
+      source: 'menu-canonical',
+    });
+    expect(JSON.parse(tomato!.nutrientsPer100gJson!)).toEqual({ potassiumMg: 250, proteinG: 0.9 });
+    expect(JSON.parse(tomato!.sourceRefsJson)).toEqual([{ source: 'mfds-raw', sourceId: 'R1' }]);
+
+    // 다시 보강해도 100g당 직접 값이 있는 행은 빌려 오지 않는다 — 원재료 행도(운영 자두 ← 상큼하자두).
+    await upsertFoodSeeds(app.prisma, [
+      {
+        name: '상큼한시험자두',
+        source: 'mfds-recipe',
+        sourceId: 'C2',
+        servingG: 125,
+        nutrition: { kcal: 40, carbG: 10, proteinG: 0.5, fatG: 0.1, sodiumMg: 2, sugarG: 8 },
+        kcalPer100g: 32,
+      },
+      { name: '시험자두', source: 'mfds-raw', sourceId: 'R2', sourceCategory: '과일류', kcalPer100g: 46 },
+    ]);
+    await backfillNutrition(app.prisma);
+    expect(await rowOf('시험토마토')).toMatchObject({ nutritionFrom: null, kcal: null, kcalPer100g: 21 });
+    expect(await rowOf('시험자두')).toMatchObject({ nutritionFrom: null, kcal: null, kcalPer100g: 46 });
+
+    await app.prisma.foodItem.deleteMany({
+      where: { nameNorm: { in: ['연두부시험토마토', '시험토마토', '상큼한시험자두', '시험자두'] } },
     });
   });
 
