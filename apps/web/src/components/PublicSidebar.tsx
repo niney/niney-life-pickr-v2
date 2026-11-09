@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
+  Apple,
   Building2,
   Bus,
   CloudSun,
@@ -36,6 +37,8 @@ interface NavItem {
   match?: string[];
   // 로그인 사용자에게만 노출(개인 데이터 화면).
   requiresAuth?: boolean;
+  // 이 경로 아래에서는 켜지 않는다('식단' /meal 은 건강식단 /meal/stories 에서 꺼진다).
+  not?: string[];
 }
 
 const NAV: NavItem[] = [
@@ -53,7 +56,8 @@ const NAV: NavItem[] = [
   { to: '/tarot', label: '타로', icon: Sparkles },
   { to: '/saju-c', label: '사주(C)', icon: Compass },
   { to: '/saju-g', label: '사주(G)', icon: Sparkles },
-  { to: '/meal', label: '식단', icon: Salad, requiresAuth: true },
+  { to: '/meal/stories', label: '건강식단', icon: Apple },
+  { to: '/meal', label: '식단', icon: Salad, requiresAuth: true, not: ['/meal/stories'] },
 ];
 
 const ROW = 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors';
@@ -109,16 +113,15 @@ export const PublicSidebar = ({ open, onClose }: Props) => {
         </div>
         {/* 가로 모드 등 낮은 화면에서도 하단 계정 영역이 밀려나지 않게 NAV 만 스크롤. */}
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
-          {NAV.filter((item) => !item.requiresAuth || !!user).map(({ to, label, icon: Icon, end, match }) => (
+          {NAV.filter((item) => !item.requiresAuth || !!user).map(({ to, label, icon: Icon, end, match, not }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               onClick={onClose}
               className={({ isActive }) => {
-                const active = match
-                  ? match.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-                  : isActive;
+                const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
+                const active = (match ? match.some(under) : isActive) && !not?.some(under);
                 return cn(ROW, active ? ROW_ACTIVE : ROW_IDLE);
               }}
             >

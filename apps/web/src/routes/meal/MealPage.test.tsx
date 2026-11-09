@@ -1818,6 +1818,52 @@ describe('MealPage — 영양 탭', () => {
     expect(screen.getByText('칼슘부터 음식으로 챙겨 보세요.').closest('.opacity-60')).not.toBeNull();
   });
 
+  it("'많음'인 영양소에 같은 주제의 건강식단 이야기가 있으면 줄이는 법 링크 — 부족한 칼슘은 채우는 이야기가 없어 링크도 없다", async () => {
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(NUTRITION_URL, () =>
+        HttpResponse.json({
+          ...analysis(14),
+          nutrients: [
+            nutrient({
+              key: 'sodium',
+              label: '나트륨',
+              intakePerDay: 3400,
+              reference: { kind: 'cdrr', amount: 2300, ear: null },
+              percent: 148,
+              status: 'high',
+              supplementCandidate: false,
+              foodSuggestions: [],
+              typicalFoods: [],
+            }),
+            nutrient({}),
+          ],
+        }),
+      ),
+      http.get(ADVICE_URL, () => HttpResponse.json({ advice: null })),
+      http.get('/api/v1/meal-stories', () =>
+        HttpResponse.json({
+          items: [
+            {
+              slug: 'sodium-tomato-pasta',
+              status: 'published',
+              title: '토마토 스파게티로 나트륨 줄이기',
+              summary: '요약',
+              topic: { nutrient: 'sodium', direction: 'reduce' },
+              publishedAt: '2026-11-09',
+              coverUrl: null,
+              sceneCount: 12,
+            },
+          ],
+        }),
+      ),
+    );
+    renderPage(undefined, '/meal/nutrition');
+    const link = await screen.findByRole('link', { name: '줄이는 법 보기 — 토마토 스파게티로 나트륨 줄이기' });
+    expect(link).toHaveAttribute('href', '/meal/stories/sodium-tomato-pasta');
+    expect(screen.queryByRole('link', { name: /채우는 법 보기/ })).not.toBeInTheDocument();
+  });
+
   it('기록이 모자라면 이유를 보여 주고 조언 버튼을 막는다', async () => {
     server.use(
       http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),

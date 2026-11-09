@@ -87,6 +87,8 @@ const ContactsPage = lazy(() =>
 );
 // 식단 하위 사이트(/meal/*) — 전용 셸과 화면들을 한 덩어리로 늦게 부른다(어드민과 같은 방식).
 const MealApp = lazy(() => import('./routes/meal/MealApp'));
+// 건강식단 스토리 — 누구나 보는 화면(목록·전체 화면 스토리·레시피). 식단 셸 밖이라 따로 늦게 부른다.
+const MealStoryApp = lazy(() => import('./routes/meal-story/MealStoryApp'));
 const SettlementNewPage = lazy(() =>
   import('./routes/settlement/SettlementNewPage').then((m) => ({ default: m.SettlementNewPage })),
 );
@@ -296,6 +298,8 @@ export const App = () => {
               </RequireUser>
             }
           />
+          {/* 건강식단 스토리 — /meal 아래지만 로그인 없이 누구나(공유 링크로 들어온다). /meal/* 보다 구체적이라 먼저 잡힌다. */}
+          <Route path="/meal/stories/*" element={<MealStoryApp />} />
           {/* 내 식단 — 공통 상단바 없이 전용 셸(사이드 메뉴·하단 탭)로 띄우는 하위 사이트. 로그인 필수.
             예전 주소(/me/meals?tab=…, /me/meals/:id…)는 새 주소로 넘긴다. */}
           <Route

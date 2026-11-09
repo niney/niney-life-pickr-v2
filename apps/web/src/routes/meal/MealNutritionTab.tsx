@@ -11,6 +11,7 @@ import {
   useCreateMealNutritionAdvice,
   useLatestMealNutritionAdvice,
   useMealNutrition,
+  useMealStories,
 } from '@repo/shared';
 import {
   MEAL_NUTRIENT_DATA_SOURCES,
@@ -28,7 +29,7 @@ import { MealLink } from './MealLink';
 import { MealNutrientLine, MealNutrientMeter } from './MealNutrientLine';
 import { nutrientVsRefText } from './mealNutrientTone';
 import { useMealOpen } from './mealPanel';
-import { MEAL_PATH } from './mealPaths';
+import { MEAL_PATH, MEAL_STORY_PATH } from './mealPaths';
 import { MealSkipReview } from './MealSkip';
 
 // 영양 — 최근 기록의 하루 평균을 한국인 영양소 섭취기준(2020)과 견주고(서버 계산), 모자란 영양소를 음식·영양제
@@ -220,7 +221,28 @@ const NutrientRow = ({ n }: { n: MealNutrientResultType }) => {
       ) : n.topSources.length > 0 && n.status !== 'unknown' ? (
         <p className="text-xs text-muted-foreground">주로 {n.topSources.join('·')}에서</p>
       ) : null}
+      <NutrientStoryLink n={n} />
     </li>
+  );
+};
+
+// 이 영양소를 다루는 건강식단 이야기 — '많음'이면 줄이는 이야기, '부족'·'경계'면 채우는 이야기. 게시한 것 중 가장 새 것.
+const NutrientStoryLink = ({ n }: { n: MealNutrientResultType }) => {
+  const stories = useMealStories();
+  const direction = n.status === 'high' ? 'reduce' : n.status === 'low' || n.status === 'borderline' ? 'increase' : null;
+  const story = direction
+    ? (stories.data?.items.find(
+        (s) => s.status === 'published' && s.topic?.nutrient === n.key && s.topic.direction === direction,
+      ) ?? null)
+    : null;
+  if (!story) return null;
+  return (
+    <Link
+      to={MEAL_STORY_PATH.story(story.slug)}
+      className="inline-block text-xs font-bold underline underline-offset-4"
+    >
+      {direction === 'reduce' ? '줄이는 법' : '채우는 법'} 보기 — {story.title}
+    </Link>
   );
 };
 

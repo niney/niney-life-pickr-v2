@@ -1,6 +1,7 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
+  Apple,
   ArrowLeft,
   CalendarDays,
   ChartNoAxesColumn,
@@ -18,7 +19,8 @@ import { PublicSidebar } from '~/components/PublicSidebar';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { cn } from '~/lib/utils';
 import { MealLink } from './MealLink';
-import { MEAL_PATH, MEAL_SECTION_PATHS } from './mealPaths';
+import { useMealFont } from './mealFont';
+import { MEAL_PATH, MEAL_SECTION_PATHS, MEAL_STORY_PATH } from './mealPaths';
 import './mealTheme.css';
 
 // 식단 셸(2026-11-08 리뉴얼) — 식단을 사이트 안의 하위 사이트처럼 띄운다. 공통 상단바 대신
@@ -26,22 +28,6 @@ import './mealTheme.css';
 //   기록 = 목록·달력, 분석 = 통계·영양). 사이트 전체 메뉴는 상단바 '메뉴'가 공통 서랍(PublicSidebar)을 연다.
 // 본문은 사이드 메뉴 옆에 왼쪽 정렬로 붙인다 — 넓은 화면에서 오른쪽에 뜨는 패널이 빈 자리에 놓이게.
 // 바깥 틀(.meal-app)은 MealApp 이 둔다 — 배경 위에 뜨는 패널도 같은 틀 안에 그려 글꼴·색을 받는다.
-
-const WANTED_SANS_ID = 'meal-font-wanted-sans';
-const WANTED_SANS_CSS =
-  'https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.3/packages/wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.min.css';
-
-/** 식단 글꼴(원티드 산스, 쓰는 글자만 받는 분할판) — 식단 화면에 들어올 때 한 번만 붙인다. 문서 head(외부)라 effect. */
-const useMealFont = (): void => {
-  useEffect(() => {
-    if (document.getElementById(WANTED_SANS_ID)) return;
-    const link = document.createElement('link');
-    link.id = WANTED_SANS_ID;
-    link.rel = 'stylesheet';
-    link.href = WANTED_SANS_CSS;
-    document.head.appendChild(link);
-  }, []);
-};
 
 interface NavItem {
   to: string;
@@ -129,6 +115,11 @@ export const MealShell = () => {
           ))}
         </nav>
         <div className="mt-auto flex flex-col pb-3">
+          {/* 건강식단 스토리 — 누구나 보는 공개 화면이라 식단 셸 밖(전체 화면 스토리)으로 나간다. */}
+          <Link to={MEAL_STORY_PATH.list} className="meal-nav-item" title="건강식단">
+            <Apple className="size-5 shrink-0" aria-hidden />
+            <span className="hidden xl:inline">건강식단</span>
+          </Link>
           <NavLink to={MEAL_PATH.settings} className="meal-nav-item" title="설정">
             <Settings2 className="size-5 shrink-0" aria-hidden />
             <span className="hidden xl:inline">설정</span>

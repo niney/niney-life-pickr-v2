@@ -17,6 +17,8 @@ interface NavItem {
   match?: string[];
   // 로그인 사용자에게만 노출(개인 데이터 화면). 게스트·비로그인은 메뉴에서 숨긴다.
   requiresAuth?: boolean;
+  // 이 경로 아래에서는 켜지 않는다('식단' /meal 은 건강식단 /meal/stories 에서 꺼진다).
+  not?: string[];
 }
 
 const NAV: NavItem[] = [
@@ -34,7 +36,8 @@ const NAV: NavItem[] = [
   { to: '/tarot', label: '타로' },
   { to: '/saju-c', label: '사주(C)' },
   { to: '/saju-g', label: '사주(G)' },
-  { to: '/meal', label: '식단', requiresAuth: true },
+  { to: '/meal/stories', label: '건강식단' },
+  { to: '/meal', label: '식단', requiresAuth: true, not: ['/meal/stories'] },
 ];
 
 interface Props {
@@ -117,9 +120,8 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) => {
-                  const active = item.match
-                    ? item.match.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-                    : isActive;
+                  const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
+                  const active = (item.match ? item.match.some(under) : isActive) && !item.not?.some(under);
                   return cn(
                     'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                     active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',

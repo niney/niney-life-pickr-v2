@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Button,
   Divider,
@@ -22,6 +22,11 @@ const modeOptions = [
   { value: 'register' as const, label: '회원가입' },
 ];
 
+// 로그인 뒤 돌아갈 곳(?next=) — 이 사이트 안 경로만('//'·'/\' 로 시작하는 다른 사이트 주소는 버린다). 건강식단 스토리의
+// [이 레시피로 기록]·내 평균이 로그인 뒤 그 장면으로 돌아오게 쓴다.
+const safeNextPath = (next: string | null): string | null =>
+  next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : null;
+
 export const LoginPage = () => {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
@@ -30,13 +35,15 @@ export const LoginPage = () => {
   const register = useRegister();
   const enterGuest = useAuthStore((s) => s.enterGuest);
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = safeNextPath(params.get('next'));
 
   const mutation = mode === 'login' ? login : register;
 
   const submit = () => {
     mutation.mutate(
       { email, password },
-      { onSuccess: () => navigate('/') },
+      { onSuccess: () => navigate(next ?? '/') },
     );
   };
 

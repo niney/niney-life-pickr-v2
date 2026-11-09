@@ -14,6 +14,14 @@ export const MEAL_PATH = {
   edit: (id: string) => `/meal/${id}/edit`,
 } as const;
 
+// 건강식단 스토리(2026-11-09) — /meal 아래지만 로그인 없이 누구나 보는 화면이라 식단 셸(MealApp) 밖에서 띄운다(App 의
+// /meal/stories/* 가 /meal/* 보다 먼저 잡힌다).
+export const MEAL_STORY_PATH = {
+  list: '/meal/stories',
+  story: (slug: string) => `/meal/stories/${slug}`,
+  recipe: (slug: string) => `/meal/stories/${slug}/recipe`,
+} as const;
+
 // 하단 탭·사이드 메뉴가 보이는 '구역' 화면 — 입력·상세·수정은 화면에 집중하게 하단 탭을 숨긴다.
 export const MEAL_SECTION_PATHS: ReadonlySet<string> = new Set([
   MEAL_PATH.home,

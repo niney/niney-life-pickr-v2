@@ -300,6 +300,22 @@ html.dark:has(.meal-app) {
   .meal-label-fine { padding: 0 0.85rem 0.75rem; font-size: 0.6875rem; line-height: 1.45; color: var(--muted-foreground); }
 
   .meal-insight { font-size: 1.0625rem; font-weight: 700; line-height: 1.5; }
+
+  /* 홈 — 새 건강식단 이야기 한 줄(스토리 화면으로) */
+  .meal-story-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    margin-bottom: 1.25rem;
+    padding: 0.8rem 1rem;
+    background: var(--card);
+    border: var(--meal-line) solid var(--foreground);
+  }
+  .meal-story-card-kicker { font-size: 0.75rem; font-weight: 800; color: var(--muted-foreground); }
+  .meal-story-card-title { flex: 1 1 14rem; font-weight: 800; letter-spacing: -0.01em; }
+  .meal-story-card-go { font-size: 0.875rem; font-weight: 800; }
+  .meal-story-card:hover .meal-story-card-title { text-decoration: underline; text-underline-offset: 3px; }
   .meal-chip {
     display: inline-flex;
     align-items: center;
