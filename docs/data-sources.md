@@ -87,7 +87,11 @@ API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 
 방식이라 `pnpm --filter friendly fetch:mfds-nutrition` 이 같은 호출을 재현해 `data/open/food/mfds-nutrition.csv`
 로 저장한다(서비스키·활용신청 불필요, 2026-09-02 기준 19,495행). 같은 스크립트에 `--pk=15100065` 를 주면
 원재료성식품 배포본을 `mfds-nutrition-15100065.csv` 로 받는다. 가공식품(15100066)은 포털 배포본이 5만 행에서
-잘려 주류가 1행뿐이라 쓰지 않는다 — 주류·음료는 큐레이션 표로 채운다.
+잘려 주류가 1행뿐이라 카탈로그에는 쓰지 않는다 — 주류·음료는 큐레이션 표로 채운다.
+
+건강식단 스토리(2026-11-09, [meal-story-authoring.md](meal-story-authoring.md))의 `build:meal-stories` 는 이 두 CSV
+(`mfds-nutrition-15100065.csv`·`-15100066.csv`)에서 원고가 가리킨 식품코드·제품 묶음의 100g당 값을 읽어 `foods.json` 을 만든다
+(가공식품은 잘린 5만 행 안에서 고른다 — 시판 토마토 소스·파르메산 치즈는 들어 있다). 작업 컴퓨터에서만 돌린다.
 
 판정 규칙·골든셋·어휘 편집은 [menu-calorie-engine.md](menu-calorie-engine.md).
 

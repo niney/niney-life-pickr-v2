@@ -120,6 +120,17 @@ pm2 reload friendly                                                 # 어휘·�
 - **운영에서 대표값 재적재(`--refresh-nutrients`)를 안 했으면** 해장국 100g당 철이 6.83mg(선지 변형)으로 남아, 영양 기준 음식으로
   해장국에 이어진 기록(소고기 해장국·우거지탕)의 철이 부풀어 '충분'으로 보인다(로컬 사본에서 2026-11-08 확인 — 재적재 뒤 2.03mg).
   `SELECT json_extract(nutrientsPer100gJson,'$.ironMg') FROM food_items WHERE name='해장국'` 이 2.03 이면 된 것이다.
+- **빌려 온 영양은 직접 값에 물러난다(2026-11-09)** — 예전엔 외식 어휘가 먼저 같은 계열 요리의 1인분을 빌려 온 뒤 원재료가 들어와도
+  빈 칸만 채워, 운영 '토마토'가 '연두부 토마토' 값(1인분 155g 110kcal, 100g당 71kcal)으로 남았다. 원재료 '자두'도 요리
+  '상큼하자두'에서 빌려 왔다(빌려 오기가 100g당 직접 값이 있는 행까지 대상으로 삼았다). 고친 판을 배포한 뒤
+  `pnpm --filter friendly load:food-catalog --source=raw` 를 한 번 돌리면 두 행이 원재료 값으로 바뀐다(로컬 운영 사본: 갱신 2·건너뜀 865).
+  `SELECT kcalPer100g, nutritionFrom FROM food_items WHERE name='토마토'` 가 `21|`(빌린 표시 없음)이면 된 것이다. 이후
+  `--backfill-nutrition` 은 100g당 직접 값이 있는 행(원재료 등)을 건드리지 않는다.
+- **건강식단 스토리(2026-11-09)** — 마이그레이션·적재 없음. 원고·사진은 git(`apps/friendly/content/meal-stories/`)으로 올라가고
+  서버가 몇 초마다 다시 읽는다(`MEAL_STORY_DIR` 로 폴더를 바꿀 수 있다 — 기본은 friendly 작업 폴더의 `content/meal-stories`).
+  `build:meal-stories`(재료 값·사진 만들기)는 원본 CSV 가 있는 작업 컴퓨터에서만 돌리고 결과(`foods.json`·`images/`)를 커밋한다
+  — 운영에서 돌릴 일은 없다. 공유 미리보기는 아래 nginx `location ^~ /meal/stories` 가 있어야 산다. 초안(`status: draft`)은
+  관리자에게만 보인다. 만드는 절차는 [meal-story-authoring.md](meal-story-authoring.md).
 - `--classify` 단계는 chat 모델이 설정돼 있을 때만 돈다(없으면 조용히 건너뛴다).
 - 외식 어휘는 **그 서버의 식당·리뷰 데이터**에서 나오므로 서버마다 종수가 다르다. 정상이다.
 
@@ -320,6 +331,17 @@ location / {
 # 카카오톡 등 미리보기(OG)만 빠진다. PNG 라우트는 없어 정규식 충돌 걱정은 없지만
 # 관례대로 ^~ 유지.
 location ^~ /vote/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_cf_connecting_ip;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+}
+# 건강식단 스토리(/meal/stories, /meal/stories/<slug>, …/recipe) OG — friendly 가 제목·요약·표지를 head 에 넣는다
+# (2026-11-09). 없어도 SPA 는 정적 index.html 로 뜨고 미리보기만 기본값. 사진은 /api/v1/meal-stories/<slug>/images/
+# 라 기존 /api 프록시를 탄다. /meal 아래 다른 화면(로그인 식단)은 그대로 정적 index.html.
+location ^~ /meal/stories {
     proxy_pass http://127.0.0.1:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;

@@ -93,6 +93,12 @@ niney@life.com 에 최근 14일 기록이 있어 아래 예시 값으로 맞춰 
 - **사진 포함 백업의 '안 먹음'**(2026-11-09): `MealDataBackup.skips`(선택 필드). 앱의 백업 파일 불러오기(`MealDataManagementCard`)는
   엄격한 계약(`MealDataBackup.safeParse`)으로 검사해, 이 계약으로 다시 빌드하기 전의 앱은 새 백업 파일을 거절한다 — 앱 코드 변경은
   없고 새 빌드만 있으면 된다.
+- **건강식단 스토리**(2026-11-09, [PLAN-meal-story.md](PLAN-meal-story.md)): 웹 `/meal/stories`(누구나) — 장면 틀 8종을 넘겨
+  보는 재생기·레시피 전체 보기. 앱은 같은 API(`GET /meal-stories`·`/meal-stories/:slug` — 숫자는 서버가 계산해 준다,
+  `POST /meal-stories/:slug/food` → `prepareMealEntry` 와 같은 draft 채우기)와 공용 훅(`useMealStories`·`useMealStory`·
+  `useMealStoryFood`)으로 RN 재생기만 만들면 된다. 움직임은 웹이 CSS 라 앱은 Reanimated 로 따로(숫자 굴러가기·막대 자라기).
+  입구는 웹과 같이 식단 홈 한 줄·분석 탭 영양소 줄의 '줄이는 법 보기'. 사진 주소는 `/api/v1/...` 상대 경로라 앱은 API 기준
+  주소를 붙인다.
 
 ## 3. 끝났다고 볼 기준
 

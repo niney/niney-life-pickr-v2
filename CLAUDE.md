@@ -96,6 +96,9 @@ pnpm test             # 전체 테스트
 pnpm --filter <name>  # 특정 워크스페이스만
 ```
 
+건강식단 스토리(손수 만드는 콘텐츠) 원고 쓰기·점검 절차는 [docs/meal-story-authoring.md](docs/meal-story-authoring.md)
+(`pnpm --filter friendly build:meal-stories` · `check:meal-stories`).
+
 앱 iOS 링크 오류(`Undefined symbol: facebook::react::...getDebug*` 등)는 prebuilt RN 아티팩트가
 Release 로 깔려서다 — 해결은 [docs/mobile-ios-build.md](docs/mobile-ios-build.md). `pod install`
 할 때마다 재발한다.
