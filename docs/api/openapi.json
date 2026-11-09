@@ -12304,6 +12304,1213 @@
         }
       }
     },
+    "/api/v1/meal-stories": {
+      "get": {
+        "summary": "건강식단 스토리 목록 — 게시한 것, 게시일 최근 순",
+        "tags": [
+          "meal-story"
+        ],
+        "description": "선택 인증 — 관리자면 초안(status draft)도 함께 준다.",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "optional",
+        "x-rate-limit": {
+          "max": 120,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "published"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "topic": {
+                            "type": "object",
+                            "properties": {
+                              "nutrient": {
+                                "type": "string",
+                                "enum": [
+                                  "protein",
+                                  "fiber",
+                                  "calcium",
+                                  "iron",
+                                  "potassium",
+                                  "vitaminA",
+                                  "vitaminD",
+                                  "thiamin",
+                                  "riboflavin",
+                                  "niacin",
+                                  "vitaminC",
+                                  "sodium",
+                                  "magnesium",
+                                  "zinc",
+                                  "folate"
+                                ]
+                              },
+                              "direction": {
+                                "type": "string",
+                                "enum": [
+                                  "reduce",
+                                  "increase"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "nutrient",
+                              "direction"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "coverUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sceneCount": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "slug",
+                          "status",
+                          "title",
+                          "summary",
+                          "topic",
+                          "publishedAt",
+                          "coverUrl",
+                          "sceneCount"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meal-stories/{slug}": {
+      "get": {
+        "summary": "건강식단 스토리 한 편 — 장면·레시피·출처(숫자는 서버가 계산한 값)",
+        "tags": [
+          "meal-story"
+        ],
+        "description": "선택 인증 — 초안은 관리자만, 없거나 볼 수 없으면 404. 장면 숫자(figure)는 섭취기준·식약처 식품 표준데이터·레시피 합계로 서버가 계산하고, 내 기록 값(figure.my)은 value 가 null 이라 화면이 /meals/stats/nutrients 로 채운다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "optional",
+        "x-rate-limit": {
+          "max": 120,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "slug": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "published"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "topic": {
+                      "type": "object",
+                      "properties": {
+                        "nutrient": {
+                          "type": "string",
+                          "enum": [
+                            "protein",
+                            "fiber",
+                            "calcium",
+                            "iron",
+                            "potassium",
+                            "vitaminA",
+                            "vitaminD",
+                            "thiamin",
+                            "riboflavin",
+                            "niacin",
+                            "vitaminC",
+                            "sodium",
+                            "magnesium",
+                            "zinc",
+                            "folate"
+                          ]
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "reduce",
+                            "increase"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "nutrient",
+                        "direction"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "publishedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "reviewedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                      "nullable": true
+                    },
+                    "coverUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "scenes": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "cover"
+                                ]
+                              },
+                              "kicker": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "subtitle": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "image": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "kicker",
+                              "title",
+                              "subtitle",
+                              "image"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "stat"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "figures": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "figure": {
+                                      "type": "object",
+                                      "properties": {
+                                        "value": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "unit": {
+                                          "type": "string"
+                                        },
+                                        "basis": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "detail": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "sources": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "my": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kcal",
+                                            "carb",
+                                            "sugar",
+                                            "fat",
+                                            "saturatedFat",
+                                            "cholesterol",
+                                            "protein",
+                                            "fiber",
+                                            "calcium",
+                                            "iron",
+                                            "potassium",
+                                            "vitaminA",
+                                            "vitaminD",
+                                            "thiamin",
+                                            "riboflavin",
+                                            "niacin",
+                                            "vitaminC",
+                                            "sodium",
+                                            "magnesium",
+                                            "zinc",
+                                            "folate"
+                                          ],
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "value",
+                                        "unit",
+                                        "basis",
+                                        "detail",
+                                        "sources",
+                                        "my"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "label",
+                                    "figure"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "title",
+                              "figures",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "bars"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "bars": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "figure": {
+                                      "type": "object",
+                                      "properties": {
+                                        "value": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "unit": {
+                                          "type": "string"
+                                        },
+                                        "basis": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "detail": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "sources": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "my": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kcal",
+                                            "carb",
+                                            "sugar",
+                                            "fat",
+                                            "saturatedFat",
+                                            "cholesterol",
+                                            "protein",
+                                            "fiber",
+                                            "calcium",
+                                            "iron",
+                                            "potassium",
+                                            "vitaminA",
+                                            "vitaminD",
+                                            "thiamin",
+                                            "riboflavin",
+                                            "niacin",
+                                            "vitaminC",
+                                            "sodium",
+                                            "magnesium",
+                                            "zinc",
+                                            "folate"
+                                          ],
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "value",
+                                        "unit",
+                                        "basis",
+                                        "detail",
+                                        "sources",
+                                        "my"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "aside": {
+                                      "type": "object",
+                                      "properties": {
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "figure": {
+                                          "type": "object",
+                                          "properties": {
+                                            "value": {
+                                              "type": "number",
+                                              "nullable": true
+                                            },
+                                            "unit": {
+                                              "type": "string"
+                                            },
+                                            "basis": {
+                                              "type": "string",
+                                              "nullable": true
+                                            },
+                                            "detail": {
+                                              "type": "string",
+                                              "nullable": true
+                                            },
+                                            "sources": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "my": {
+                                              "type": "string",
+                                              "enum": [
+                                                "kcal",
+                                                "carb",
+                                                "sugar",
+                                                "fat",
+                                                "saturatedFat",
+                                                "cholesterol",
+                                                "protein",
+                                                "fiber",
+                                                "calcium",
+                                                "iron",
+                                                "potassium",
+                                                "vitaminA",
+                                                "vitaminD",
+                                                "thiamin",
+                                                "riboflavin",
+                                                "niacin",
+                                                "vitaminC",
+                                                "sodium",
+                                                "magnesium",
+                                                "zinc",
+                                                "folate"
+                                              ],
+                                              "nullable": true
+                                            }
+                                          },
+                                          "required": [
+                                            "value",
+                                            "unit",
+                                            "basis",
+                                            "detail",
+                                            "sources",
+                                            "my"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "required": [
+                                        "label",
+                                        "figure"
+                                      ],
+                                      "additionalProperties": false,
+                                      "nullable": true
+                                    },
+                                    "highlight": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "label",
+                                    "figure",
+                                    "aside",
+                                    "highlight"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "title",
+                              "bars",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "list"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "title",
+                                    "text"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "title",
+                              "items",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "ingredients"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "servings": {
+                                "type": "integer"
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "grams": {
+                                      "type": "number"
+                                    },
+                                    "note": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "food": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "label",
+                                    "grams",
+                                    "note",
+                                    "food"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "title",
+                              "servings",
+                              "items"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "step"
+                                ]
+                              },
+                              "number": {
+                                "type": "integer"
+                              },
+                              "total": {
+                                "type": "integer"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "tip": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "image": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "number",
+                              "total",
+                              "text",
+                              "tip",
+                              "image"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "nutrition"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "servings": {
+                                "type": "integer"
+                              },
+                              "rows": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string",
+                                      "enum": [
+                                        "kcal",
+                                        "carbG",
+                                        "proteinG",
+                                        "fatG",
+                                        "sugarG",
+                                        "fiberG",
+                                        "sodiumMg",
+                                        "potassiumMg"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "figure": {
+                                      "type": "object",
+                                      "properties": {
+                                        "value": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "unit": {
+                                          "type": "string"
+                                        },
+                                        "basis": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "detail": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "sources": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "my": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kcal",
+                                            "carb",
+                                            "sugar",
+                                            "fat",
+                                            "saturatedFat",
+                                            "cholesterol",
+                                            "protein",
+                                            "fiber",
+                                            "calcium",
+                                            "iron",
+                                            "potassium",
+                                            "vitaminA",
+                                            "vitaminD",
+                                            "thiamin",
+                                            "riboflavin",
+                                            "niacin",
+                                            "vitaminC",
+                                            "sodium",
+                                            "magnesium",
+                                            "zinc",
+                                            "folate"
+                                          ],
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "value",
+                                        "unit",
+                                        "basis",
+                                        "detail",
+                                        "sources",
+                                        "my"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "label",
+                                    "figure"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "cautions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "title",
+                              "servings",
+                              "rows",
+                              "cautions",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "outro"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "actions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "record",
+                                    "recipe",
+                                    "share",
+                                    "stats"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "title",
+                              "text",
+                              "actions"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "recipe": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "servings": {
+                          "type": "integer"
+                        },
+                        "dishType": {
+                          "type": "string",
+                          "enum": [
+                            "rice",
+                            "noodle",
+                            "soup",
+                            "stew",
+                            "grill",
+                            "stir_fry",
+                            "braise",
+                            "steam",
+                            "pancake",
+                            "fried",
+                            "namul",
+                            "salad",
+                            "kimchi",
+                            "raw_fish",
+                            "bakery",
+                            "dairy",
+                            "beverage",
+                            "alcohol",
+                            "other"
+                          ]
+                        },
+                        "ingredients": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              },
+                              "grams": {
+                                "type": "number"
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "food": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "label",
+                              "grams",
+                              "note",
+                              "food"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "text": {
+                                "type": "string"
+                              },
+                              "tip": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "image": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "text",
+                              "tip",
+                              "image"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "nutrition": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "enum": [
+                                  "kcal",
+                                  "carbG",
+                                  "proteinG",
+                                  "fatG",
+                                  "sugarG",
+                                  "fiberG",
+                                  "sodiumMg",
+                                  "potassiumMg"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "figure": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  },
+                                  "basis": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "detail": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "sources": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "my": {
+                                    "type": "string",
+                                    "enum": [
+                                      "kcal",
+                                      "carb",
+                                      "sugar",
+                                      "fat",
+                                      "saturatedFat",
+                                      "cholesterol",
+                                      "protein",
+                                      "fiber",
+                                      "calcium",
+                                      "iron",
+                                      "potassium",
+                                      "vitaminA",
+                                      "vitaminD",
+                                      "thiamin",
+                                      "riboflavin",
+                                      "niacin",
+                                      "vitaminC",
+                                      "sodium",
+                                      "magnesium",
+                                      "zinc",
+                                      "folate"
+                                    ],
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "unit",
+                                  "basis",
+                                  "detail",
+                                  "sources",
+                                  "my"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "figure"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "servings",
+                        "dishType",
+                        "ingredients",
+                        "steps",
+                        "nutrition"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "slug",
+                    "status",
+                    "title",
+                    "summary",
+                    "topic",
+                    "publishedAt",
+                    "reviewedAt",
+                    "coverUrl",
+                    "scenes",
+                    "recipe",
+                    "sources"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meal-stories/{slug}/food": {
+      "post": {
+        "summary": "이 레시피로 기록 — 스토리 레시피를 카탈로그 음식으로 맞추고 그 id 를 준다",
+        "tags": [
+          "meal-story"
+        ],
+        "description": "처음 부르면 음식(source manual)을 만들고, 원고 숫자가 바뀌었으면 고친다. 새 기록 화면이 이 foodId 로 항목을 채워 스토리와 같은 1인분 영양이 기록된다. 레시피가 없는 스토리는 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "foodId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dishType": {
+                      "type": "string",
+                      "enum": [
+                        "rice",
+                        "noodle",
+                        "soup",
+                        "stew",
+                        "grill",
+                        "stir_fry",
+                        "braise",
+                        "steam",
+                        "pancake",
+                        "fried",
+                        "namul",
+                        "salad",
+                        "kimchi",
+                        "raw_fish",
+                        "bakery",
+                        "dairy",
+                        "beverage",
+                        "alcohol",
+                        "other"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "foodId",
+                    "name",
+                    "dishType"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meal-stories/{slug}/images/{file}": {
+      "get": {
+        "summary": "건강식단 스토리 사진",
+        "tags": [
+          "meal-story"
+        ],
+        "description": "인증 없음(<img> 가 바로 부른다). ?v=(수정 시각)가 붙은 주소는 1년 캐시, 없으면 1시간.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:jpg|jpeg|png|webp)$"
+            },
+            "in": "path",
+            "name": "file",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 300,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/v1/meals": {
       "get": {
         "summary": "내 식단 기록 목록 — 기간·끼니·유형·검색어 필터, 최신순 커서 페이지네이션",

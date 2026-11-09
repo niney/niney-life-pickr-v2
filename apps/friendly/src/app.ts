@@ -15,6 +15,7 @@ import { registerVotePreview } from './modules/vote/vote-preview.js';
 import { registerTarotPreview } from './modules/tarot/tarot-preview.js';
 import { registerSajuPreview } from './modules/saju/saju-preview.js';
 import { registerSajuGPreview } from './modules/saju-g/saju-g-preview.js';
+import { registerMealStoryPreview } from './modules/meal-story/meal-story-preview.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -147,6 +148,8 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
   // 사주 공유 링크 OG + 공유 이미지 — /saju-c/s/:token(/image.png). nginx `^~ /saju-c/s/` 프록시 필요.
   await registerSajuPreview(app);
   await registerSajuGPreview(app);
+  // 건강식단 스토리 공유 링크 OG — /meal/stories(/:slug(/recipe)). nginx `^~ /meal/stories` 프록시 필요.
+  await registerMealStoryPreview(app);
 
   return app;
 }

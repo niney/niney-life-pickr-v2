@@ -32,6 +32,8 @@ Thumbs.db
 *.sqlite-journal
 apps/friendly/data/*
 !apps/friendly/data/.gitkeep
+# 건강식단 스토리 원본 사진 — build:meal-stories 가 줄여 images/ 에 쓴다(원본은 크고 위치 정보가 있을 수 있다).
+apps/friendly/content/meal-stories/*/originals/
 
 coverage
 .nyc_output

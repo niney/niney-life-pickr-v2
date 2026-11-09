@@ -1,0 +1,146 @@
+{
+  "slug": "sodium-tomato-pasta",
+  "status": "draft",
+  "title": "토마토 스파게티로 나트륨 줄이기",
+  "summary": "같은 스파게티도 소스를 직접 만들면 나트륨이 크게 줄어요. 줄이는 방법과 만들어 먹는 레시피, 면 바꾸기까지.",
+  "topic": { "nutrient": "sodium", "direction": "reduce" },
+  "publishedAt": "2026-11-09",
+  "reviewedAt": null,
+  "sources": [],
+  "foods": [
+    { "id": "spaghetti", "label": "스파게티(건면)", "ref": { "db": "raw", "code": "R101-024020002-0000" } },
+    { "id": "tomato", "label": "토마토", "ref": { "db": "raw", "code": "R106-186000001-0000" } },
+    { "id": "onion", "label": "양파", "ref": { "db": "raw", "code": "R106-132000001-0000" } },
+    { "id": "garlic", "label": "마늘", "ref": { "db": "raw", "code": "R106-053002201-0000" } },
+    { "id": "olive-oil", "label": "올리브유", "ref": { "db": "raw", "code": "R114-017000000-0000" } },
+    { "id": "basil", "label": "바질", "ref": { "db": "raw", "code": "R106-080007801-0000" } },
+    { "id": "parmesan", "label": "파르메산(파마산) 치즈", "ref": { "db": "processed", "code": "P119-900090100-0348" } },
+    { "id": "zucchini", "label": "애호박", "ref": { "db": "raw", "code": "R106-198050001-0000" } },
+    { "id": "konjac-noodle", "label": "곤약면", "ref": { "db": "raw", "code": "R102-009010001-0000" } },
+    {
+      "id": "store-sauce",
+      "label": "시판 토마토 파스타 소스",
+      "group": { "db": "processed", "all": ["토마토", "소스"], "any": ["스파게티", "파스타"], "none": ["소스파스타"] }
+    }
+  ],
+  "recipe": {
+    "name": "저염 토마토 스파게티",
+    "servings": 1,
+    "dishType": "noodle",
+    "ingredients": [
+      { "food": "spaghetti", "grams": 80, "label": "스파게티 건면", "note": "소금 없이 삶기" },
+      { "food": "tomato", "grams": 250, "label": "토마토 2개(중간 크기)", "part": "sauce" },
+      { "food": "onion", "grams": 50, "label": "양파 1/4개", "part": "sauce" },
+      { "food": "garlic", "grams": 10, "label": "마늘 2쪽", "part": "sauce" },
+      { "food": "olive-oil", "grams": 10, "label": "올리브유 2작은술", "part": "sauce" },
+      { "food": "basil", "grams": 3, "label": "바질 잎 6장", "part": "sauce" },
+      { "food": "parmesan", "grams": 5, "label": "파마산 치즈 1큰술(간 것)", "part": "sauce" }
+    ],
+    "steps": [
+      {
+        "text": "물을 넉넉히 끓여 스파게티를 포장에 적힌 시간만큼 삶아요. 물에 소금은 넣지 않아요.",
+        "tip": "면 삶은 물을 한 국자 남겨 두면 소스와 버무릴 때 잘 섞여요."
+      },
+      {
+        "text": "올리브유에 다진 마늘과 양파를 약한 불로 볶아 향을 낸 뒤, 깍둑 썬 토마토를 넣고 10분쯤 눌러 가며 끓여요."
+      },
+      {
+        "text": "삶은 면을 소스에 넣어 버무리고 바질과 후추로 맛을 낸 뒤 파마산을 조금 뿌려요.",
+        "tip": "싱거우면 소금 대신 레몬즙이나 후추를 더해 보세요."
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "나트륨 줄이기",
+      "title": "토마토 스파게티로 나트륨 줄이기",
+      "subtitle": "같은 스파게티도 소스를 직접 만들면 나트륨이 크게 줄어요"
+    },
+    {
+      "type": "stat",
+      "title": "하루 나트륨, 이보다 적게",
+      "figures": [
+        { "label": "성인 하루 기준", "value": { "kdri": "sodium" } },
+        { "label": "내 최근 2주 하루 평균", "value": { "my": "sodium" } }
+      ],
+      "note": "이보다 많이 먹는다면 줄이는 만큼 만성질환 위험을 낮출 수 있다는 기준이에요."
+    },
+    {
+      "type": "list",
+      "title": "나트륨은 어디서 많이 올까요",
+      "items": [
+        { "title": "국물", "text": "국·찌개·라면 국물에 많이 녹아 있어요" },
+        { "title": "김치·장아찌", "text": "절이고 담그는 데 소금이 많이 들어가요" },
+        { "title": "소스·양념", "text": "간장·고추장·시판 소스가 생각보다 짜요" },
+        { "title": "가공식품", "text": "햄·소시지·즉석식품은 성분표를 먼저 봐요" }
+      ]
+    },
+    {
+      "type": "list",
+      "title": "줄이는 방법",
+      "items": [
+        { "title": "국물은 남기기", "text": "건더기 위주로 먹고 국물은 덜 먹어요" },
+        { "title": "간은 마지막에", "text": "먹기 직전에 맛보고 모자랄 때만 더해요" },
+        { "title": "향과 신맛 쓰기", "text": "마늘·후추·바질·레몬으로 싱거움을 채워요" },
+        { "title": "성분표 확인", "text": "같은 종류라도 제품마다 나트륨이 달라요" },
+        { "title": "소스는 덜어 먹기", "text": "부어 먹기보다 찍어 먹으면 덜 먹게 돼요" }
+      ]
+    },
+    {
+      "type": "bars",
+      "title": "같은 스파게티, 다른 나트륨",
+      "bars": [
+        {
+          "label": "시판 토마토 소스 150g",
+          "value": { "food": "store-sauce", "nutrient": "sodiumMg", "grams": 150 }
+        },
+        {
+          "label": "직접 만든 소스(1인분)",
+          "value": { "recipe": "sodiumMg", "part": "sauce" },
+          "highlight": true
+        }
+      ],
+      "note": "시판 소스는 여러 제품의 중앙값이에요. 제품마다 차이가 커서 성분표를 보고 고르세요."
+    },
+    { "type": "ingredients", "title": "재료" },
+    { "type": "step", "step": 1 },
+    { "type": "step", "step": 2 },
+    { "type": "step", "step": 3 },
+    {
+      "type": "nutrition",
+      "title": "영양정보",
+      "nutrients": ["kcal", "sodiumMg", "potassiumMg", "proteinG", "fiberG"],
+      "note": "신장 질환이 있거나 칼륨을 줄이라는 안내를 받았다면 토마토 양은 의사와 정하세요."
+    },
+    {
+      "type": "bars",
+      "title": "덤: 면을 바꾸면 열량도 줄어요",
+      "bars": [
+        {
+          "label": "스파게티 건면 80g",
+          "value": { "food": "spaghetti", "nutrient": "kcal", "grams": 80 },
+          "aside": { "food": "spaghetti", "nutrient": "proteinG", "grams": 80 }
+        },
+        {
+          "label": "애호박면 200g",
+          "value": { "food": "zucchini", "nutrient": "kcal", "grams": 200 },
+          "aside": { "food": "zucchini", "nutrient": "proteinG", "grams": 200 },
+          "highlight": true
+        },
+        {
+          "label": "곤약면 200g",
+          "value": { "food": "konjac-noodle", "nutrient": "kcal", "grams": 200 },
+          "aside": { "food": "konjac-noodle", "nutrient": "proteinG", "grams": 200 }
+        }
+      ],
+      "note": "열량은 크게 줄지만 포만감과 단백질도 함께 줄어요. 달걀이나 두부를 곁들여 보세요."
+    },
+    {
+      "type": "outro",
+      "title": "오늘 한 끼로 해 볼까요",
+      "text": "기록해 두면 통계에서 나트륨이 줄어드는 게 보여요.",
+      "actions": ["record", "recipe", "share"]
+    }
+  ]
+}

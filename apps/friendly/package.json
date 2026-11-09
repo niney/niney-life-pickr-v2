@@ -31,6 +31,8 @@
     "load:life-hospitals": "tsx --env-file=.env scripts/load-life-hospitals.ts",
     "load:life-flood": "tsx --env-file=.env scripts/load-life-flood.ts",
     "load:food-catalog": "tsx --env-file=.env scripts/load-food-catalog.ts",
+    "build:meal-stories": "tsx scripts/build-meal-stories.ts",
+    "check:meal-stories": "tsx scripts/check-meal-stories.ts",
     "build:tarot-deck": "tsx scripts/build-tarot-deck.ts",
     "probe:tarot-reading": "tsx --env-file=.env scripts/probe-tarot-reading.ts",
     "probe:saju-g-reading": "tsx --env-file=.env scripts/probe-saju-g-reading.ts",

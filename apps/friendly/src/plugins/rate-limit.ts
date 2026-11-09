@@ -68,6 +68,10 @@ export const RATE = {
   foodRestaurants: { max: 60, timeWindow: '1 minute' },
   // 식단 사진 업로드·지난 사진 복제 — 장당 1요청(최대 5장) + 재시도 여유. 분당 30.
   mealPhotoUpload: { max: 30, timeWindow: '1 minute' },
+  // 건강식단 스토리 목록·한 편·공유 미리보기 — 파일 캐시(DB 0콜). 분당 120.
+  mealStoryRead: { max: 120, timeWindow: '1 minute' },
+  // 건강식단 스토리 사진 — 한 편에 사진 몇 장 + 목록 표지. 브라우저·엣지가 오래 캐시한다(?v=). 분당 300.
+  mealStoryImage: { max: 300, timeWindow: '1 minute' },
   // 식단 사진 인식 — 비전 LLM 1콜/요청. 일일 한도(MEAL_RECOGNIZE_DAILY_LIMIT)가 진짜 비용
   // 방어선이고 이건 연타 억제용. 분당 10.
   mealRecognize: { max: 10, timeWindow: '1 minute' },

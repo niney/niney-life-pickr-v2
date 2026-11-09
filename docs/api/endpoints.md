@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 214개 — 공개 91 · 선택 인증 16 · 로그인 107. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 218개 — 공개 92 · 선택 인증 18 · 로그인 108. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -152,6 +152,15 @@
 | GET | `/api/v1/meals/:id` | 로그인 |  |  | 식단 기록 단건 조회 — 사진 인식 원본 스냅샷 포함 |
 | PATCH | `/api/v1/meals/:id` | 로그인 |  | body | 식단 기록 수정 — items·photoTokens 는 보내면 전량 교체 |
 | DELETE | `/api/v1/meals/:id` | 로그인 |  |  | 식단 기록 삭제 — 연결된 사진 파일도 함께 삭제 |
+
+## meal-story
+
+| 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
+|---|---|---|---|---|---|
+| GET | `/api/v1/meal-stories` | 선택 | 120/분 |  | 건강식단 스토리 목록 — 게시한 것, 게시일 최근 순 |
+| GET | `/api/v1/meal-stories/:slug` | 선택 | 120/분 |  | 건강식단 스토리 한 편 — 장면·레시피·출처(숫자는 서버가 계산한 값) |
+| POST | `/api/v1/meal-stories/:slug/food` | 로그인 |  |  | 이 레시피로 기록 — 스토리 레시피를 카탈로그 음식으로 맞추고 그 id 를 준다 |
+| GET | `/api/v1/meal-stories/:slug/images/:file` | 공개 | 300/분 |  | 건강식단 스토리 사진 |
 
 ## media
 

@@ -1,0 +1,170 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "spaghetti": {
+      "per100": {
+        "kcal": 365,
+        "carbG": 76.64,
+        "proteinG": 11.78,
+        "fatG": 1.28,
+        "sugarG": 1.39,
+        "fiberG": 2.7,
+        "sodiumMg": 2,
+        "potassiumMg": 234
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-024020002-0000 '파스타_스파게티_말린것'",
+      "source": "mfds-raw"
+    },
+    "tomato": {
+      "per100": {
+        "kcal": 19,
+        "carbG": 4.26,
+        "proteinG": 1.03,
+        "fatG": 0.18,
+        "sugarG": 2.37,
+        "fiberG": 2.6,
+        "sodiumMg": 2,
+        "potassiumMg": 250
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-186000001-0000 '토마토_생것'",
+      "source": "mfds-raw"
+    },
+    "onion": {
+      "per100": {
+        "kcal": 29,
+        "carbG": 6.52,
+        "proteinG": 0.96,
+        "fatG": 0.17,
+        "sugarG": 4.71,
+        "fiberG": 1.6,
+        "sodiumMg": 2,
+        "potassiumMg": 148
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-132000001-0000 '양파_생것'",
+      "source": "mfds-raw"
+    },
+    "garlic": {
+      "per100": {
+        "kcal": 128,
+        "carbG": 26.42,
+        "proteinG": 7.45,
+        "fatG": 0.16,
+        "sugarG": 0.23,
+        "fiberG": 3.8,
+        "sodiumMg": 3,
+        "potassiumMg": 531
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-053002201-0000 '마늘_구근_생것'",
+      "source": "mfds-raw"
+    },
+    "olive-oil": {
+      "per100": {
+        "kcal": 921,
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 100,
+        "sugarG": 0,
+        "fiberG": 0,
+        "sodiumMg": 7,
+        "potassiumMg": 13
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R114-017000000-0000 '올리브유'",
+      "source": "mfds-raw"
+    },
+    "basil": {
+      "per100": {
+        "kcal": 32,
+        "carbG": 5.56,
+        "proteinG": 2.43,
+        "fatG": 0.71,
+        "sugarG": 0.8,
+        "fiberG": 2.6,
+        "sodiumMg": 3,
+        "potassiumMg": 340
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-080007801-0000 '바질_잎_생것'",
+      "source": "mfds-raw"
+    },
+    "parmesan": {
+      "per100": {
+        "kcal": 420,
+        "carbG": 13.91,
+        "proteinG": 28.42,
+        "fatG": 27.84,
+        "sugarG": 0.07,
+        "fiberG": 0,
+        "sodiumMg": 1804,
+        "potassiumMg": 180
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 표준데이터 P119-900090100-0348 '파르메산(파마산)'",
+      "source": "mfds-processed"
+    },
+    "zucchini": {
+      "per100": {
+        "kcal": 22,
+        "carbG": 5.14,
+        "proteinG": 1.07,
+        "fatG": 0.09,
+        "sugarG": 2.43,
+        "fiberG": 2.2,
+        "sodiumMg": 0,
+        "potassiumMg": 224
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-198050001-0000 '호박_애호박_생것'",
+      "source": "mfds-raw"
+    },
+    "konjac-noodle": {
+      "per100": {
+        "kcal": 7,
+        "carbG": 3.18,
+        "proteinG": 0.08,
+        "fatG": 0.01,
+        "sugarG": 0,
+        "fiberG": 2.4,
+        "sodiumMg": 2,
+        "potassiumMg": 13
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R102-009010001-0000 '곤약(구약나물)_국수형_생것'",
+      "source": "mfds-raw"
+    },
+    "store-sauce": {
+      "per100": {
+        "kcal": 67.5,
+        "carbG": 9.62,
+        "proteinG": 1,
+        "fatG": 3.45,
+        "sugarG": 6.8,
+        "fiberG": 2.7,
+        "sodiumMg": 635,
+        "potassiumMg": 340
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 표준데이터 '토마토·소스 + 스파게티|파스타' 제품 12개의 중앙값",
+      "source": "mfds-processed",
+      "matched": {
+        "count": 12,
+        "names": [
+          "토마토 스파게티 소스 베이스",
+          "토마토 어니언 파스타소스",
+          "토마토스파게티소스",
+          "토마토스파게티용 소스",
+          "토마토와 레드페퍼 아라비아따 스파게티소스",
+          "토마토파스타소스",
+          "파스타소스 위드 로쏘로 토마토 위드 제노베제 바질 피디오",
+          "파스타소스 위드 체리토마토 위드 레치노 올리브",
+          "프레스코 바질토마토 파스타소스",
+          "프레스코 올리브토마토 파스타소스"
+        ]
+      }
+    }
+  }
+}

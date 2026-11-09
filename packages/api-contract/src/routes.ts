@@ -378,6 +378,16 @@ export const Meal = {
   nutritionAdvice: `${API_PREFIX}/meals/nutrition/advice`,
 } as const;
 
+// 건강식단 스토리 — 누구나 보는 손수 만든 콘텐츠(원고는 서버 파일). 초안은 관리자에게만.
+export const MealStory = {
+  list: `${API_PREFIX}/meal-stories`,
+  detail: (slug: string) => `${API_PREFIX}/meal-stories/${slug}`,
+  // 장면 사진 — <img> 가 바로 부른다(인증 없음).
+  image: (slug: string, file: string) => `${API_PREFIX}/meal-stories/${slug}/images/${file}`,
+  // [이 레시피로 기록](POST, 로그인) — 레시피를 카탈로그 음식으로 맞추고 그 id 를 준다.
+  food: (slug: string) => `${API_PREFIX}/meal-stories/${slug}/food`,
+} as const;
+
 // provider × purpose 조합으로 row 를 식별한다. purpose='chat' 이 기본이며
 // 같은 provider 에 'image' 등 다른 용도를 따로 등록할 수 있다.
 export const Ai = {
