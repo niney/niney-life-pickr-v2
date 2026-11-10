@@ -34,12 +34,9 @@ export const ChapterBars = ({ scene, ctx }: { scene: BarsScene; ctx: ChapterCont
   const footLines = barsFootnotes(scene).flatMap((d) => wrapText(`※ ${d}`, TYPE.foot, 840));
   const L = barsLayout(scene.bars.length, noteLines.length, footLines.length);
 
-  // 둘이고 둘 다 아는 값이며 차이가 크면 — 몇 분의 1(서버가 계산한 두 값의 비).
-  const pair = values.length === 2 && known.length === 2;
-  const small = pair ? Math.min(...known) : 0;
-  const ratio = pair && small > 0 ? Math.round(Math.max(...known) / small) : 0;
-  const smallIndex = values.indexOf(small);
-  const stamp = ratio >= 2 ? pop(f, timing.stampAt, fps, { damping: 9, stiffness: 200 }) : 0;
+  // 작은 쪽이 큰 쪽의 '약 N분의 1' — 서버가 두 값으로 계산해 준 것만 말한다(어림이 맞지 않으면 서버가 비운다).
+  const fraction = scene.fraction;
+  const stamp = fraction ? pop(f, timing.stampAt, fps, { damping: 9, stiffness: 200 }) : 0;
   const note = prog(f, timing.noteAt, timing.noteAt + 18);
   const paperW = barsPaperWidth(
     scene.bars.map((b) => ({ number: b.figure.value === null ? null : formatAmount(b.figure.value, b.figure.unit), unit: b.figure.unit })),
@@ -102,9 +99,9 @@ export const ChapterBars = ({ scene, ctx }: { scene: BarsScene; ctx: ChapterCont
                   {aside.label} {aside.figure.value !== null ? `${formatAmount(aside.figure.value, aside.figure.unit)}${aside.figure.unit}` : '값 없음'}
                 </text>
               ) : null}
-              {ratio >= 2 && i === smallIndex ? (
+              {fraction && i === fraction.bar ? (
                 <g transform={`translate(${TRACK_X + 14} ${barTop + L.barH + (aside ? 70 : 22)}) rotate(-6) scale(${lerp(2.2, 1, stamp)})`} opacity={Math.min(1, stamp * 3)}>
-                  <Note x={0} y={0} text={`약 ${ratio}분의 1`} size={Math.round(L.numSize * 0.62)} fill={pal.yellow} color={pal.ink} weight={900} anchor="start" seed={45 + v * 101} lift={1.2} />
+                  <Note x={0} y={0} text={`약 ${fraction.denominator}분의 1`} size={Math.round(L.numSize * 0.62)} fill={pal.yellow} color={pal.ink} weight={900} anchor="start" seed={45 + v * 101} lift={1.2} />
                   <Tape x={20} y={6} angle={-30} pal={pal} w={80} />
                 </g>
               ) : null}

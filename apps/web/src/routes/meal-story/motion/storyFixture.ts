@@ -12,6 +12,7 @@ const fig = (over: Partial<MealStoryFigureType> = {}): MealStoryFigureType => ({
   detail: null,
   sources: [],
   my: null,
+  equivalent: null,
   ...over,
 });
 
@@ -37,8 +38,8 @@ export const variantStory: MealStoryType = {
       type: 'stat',
       title: '하루 나트륨, 이보다 적게',
       figures: [
-        { label: '성인 하루 기준', figure: fig({ value: 2300, detail: '65~74세 2,100mg · 75세 이상 1,700mg' }) },
-        { label: '내 최근 2주 하루 평균', figure: fig({ unit: '', my: 'sodium' }) },
+        { label: '성인 하루 기준', figure: fig({ value: 2300, detail: '65~74세 2,100mg · 75세 이상 1,700mg', equivalent: { label: '소금', value: 5.8, unit: 'g', per: 400 } }) },
+        { label: '내 최근 2주 하루 평균', figure: fig({ unit: '', my: 'sodium', equivalent: { label: '소금', value: null, unit: 'g', per: 400 } }) },
       ],
       note: '이보다 많이 먹는다면 줄이는 만큼 만성질환 위험을 낮출 수 있다는 기준이에요.',
     },
@@ -59,6 +60,7 @@ export const variantStory: MealStoryType = {
         { label: '시판 토마토 소스 150g', figure: fig({ value: 953 }), aside: null, highlight: false },
         { label: '직접 만든 소스(1인분)', figure: fig({ value: 97 }), aside: { label: '열량', figure: fig({ value: 190, unit: 'kcal' }) }, highlight: true },
       ],
+      fraction: { bar: 1, denominator: 10 },
       note: '시판 소스는 여러 제품의 중앙값이에요. 제품마다 차이가 커서 성분표를 보고 고르세요.',
     },
     {
@@ -70,6 +72,7 @@ export const variantStory: MealStoryType = {
         { label: '값이 없는 막대', figure: fig({ unit: 'g' }), aside: { label: '열량', figure: fig({ unit: 'kcal' }) }, highlight: false },
         { label: '곤약면 200g', figure: fig({ value: 0.2, unit: 'g' }), aside: { label: '열량', figure: fig({ value: 14, unit: 'kcal' }) }, highlight: false },
       ],
+      fraction: null,
       note: LONG_NOTE,
     },
     {
@@ -140,5 +143,10 @@ export const variantStory: MealStoryType = {
 
 /** 로그인한 사람의 값(예시) — 나트륨은 기준을 넘고, 식이섬유는 기록이 모자란 경우. */
 export const variantMine: MotionMine = {
-  sodium: { value: 3120, unit: 'mg', percent: 136, statusLabel: '많음', over: true },
+  sodium: { value: 3120, unit: 'mg', percent: 136, standard: 2300, statusLabel: '많음', over: true },
+};
+
+/** 내 기준이 원고의 성인 기준과 다른 사람(65~74세 2,100mg) — 2,200mg 은 성인 기준 안이지만 내 기준으로는 넘는다. */
+export const variantMineSenior: MotionMine = {
+  sodium: { value: 2200, unit: 'mg', percent: 105, standard: 2100, statusLabel: '많음', over: true },
 };

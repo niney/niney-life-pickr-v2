@@ -29,6 +29,7 @@ const fig = (over: Partial<MealStoryFigureType> = {}): MealStoryFigureType => ({
   detail: null,
   sources: [],
   my: null,
+  equivalent: null,
   ...over,
 });
 
@@ -45,7 +46,7 @@ const scenes: MealStorySceneType[] = [
     ],
     note: null,
   },
-  { type: 'bars', title: '비교', bars: [0, 1].map((i) => ({ label: `막대 ${i}`, figure: fig({ value: 100 * (i + 1) }), aside: null, highlight: i === 1 })), note: null },
+  { type: 'bars', title: '비교', bars: [0, 1].map((i) => ({ label: `막대 ${i}`, figure: fig({ value: 100 * (i + 1) }), aside: null, highlight: i === 1 })), fraction: null, note: null },
   { type: 'list', title: '방법', items: [0, 1, 2].map((i) => ({ title: `방법 ${i}`, text: null, icon: null })), note: null },
   { type: 'ingredients', title: '재료', servings: 1, items: [0, 1, 2, 3].map((i) => ({ label: `재료 ${i}`, grams: 10, note: null, food: 'x', icon: null })) },
   { type: 'step', number: 1, total: 1, text: '가'.repeat(50), tip: '팁', image: null, icon: null },
@@ -95,6 +96,7 @@ describe('장면 길이', () => {
         { label: '반반', figure: fig({ value: 4.3, unit: 'g', detail: '통밀 스파게티의 식이섬유 값은 표시한 제품 4개의 중앙값이에요' }), aside: null, highlight: false },
         { label: '통밀', figure: fig({ value: 6.4, unit: 'g', detail: '통밀 스파게티의 식이섬유 값은 표시한 제품 4개의 중앙값이에요' }), aside: null, highlight: true },
       ],
+      fraction: null,
       note: null,
     };
     expect(barsFootnotes(scene)).toEqual(['통밀 스파게티의 식이섬유 값은 표시한 제품 4개의 중앙값이에요']);

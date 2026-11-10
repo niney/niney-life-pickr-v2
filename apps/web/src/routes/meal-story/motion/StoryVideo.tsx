@@ -12,6 +12,7 @@ import { ChapterOutro } from './ChapterOutro';
 import { ChapterStat } from './ChapterStat';
 import { ChapterStep } from './ChapterStep';
 import { Grain } from './paper/kit';
+import { PaperShadow } from './paper/shadow';
 import { paperPalette } from './paper/palette';
 import { TRANSITION_FRAMES, buildTimeline, isSaltSpoonScene } from './timeline';
 import { FONT } from './theme';
@@ -37,7 +38,13 @@ const transitionAt = (i: number) => (
 );
 
 /** 장면 하나 — 원고 장면 종류에 맞는 장면 틀(장면 그림 테스트도 이것으로 그린다). */
-export const Chapter = ({ scene, ctx, saltSpoon }: { scene: MealStorySceneType; ctx: ChapterContext; saltSpoon: boolean }) => {
+export const Chapter = (props: { scene: MealStorySceneType; ctx: ChapterContext; saltSpoon: boolean }) => (
+  <PaperShadow.Provider value={props.ctx.pal.shadow}>
+    <ChapterBody {...props} />
+  </PaperShadow.Provider>
+);
+
+const ChapterBody = ({ scene, ctx, saltSpoon }: { scene: MealStorySceneType; ctx: ChapterContext; saltSpoon: boolean }) => {
   switch (scene.type) {
     case 'cover':
       return <ChapterCover scene={scene} ctx={ctx} />;

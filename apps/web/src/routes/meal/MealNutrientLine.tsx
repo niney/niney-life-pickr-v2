@@ -15,13 +15,16 @@ import { MEAL_NUTRIENT_TONE } from './mealNutrientTone';
 // 기준선 자리 — 0~150% 축의 100%.
 const REF_AT = (100 / NUTRIENT_BAR_MAX_PERCENT) * 100;
 
-/** 판정 칩 — '기록 더 필요'는 판정이 부족이어도 빠진 끼니 탓일 수 있어 점선 테두리로 잠정임을 보인다. */
-export const MealNutrientChip = ({ status }: { status: MealNutrientDisplayKey }) => (
+/**
+ * 판정 칩 — '기록 더 필요'는 판정이 부족이어도 빠진 끼니 탓일 수 있어 점선 테두리로 잠정임을 보인다.
+ * label 을 주면 글자만 바꾼다(건강식단 스토리의 '기준 안' — 색·모양은 판정 그대로).
+ */
+export const MealNutrientChip = ({ status, label }: { status: MealNutrientDisplayKey; label?: string }) => (
   <span
     className={cn('meal-flag', MEAL_NUTRIENT_TONE[status])}
     data-dashed={status === 'recordGap' ? 'true' : undefined}
   >
-    {MEAL_NUTRIENT_STATUS_LABEL[status]}
+    {label ?? MEAL_NUTRIENT_STATUS_LABEL[status]}
   </span>
 );
 

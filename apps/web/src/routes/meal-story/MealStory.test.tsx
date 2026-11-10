@@ -104,6 +104,7 @@ const fig = (over: Partial<MealStoryFigureType> = {}): MealStoryFigureType => ({
   detail: null,
   sources: [],
   my: null,
+  equivalent: null,
   ...over,
 });
 
@@ -124,9 +125,18 @@ const story: MealStoryType = {
       figures: [
         {
           label: '성인 하루 기준',
-          figure: fig({ value: 2300, basis: '성인 하루 기준(이보다 적게)', detail: '65~74세 2,100mg · 75세 이상 1,700mg', sources: ['kdri-2020'] }),
+          figure: fig({
+            value: 2300,
+            basis: '성인 하루 기준(이보다 적게)',
+            detail: '65~74세 2,100mg · 75세 이상 1,700mg',
+            sources: ['kdri-2020', 'who-sodium-2012'],
+            equivalent: { label: '소금', value: 5.8, unit: 'g', per: 400 },
+          }),
         },
-        { label: '내 최근 2주 하루 평균', figure: fig({ unit: '', basis: '내 최근 2주 하루 평균', my: 'sodium' }) },
+        {
+          label: '내 최근 2주 하루 평균',
+          figure: fig({ unit: '', basis: '내 최근 2주 하루 평균', my: 'sodium', equivalent: { label: '소금', value: null, unit: 'g', per: 400 } }),
+        },
       ],
       note: null,
     },
@@ -137,6 +147,7 @@ const story: MealStoryType = {
         { label: '시판 소스 150g', figure: fig({ value: 953 }), aside: null, highlight: false },
         { label: '직접 만든 소스', figure: fig({ value: 97 }), aside: { label: '열량', figure: fig({ value: 190, unit: 'kcal' }) }, highlight: true },
       ],
+      fraction: { bar: 1, denominator: 10 },
       note: null,
     },
     { type: 'outro', title: '오늘 한 끼로', text: null, actions: ['record', 'recipe', 'share'] },
@@ -212,6 +223,8 @@ describe('건강식단 스토리', () => {
     // 굴러 올라가는 숫자도 읽기 프로그램에는 완성된 값 한 번.
     expect(screen.getByText('2,300mg')).toBeInTheDocument();
     expect(screen.getByText('65~74세 2,100mg · 75세 이상 1,700mg')).toBeInTheDocument();
+    // 다른 단위로 본 값(소금)도 서버가 환산한 그대로.
+    expect(screen.getByText('소금 약 5.8g')).toBeInTheDocument();
     const login = screen.getByRole('link', { name: '로그인' });
     expect(login).toHaveAttribute('href', `/login?next=${encodeURIComponent(`/meal/stories/${story.slug}?s=2`)}`);
 
@@ -220,6 +233,8 @@ describe('건강식단 스토리', () => {
     expect(screen.getByText('953mg')).toBeInTheDocument();
     expect(screen.getByText('97mg')).toBeInTheDocument();
     expect(screen.getByText('190kcal')).toBeInTheDocument();
+    // 작은 쪽이 큰 쪽의 몇 분의 1 인지도 서버가 계산해 준다.
+    expect(screen.getByText('약 10분의 1')).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('region', { name: story.title }), { key: 'ArrowLeft' });
     expect(screen.getByRole('heading', { name: '하루 나트륨' })).toBeInTheDocument();
   });
@@ -240,7 +255,26 @@ describe('건강식단 스토리', () => {
     expect(await screen.findByText('3,120mg')).toBeInTheDocument();
     expect(screen.getByText('기준의 136%')).toBeInTheDocument();
     expect(screen.getByText('많음')).toBeInTheDocument();
+    // 내 값의 소금 환산은 서버가 준 식(÷ 400)으로.
+    expect(screen.getByText('소금 약 7.8g')).toBeInTheDocument();
     expect(asked).toHaveLength(1);
+  });
+
+  it('내 평균이 기준 안 — 글로 보기 칩도 충분이 아니라 기준 안', async () => {
+    useAuthStore.setState({ token: 't', user, isGuest: false });
+    server.use(
+      http.get(STATS_NUTRIENTS_URL, () =>
+        HttpResponse.json({
+          status: 'ok',
+          rows: [{ key: 'sodium', unit: 'mg', intakePerDay: 1850, percent: 80, status: 'ok', recordGap: false, reference: { kind: 'cdrr', amount: 2300 } }],
+        }),
+      ),
+    );
+    renderAt(`/meal/stories/${story.slug}?s=2`);
+    expect(await screen.findByText('1,850mg')).toBeInTheDocument();
+    expect(screen.getByText('기준 안')).toBeInTheDocument();
+    expect(screen.queryByText('충분')).not.toBeInTheDocument();
+    expect(screen.getByText('소금 약 4.6g')).toBeInTheDocument();
   });
 
   it('이 레시피로 기록 — 비로그인은 로그인으로(돌아올 주소), 로그인하면 레시피 음식으로 새 기록 draft 를 채워 입력 화면으로', async () => {
@@ -442,7 +476,7 @@ describe('건강식단 스토리 — 영상으로 보기', () => {
         HttpResponse.json({
           status: 'ok',
           rows: [
-            { key: 'sodium', unit: 'mg', intakePerDay: 3120, percent: 136, status: 'high', recordGap: false },
+            { key: 'sodium', unit: 'mg', intakePerDay: 3120, percent: 136, status: 'high', recordGap: false, reference: { kind: 'cdrr', amount: 2300 } },
             { key: 'potassium', unit: 'mg', intakePerDay: null, percent: null, status: null, recordGap: false },
           ],
         }),
@@ -453,7 +487,7 @@ describe('건강식단 스토리 — 영상으로 보기', () => {
     await waitFor(() =>
       expect(input()).toMatchObject({
         loggedIn: true,
-        mine: { sodium: { value: 3120, unit: 'mg', percent: 136, statusLabel: '많음', over: true } },
+        mine: { sodium: { value: 3120, unit: 'mg', percent: 136, standard: 2300, statusLabel: '많음', over: true } },
       }),
     );
     expect(Object.keys(input().mine ?? {})).toEqual(['sodium']);
@@ -594,7 +628,18 @@ describe('영상의 내 값(toMotionMine)', () => {
       toMotionMine(result([{ key: 'sodium', unit: 'mg', intakePerDay: 900, percent: 39, status: 'ok', recordGap: false }], 'insufficient')),
     ).toEqual({});
     expect(toMotionMine(result([{ key: 'fiber', unit: 'g', intakePerDay: 9, percent: 36, status: 'low', recordGap: true }]))).toEqual({
-      fiber: { value: 9, unit: 'g', percent: 36, statusLabel: '기록 더 필요', over: false },
+      fiber: { value: 9, unit: 'g', percent: 36, standard: null, statusLabel: '기록 더 필요', over: false },
     });
+  });
+
+  it('나트륨이 기준 안이면 충분이 아니라 기준 안 — 이보다 적게인 기준(cdrr)만, 다른 영양소의 충분은 그대로', () => {
+    const mine = toMotionMine(
+      result([
+        { key: 'sodium', unit: 'mg', intakePerDay: 1850, percent: 80, status: 'ok', recordGap: false, reference: { kind: 'cdrr', amount: 2300 } },
+        { key: 'protein', unit: 'g', intakePerDay: 70, percent: 108, status: 'ok', recordGap: false, reference: { kind: 'rni', amount: 65 } },
+      ]),
+    );
+    expect(mine.sodium).toMatchObject({ statusLabel: '기준 안', over: false, standard: 2300 });
+    expect(mine.protein).toMatchObject({ statusLabel: '충분', standard: 65 });
   });
 });

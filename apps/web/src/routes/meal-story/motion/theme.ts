@@ -21,9 +21,6 @@ export const FONT = "'Wanted Sans Variable', 'Wanted Sans', 'Pretendard Variable
 /** 손글씨(개구, OFL) — 종이 오리기의 제목·짧은 덧말. 숫자·작은 글은 FONT. */
 export const HAND = "'Gaegu', 'Wanted Sans Variable', system-ui, sans-serif";
 
-// 나트륨 → 소금(염화나트륨) 그램. 식약처 안내 기준 나트륨 1g = 소금 2.5g.
-export const sodiumToSaltG = (sodiumMg: number): number => (sodiumMg * 2.5) / 1000;
-
 /** 소수 자릿수 — 10g 미만의 g 만 한 자리(글 장면 formatStoryAmount 와 같은 규칙, .0 은 빼고). */
 export const amountDecimals = (value: number, unit: string): number =>
   unit === 'g' && value < 10 && Math.round(value * 10) % 10 !== 0 ? 1 : 0;

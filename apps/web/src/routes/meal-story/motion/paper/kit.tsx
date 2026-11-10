@@ -1,23 +1,27 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useContext, type CSSProperties, type ReactNode } from 'react';
 import { AbsoluteFill } from 'remotion';
 import { rand } from '../anim';
 import { textWidth } from '../layout';
 import { FONT } from '../theme';
-import { SHADOW, type PaperPalette } from './palette';
+import type { PaperPalette } from './palette';
+import { PaperShadow } from './shadow';
 import { tornRect } from './torn';
 
 // 종이 오리기 도구 — 찢긴 종이 조각(겹친 그림자), 테이프, 쪽지(글 + 종이), 얼굴, 김, 종이 결.
 // 숫자·작은 글은 앱 글꼴(FONT)로 쪽지 위에, 손글씨(HAND)는 제목·짧은 덧말에만.
 
-/** 종이 조각 — 찢긴 경로 + 아래로 겹친 그림자(lift 가 클수록 떠 보인다). */
-export const Paper = ({ d, fill, lift = 1, opacity }: { d: string; fill: string; lift?: number; opacity?: number }) => (
-  <g opacity={opacity}>
-    {lift > 0
-      ? [10, 6, 3].map((dy, i) => <path key={dy} d={d} fill={SHADOW[i]} transform={`translate(${(i === 0 ? 2 : i === 1 ? 1 : 0) * lift} ${dy * lift})`} />)
-      : null}
-    <path d={d} fill={fill} />
-  </g>
-);
+/** 종이 조각 — 찢긴 경로 + 아래로 겹친 그림자(lift 가 클수록 떠 보인다). 그림자 색은 장면이 내려 준다(paper/shadow.ts). */
+export const Paper = ({ d, fill, lift = 1, opacity }: { d: string; fill: string; lift?: number; opacity?: number }) => {
+  const shadow = useContext(PaperShadow);
+  return (
+    <g opacity={opacity}>
+      {lift > 0
+        ? [10, 6, 3].map((dy, i) => <path key={dy} d={d} fill={shadow[i]} transform={`translate(${(i === 0 ? 2 : i === 1 ? 1 : 0) * lift} ${dy * lift})`} />)
+        : null}
+      <path d={d} fill={fill} />
+    </g>
+  );
+};
 
 /** 테이프 한 조각(반투명). */
 export const Tape = ({ x, y, angle, pal, w = 104 }: { x: number; y: number; angle: number; pal: PaperPalette; w?: number }) => (
@@ -211,7 +215,7 @@ export const Patterns = ({ idp, pal }: { idp: string; pal: PaperPalette }) => (
       <rect width={30} height={60} fill="rgba(255,255,255,0.08)" />
     </pattern>
     <pattern id={`${idp}-gingham`} patternUnits="userSpaceOnUse" width={64} height={64}>
-      <rect width={64} height={64} fill="#ffffff" />
+      <rect width={64} height={64} fill={pal.cloth} />
       <rect width={32} height={64} fill={pal.navy} opacity={0.32} />
       <rect width={64} height={32} fill={pal.navy} opacity={0.32} />
     </pattern>

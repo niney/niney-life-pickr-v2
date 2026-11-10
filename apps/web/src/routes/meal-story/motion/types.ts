@@ -5,7 +5,10 @@ import type { PaperPalette } from './paper/palette';
 export type MotionMineValue = {
   value: number;
   unit: string;
+  /** 내 기준 대비 %(통계가 계산 — 기준은 내 나이·성별의 섭취기준). */
   percent: number | null;
+  /** 그 기준값(같은 단위). 원고의 기준 숫자와 다르면 영상이 밝힌다. */
+  standard: number | null;
   statusLabel: string | null;
   /** 기준을 넘었다(많음) — 넘치는 연출·빨간 도장. */
   over: boolean;

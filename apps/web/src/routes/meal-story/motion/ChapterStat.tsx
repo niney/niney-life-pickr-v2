@@ -9,7 +9,7 @@ import { PaperShaker, PaperSpoon } from './paper/props';
 import { boil, tornEllipse, tornRect } from './paper/torn';
 import { shakerPose, type Span } from './saltPose';
 import { PaperHeading, PaperStage } from './Stage';
-import { FONT, HAND, TYPE, sodiumToSaltG } from './theme';
+import { FONT, HAND, TYPE, formatAmount } from './theme';
 import { SPOON, statTiming } from './timeline';
 import type { ChapterContext } from './types';
 
@@ -74,7 +74,24 @@ const SaltSpoonStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }
   const colB: Col = { x: lerp(1450, 770, enterB), y: 1080 - bob, s: 0.8 };
 
   const pA = prog(f, T.fillA[0], T.fillA[1]);
-  const ratio = mineValue ? mineValue.value / Math.max(1, refMg) : 0;
+  // 내 숟가락이 차는 비율 — 통계가 준 '기준 대비 %'(내 나이·성별의 기준)를 그대로 쓴다. 숟가락·'기준의 N%'·판정 도장이 같은
+  // 기준을 본다(원고의 성인 기준으로 채우면 65세 이상은 숟가락이 안 넘치는데 '많음'이 찍혔다). % 가 없을 때만 원고 기준으로.
+  const ratio = mineValue ? (mineValue.percent !== null ? mineValue.percent / 100 : mineValue.value / Math.max(1, refMg)) : 0;
+  // 다른 단위로 본 값(소금) — 기준 숫자는 서버가 환산한 값, 내 값은 서버가 준 식(÷ per)으로. 화면이 환산 비율을 갖고 있지 않다.
+  const refEq = refFig.figure.equivalent;
+  const myEq = myFig?.figure.equivalent ?? null;
+  const eqChip = (label: string, value: number, unit: string) => `${label} 약 ${formatAmount(value, unit)}${unit}`;
+  const refChips = refEq && refEq.value !== null ? [eqChip(refEq.label, refEq.value, refEq.unit)] : [];
+  // 내 기준이 원고의 기준 숫자와 다르면(나이가 달라서) 어느 기준인지 밝힌다.
+  const ownStandard = mineValue && mineValue.standard !== null && mineValue.standard !== refMg ? mineValue.standard : null;
+  const myChips = mineValue
+    ? [
+        ...(myEq ? [eqChip(myEq.label, mineValue.value / myEq.per, myEq.unit)] : []),
+        ...(mineValue.percent !== null
+          ? [ownStandard !== null ? `내 기준 ${formatAmount(ownStandard, mineValue.unit)}${mineValue.unit}의 ${mineValue.percent}%` : `기준의 ${mineValue.percent}%`]
+          : []),
+      ]
+    : [];
   const pB = prog(f, T.fillB[0], T.fillB[1]);
   let overFrom = Infinity;
   if (mineValue && ratio > 1) {
@@ -153,12 +170,12 @@ const SaltSpoonStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }
             </g>
           ) : null}
 
-          <CounterPaper col={colA} label={refFig.label} chips={[`소금 약 ${sodiumToSaltG(refMg).toFixed(1)}g`]} enter={enterA} chip={chipA} ctx={ctx} v={v} />
+          <CounterPaper col={colA} label={refFig.label} chips={refChips} enter={enterA} chip={chipA} ctx={ctx} v={v} />
           {myFig && mineValue ? (
             <CounterPaper
               col={colB}
               label={myFig.label}
-              chips={[`소금 약 ${sodiumToSaltG(mineValue.value).toFixed(1)}g`, ...(mineValue.percent !== null ? [`기준의 ${mineValue.percent}%`] : [])]}
+              chips={myChips}
               enter={enterB}
               chip={chipB}
               ctx={ctx}

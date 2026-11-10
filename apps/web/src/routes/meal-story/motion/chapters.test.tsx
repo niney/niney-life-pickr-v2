@@ -5,7 +5,7 @@ import { FONT_STYLESHEETS } from './fonts';
 import { BARS, STAGE_BOTTOM, barsLayout, cardHeight, clipLines, fitSize, headingBottom, headingSize, textWidth } from './layout';
 import { paperPalette } from './paper/palette';
 import { Chapter } from './StoryVideo';
-import { variantMine, variantStory } from './storyFixture';
+import { variantMine, variantMineSenior, variantStory } from './storyFixture';
 import { TYPE } from './theme';
 import { buildTimeline, chapterFrames, isSaltSpoonScene } from './timeline';
 import type { MotionMine } from './types';
@@ -117,6 +117,35 @@ describe('장면 그림 — 변형 원고', () => {
     const stat = last(at('stat', 1));
     expect(stat.match(/값 없음/g)).toHaveLength(1);
     expect(stat.match(/로그인하면 내 값도 보여요/g)).toHaveLength(1);
+  });
+
+  it('소금 환산·약 N분의 1 은 서버가 준 값만 — 화면이 비율을 지어내지 않는다', () => {
+    const spoon = scenes.find((s) => s.type === 'stat')!;
+    const last = (scene: MealStorySceneType, viewer: Viewer) => draw(scene, viewer, chapterFrames(variantStory, scene) - 1);
+    // 기준 숫자는 서버가 환산한 5.8g, 내 값은 서버가 준 식(÷ 400)으로 3,120 → 7.8g.
+    const mine = last(spoon, VIEWERS[2]!);
+    expect(mine).toContain('소금 약 5.8g');
+    expect(mine).toContain('소금 약 7.8g');
+    expect(mine).toContain('기준의 136%');
+    // 환산이 없는 원고면 소금 쪽지도 없다.
+    const bare = { ...spoon, figures: spoon.type === 'stat' ? spoon.figures.map((f) => ({ ...f, figure: { ...f.figure, equivalent: null } })) : [] } as MealStorySceneType;
+    expect(last(bare, VIEWERS[2]!)).not.toContain('소금 약');
+    // 막대 — 서버가 준 '약 10분의 1'만, 비우면 말하지 않는다.
+    const two = scenes.filter((s) => s.type === 'bars')[0]!;
+    expect(last(two, VIEWERS[0]!)).toContain('약 10분의 1');
+    expect(last({ ...two, fraction: null } as MealStorySceneType, VIEWERS[0]!)).not.toContain('분의 1');
+  });
+
+  it('내 기준이 원고의 성인 기준과 다르면(65세 이상) 숟가락·% ·도장이 내 기준을 따르고 어느 기준인지 밝힌다', () => {
+    const spoon = scenes.find((s) => s.type === 'stat')!;
+    const senior: Viewer = { name: '65세 이상', mine: variantMineSenior, loggedIn: true };
+    const markup = draw(spoon, senior, chapterFrames(variantStory, spoon) - 1);
+    // 2,200mg 은 성인 기준(2,300) 안이지만 내 기준(2,100)으로는 105% — 쪽지가 내 기준을 밝히고 도장은 '많음'.
+    expect(markup).toContain('내 기준 2,100mg의 105%');
+    expect(markup).toContain('많음');
+    expect(markup).toContain('소금 약 5.5g');
+    // 성인 기준인 사람에게는 그냥 '기준의 N%'.
+    expect(draw(spoon, VIEWERS[2]!, chapterFrames(variantStory, spoon) - 1)).not.toContain('내 기준');
   });
 
   it('시간표 — 장면마다 길이가 있고 전체가 이어진다', () => {

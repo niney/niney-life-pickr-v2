@@ -4,7 +4,7 @@ import type { MealStorySceneType, MealStoryType } from '@repo/api-contract';
 import { useAuthStore } from '@repo/shared';
 import { cn } from '~/lib/utils';
 import { MEAL_PATH, MEAL_STORY_PATH } from '../meal/mealPaths';
-import { AmountText, FigureValue } from './MealStoryFigure';
+import { AmountText, EquivalentText, FigureValue } from './MealStoryFigure';
 import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
 
 // 장면 틀 8종 — 표지 · 큰 숫자 · 막대 비교 · 목록 · 재료 · 만드는 법 · 영양정보 · 마무리. 글·숫자는 서버가 준 그대로
@@ -43,6 +43,12 @@ const Stat = ({ scene }: { scene: Scene<'stat'> }) => (
         <li key={i} className="mss-figure msp-rise" style={order(i + 1)}>
           <p className="mss-figure-label">{f.label}</p>
           <FigureValue figure={f.figure} size="xl" />
+          {/* 다른 단위로 본 값(나트륨 → 소금) — 서버가 환산했다. 내 기록은 FigureValue 안에서. */}
+          {f.figure.equivalent && f.figure.equivalent.value !== null && !f.figure.my ? (
+            <p className="mss-figure-eq">
+              <EquivalentText label={f.figure.equivalent.label} value={f.figure.equivalent.value} unit={f.figure.equivalent.unit} />
+            </p>
+          ) : null}
           {f.figure.basis && !f.figure.my && f.figure.basis !== f.label ? (
             <p className="mss-figure-basis">{f.figure.basis}</p>
           ) : null}
@@ -83,6 +89,7 @@ const Bars = ({ scene }: { scene: Scene<'bars'> }) => {
                 {b.aside.label} <AmountText figure={b.aside.figure} />
               </p>
             ) : null}
+            {scene.fraction?.bar === i ? <p className="mss-bar-frac">약 {scene.fraction.denominator}분의 1</p> : null}
           </li>
         ))}
       </ul>

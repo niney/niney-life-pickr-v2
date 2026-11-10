@@ -1,8 +1,14 @@
 // 종이 오리기 색 — 크림 바탕에 색종이. 무대 색종이만 주제색(나트륨 = 파랑), 빨강은 판정('많음')에만.
 // 다크 모드는 어두운 판지 위에 같은 색종이(종이는 종이 — 쪽지 글은 그대로 먹색), 바탕 위 글만 밝게.
+// 다만 어두운 화면에서 눈부시지 않게 밝은 종이(쪽지·식탁보·노랑·분홍)를 한 톤 낮추고, 낮춘 종이 위에서도 읽히게 보조 글은
+// 더 짙게, 판지 위에서 종이가 떠 보이게 그림자는 더 진하게 한다(DARK).
 
 export interface PaperPalette {
   bg: string;
+  /** 종이 그림자 세 겹(아래로 갈수록 가까운 겹). */
+  shadow: readonly [string, string, string];
+  /** 깅엄 식탁보의 흰 바탕. */
+  cloth: string;
   onBg: string;
   onBgFaint: string;
   paper: string;
@@ -58,6 +64,25 @@ const BASE = {
   steel: '#8e99ab',
 };
 
+/** 그림자 — 흐림 없이 세 겹(휴대폰에서 매 프레임 흐림을 다시 그리지 않게). */
+export const SHADOW = ['rgba(42,29,24,0.07)', 'rgba(42,29,24,0.09)', 'rgba(42,29,24,0.1)'] as const;
+
+// 다크 모드에서 바뀌는 색 — 밝은 종이는 약 6~8% 낮추고(먹색 글과의 대비는 그대로 넉넉하다), 보조 글은 낮춘 크림 쪽지 위에서도
+// 대비 4.5:1 을 넘게 짙게.
+const DARK = {
+  bg: '#221f1b',
+  onBg: '#f2ece0',
+  onBgFaint: '#b9b0a3',
+  paper: '#e8dfcc',
+  cream: '#dad1bd',
+  cloth: '#dfdbd0',
+  inkFaint: '#584940',
+  yellow: '#ecc650',
+  pink: '#e69bb5',
+  salt: '#f4f0e7',
+  shadow: ['rgba(0,0,0,0.14)', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.22)'],
+} as const;
+
 const TOPIC_STAGE: Readonly<Record<string, { stage: string; stageDeep: string }>> = {
   sodium: { stage: '#4c6fb5', stageDeep: '#3f5e9c' },
 };
@@ -68,12 +93,11 @@ export const paperPalette = (topicNutrient: string | null, dark: boolean): Paper
   return {
     ...BASE,
     ...stage,
-    bg: dark ? '#1d1b18' : '#f3ead6',
-    onBg: dark ? '#f2ece0' : '#2a1d18',
-    onBgFaint: dark ? '#b9b0a3' : '#6b5a4f',
-    ...(dark ? { paper: '#efe7d6', stage: stage.stageDeep, stageDeep: '#324d85' } : {}),
+    bg: '#f3ead6',
+    onBg: '#2a1d18',
+    onBgFaint: '#6b5a4f',
+    cloth: '#ffffff',
+    shadow: SHADOW,
+    ...(dark ? { ...DARK, stage: stage.stageDeep, stageDeep: '#324d85' } : {}),
   };
 };
-
-/** 그림자 — 흐림 없이 세 겹(휴대폰에서 매 프레임 흐림을 다시 그리지 않게). */
-export const SHADOW = ['rgba(42,29,24,0.07)', 'rgba(42,29,24,0.09)', 'rgba(42,29,24,0.1)'] as const;
