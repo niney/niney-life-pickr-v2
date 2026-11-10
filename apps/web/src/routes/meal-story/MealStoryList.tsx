@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { useAuthStore, useMealStories } from '@repo/shared';
-import { MEAL_PATH, MEAL_STORY_PATH } from '../meal/mealPaths';
-import { mealStoryTopicLabel } from './mealStoryTopic';
+import { useMealStories } from '@repo/shared';
+import { MEAL_PATH } from '../meal/mealPaths';
+import { MealStoryCards } from './MealStoryCards';
+import { MEAL_STORY_INTRO } from './mealStoryTopic';
 
-// 건강식단 목록 — 누구나. 게시일 최근 순(관리자는 초안도, '초안' 표시).
+// 건강식단 목록(로그인 전) — 식단의 공개 얼굴. 사이트 메뉴 '식단'이 로그인 전에는 여기로 온다(MealEntry). 게시일 최근 순.
+// 로그인한 사람은 같은 주소에서 식단 셸 안의 목록(MealStoriesPage)을 본다.
 export const MealStoryList = () => {
   const stories = useMealStories();
-  const token = useAuthStore((s) => s.token);
   const items = stories.data?.items ?? [];
   return (
     <main className="msl">
@@ -15,37 +16,17 @@ export const MealStoryList = () => {
         <Link to="/">
           <ArrowLeft className="size-4" aria-hidden /> Life Pickr
         </Link>
-        {token ? <Link to={MEAL_PATH.home}>내 식단</Link> : null}
+        {/* 로그인하면 식단 홈으로 — 기록을 쌓으면 이야기 속 '내 숟가락'이 내 평균으로 찬다. */}
+        <Link to={`/login?next=${encodeURIComponent(MEAL_PATH.home)}`}>로그인하고 식단 기록하기</Link>
       </div>
       <h1 className="meal-title">건강식단</h1>
-      <p className="msl-intro">주제 하나를 장면으로 넘겨 봐요 — 줄이는 방법, 만들어 먹는 레시피, 바꿔 먹기까지.</p>
+      <p className="msl-intro">{MEAL_STORY_INTRO}</p>
       {stories.isLoading ? (
         <Loader2 className="mt-8 size-5 animate-spin" aria-label="불러오는 중" />
       ) : items.length === 0 ? (
         <p className="msl-empty">아직 올라온 이야기가 없어요.</p>
       ) : (
-        <ul className="msl-grid">
-          {items.map((s) => (
-            <li key={s.slug}>
-              <Link to={MEAL_STORY_PATH.story(s.slug)} className="msl-card">
-                {s.coverUrl ? (
-                  <img src={s.coverUrl} alt="" className="msl-cover" loading="lazy" />
-                ) : (
-                  <div className="msl-cover msl-cover-text" aria-hidden>
-                    {mealStoryTopicLabel(s.topic)}
-                  </div>
-                )}
-                <div className="msl-body">
-                  <p className="msl-kicker">
-                    {mealStoryTopicLabel(s.topic)} · {s.sceneCount}장면{s.status === 'draft' ? ' · 초안' : ''}
-                  </p>
-                  <h2 className="msl-title">{s.title}</h2>
-                  <p className="msl-summary">{s.summary}</p>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <MealStoryCards items={items} />
       )}
     </main>
   );

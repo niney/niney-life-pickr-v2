@@ -23,6 +23,7 @@ import { useIsDesktopLg } from '~/lib/useMediaQuery';
 import { MealNutrientLine, MealNutrientMeter } from './MealNutrientLine';
 import { nutrientVsRefText } from './mealNutrientTone';
 import { MEAL_PATH } from './mealPaths';
+import { NutrientStoryLink } from './MealStoryLink';
 
 // 통계의 영양소(2026-11-08) — 고른 기간을 영양 탭과 같은 셈(두 끼 이상 기록한 날의 하루 평균, 2020 섭취기준·판정)으로 본다.
 // 모양도 영양 탭 '영양소 점검'과 같게(사용자 "영양에서 나왔던 디자인처럼") — 흰 카드에 같은 줄 부품(MealNutrientLine: 이름 +
@@ -433,7 +434,7 @@ interface Bar {
 
 // 흐름에 쓰는 날짜별 값 — 서버가 dates 와 같은 순서로 준다. 평균에 든 날(counted)은 서버 판정 그대로 쓴다(한 끼 기록에 남은
 // 끼니가 모두 '안 먹음'인 날도 든다).
-type FlowDays = Pick<MealStatsNutrientsResultType, 'dates' | 'meals' | 'skipped' | 'counted'>;
+type FlowDays = Pick<MealStatsNutrientsResultType, 'dates' | 'meals' | 'skipped' | 'counted' | 'status'>;
 
 const isWeekly = (row: MealStatsNutrientRowType, dates: string[]): boolean =>
   row.group === 'micro' || dates.length > DAILY_MAX_DAYS;
@@ -520,6 +521,10 @@ const DetailBody = ({ row, days }: { row: MealStatsNutrientRowType; days: FlowDa
         <FlowChart row={row} bars={bars} weekly={weekly} />
       )}
       <TopFoods row={row} />
+      {/* 이 영양소를 다루는 건강식단 이야기(많음 → 줄이는 법, 부족 → 채우는 법) — 판정이 선 기간에만, 맞는 이야기가 있을 때만. */}
+      <div className="mt-3 empty:hidden">
+        <NutrientStoryLink nutrient={row.key} status={displayOf(row, days.status === 'ok')} />
+      </div>
     </>
   );
 };

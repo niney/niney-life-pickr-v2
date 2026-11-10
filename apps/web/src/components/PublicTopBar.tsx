@@ -17,8 +17,8 @@ interface NavItem {
   match?: string[];
   // 로그인 사용자에게만 노출(개인 데이터 화면). 게스트·비로그인은 메뉴에서 숨긴다.
   requiresAuth?: boolean;
-  // 이 경로 아래에서는 켜지 않는다('식단' /meal 은 건강식단 /meal/stories 에서 꺼진다).
-  not?: string[];
+  // 로그인 전에 갈 곳 — '식단'은 로그인 전에는 건강식단 목록(식단의 공개 얼굴)으로 간다.
+  guestTo?: string;
 }
 
 const NAV: NavItem[] = [
@@ -36,8 +36,8 @@ const NAV: NavItem[] = [
   { to: '/tarot', label: '타로' },
   { to: '/saju-c', label: '사주(C)' },
   { to: '/saju-g', label: '사주(G)' },
-  { to: '/meal/stories', label: '건강식단' },
-  { to: '/meal', label: '식단', requiresAuth: true, not: ['/meal/stories'] },
+  // 건강식단은 따로 두지 않는다(2026-11-10) — 식단 안에서 맥락으로 보이고, 로그인 전에는 '식단'이 건강식단 목록으로 간다.
+  { to: '/meal', label: '식단', guestTo: '/meal/stories', match: ['/meal'] },
 ];
 
 interface Props {
@@ -117,11 +117,11 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
             {NAV.filter((item) => !item.requiresAuth || !!user).map((item) => (
               <NavLink
                 key={item.to}
-                to={item.to}
+                to={user ? item.to : (item.guestTo ?? item.to)}
                 end={item.end}
                 className={({ isActive }) => {
                   const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
-                  const active = (item.match ? item.match.some(under) : isActive) && !item.not?.some(under);
+                  const active = item.match ? item.match.some(under) : isActive;
                   return cn(
                     'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                     active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',

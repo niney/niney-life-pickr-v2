@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Player, type CallbackListener, type EventTypes, type PlayerRef } from '@remotion/player';
-import { AlignLeft, ChevronLeft, ChevronRight, Loader2, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { AlignLeft, ArrowLeft, ChevronLeft, ChevronRight, Loader2, Pause, Play, RotateCcw } from 'lucide-react';
 import type { MealStoryType } from '@repo/api-contract';
 import { useAuthStore } from '@repo/shared';
 import { useMediaQuery } from '~/lib/useMediaQuery';
 import { useThemeStore } from '~/stores/theme';
 import { MEAL_PATH, MEAL_STORY_PATH } from '../meal/mealPaths';
+import { MealStoryAside } from './MealStoryAside';
 import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
 import { useStoryFontsReady } from './mealStoryFont';
 import { toMotionMine, useStoryMyStats } from './mealStoryMine';
-import { PREV_ZONE, SWIPE_PX, TAP_PX, focusOnMount, isInteractive, useCloseStory, useStoryParams } from './mealStoryNav';
+import { PREV_ZONE, STORY_ASIDE_QUERY, SWIPE_PX, TAP_PX, focusOnMount, isInteractive, useLeaveStory, useStoryParams } from './mealStoryNav';
 import { StoryVideo, type StoryVideoProps } from './motion/StoryVideo';
 import { paperPalette } from './motion/paper/palette';
 import { FPS, H, W } from './motion/theme';
@@ -116,8 +117,8 @@ const EndCard = ({ story, onLeave }: { story: MealStoryType; onLeave: () => void
   );
 };
 
-const MealStoryMotion = ({ story, index }: { story: MealStoryType; index: number }) => {
-  const close = useCloseStory();
+const MealStoryMotion = ({ story, index, inShell = false }: { story: MealStoryType; index: number; inShell?: boolean }) => {
+  const { leave, label: backLabel } = useLeaveStory();
   const { update } = useStoryParams();
   const { token, stats } = useStoryMyStats();
   const dark = useThemeStore((s) => s.mode) === 'dark';
@@ -138,6 +139,7 @@ const MealStoryMotion = ({ story, index }: { story: MealStoryType; index: number
   // 글꼴 조각을 다 받은 뒤(또는 잠깐 기다린 뒤) 재생기를 붙인다 — 도는 중에 제목 글꼴이 바뀌지 않게.
   const fontsReady = useStoryFontsReady(story);
   const narrow = useMediaQuery('(max-width: 39.99rem)', false);
+  const aside = useMediaQuery(STORY_ASIDE_QUERY, false) && inShell;
 
   // 다른 탭·앱으로 가면 멈추고 돌아오면 이어 튼다 — 재생기는 숨은 탭에서도 타이머로 계속 돌아, 돌아오면 끝나 있었다.
   // 문서의 보임 상태(바깥 시스템)를 따라가는 일이라 effect.
@@ -204,7 +206,7 @@ const MealStoryMotion = ({ story, index }: { story: MealStoryType; index: number
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(chapter - 1);
     else if (e.key === 'Home') go(0);
     else if (e.key === 'End') go(total - 1);
-    else if (e.key === 'Escape') close();
+    else if (e.key === 'Escape') leave();
     else if ((e.key === ' ' || e.key === 'k') && !isInteractive(e.target)) player?.toggle();
     else return;
     e.preventDefault();
@@ -224,7 +226,10 @@ const MealStoryMotion = ({ story, index }: { story: MealStoryType; index: number
         <div className="msp-top">
           <MotionProgress player={player} timeline={timeline} initialFrame={initialFrame} />
           <div className="msp-bar">
-            <Link to={MEAL_STORY_PATH.list}>건강식단</Link>
+            <button type="button" className="msp-back" onClick={leave}>
+              <ArrowLeft className="size-5" aria-hidden />
+              {backLabel}
+            </button>
             {story.status === 'draft' ? <span className="msp-draft">초안</span> : null}
             {/* 영상은 스스로 넘어가므로 장면 번호를 소리 내어 알리지 않는다(글로 보기는 알린다). */}
             <span className="msp-count">
@@ -234,9 +239,6 @@ const MealStoryMotion = ({ story, index }: { story: MealStoryType; index: number
             <button type="button" className="msm-view" onClick={toText}>
               <AlignLeft className="size-4" aria-hidden />
               글로 보기
-            </button>
-            <button type="button" className="msp-icon" onClick={close} aria-label="닫기">
-              <X className="size-5" aria-hidden />
             </button>
           </div>
         </div>
@@ -304,6 +306,8 @@ const MealStoryMotion = ({ story, index }: { story: MealStoryType; index: number
           </div>
         )}
       </div>
+      {/* 옆 칸 — 지금 장면은 재생을 따라가고, 누르면 그 장면으로 건너뛴다. 레시피로 떠날 때는 돌아올 장면을 주소에 적는다. */}
+      {aside ? <MealStoryAside story={story} current={chapter} onPick={go} onLeave={() => update({ index: chapter })} /> : null}
     </div>
   );
 };

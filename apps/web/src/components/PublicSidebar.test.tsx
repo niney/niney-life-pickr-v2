@@ -56,6 +56,17 @@ describe('PublicSidebar', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("건강식단은 따로 두지 않는다 — '식단' 하나가 로그인 전에는 건강식단 목록으로, 로그인하면 식단 홈으로", () => {
+    const { unmount } = renderSidebar();
+    expect(screen.queryByRole('link', { name: '건강식단' })).toBeNull();
+    expect(screen.getByRole('link', { name: '식단' })).toHaveAttribute('href', '/meal/stories');
+    unmount();
+    useAuthStore.setState({ token: 't', user: { ...admin, role: 'USER' }, isGuest: false });
+    renderSidebar();
+    expect(screen.queryByRole('link', { name: '건강식단' })).toBeNull();
+    expect(screen.getByRole('link', { name: '식단' })).toHaveAttribute('href', '/meal');
+  });
+
   it('일반 사용자(USER)에겐 관리자 항목이 없다', () => {
     useAuthStore.setState({ token: 't', user: { ...admin, role: 'USER' }, isGuest: false });
     renderSidebar();

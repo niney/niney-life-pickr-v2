@@ -7,7 +7,7 @@ import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/sh
 import { toLocalDateKey } from '@repo/utils';
 import { server } from '~/test/msw';
 import { prepareMealEntry } from './mealDraftStart';
-import { legacyMealPath } from './mealPaths';
+import { MEAL_SECTION_PATHS, legacyMealPath, mealPanelKindOf } from './mealPaths';
 import { MealHomePage } from './MealHomePage';
 import { MealPageHeader } from './MealPageHeader';
 import { MealShell } from './MealShell';
@@ -22,6 +22,7 @@ const CONTEXT_URL = '/api/v1/meals/recommendations/context';
 const FREQUENT_URL = '/api/v1/meals/items/frequent';
 const SKIPS_URL = '/api/v1/meals/skips';
 const SKIPS_BATCH_URL = '/api/v1/meals/skips/batch';
+const STORIES_URL = '/api/v1/meal-stories';
 
 const signIn = () =>
   useAuthStore.setState({
@@ -49,6 +50,15 @@ describe('legacyMealPath — 예전 /me/meals 주소', () => {
     expect(legacyMealPath('/me/meals/new', '?slot=dinner')).toBe('/meal/new?slot=dinner');
     expect(legacyMealPath('/me/meals/e1', '')).toBe('/meal/e1');
     expect(legacyMealPath('/me/meals/e1/edit', '')).toBe('/meal/e1/edit');
+  });
+});
+
+describe('건강식단 목록 주소(/meal/stories)', () => {
+  it('식단의 한 구역이다 — 기록 상세 패널로 열지 않고(stories 는 기록 id 가 아니다) 하단 탭이 보인다', () => {
+    expect(mealPanelKindOf('/meal/stories')).toBeNull();
+    expect(MEAL_SECTION_PATHS.has('/meal/stories')).toBe(true);
+    // 기록 상세는 그대로.
+    expect(mealPanelKindOf('/meal/e1')).toBe('detail');
   });
 });
 
@@ -128,6 +138,7 @@ describe('MealHomePage — 식단 홈', () => {
     await setMealDraftPrincipal('u1');
     useMealDraftStore.getState().clear();
     server.use(
+      http.get(STORIES_URL, () => HttpResponse.json({ items: [] })),
       http.get(ENTRIES_URL, () =>
         HttpResponse.json({
           items: [
@@ -320,6 +331,68 @@ describe('MealHomePage — 식단 홈', () => {
     // 기록이 있으면 시작 안내는 없다.
     expect(screen.queryByRole('heading', { name: '식단 시작하기' })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '제육볶음' })).toBeInTheDocument();
+  });
+
+  describe('건강식단 한 줄', () => {
+    const storyItem = (over: Record<string, unknown>) => ({
+      slug: 'sodium-tomato-pasta',
+      status: 'published',
+      title: '토마토 스파게티로 나트륨 줄이기',
+      summary: '요약',
+      topic: { nutrient: 'sodium', direction: 'reduce' },
+      publishedAt: '2026-01-05',
+      coverUrl: null,
+      sceneCount: 13,
+      ...over,
+    });
+    const proteinStory = storyItem({ slug: 'protein-up', title: '단백질 채우는 한 끼', topic: { nutrient: 'protein', direction: 'increase' }, publishedAt: today });
+
+    it('이야기가 없으면 자리도 없다', async () => {
+      renderHome();
+      expect(await screen.findByRole('heading', { name: '영양정보' })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: '건강식단' })).not.toBeInTheDocument();
+    });
+
+    it('내 14일 판정에 맞는 이야기를 먼저 — 나트륨이 많음이면 더 새 이야기가 있어도 나트륨 줄이기, 모두 보기는 식단 안 목록으로', async () => {
+      // 서버 차례는 새 것 먼저(단백질 이야기가 더 새 것) — 단백질은 충분이라 맞지 않는다.
+      server.use(http.get(STORIES_URL, () => HttpResponse.json({ items: [proteinStory, storyItem({})] })));
+      renderHome();
+      const line = await screen.findByRole('region', { name: '건강식단' });
+      const main = await within(line).findByRole('link', { name: /토마토 스파게티로 나트륨 줄이기/ });
+      expect(main).toHaveAttribute('href', '/meal/stories/sodium-tomato-pasta');
+      expect(main).toHaveTextContent('건강식단 · 나트륨 많음');
+      expect(within(line).getByRole('link', { name: '모두 보기' })).toHaveAttribute('href', '/meal/stories');
+    });
+
+    it('맞는 이야기가 없으면 가장 새 이야기 — 게시 30일 안이면 새 이야기', async () => {
+      server.use(http.get(STORIES_URL, () => HttpResponse.json({ items: [proteinStory] })));
+      renderHome();
+      const line = await screen.findByRole('region', { name: '건강식단' });
+      const main = within(line).getByRole('link', { name: /단백질 채우는 한 끼/ });
+      expect(main).toHaveAttribute('href', '/meal/stories/protein-up');
+      expect(main).toHaveTextContent('건강식단 새 이야기');
+      expect(within(line).queryByText(/초안/)).not.toBeInTheDocument();
+    });
+
+    it('초안뿐이어도(관리자에게만 온다) 들어가는 길이 있다 — 받은 대로 보이고 초안이라고 표시한다', async () => {
+      // 메뉴 항목이 없어 홈의 이 줄이 유일한 입구다 — 게시 전 첫 편(초안)에서 이 줄이 안 떠 들어갈 길이 없었다.
+      server.use(http.get(STORIES_URL, () => HttpResponse.json({ items: [storyItem({ status: 'draft', publishedAt: today })] })));
+      renderHome();
+      const line = await screen.findByRole('region', { name: '건강식단' });
+      const main = await within(line).findByRole('link', { name: /토마토 스파게티로 나트륨 줄이기/ });
+      expect(main).toHaveAttribute('href', '/meal/stories/sodium-tomato-pasta');
+      expect(main).toHaveTextContent('건강식단 · 나트륨 많음 · 초안');
+      expect(within(line).getByRole('link', { name: '모두 보기' })).toHaveAttribute('href', '/meal/stories');
+    });
+
+    it('오래된 이야기뿐이어도 자리는 남는다(예전엔 게시 30일이 지나면 사라졌다)', async () => {
+      server.use(http.get(STORIES_URL, () => HttpResponse.json({ items: [storyItem({ slug: 'old', title: '오래된 칼륨 이야기', topic: { nutrient: 'potassium', direction: 'increase' } })] })));
+      renderHome();
+      const line = await screen.findByRole('region', { name: '건강식단' });
+      const main = within(line).getByRole('link', { name: /오래된 칼륨 이야기/ });
+      expect(main).toHaveTextContent(/^건강식단오래된 칼륨 이야기/);
+      expect(main).not.toHaveTextContent('새 이야기');
+    });
   });
 
   it('최근 기록이 없으면 시작 안내 — 첫 기록·성별·출생연도(넣었으면 표시만)·추천', async () => {

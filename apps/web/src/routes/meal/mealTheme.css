@@ -301,21 +301,52 @@ html.dark:has(.meal-app) {
 
   .meal-insight { font-size: 1.0625rem; font-weight: 700; line-height: 1.5; }
 
-  /* 홈 — 새 건강식단 이야기 한 줄(스토리 화면으로) */
+  /* 홈 — 건강식단 한 줄: 내 기록에 맞는(없으면 가장 새) 이야기로 가는 큰 링크 + '모두 보기'(식단 안 목록).
+   * 휴대폰은 [머리말 / 제목] 옆에 '모두 보기', 넓은 화면은 한 줄(머리말 · 제목 · 보기 → · 모두 보기). */
   .meal-story-card {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 0.75rem;
+    align-items: center;
+    gap: 1rem;
     margin-bottom: 1.25rem;
-    padding: 0.8rem 1rem;
+    padding: 0.35rem 1rem;
     background: var(--card);
     border: var(--meal-line) solid var(--foreground);
   }
-  .meal-story-card-kicker { font-size: 0.75rem; font-weight: 800; color: var(--muted-foreground); }
-  .meal-story-card-title { flex: 1 1 14rem; font-weight: 800; letter-spacing: -0.01em; }
-  .meal-story-card-go { font-size: 0.875rem; font-weight: 800; }
-  .meal-story-card:hover .meal-story-card-title { text-decoration: underline; text-underline-offset: 3px; }
+  .meal-story-card-main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    align-content: center;
+    gap: 0.1rem 0.75rem;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: 0.3rem 0;
+  }
+  .meal-story-card-kicker { flex: 0 0 100%; font-size: 0.8rem; font-weight: 800; color: var(--muted-foreground); }
+  /* '건강식단' — 메뉴 항목이 없어 이 줄이 들어가는 문이다. 흐린 머리말 속에서 이것만 또렷하게. */
+  .meal-story-card-kicker b { font-weight: 900; color: var(--foreground); }
+  .meal-story-card-title { flex: 1 1 14rem; min-width: 0; font-weight: 800; letter-spacing: -0.01em; }
+  /* 링크 전체가 눌리므로 화살표는 넓은 화면에서만 */
+  .meal-story-card-go { display: none; font-size: 0.875rem; font-weight: 800; }
+  @media (min-width: 40rem) {
+    .meal-story-card-kicker { flex: 0 0 auto; }
+    .meal-story-card-go { display: inline; }
+  }
+  .meal-story-card-main:hover .meal-story-card-title { text-decoration: underline; text-underline-offset: 3px; }
+  .meal-story-card-all {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-height: 2.75rem;
+    font-size: 0.8rem;
+    font-weight: 800;
+    white-space: nowrap;
+    color: var(--muted-foreground);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .meal-story-card-all:hover { color: var(--foreground); }
   .meal-chip {
     display: inline-flex;
     align-items: center;

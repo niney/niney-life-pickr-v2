@@ -24,7 +24,8 @@ import { MEAL_PATH, mealEntryIdOf, mealPanelKindOf } from './mealPaths';
 
 // 식단 하위 사이트(/meal/*) — 어드민처럼 한 덩어리로 늦게 부르고(App.tsx), 그 안에서 셸 + 홈은 바로, 나머지 화면은
 // 들어갈 때 부른다. 주소: 홈 /meal · 기록 /meal/records · 달력 /meal/calendar · 통계 /meal/stats · 영양 /meal/nutrition ·
-// 추천 /meal/recommend · 설정 /meal/settings · 입력 /meal/new · 상세 /meal/:id · 수정 /meal/:id/edit.
+// 추천 /meal/recommend · 설정 /meal/settings · 건강식단 /meal/stories(목록)·/meal/stories/:slug(이야기)·…/recipe(레시피) ·
+// 입력 /meal/new · 상세 /meal/:id · 수정 /meal/:id/edit.
 //
 // 데스크톱(1024px~)에서 상세·수정·새 기록을 배경 위치와 함께 열면(mealPanel) 배경 화면을 셸에 그대로 두고 그 위에 패널을
 // 띄운다. 수정·새 기록 패널은 모달이라 뒤 화면을 inert 로 막는다.
@@ -44,6 +45,17 @@ const MealRecommendTab = lazy(() =>
 );
 const MealPreferenceTab = lazy(() =>
   import('./MealPreferenceTab').then((m) => ({ default: m.MealPreferenceTab })),
+);
+// 건강식단 — 식단 안에 뜬다(메뉴 항목은 없다 — 홈의 건강식단 줄·영양·통계에서 들어온다). 목록은 한 구역, 이야기 한 편과
+// 레시피는 입력·상세처럼 하단 탭 없이(넓은 화면은 사이드 메뉴 옆 본문 자리, 휴대폰은 화면 가득).
+const MealStoriesPage = lazy(() =>
+  import('../meal-story/MealStoriesPage').then((m) => ({ default: m.MealStoriesPage })),
+);
+const MealStoryPlayerPage = lazy(() =>
+  import('../meal-story/MealStoryApp').then((m) => ({ default: m.MealStoryPlayerPage })),
+);
+const MealStoryRecipePage = lazy(() =>
+  import('../meal-story/MealStoryApp').then((m) => ({ default: m.MealStoryRecipePage })),
 );
 const MealNewPage = lazy(() =>
   import('./MealEntryFormPage').then((m) => ({ default: m.MealNewPage })),
@@ -173,6 +185,9 @@ export default function MealApp() {
               <Route path="nutrition" element={<MealNutritionPage />} />
               <Route path="recommend" element={<MealRecommendPage />} />
               <Route path="settings" element={<MealSettingsPage />} />
+              <Route path="stories" element={<MealStoriesPage />} />
+              <Route path="stories/:slug" element={<MealStoryPlayerPage />} />
+              <Route path="stories/:slug/recipe" element={<MealStoryRecipePage />} />
               <Route path="new" element={<MealNewPage />} />
               <Route path=":id" element={<MealDetailPage />} />
               <Route path=":id/edit" element={<MealEditPage />} />

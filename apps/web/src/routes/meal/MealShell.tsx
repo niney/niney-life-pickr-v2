@@ -1,7 +1,6 @@
 import { Suspense, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
-  Apple,
   ArrowLeft,
   CalendarDays,
   ChartNoAxesColumn,
@@ -26,6 +25,8 @@ import './mealTheme.css';
 // 식단 셸(2026-11-08 리뉴얼) — 식단을 사이트 안의 하위 사이트처럼 띄운다. 공통 상단바 대신
 //   데스크톱(1280px~) 왼쪽 사이드 메뉴 · 태블릿(768~1279px) 아이콘 줄 · 휴대폰 상단바 + 하단 탭 5칸(앱과 같은 묶음:
 //   기록 = 목록·달력, 분석 = 통계·영양). 사이트 전체 메뉴는 상단바 '메뉴'가 공통 서랍(PublicSidebar)을 연다.
+// 건강식단은 메뉴 항목이 아니다(2026-11-10) — 홈의 건강식단 줄·영양 탭·통계에서 맥락으로 들어오고, 목록·이야기·레시피
+// (/meal/stories…)에서는 홈이 켜진다. 이야기도 이 셸 안에 떠서 넓은 화면에서는 사이드 메뉴가 그대로 남는다.
 // 본문은 사이드 메뉴 옆에 왼쪽 정렬로 붙인다 — 넓은 화면에서 오른쪽에 뜨는 패널이 빈 자리에 놓이게.
 // 바깥 틀(.meal-app)은 MealApp 이 둔다 — 배경 위에 뜨는 패널도 같은 틀 안에 그려 글꼴·색을 받는다.
 
@@ -34,10 +35,12 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  /** 이 주소와 그 아래에서도 켠다 — 메뉴 항목이 없는 구역(건강식단 목록·이야기는 홈의 건강식단 줄에서 들어온다). */
+  also?: string[];
 }
 
 const SIDE_NAV: NavItem[] = [
-  { to: MEAL_PATH.home, label: '홈', icon: Home, end: true },
+  { to: MEAL_PATH.home, label: '홈', icon: Home, end: true, also: [MEAL_STORY_PATH.list] },
   { to: MEAL_PATH.records, label: '기록', icon: List },
   { to: MEAL_PATH.calendar, label: '달력', icon: CalendarDays },
   { to: MEAL_PATH.stats, label: '통계', icon: ChartNoAxesColumn },
@@ -47,7 +50,7 @@ const SIDE_NAV: NavItem[] = [
 
 // 휴대폰 하단 탭 — 한 탭이 두 화면을 묶으면 둘 다에서 켜진다.
 const TABS: Array<NavItem & { match: string[] }> = [
-  { to: MEAL_PATH.home, label: '홈', icon: Home, match: [MEAL_PATH.home] },
+  { to: MEAL_PATH.home, label: '홈', icon: Home, match: [MEAL_PATH.home, MEAL_STORY_PATH.list] },
   {
     to: MEAL_PATH.records,
     label: '기록',
@@ -101,25 +104,26 @@ export const MealShell = () => {
           </MealLink>
         </div>
         <nav aria-label="식단" className="flex flex-col">
-          {SIDE_NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className="meal-nav-item"
-              title={item.label}
-            >
-              <item.icon className="size-5 shrink-0" aria-hidden />
-              <span className="hidden xl:inline">{item.label}</span>
-            </NavLink>
-          ))}
+          {SIDE_NAV.map((item) => {
+            const inner = (
+              <>
+                <item.icon className="size-5 shrink-0" aria-hidden />
+                <span className="hidden xl:inline">{item.label}</span>
+              </>
+            );
+            // 메뉴 항목이 없는 구역(건강식단 목록·이야기·레시피)에서는 그 구역이 딸린 항목(홈)을 켠다.
+            return item.also?.some((p) => path === p || path.startsWith(`${p}/`)) ? (
+              <Link key={item.to} to={item.to} className="meal-nav-item" title={item.label} aria-current="page">
+                {inner}
+              </Link>
+            ) : (
+              <NavLink key={item.to} to={item.to} end={item.end} className="meal-nav-item" title={item.label}>
+                {inner}
+              </NavLink>
+            );
+          })}
         </nav>
         <div className="mt-auto flex flex-col pb-3">
-          {/* 건강식단 스토리 — 누구나 보는 공개 화면이라 식단 셸 밖(전체 화면 스토리)으로 나간다. */}
-          <Link to={MEAL_STORY_PATH.list} className="meal-nav-item" title="건강식단">
-            <Apple className="size-5 shrink-0" aria-hidden />
-            <span className="hidden xl:inline">건강식단</span>
-          </Link>
           <NavLink to={MEAL_PATH.settings} className="meal-nav-item" title="설정">
             <Settings2 className="size-5 shrink-0" aria-hidden />
             <span className="hidden xl:inline">설정</span>

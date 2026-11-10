@@ -1,21 +1,23 @@
 import { Suspense, lazy, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { preload } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Clapperboard, Loader2, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Clapperboard, Loader2 } from 'lucide-react';
 import type { MealStoryType } from '@repo/api-contract';
 import { useMealStory } from '@repo/shared';
 import { useMediaQuery } from '~/lib/useMediaQuery';
 import { MEAL_STORY_PATH } from '../meal/mealPaths';
+import { MealStoryAside } from './MealStoryAside';
 import { MealStorySceneView } from './MealStoryScenes';
 import { startStoryFonts } from './mealStoryFont';
 import {
   PREV_ZONE,
+  STORY_ASIDE_QUERY,
   SWIPE_PX,
   TAP_PX,
   focusOnMount,
   isInteractive,
   sceneIndexFrom,
-  useCloseStory,
+  useLeaveStory,
   useStoryParams,
 } from './mealStoryNav';
 
@@ -23,6 +25,8 @@ import {
 // 장면을 손으로 넘기고 장면 안의 움직임만 CSS 로 돈다). '동작 줄이기'를 켰거나 영상을 돌릴 수 없는 환경이면 글로 본다.
 // 글로 보기: 오른쪽 누르기·왼쪽으로 밀기·→ 키 = 다음, 왼쪽 30% 누르기·오른쪽으로 밀기·← 키 = 이전, Esc = 닫기. 지금 장면은
 // 주소 ?s=N(1부터) — 바꿀 때 기록을 쌓지 않아 뒤로 가기는 스토리를 떠난다. 레시피 전체 보기에서 돌아와도 같은 장면이다.
+// 나가는 단추는 왼쪽 위 '← 뒤로' 하나(useLeaveStory — 식단 상세·입력 화면과 같다). 로그인했으면 식단 셸 안에 뜬다 — 넓은 화면은
+// 사이드 메뉴 옆 본문 자리에, 휴대폰은 화면 가득(mealStory.css .meal-story-inshell).
 
 // 영상 재생기는 무거워 나눠 받는다. 스토리 응답을 기다리는 동안 미리 받기 시작한다(같은 import 는 한 번만 받는다) —
 // 응답 뒤에야 받기 시작하면 첫 화면이 그만큼 늦는다.
@@ -35,9 +39,20 @@ const canPlayMotion = (): boolean => typeof window !== 'undefined' && typeof win
 const sceneImage = (scene: MealStoryType['scenes'][number] | undefined): string | null =>
   scene && (scene.type === 'cover' || scene.type === 'step') ? scene.image : null;
 
-const TextPlayer = ({ story, index, motionAvailable }: { story: MealStoryType; index: number; motionAvailable: boolean }) => {
+const TextPlayer = ({
+  story,
+  index,
+  motionAvailable,
+  inShell,
+}: {
+  story: MealStoryType;
+  index: number;
+  motionAvailable: boolean;
+  inShell: boolean;
+}) => {
   const { update } = useStoryParams();
-  const close = useCloseStory();
+  const { leave, label: backLabel } = useLeaveStory();
+  const aside = useMediaQuery(STORY_ASIDE_QUERY, false) && inShell;
   const start = useRef<{ x: number; y: number } | null>(null);
   const total = story.scenes.length;
   const scene = story.scenes[index]!;
@@ -75,7 +90,7 @@ const TextPlayer = ({ story, index, motionAvailable }: { story: MealStoryType; i
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(index - 1);
     else if (e.key === 'Home') go(0);
     else if (e.key === 'End') go(total - 1);
-    else if (e.key === 'Escape') close();
+    else if (e.key === 'Escape') leave();
     else return;
     e.preventDefault();
   };
@@ -100,7 +115,10 @@ const TextPlayer = ({ story, index, motionAvailable }: { story: MealStoryType; i
             ))}
           </div>
           <div className="msp-bar">
-            <Link to={MEAL_STORY_PATH.list}>건강식단</Link>
+            <button type="button" className="msp-back" onClick={leave}>
+              <ArrowLeft className="size-5" aria-hidden />
+              {backLabel}
+            </button>
             {story.status === 'draft' ? <span className="msp-draft">초안</span> : null}
             <span className="msp-count" aria-live="polite">
               {index + 1} / {total}
@@ -111,9 +129,6 @@ const TextPlayer = ({ story, index, motionAvailable }: { story: MealStoryType; i
                 영상으로 보기
               </button>
             ) : null}
-            <button type="button" className="msp-icon" onClick={close} aria-label="닫기">
-              <X className="size-5" aria-hidden />
-            </button>
           </div>
         </div>
         <div
@@ -139,6 +154,7 @@ const TextPlayer = ({ story, index, motionAvailable }: { story: MealStoryType; i
           </button>
         </div>
       </div>
+      {aside ? <MealStoryAside story={story} current={index} onPick={go} /> : null}
     </div>
   );
 };
@@ -153,7 +169,8 @@ const StatusCard = ({ children }: { children: ReactNode }) => (
 
 const Spinner = () => <Loader2 className="size-5 animate-spin" aria-label="불러오는 중" />;
 
-export const MealStoryPlayer = () => {
+/** inShell — 식단 셸 안(로그인)에서 띄웠다: 넓은 화면이면 옆 칸을 둔다. */
+export const MealStoryPlayer = ({ inShell = false }: { inShell?: boolean }) => {
   const { slug } = useParams();
   const story = useMealStory(slug);
   const { params } = useStoryParams();
@@ -176,11 +193,11 @@ export const MealStoryPlayer = () => {
             </StatusCard>
           }
         >
-          <MealStoryMotion story={story.data} index={index} />
+          <MealStoryMotion story={story.data} index={index} inShell={inShell} />
         </Suspense>
       );
     }
-    return <TextPlayer story={story.data} index={index} motionAvailable={motionAvailable} />;
+    return <TextPlayer story={story.data} index={index} motionAvailable={motionAvailable} inShell={inShell} />;
   }
   return (
     <StatusCard>

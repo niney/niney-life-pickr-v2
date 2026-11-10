@@ -5,6 +5,9 @@ import { MEAL_STORY_PATH } from '../meal/mealPaths';
 //   오른쪽 누르기·왼쪽으로 밀기 = 다음, 왼쪽 30% 누르기·오른쪽으로 밀기 = 이전.
 //   주소 ?s=N(1부터) = 지금 장면, ?view=text|motion = 고른 보기(없으면 '동작 줄이기'가 아니면 영상). 기록을 쌓지 않는다.
 
+/** 식단 셸 안의 넓은 화면이면 재생기 카드 옆에 이야기 옆 칸(장면 차례·단추)을 둔다 — 영상·글 보기가 같은 조건을 쓴다. */
+export const STORY_ASIDE_QUERY = '(min-width: 64rem)';
+
 export const SWIPE_PX = 48;
 export const TAP_PX = 10;
 export const PREV_ZONE = 0.3;
@@ -41,12 +44,19 @@ export const useStoryParams = () => {
   return { params, update };
 };
 
-/** 닫기 — 앞 화면에서 왔으면 뒤로, 주소로 바로 들어왔으면 목록으로. */
-export const useCloseStory = () => {
+/**
+ * 나가기 — 앞 화면에서 왔으면 뒤로, 주소로 바로 들어왔으면(공유 링크) 건강식단 목록으로. 단추 글자도 그에 맞춘다
+ * (식단 상세·입력 화면 MealSurface 와 같은 규칙 — 나가는 단추는 왼쪽 위 '← 뒤로' 하나다).
+ */
+export const useLeaveStory = (): { leave: () => void; label: string } => {
   const navigate = useNavigate();
   const location = useLocation();
-  return () => {
-    if (location.key !== 'default') navigate(-1);
-    else navigate(MEAL_STORY_PATH.list);
+  const direct = location.key === 'default';
+  return {
+    leave: () => {
+      if (direct) navigate(MEAL_STORY_PATH.list);
+      else navigate(-1);
+    },
+    label: direct ? '건강식단' : '뒤로',
   };
 };

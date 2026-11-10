@@ -9,6 +9,7 @@ import { ReviewAskToaster } from './components/ReviewAskToaster';
 import { PublicLayout } from './components/PublicLayout';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
+import { MealEntry } from './routes/meal/MealEntry';
 import { legacyMealPath } from './routes/meal/mealPaths';
 
 // 코드 스플리팅 — 공개 진입(/, /login)과 레이아웃 셸만 메인 번들에 두고, 무거운
@@ -85,10 +86,6 @@ const SettlementHistoryPage = lazy(() =>
 const ContactsPage = lazy(() =>
   import('./routes/settlement/ContactsPage').then((m) => ({ default: m.ContactsPage })),
 );
-// 식단 하위 사이트(/meal/*) — 전용 셸과 화면들을 한 덩어리로 늦게 부른다(어드민과 같은 방식).
-const MealApp = lazy(() => import('./routes/meal/MealApp'));
-// 건강식단 스토리 — 누구나 보는 화면(목록·전체 화면 스토리·레시피). 식단 셸 밖이라 따로 늦게 부른다.
-const MealStoryApp = lazy(() => import('./routes/meal-story/MealStoryApp'));
 const SettlementNewPage = lazy(() =>
   import('./routes/settlement/SettlementNewPage').then((m) => ({ default: m.SettlementNewPage })),
 );
@@ -298,18 +295,10 @@ export const App = () => {
               </RequireUser>
             }
           />
-          {/* 건강식단 스토리 — /meal 아래지만 로그인 없이 누구나(공유 링크로 들어온다). /meal/* 보다 구체적이라 먼저 잡힌다. */}
-          <Route path="/meal/stories/*" element={<MealStoryApp />} />
-          {/* 내 식단 — 공통 상단바 없이 전용 셸(사이드 메뉴·하단 탭)로 띄우는 하위 사이트. 로그인 필수.
-            예전 주소(/me/meals?tab=…, /me/meals/:id…)는 새 주소로 넘긴다. */}
-          <Route
-            path="/meal/*"
-            element={
-              <RequireUser>
-                <MealApp />
-              </RequireUser>
-            }
-          />
+          {/* 내 식단 — 공통 상단바 없이 전용 셸(사이드 메뉴·하단 탭)로 띄우는 하위 사이트. 로그인 필수 — 로그인 전에는 건강식단
+            (/meal/stories 목록·이야기·레시피 — 공유 링크로 들어온다)만 셸 없이 열어 준다(MealEntry). 예전 주소(/me/meals?tab=…,
+            /me/meals/:id…)는 새 주소로 넘긴다. */}
+          <Route path="/meal/*" element={<MealEntry />} />
           <Route path="/me/meals/*" element={<LegacyMealRedirect />} />
           {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
             않아 받는 사람이 단순히 결과만 보게 한다. 짧은 /s/:token 경로. */}

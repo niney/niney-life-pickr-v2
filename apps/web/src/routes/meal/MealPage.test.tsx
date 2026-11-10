@@ -635,6 +635,23 @@ describe('MealPage', () => {
       http.get(STATS_URL, () => HttpResponse.json(stats)),
       http.get(STATS_NUTRITION_URL, () => HttpResponse.json(statsNutrition)),
       http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json(statsNutrients)),
+      http.get('/api/v1/meal-stories', () =>
+        HttpResponse.json({
+          items: [
+            {
+              slug: 'sodium-tomato-pasta',
+              // 초안은 관리자에게만 온다 — 받은 대로 잇고 '(초안)'을 붙인다.
+              status: 'draft',
+              title: '토마토 스파게티로 나트륨 줄이기',
+              summary: '요약',
+              topic: { nutrient: 'sodium', direction: 'reduce' },
+              publishedAt: '2026-11-09',
+              coverUrl: null,
+              sceneCount: 13,
+            },
+          ],
+        }),
+      ),
     );
     renderPage(undefined, '/meal/stats');
     // 제목에 기간 — 모양이 영양 탭과 같아도 숫자가 다른 까닭(영양 탭은 최근 14일)이 보이게.
@@ -701,6 +718,11 @@ describe('MealPage', () => {
     expect(within(flow).getByText('8/20 · 1,200mg · 1끼 — 한 끼만 기록해 평균에서 뺐어요')).toBeInTheDocument();
     expect(within(flow).getByText('나트륨을 많이 준 음식')).toBeInTheDocument();
     expect(within(flow).getByText('60% · 2번')).toBeInTheDocument();
+    // '많음'인 영양소의 흐름 아래 — 같은 주제의 건강식단 이야기로(영양 탭과 같은 연결).
+    expect(await within(flow).findByRole('link', { name: '줄이는 법 보기 — 토마토 스파게티로 나트륨 줄이기 (초안)' })).toHaveAttribute(
+      'href',
+      '/meal/stories/sodium-tomato-pasta',
+    );
     fireEvent.click(row(/^나트륨/));
     expect(within(card).queryByRole('region', { name: '나트륨 흐름' })).not.toBeInTheDocument();
 

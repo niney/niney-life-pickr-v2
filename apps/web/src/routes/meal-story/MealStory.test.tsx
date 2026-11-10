@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -6,7 +7,7 @@ import { http, HttpResponse } from 'msw';
 import type { MealStoryFigureType, MealStoryType } from '@repo/api-contract';
 import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/shared';
 import { server } from '~/test/msw';
-import MealStoryApp from './MealStoryApp';
+import { MealEntry } from '../meal/MealEntry';
 import { startStoryFonts } from './mealStoryFont';
 import { toMotionMine } from './mealStoryMine';
 import type { StoryVideoProps } from './motion/StoryVideo';
@@ -91,7 +92,9 @@ vi.mock('@remotion/player', async () => {
   return { Player };
 });
 
-// 건강식단 스토리(웹) — 누구나 보는 목록·전체 화면 재생기·레시피 전체 보기. 숫자는 서버가 계산해 주고(그대로 그린다),
+// 건강식단 스토리(웹) — 목록·이야기 한 편(영상·글 재생기)·레시피 전체 보기. 로그인 전에는 식단 셸 없이(공개 목록·전체 화면
+// 재생기), 로그인하면 식단 셸 안에 뜬다(주소는 App 과 같은 짜임 — /meal/* 는 모두 식단 들머리 MealEntry 가 가른다).
+// 숫자는 서버가 계산해 주고(그대로 그린다),
 // 내 평균은 로그인했을 때만 통계 영양소에서, [이 레시피로 기록]은 레시피 음식을 받아 새 기록 draft 를 채운다.
 
 const LIST_URL = '/api/v1/meal-stories';
@@ -187,11 +190,13 @@ const renderAt = (path: string) =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/meal/stories/*" element={<MealStoryApp />} />
-          <Route path="/meal/new" element={<p>새 기록 화면</p>} />
-          <Route path="/login" element={<p>로그인 화면</p>} />
-        </Routes>
+        <Suspense fallback={null}>
+          <Routes>
+            <Route path="/meal/new" element={<p>새 기록 화면</p>} />
+            <Route path="/meal/*" element={<MealEntry />} />
+            <Route path="/login" element={<p>로그인 화면</p>} />
+          </Routes>
+        </Suspense>
         <Where />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -299,13 +304,48 @@ describe('건강식단 스토리', () => {
     expect(items.map((i) => [i.name, i.foodId, i.source])).toEqual([['저염 토마토 스파게티', 'food-1', 'catalog']]);
   });
 
-  it('목록 — 게시본 카드(주제·장면 수), 없는 스토리는 안내', async () => {
+  it('목록(로그인 전) — 식단의 공개 얼굴: 게시본 카드(주제·장면 수)와 로그인하고 기록하기, 식단 메뉴(셸)는 없다', async () => {
     server.use(http.get(LIST_URL, () => HttpResponse.json({ items: [listItem(), listItem({ slug: 'draft-x', status: 'draft', title: '초안 이야기' })] })));
     renderAt('/meal/stories');
     const card = await screen.findByRole('link', { name: /시험 나트륨 이야기/ });
     expect(card).toHaveAttribute('href', `/meal/stories/${story.slug}`);
     expect(card).toHaveTextContent('나트륨 줄이기 · 4장면');
     expect(screen.getByRole('link', { name: /초안 이야기/ })).toHaveTextContent('초안');
+    expect(screen.getByRole('link', { name: '로그인하고 식단 기록하기' })).toHaveAttribute('href', `/login?next=${encodeURIComponent('/meal')}`);
+    expect(screen.queryByRole('navigation', { name: '식단' })).not.toBeInTheDocument();
+  });
+
+  it('로그인 전 — 건강식단 말고 다른 식단 주소는 로그인으로', async () => {
+    renderAt('/meal/records');
+    expect(await screen.findByText('로그인 화면')).toBeInTheDocument();
+  });
+
+  it("나가는 단추는 왼쪽 위 하나 — 주소로 바로 들어왔으면 '건강식단'(목록으로), 닫기(✕)와 따로 있던 목록 링크는 없다", async () => {
+    server.use(http.get(LIST_URL, () => HttpResponse.json({ items: [listItem()] })));
+    renderAt(`/meal/stories/${story.slug}`);
+    expect(await screen.findByRole('heading', { name: '시험 표지 제목' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '닫기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '건강식단' })).not.toBeInTheDocument();
+    // 로그인 전에는 식단 셸(사이드 메뉴)이 없다 — 전체 화면.
+    expect(screen.queryByRole('navigation', { name: '식단' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '건강식단' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/meal/stories');
+    expect(await screen.findByRole('link', { name: /시험 나트륨 이야기/ })).toBeInTheDocument();
+  });
+
+  it("목록에서 들어왔으면 나가는 단추는 '뒤로' — 누르면 보던 목록으로, Esc 도 같다", async () => {
+    server.use(http.get(LIST_URL, () => HttpResponse.json({ items: [listItem()] })));
+    renderAt('/meal/stories');
+    fireEvent.click(await screen.findByRole('link', { name: /시험 나트륨 이야기/ }));
+    expect(await screen.findByRole('heading', { name: '시험 표지 제목' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+    expect(await screen.findByRole('link', { name: /시험 나트륨 이야기/ })).toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent('/meal/stories');
+
+    fireEvent.click(screen.getByRole('link', { name: /시험 나트륨 이야기/ }));
+    await screen.findByRole('heading', { name: '시험 표지 제목' });
+    fireEvent.keyDown(screen.getByRole('region', { name: story.title }), { key: 'Escape' });
+    expect(await screen.findByRole('link', { name: /시험 나트륨 이야기/ })).toBeInTheDocument();
   });
 
   it('없는 스토리 — 찾지 못했다고 하고 목록으로', async () => {
@@ -549,6 +589,36 @@ describe('건강식단 스토리 — 영상으로 보기', () => {
     expect(screen.getByText(/장면 글을 읽으려면 ‘글로 보기’/)).toBeInTheDocument();
   });
 
+  it('식단 셸 안의 넓은 화면 — 옆 칸의 지금 장면이 재생을 따라가고, 장면을 누르면 그 장면 시작으로 건너뛴다(로그인 전에는 옆 칸이 없다)', async () => {
+    setWindow('matchMedia', (query: string) => ({
+      matches: query.includes('min-width: 64rem'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    // 로그인 전 — 전체 화면이라 옆 칸이 없다.
+    const guest = renderAt(`/meal/stories/${story.slug}`);
+    await findPlayer();
+    expect(screen.queryByRole('complementary', { name: '이야기 차례' })).not.toBeInTheDocument();
+    guest.unmount();
+    fake.reset();
+
+    useAuthStore.setState({ token: 't', user, isGuest: false });
+    server.use(http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json({ status: 'insufficient', rows: [] })));
+    renderAt(`/meal/stories/${story.slug}`);
+    await findPlayer();
+    const aside = screen.getByRole('complementary', { name: '이야기 차례' });
+    const scenes = () => within(aside).getAllByRole('button').slice(0, story.scenes.length);
+    expect(scenes().map((b) => b.getAttribute('aria-current'))).toEqual(['step', null, null, null]);
+    act(() => fake.reach(timeline.chapters[2]!.from + TRANSITION_FRAMES));
+    expect(scenes().map((b) => b.getAttribute('aria-current'))).toEqual([null, null, 'step', null]);
+    fireEvent.click(scenes()[1]!);
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 1));
+    // 레시피로 떠날 때는 돌아올 장면을 주소에 적는다(영상은 주소가 재생을 따라가지 않는다).
+    fireEvent.click(within(aside).getByRole('link', { name: '레시피 전체 보기' }));
+    expect(await screen.findByRole('heading', { name: '저염 토마토 스파게티' }, { timeout: 5000 })).toBeInTheDocument();
+  });
+
   it('동작 줄이기면 글로 보기가 기본 — 영상으로 보기를 고를 수 있다', async () => {
     setWindow('matchMedia', (query: string) => ({
       matches: query.includes('prefers-reduced-motion'),
@@ -561,6 +631,148 @@ describe('건강식단 스토리 — 영상으로 보기', () => {
     expect(screen.queryByTestId('remotion-player')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '영상으로 보기' }));
     await findPlayer();
+  });
+});
+
+describe('건강식단 — 식단 안에서(로그인)', () => {
+  // 로그인하면 /meal/stories 는 식단 셸 안의 한 구역 — 메뉴 항목은 없고(홈이 켜진다), 내 14일 판정에 맞는 이야기를 표시해 앞에 둔다.
+  const NUTRITION_URL = '/api/v1/meals/nutrition';
+  const analysis = (nutrients: unknown[]) => ({
+    days: 14,
+    analyzedDays: 9,
+    status: 'ok',
+    insufficientReason: null,
+    energy: { intakePerDay: 1900, requirement: 2200, percent: 86 },
+    nutrients,
+  });
+  const sodium = (over: Record<string, unknown> = {}) => ({
+    key: 'sodium',
+    label: '나트륨',
+    unit: 'mg',
+    intakePerDay: 3400,
+    reference: { kind: 'cdrr', amount: 2300, ear: null },
+    upperLimit: null,
+    percent: 148,
+    coverage: 1,
+    status: 'high',
+    supplementCandidate: false,
+    recordGap: false,
+    topSources: [],
+    foodSuggestions: [],
+    sideSuggestions: [],
+    typicalFoods: [],
+    note: null,
+    ...over,
+  });
+  const fiberStory = listItem({ slug: 'fiber-up', title: '식이섬유 채우는 이야기', topic: { nutrient: 'fiber', direction: 'increase' }, publishedAt: '2026-11-10' });
+
+  beforeEach(() => {
+    useAuthStore.setState({ token: 't', user, isGuest: false });
+    // 나트륨 이야기는 초안 — 관리자에게만 오고, 식단 안에서는 받은 대로 보인다('초안' 표시).
+    server.use(http.get(LIST_URL, () => HttpResponse.json({ items: [fiberStory, listItem({ status: 'draft' })] })));
+  });
+
+  it('식단 셸 안의 목록 — 내 기록에 맞는 이야기(나트륨 많음 → 나트륨 줄이기)를 표시해 앞에, 메뉴에는 건강식단 항목 없이 홈이 켜진다', async () => {
+    server.use(http.get(NUTRITION_URL, () => HttpResponse.json(analysis([sodium()]))));
+    renderAt('/meal/stories');
+    expect(await screen.findByRole('heading', { level: 1, name: '건강식단' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText('내 기록 · 나트륨 많음')).toBeInTheDocument();
+    const cards = screen.getAllByRole('link', { name: /이야기/ });
+    expect(cards.map((c) => c.getAttribute('href'))).toEqual([`/meal/stories/${story.slug}`, '/meal/stories/fiber-up']);
+    expect(cards[0]).toHaveTextContent('내 기록 · 나트륨 많음');
+    expect(cards[0]).toHaveTextContent('초안');
+    expect(cards[1]).not.toHaveTextContent('내 기록');
+    // 식단 셸 — 사이드 메뉴와 하단 탭. 건강식단은 메뉴 항목이 아니고, 이 구역에서는 홈이 켜진다.
+    const navs = screen.getAllByRole('navigation', { name: '식단' });
+    expect(navs).toHaveLength(2);
+    for (const nav of navs) {
+      expect(within(nav).queryByRole('link', { name: '건강식단' })).not.toBeInTheDocument();
+      expect(within(nav).getByRole('link', { name: '홈' })).toHaveAttribute('aria-current', 'page');
+    }
+    expect(screen.queryByRole('link', { name: '로그인하고 식단 기록하기' })).not.toBeInTheDocument();
+  });
+
+  it('이야기 한 편도 식단 셸 안에서 — 사이드 메뉴가 남고(홈이 켜진다) 하단 탭은 없다, 뒤로는 보던 목록으로', async () => {
+    server.use(
+      http.get(NUTRITION_URL, () => HttpResponse.json(analysis([sodium()]))),
+      http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(story)),
+      http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json({ status: 'insufficient', rows: [] })),
+    );
+    renderAt('/meal/stories');
+    fireEvent.click(await screen.findByRole('link', { name: /시험 나트륨 이야기/ }, { timeout: 5000 }));
+    expect(await screen.findByRole('heading', { name: '시험 표지 제목' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent(`/meal/stories/${story.slug}`);
+    // 사이드 메뉴만 — 입력·상세 화면처럼 하단 탭은 숨긴다(휴대폰에서는 재생기가 화면을 가득 쓴다).
+    const navs = screen.getAllByRole('navigation', { name: '식단' });
+    expect(navs).toHaveLength(1);
+    expect(within(navs[0]!).getByRole('link', { name: '홈' })).toHaveAttribute('aria-current', 'page');
+    expect(within(navs[0]!).getByRole('link', { name: '기록' })).toHaveAttribute('href', '/meal/records');
+    // 이야기 안의 나가는 단추는 '뒤로' 하나(사이트 서랍의 닫기 단추는 셸의 것).
+    const region = screen.getByRole('region', { name: story.title });
+    expect(within(region).queryByRole('button', { name: '닫기' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+    expect(await screen.findByRole('heading', { level: 1, name: '건강식단' })).toBeInTheDocument();
+    expect(screen.getAllByRole('navigation', { name: '식단' })).toHaveLength(2);
+  });
+
+  it('넓은 화면이면 재생기 옆에 이야기 옆 칸 — 주제·제목, 장면 차례(지금 장면 표시·누르면 그 장면으로), 기록·레시피·공유', async () => {
+    // 식단 셸 안 + 64rem 이상에서만 — 좁은 화면·로그인 전에는 그리지 않는다(위 테스트들에는 옆 칸이 없다).
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({ matches: query.includes('min-width: 64rem'), media: query, addEventListener: () => {}, removeEventListener: () => {} }),
+    });
+    try {
+      server.use(
+        http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(story)),
+        http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json({ status: 'insufficient', rows: [] })),
+      );
+      renderAt(`/meal/stories/${story.slug}?s=2`);
+      const aside = await screen.findByRole('complementary', { name: '이야기 차례' }, { timeout: 5000 });
+      expect(within(aside).getByRole('heading', { level: 1, name: story.title })).toBeInTheDocument();
+      expect(aside).toHaveTextContent('건강식단 · 나트륨 줄이기');
+      const scenes = within(aside).getAllByRole('button', { name: /처음|하루 나트륨|같은 스파게티, 다른 나트륨|오늘 한 끼로/ });
+      expect(scenes.map((b) => b.textContent)).toEqual(['1처음', '2하루 나트륨', '3같은 스파게티, 다른 나트륨', '4오늘 한 끼로']);
+      expect(scenes.map((b) => b.getAttribute('aria-current'))).toEqual([null, 'step', null, null]);
+      // 장면을 누르면 그 장면으로 — 주소와 본문이 따라간다.
+      fireEvent.click(scenes[2]!);
+      expect(screen.getByTestId('where')).toHaveTextContent(`/meal/stories/${story.slug}?s=3`);
+      expect(screen.getByRole('heading', { name: '같은 스파게티, 다른 나트륨' })).toBeInTheDocument();
+      expect(within(aside).getAllByRole('button')[2]).toHaveAttribute('aria-current', 'step');
+      // 끝까지 보지 않아도 쓸 수 있는 단추.
+      expect(within(aside).getByRole('button', { name: '이 레시피로 기록' })).toBeInTheDocument();
+      expect(within(aside).getByRole('link', { name: '레시피 전체 보기' })).toHaveAttribute('href', `/meal/stories/${story.slug}/recipe`);
+      expect(within(aside).getByRole('button', { name: '공유하기' })).toBeInTheDocument();
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia');
+    }
+  });
+
+  it('레시피 전체 보기도 식단 셸 안에서', async () => {
+    server.use(http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(story)));
+    renderAt(`/meal/stories/${story.slug}/recipe`);
+    expect(await screen.findByRole('heading', { name: '저염 토마토 스파게티' }, { timeout: 5000 })).toBeInTheDocument();
+    const navs = screen.getAllByRole('navigation', { name: '식단' });
+    expect(navs).toHaveLength(1);
+    expect(within(navs[0]!).getByRole('link', { name: '홈' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('판정이 맞지 않거나 기록 더 필요면 표시하지 않고 서버가 준 차례(새 것 먼저) 그대로', async () => {
+    server.use(
+      http.get(NUTRITION_URL, () =>
+        HttpResponse.json(
+          analysis([
+            sodium({ status: 'ok', percent: 80, intakePerDay: 1850 }),
+            sodium({ key: 'fiber', label: '식이섬유', unit: 'g', status: 'low', recordGap: true, reference: { kind: 'ai', amount: 25, ear: null } }),
+          ]),
+        ),
+      ),
+    );
+    renderAt('/meal/stories');
+    expect(await screen.findByRole('heading', { level: 1, name: '건강식단' }, { timeout: 5000 })).toBeInTheDocument();
+    const cards = await screen.findAllByRole('link', { name: /이야기/ });
+    expect(cards.map((c) => c.getAttribute('href'))).toEqual(['/meal/stories/fiber-up', `/meal/stories/${story.slug}`]);
+    expect(screen.queryByText(/^내 기록 ·/)).not.toBeInTheDocument();
   });
 });
 

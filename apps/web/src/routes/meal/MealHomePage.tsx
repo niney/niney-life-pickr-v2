@@ -35,6 +35,7 @@ import { prepareMealEntry } from './mealDraftStart';
 import { MEAL_NUTRIENT_TONE } from './mealNutrientTone';
 import { useMealOpen } from './mealPanel';
 import { MEAL_PATH, MEAL_STORY_PATH } from './mealPaths';
+import { findStoryFor } from './mealStoryMatch';
 import { MealMissedDaysLink, MealSkipNudge } from './MealSkip';
 
 // 식단 홈(2026-11-08 리뉴얼) — 간단명료한 대시보드. 오늘(끼니 4칸 + 열량), 다음 끼니 추천, 영양정보 라벨(최근 14일
@@ -117,7 +118,7 @@ export const MealHomePage = () => {
       />
       {/* 지난 2주에 한 끼만 적힌 날이 둘 이상이면 영양 탭 '빠진 날 정리'(체크 목록)로 — 한 번에 정리. */}
       <MealMissedDaysLink />
-      <NewStoryCard today={today} />
+      <HomeStory analysis={nutrition.data ?? null} today={today} />
       <div className="meal-dash">
         <Today
           entries={dayEntries}
@@ -528,21 +529,51 @@ const Week = ({
   );
 };
 
-// 새 건강식단 이야기 — 게시한 지 30일 안의 가장 새 이야기 한 줄(그 뒤엔 사이드 메뉴·사이트 메뉴의 '건강식단'에서).
+// 건강식단 한 줄 — 늘 있는 자리(2026-11-10: 건강식단을 별도 메뉴가 아니라 식단 안에 둔다). 내 최근 14일 판정에 맞는 이야기
+// ('나트륨 많음' → 나트륨 줄이기)를 먼저(라벨과 같은 차례 — 많음·부족·조금 부족), 없으면 가장 새 이야기. 판정이 '기록 더 필요'면
+// 잇지 않는다(빠진 끼니 탓일 수 있다). 모든 이야기는 '모두 보기'(식단 안 목록)로.
+// 초안은 관리자에게만 온다 — 받은 대로 보이고 '초안'이라고 표시한다(메뉴 항목이 없어 초안도 여기로 들어간다).
 const NEW_STORY_DAYS = 30;
-const NewStoryCard = ({ today }: { today: string }) => {
+const HomeStory = ({ analysis, today }: { analysis: MealNutritionAnalysisType | null; today: string }) => {
   const stories = useMealStories();
-  const latest = stories.data?.items.find((s) => s.status === 'published') ?? null;
-  const age = latest ? daysBetween(latest.publishedAt, today) : null;
-  if (!latest || age === null || age > NEW_STORY_DAYS) return null;
+  const items = stories.data?.items ?? [];
+  const newest = items[0];
+  if (!newest) return null;
+  const rows =
+    analysis && analysis.status !== 'insufficient'
+      ? analysis.nutrients
+          .map((n) => ({ n, d: mealNutrientDisplayStatus(n) }))
+          .sort((a, b) => FLAG_ORDER[a.d] - FLAG_ORDER[b.d])
+      : [];
+  let matched: { story: (typeof items)[number]; label: string } | null = null;
+  for (const { n, d } of rows) {
+    const story = findStoryFor(items, n.key, d);
+    if (story) {
+      matched = { story, label: `${n.label} ${MEAL_NUTRIENT_STATUS_LABEL[d]}` };
+      break;
+    }
+  }
+  const story = matched?.story ?? newest;
+  const age = daysBetween(story.publishedAt, today);
+  // 머리말 — '건강식단'(이 줄이 건강식단으로 들어가는 문이라 굵게) 뒤에 왜 이 이야기인지.
+  const why = matched ? ` · ${matched.label}` : age !== null && age <= NEW_STORY_DAYS ? ' 새 이야기' : '';
+  const tail = story.status === 'draft' ? `${why} · 초안` : why;
   return (
-    <Link to={MEAL_STORY_PATH.story(latest.slug)} className="meal-story-card">
-      <span className="meal-story-card-kicker">건강식단 새 이야기</span>
-      <span className="meal-story-card-title">{latest.title}</span>
-      <span className="meal-story-card-go" aria-hidden>
-        보기 →
-      </span>
-    </Link>
+    <section className="meal-story-card" aria-label="건강식단">
+      <Link to={MEAL_STORY_PATH.story(story.slug)} className="meal-story-card-main">
+        <span className="meal-story-card-kicker">
+          <b>건강식단</b>
+          {tail}
+        </span>
+        <span className="meal-story-card-title">{story.title}</span>
+        <span className="meal-story-card-go" aria-hidden>
+          보기 →
+        </span>
+      </Link>
+      <Link to={MEAL_STORY_PATH.list} className="meal-story-card-all">
+        모두 보기
+      </Link>
+    </section>
   );
 };
 

@@ -14,8 +14,9 @@ export const MEAL_PATH = {
   edit: (id: string) => `/meal/${id}/edit`,
 } as const;
 
-// 건강식단 스토리(2026-11-09) — /meal 아래지만 로그인 없이 누구나 보는 화면이라 식단 셸(MealApp) 밖에서 띄운다(App 의
-// /meal/stories/* 가 /meal/* 보다 먼저 잡힌다).
+// 건강식단 스토리(2026-11-09) — 이야기 한 편(story)과 레시피(recipe)는 로그인 없이 누구나 보는 전체 화면이라 식단 셸 밖에서
+// 띄운다(App 의 /meal/stories/:slug/* 가 /meal/* 보다 먼저 잡힌다). 목록(list)은 로그인하면 식단 셸 안의 한 구역이고 로그인
+// 전에는 공개 목록이다(MealEntry 가 가른다 — 2026-11-10: 건강식단을 별도 메뉴로 두지 않는다).
 export const MEAL_STORY_PATH = {
   list: '/meal/stories',
   story: (slug: string) => `/meal/stories/${slug}`,
@@ -31,6 +32,7 @@ export const MEAL_SECTION_PATHS: ReadonlySet<string> = new Set([
   MEAL_PATH.nutrition,
   MEAL_PATH.recommend,
   MEAL_PATH.settings,
+  MEAL_STORY_PATH.list,
 ]);
 
 const SECTION_SEGMENTS: ReadonlySet<string> = new Set([
@@ -40,6 +42,8 @@ const SECTION_SEGMENTS: ReadonlySet<string> = new Set([
   'nutrition',
   'recommend',
   'settings',
+  // 건강식단 목록 — 기록 id 가 아니다(상세 패널로 열지 않는다).
+  'stories',
 ]);
 
 /** 패널로 띄울 수 있는 주소인가 — 상세(/meal/:id)는 'detail', 새 기록·수정은 'form'. 구역 화면은 null. */

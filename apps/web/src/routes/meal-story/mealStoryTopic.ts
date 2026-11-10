@@ -19,5 +19,8 @@ const NUTRIENT_LABEL: Record<MealNutrientKeyType, string> = {
   folate: '엽산',
 };
 
+/** 건강식단 목록의 한 줄 소개 — 로그인 전 목록과 식단 안 목록이 같이 쓴다. */
+export const MEAL_STORY_INTRO = '주제 하나를 장면으로 넘겨 봐요 — 줄이는 방법, 만들어 먹는 레시피, 바꿔 먹기까지.';
+
 export const mealStoryTopicLabel = (topic: MealStoryTopicType | null): string =>
   topic ? `${NUTRIENT_LABEL[topic.nutrient]} ${topic.direction === 'reduce' ? '줄이기' : '채우기'}` : '건강식단';

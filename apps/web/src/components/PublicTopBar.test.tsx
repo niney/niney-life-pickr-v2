@@ -47,6 +47,17 @@ describe('PublicTopBar', () => {
     expect(screen.getByRole('link', { name: '일상지도' })).toHaveAttribute('href', '/life-map');
   });
 
+  it("건강식단은 따로 두지 않는다 — '식단' 하나가 로그인 전에는 건강식단 목록으로, 로그인하면 식단 홈으로", () => {
+    const { unmount } = renderBar();
+    expect(screen.queryByRole('link', { name: '건강식단' })).toBeNull();
+    expect(screen.getByRole('link', { name: '식단' })).toHaveAttribute('href', '/meal/stories');
+    unmount();
+    useAuthStore.setState({ token: 't', user: admin, isGuest: false });
+    renderBar();
+    expect(screen.queryByRole('link', { name: '건강식단' })).toBeNull();
+    expect(screen.getByRole('link', { name: '식단' })).toHaveAttribute('href', '/meal');
+  });
+
   it('로그인(ADMIN): 계정 메뉴 하나 — 열면 이메일·내 정산·관리자·로그아웃, ESC·바깥 클릭으로 닫힘', () => {
     server.use(http.get('/api/v1/air/location', () => HttpResponse.json({ location: null })));
     useAuthStore.setState({ token: 't', user: admin, isGuest: false });

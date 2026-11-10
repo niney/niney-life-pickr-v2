@@ -19,6 +19,9 @@
     background: var(--background);
     outline: none;
   }
+  /* 재생기 틀은 키(←·→·Esc)를 받으려고 포커스를 갖는다 — 테두리는 그리지 않는다(식단 테마의 :focus-visible 이 더 세서 다시 끈다.
+   * 식단 셸 안에서는 틀이 본문 폭을 다 써서 큰 네모가 보였다). 안의 단추들은 테마대로 테두리가 보인다. */
+  .meal-app .msp:focus-visible { outline: none; }
   .msp-card {
     position: relative;
     display: flex;
@@ -52,6 +55,8 @@
   .msp-count { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted-foreground); font-weight: 700; }
   .msp-draft { border: 1.5px dashed currentColor; padding: 0 0.35rem; font-size: 0.7rem; }
   .msp-icon { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; margin-right: -0.6rem; }
+  /* 나가는 단추는 왼쪽 위 '← 뒤로' 하나(식단 상세·입력 화면과 같다) */
+  .msp-back { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; margin-left: -0.3rem; padding: 0 0.3rem; font-weight: 800; }
   .msp-stage {
     position: relative;
     display: flex;
@@ -81,6 +86,37 @@
   .msp-nav button[aria-disabled='true'] { opacity: 0.2; cursor: default; }
   .msp-nav-hint { font-size: 0.75rem; color: var(--muted-foreground); }
   .msp-status { display: flex; flex: 1; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
+
+  /* ── 식단 셸 안(로그인) ── 넓은 화면(사이드 메뉴가 보이는 48rem~)에서는 화면을 덮지 않고 본문 자리에 놓는다 — 사이드 메뉴가
+   * 그대로 남아 식단을 떠나지 않는다. 카드는 본문 왼쪽에 맞추고 높이는 화면에 맞춘다(본문 위아래 여백을 뺀 만큼).
+   * 그보다 좁으면(휴대폰) 위 기본값대로 화면 가득 덮는다 — 셸이 상단바·하단 탭을 숨긴다. */
+  @media (min-width: 48rem) {
+    /* 본문 위아래 여백(위 2~2.5rem·아래 3rem)을 조금 당겨 카드 높이를 번다 — 세로 영상은 높이가 곧 글씨 크기다(노트북 768px). */
+    .meal-story-inshell .msp { position: static; z-index: auto; display: block; margin: -0.75rem 0 -2rem; background: none; }
+    .meal-story-inshell .msp-card { width: min(28rem, 100%); height: min(54rem, calc(100dvh - 4rem)); }
+  }
+  /* 이야기 옆 칸(64rem~, 식단 셸 안에서만 그린다) — 카드 오른쪽: 주제·제목·요약, 장면 차례(지금 장면은 먹색 바탕), 단추 */
+  @media (min-width: 64rem) {
+    .meal-story-inshell .msp { display: flex; align-items: flex-start; gap: 2.5rem; }
+    .meal-story-inshell .msp-card { flex: none; }
+  }
+  /* 높이는 카드까지 — 넘치면 장면 차례만 스크롤하고 제목과 단추는 늘 보인다 */
+  .msa { display: flex; flex: 1 1 0; min-width: 0; max-width: 30rem; max-height: min(54rem, calc(100dvh - 4rem)); flex-direction: column; gap: 1.1rem; padding: 0.25rem 2px 2px; }
+  .msa-kicker { font-size: 0.8rem; font-weight: 800; color: var(--muted-foreground); }
+  .msa-title { margin-top: 0.3rem; font-size: 1.75rem; line-height: 1.2; font-weight: 800; letter-spacing: -0.035em; text-wrap: balance; }
+  .msa-summary { margin-top: 0.5rem; font-size: 0.95rem; line-height: 1.55; color: var(--muted-foreground); }
+  .msa-scenes { flex: 0 1 auto; min-height: 6rem; overflow-y: auto; border-top: var(--meal-line) solid var(--foreground); }
+  .msa-scenes li { border-bottom: 1px solid var(--border); }
+  .msa-scene { display: flex; width: 100%; align-items: baseline; gap: 0.75rem; min-height: 2.5rem; padding: 0.42rem 0.6rem; text-align: left; font-size: 0.92rem; font-weight: 700; }
+  .msa-scene:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); }
+  .msa-scene[aria-current='step'] { background: var(--foreground); color: var(--card); }
+  .msa-no { flex: none; width: 1.4rem; font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+  .msa-scene[aria-current='step'] .msa-no { color: inherit; opacity: 0.7; }
+  .msa-name { min-width: 0; }
+  .msa-actions { display: grid; flex: none; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .msa-actions > :first-child:nth-last-child(odd) { grid-column: 1 / -1; }
+  /* 레시피 전체 보기 — 셸의 본문이 이미 여백을 갖는다 */
+  .meal-story-inshell .msr { margin: 0; padding: 0 0 2rem; }
 
   /* ── 영상으로 보기(MealStoryMotion) ── 무대는 9:16 틀 하나(남는 자리에 꼭 맞게 — 컨테이너 단위), 그 위에 누르기 판과
    * 마무리 단추. 영상 안의 움직임은 재생기가 그린다(여기 CSS 는 틀·단추만). */
@@ -298,6 +334,12 @@
   .msl-intro { margin-top: 0.5rem; font-size: 1rem; line-height: 1.55; color: var(--muted-foreground); }
   .msl-grid { display: grid; gap: 1rem; margin-top: 1.75rem; }
   @media (min-width: 40rem) { .msl-grid { grid-template-columns: 1fr 1fr; } }
+  /* 식단 셸 안의 목록 — 넓은 본문에 맞춰 칸 수를 늘리고(카드가 지나치게 커지지 않게), 머리 아래 여백은 머리가 갖는다 */
+  .msl-grid-wide { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); }
+  /* 사진 없는 표지(주제 글자만)는 식단 안에서 낮게 — 검은 덩어리가 화면을 다 차지하지 않게 */
+  .msl-grid-wide .msl-cover-text { aspect-ratio: 5 / 2; }
+  /* 내 기록에 맞는 이야기 표시 */
+  .msl-flag { align-self: flex-start; padding: 0.1rem 0.45rem; font-size: 0.72rem; font-weight: 800; color: var(--card); background: var(--foreground); }
   .msl-card { display: flex; height: 100%; flex-direction: column; background: var(--card); border: var(--meal-line) solid var(--foreground); }
   .msl-card:hover .msl-title { text-decoration: underline; text-underline-offset: 3px; }
   .msl-cover { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--foreground); }
