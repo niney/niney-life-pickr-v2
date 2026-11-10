@@ -1,0 +1,20 @@
+{
+  "name": "meal-motion",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "건강식단 스토리 영상(MP4) 렌더·검수 도구 — 장면 코드는 apps/web/src/routes/meal-story/motion 을 그대로 쓴다. pnpm 워크스페이스 밖(npm)이라 웹·서버 설치에 렌더러(웹팩·크롬·ffmpeg)가 섞이지 않는다.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts MealStory",
+    "frames": "remotion render src/index.ts MealStory --sequence --every-nth-frame=6 --image-format=jpeg --scale=0.25",
+    "sheet": "node sheet.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.541",
+    "@remotion/transitions": "4.0.541",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.541"
+  }
+}
