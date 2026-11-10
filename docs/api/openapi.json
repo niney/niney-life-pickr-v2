@@ -12638,6 +12638,34 @@
                                             "folate"
                                           ],
                                           "nullable": true
+                                        },
+                                        "equivalent": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "number",
+                                              "nullable": true
+                                            },
+                                            "unit": {
+                                              "type": "string"
+                                            },
+                                            "per": {
+                                              "type": "number",
+                                              "exclusiveMinimum": true,
+                                              "minimum": 0
+                                            }
+                                          },
+                                          "required": [
+                                            "label",
+                                            "value",
+                                            "unit",
+                                            "per"
+                                          ],
+                                          "additionalProperties": false,
+                                          "nullable": true
                                         }
                                       },
                                       "required": [
@@ -12646,7 +12674,8 @@
                                         "basis",
                                         "detail",
                                         "sources",
-                                        "my"
+                                        "my",
+                                        "equivalent"
                                       ],
                                       "additionalProperties": false
                                     }
@@ -12741,6 +12770,34 @@
                                             "folate"
                                           ],
                                           "nullable": true
+                                        },
+                                        "equivalent": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "number",
+                                              "nullable": true
+                                            },
+                                            "unit": {
+                                              "type": "string"
+                                            },
+                                            "per": {
+                                              "type": "number",
+                                              "exclusiveMinimum": true,
+                                              "minimum": 0
+                                            }
+                                          },
+                                          "required": [
+                                            "label",
+                                            "value",
+                                            "unit",
+                                            "per"
+                                          ],
+                                          "additionalProperties": false,
+                                          "nullable": true
                                         }
                                       },
                                       "required": [
@@ -12749,7 +12806,8 @@
                                         "basis",
                                         "detail",
                                         "sources",
-                                        "my"
+                                        "my",
+                                        "equivalent"
                                       ],
                                       "additionalProperties": false
                                     },
@@ -12809,6 +12867,34 @@
                                                 "folate"
                                               ],
                                               "nullable": true
+                                            },
+                                            "equivalent": {
+                                              "type": "object",
+                                              "properties": {
+                                                "label": {
+                                                  "type": "string"
+                                                },
+                                                "value": {
+                                                  "type": "number",
+                                                  "nullable": true
+                                                },
+                                                "unit": {
+                                                  "type": "string"
+                                                },
+                                                "per": {
+                                                  "type": "number",
+                                                  "exclusiveMinimum": true,
+                                                  "minimum": 0
+                                                }
+                                              },
+                                              "required": [
+                                                "label",
+                                                "value",
+                                                "unit",
+                                                "per"
+                                              ],
+                                              "additionalProperties": false,
+                                              "nullable": true
                                             }
                                           },
                                           "required": [
@@ -12817,7 +12903,8 @@
                                             "basis",
                                             "detail",
                                             "sources",
-                                            "my"
+                                            "my",
+                                            "equivalent"
                                           ],
                                           "additionalProperties": false
                                         }
@@ -12842,6 +12929,23 @@
                                   "additionalProperties": false
                                 }
                               },
+                              "fraction": {
+                                "type": "object",
+                                "properties": {
+                                  "bar": {
+                                    "type": "integer"
+                                  },
+                                  "denominator": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "bar",
+                                  "denominator"
+                                ],
+                                "additionalProperties": false,
+                                "nullable": true
+                              },
                               "note": {
                                 "type": "string",
                                 "nullable": true
@@ -12851,6 +12955,7 @@
                               "type",
                               "title",
                               "bars",
+                              "fraction",
                               "note"
                             ],
                             "additionalProperties": false
@@ -13165,6 +13270,34 @@
                                             "folate"
                                           ],
                                           "nullable": true
+                                        },
+                                        "equivalent": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "number",
+                                              "nullable": true
+                                            },
+                                            "unit": {
+                                              "type": "string"
+                                            },
+                                            "per": {
+                                              "type": "number",
+                                              "exclusiveMinimum": true,
+                                              "minimum": 0
+                                            }
+                                          },
+                                          "required": [
+                                            "label",
+                                            "value",
+                                            "unit",
+                                            "per"
+                                          ],
+                                          "additionalProperties": false,
+                                          "nullable": true
                                         }
                                       },
                                       "required": [
@@ -13173,7 +13306,8 @@
                                         "basis",
                                         "detail",
                                         "sources",
-                                        "my"
+                                        "my",
+                                        "equivalent"
                                       ],
                                       "additionalProperties": false
                                     }
@@ -13434,6 +13568,34 @@
                                       "folate"
                                     ],
                                     "nullable": true
+                                  },
+                                  "equivalent": {
+                                    "type": "object",
+                                    "properties": {
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "value": {
+                                        "type": "number",
+                                        "nullable": true
+                                      },
+                                      "unit": {
+                                        "type": "string"
+                                      },
+                                      "per": {
+                                        "type": "number",
+                                        "exclusiveMinimum": true,
+                                        "minimum": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "label",
+                                      "value",
+                                      "unit",
+                                      "per"
+                                    ],
+                                    "additionalProperties": false,
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
@@ -13442,7 +13604,8 @@
                                   "basis",
                                   "detail",
                                   "sources",
-                                  "my"
+                                  "my",
+                                  "equivalent"
                                 ],
                                 "additionalProperties": false
                               }

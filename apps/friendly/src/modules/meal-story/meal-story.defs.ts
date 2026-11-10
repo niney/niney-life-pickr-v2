@@ -41,6 +41,25 @@ export const MEAL_STORY_BUILTIN_SOURCES: Readonly<Record<string, string>> = {
   'kdri-2020': '2020 한국인 영양소 섭취기준(보건복지부·한국영양학회)',
   'mfds-raw': '식약처 전국통합식품영양성분정보(원재료성식품) 표준데이터 — 공공데이터포털 15100065',
   'mfds-processed': '식약처 전국통합식품영양성분정보(가공식품) 표준데이터 — 공공데이터포털 15100066',
+  // 환산 비율의 근거일 뿐 — 기준값은 섭취기준(kdri-2020)을 쓴다(WHO 의 권고량을 기준으로 섞지 않는다).
+  'who-sodium-2012': '나트륨을 소금으로 환산(소금 5g = 나트륨 2g, 소금 1g = 나트륨 400mg) — WHO 나트륨 섭취 지침(2012)',
+};
+
+/**
+ * 나트륨 → 소금 — 소금(염화나트륨)의 약 40%가 나트륨이라 나트륨 × 2.5 로 어림한다(WHO 지침이 나트륨 2g = 소금 5g 으로 쓴다).
+ * 화면이 숫자를 지어내지 않게 서버가 환산하고 출처를 붙인다. per = 소금 1g 에 든 나트륨 mg(나누기라 2,300 ÷ 400 처럼 딱 떨어진다).
+ */
+export const SODIUM_TO_SALT = { label: '소금', unit: 'g', per: 400, source: 'who-sodium-2012' } as const;
+
+/**
+ * '약 N분의 1' — 작은 값이 큰 값의 몇 분의 1 인지. N 은 2 이상의 정수로 어림하고, 실제 비와 15% 넘게 벗어나면 말하지 않는다
+ * (2.5배를 '3분의 1'이라 하지 않는다).
+ */
+export const fractionOf = (small: number, large: number): number | null => {
+  if (!(small > 0) || !(large > 0) || large < small) return null;
+  const ratio = large / small;
+  const n = Math.round(ratio);
+  return n >= 2 && Math.abs(ratio - n) / ratio <= 0.15 ? n : null;
 };
 
 const KDRI_KIND: Readonly<Record<'sodium' | 'potassium', { kind: 'cdrr' | 'ai'; basis: string; unit: 'mg' }>> = {

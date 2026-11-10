@@ -11,7 +11,9 @@ import {
   MEAL_STORY_BUILTIN_SOURCES,
   MEAL_STORY_NUTRIENTS,
   MEAL_STORY_RECIPE_NUTRIENTS,
+  SODIUM_TO_SALT,
   cautionText,
+  fractionOf,
   kdriFigure,
   roundForUnit,
 } from './meal-story.defs.js';
@@ -82,6 +84,7 @@ export const resolveMealStory = (
     detail: f.detail ?? null,
     sources: f.sources ?? [],
     my: f.my ?? null,
+    equivalent: f.equivalent ?? null,
   });
 
   const recipe = script.recipe ?? null;
@@ -205,6 +208,30 @@ export const resolveMealStory = (
     return figure({ value: ref.value, unit: ref.unit, sources: [ref.source] });
   };
 
+  // 나트륨을 가리키는 값인가 — 큰 숫자 장면에서 소금으로도 보여 준다.
+  const isSodium = (ref: MealStoryValueRefType): boolean =>
+    ('kdri' in ref && ref.kdri === 'sodium') ||
+    ('my' in ref && ref.my === 'sodium') ||
+    (('food' in ref || 'foods' in ref) && ref.nutrient === 'sodiumMg') ||
+    ('recipe' in ref && ref.recipe === 'sodiumMg');
+
+  /** 큰 숫자 장면의 숫자 — 나트륨이면 소금 환산을 붙인다(내 기록은 화면이 같은 per 로 나눈다). */
+  const statFigure = (ref: MealStoryValueRefType, where: string): MealStoryFigureType => {
+    const f = valueFigure(ref, where);
+    if (!isSodium(ref) || (f.value === null && !f.my)) return f;
+    usedSources.add(SODIUM_TO_SALT.source);
+    return {
+      ...f,
+      sources: [...f.sources, SODIUM_TO_SALT.source],
+      equivalent: {
+        label: SODIUM_TO_SALT.label,
+        value: f.value === null ? null : roundForUnit(f.value / SODIUM_TO_SALT.per, SODIUM_TO_SALT.unit),
+        unit: SODIUM_TO_SALT.unit,
+        per: SODIUM_TO_SALT.per,
+      },
+    };
+  };
+
   const asideLabel = (ref: MealStoryValueRefType, where: string): string => {
     if ('food' in ref || 'foods' in ref) return MEAL_STORY_NUTRIENTS[ref.nutrient].label;
     if ('recipe' in ref) return MEAL_STORY_NUTRIENTS[ref.recipe].label;
@@ -250,23 +277,28 @@ export const resolveMealStory = (
         return {
           type: 'stat',
           title: s.title,
-          figures: s.figures.map((f, k) => ({ label: f.label, figure: valueFigure(f.value, `${where} 숫자 ${k + 1}`) })),
+          figures: s.figures.map((f, k) => ({ label: f.label, figure: statFigure(f.value, `${where} 숫자 ${k + 1}`) })),
           note: s.note ?? null,
         };
-      case 'bars':
-        return {
-          type: 'bars',
-          title: s.title,
-          bars: s.bars.map((b, k) => ({
-            label: b.label,
-            figure: valueFigure(b.value, `${where} 막대 ${k + 1}`),
-            aside: b.aside
-              ? { label: asideLabel(b.aside, `${where} 막대 ${k + 1}`), figure: valueFigure(b.aside, `${where} 막대 ${k + 1} 옆 값`) }
-              : null,
-            highlight: b.highlight ?? false,
-          })),
-          note: s.note ?? null,
-        };
+      case 'bars': {
+        const bars = s.bars.map((b, k) => ({
+          label: b.label,
+          figure: valueFigure(b.value, `${where} 막대 ${k + 1}`),
+          aside: b.aside
+            ? { label: asideLabel(b.aside, `${where} 막대 ${k + 1}`), figure: valueFigure(b.aside, `${where} 막대 ${k + 1} 옆 값`) }
+            : null,
+          highlight: b.highlight ?? false,
+        }));
+        // 둘을 견주는 장면이고 단위가 같으면 — 작은 쪽이 큰 쪽의 '약 N분의 1'.
+        const [a, b] = bars;
+        let fraction: { bar: number; denominator: number } | null = null;
+        if (bars.length === 2 && a && b && a.figure.value !== null && b.figure.value !== null && a.figure.unit === b.figure.unit) {
+          const bar = a.figure.value <= b.figure.value ? 0 : 1;
+          const denominator = fractionOf(Math.min(a.figure.value, b.figure.value), Math.max(a.figure.value, b.figure.value));
+          if (denominator !== null) fraction = { bar, denominator };
+        }
+        return { type: 'bars', title: s.title, bars, fraction, note: s.note ?? null };
+      }
       case 'list':
         return {
           type: 'list',

@@ -209,6 +209,23 @@ export const checkMealStory = (
     }
   }
 
+  // 사람 확인 목록 — 서버가 어림한 환산(소금)과 '약 N분의 1'.
+  for (const [i, sc] of s.story.scenes.entries()) {
+    if (sc.type === 'stat') {
+      for (const f of sc.figures) {
+        const eq = f.figure.equivalent;
+        if (eq && eq.value !== null && f.figure.value !== null) {
+          review.push(`장면 ${i + 1} ${f.label}: ${f.figure.value.toLocaleString('ko-KR')}${f.figure.unit} → ${eq.label} 약 ${eq.value}${eq.unit}(÷ ${eq.per}) — 출처 who-sodium-2012 문구를 원문과 맞춰 본다`);
+        }
+      }
+    }
+    if (sc.type === 'bars' && sc.fraction) {
+      const small = sc.bars[sc.fraction.bar];
+      const large = sc.bars[1 - sc.fraction.bar];
+      review.push(`장면 ${i + 1}: ${small?.label} ${small?.figure.value}${small?.figure.unit} 은 ${large?.label} ${large?.figure.value}${large?.figure.unit} 의 '약 ${sc.fraction.denominator}분의 1'`);
+    }
+  }
+
   // 사람 확인 목록 — 값마다 어디서 왔는지.
   for (const spec of s.script.foods) {
     if (spec.manual) {

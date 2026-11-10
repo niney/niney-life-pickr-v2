@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { MealStorySceneType } from '@repo/api-contract';
 import { checkMealStory } from './meal-story.check.js';
 import { buildMealStoryFoods, type FoodRow } from './meal-story.foods.js';
+import { fractionOf } from './meal-story.defs.js';
 import { resolveMealStory } from './meal-story.resolve.js';
 import {
   MealStoryScript,
@@ -85,11 +86,35 @@ describe('resolveMealStory', () => {
       value: 2300,
       unit: 'mg',
       detail: '65~74세 2,100mg · 75세 이상 1,700mg',
-      sources: ['kdri-2020'],
+      // 나트륨 숫자는 소금으로도 — 서버가 환산하고(÷ 400) 출처를 붙인다.
+      sources: ['kdri-2020', 'who-sodium-2012'],
       my: null,
+      equivalent: { label: '소금', value: 5.8, unit: 'g', per: 400 },
     });
-    // 내 기록은 서버가 모른다 — 화면이 통계로 채운다.
-    expect(stat.figures[1]!.figure).toMatchObject({ value: null, my: 'sodium', basis: '내 최근 2주 하루 평균' });
+    // 내 기록은 서버가 모른다 — 화면이 통계로 채우고, 소금 환산도 같은 per 로 나눈다(값은 null).
+    expect(stat.figures[1]!.figure).toMatchObject({
+      value: null,
+      my: 'sodium',
+      basis: '내 최근 2주 하루 평균',
+      sources: ['who-sodium-2012'],
+      equivalent: { label: '소금', value: null, unit: 'g', per: 400 },
+    });
+  });
+
+  it('막대 둘 — 작은 쪽이 큰 쪽의 약 N분의 1(어림이 15% 넘게 벗어나면 말하지 않는다), 큰 숫자 장면 밖의 숫자에는 소금 환산이 없다', () => {
+    const { story } = resolveMealStory(base(), foods, imageUrl);
+    const bars = sceneOf(story.scenes, 'bars');
+    // 소스 150g 900mg · 직접 300mg → 둘째 막대가 첫째의 3분의 1.
+    expect(bars.fraction).toEqual({ bar: 1, denominator: 3 });
+    expect(bars.bars[0]!.figure.equivalent).toBeNull();
+    expect(fractionOf(97, 953)).toBe(10);
+    expect(fractionOf(100, 230)).toBe(2);
+    // 2.4배·2.5배는 '2분의 1'도 '3분의 1'도 아니다.
+    expect(fractionOf(100, 240)).toBeNull();
+    expect(fractionOf(100, 250)).toBeNull();
+    expect(fractionOf(100, 150)).toBeNull();
+    expect(fractionOf(100, 100)).toBeNull();
+    expect(fractionOf(0, 100)).toBeNull();
   });
 
   it('식품 값은 100g당 × 그램, 레시피 값은 인분으로 나눈 합계(묶음만 따로) — 값을 모르는 재료는 빼고 덧말로 밝힌다', () => {
@@ -112,7 +137,7 @@ describe('resolveMealStory', () => {
 
   it('출처 — 원고가 적은 것 뒤에 값에 쓰인 기본 출처, 사진은 있는 것만 주소', () => {
     const { story } = resolveMealStory(base(), foods, imageUrl);
-    expect(story.sources.map((s) => s.id)).toEqual(['my-book', 'kdri-2020', 'mfds-processed', 'mfds-raw']);
+    expect(story.sources.map((s) => s.id)).toEqual(['my-book', 'kdri-2020', 'who-sodium-2012', 'mfds-processed', 'mfds-raw']);
     expect(sceneOf(story.scenes, 'step')).toMatchObject({ number: 1, total: 2, text: '삶는다', image: '/img/step-1.jpg' });
     expect(story.recipe?.steps[1]?.image).toBeNull();
   });
@@ -181,6 +206,8 @@ describe('resolveMealStory', () => {
     expect(bars.bars[1]!.figure).toMatchObject({ value: 6.4, basis: '통밀국수 80g', detail: partial });
     expect(bars.bars[2]!.figure).toMatchObject({ value: null, basis: '국수 40g + 허브 40g', sources: [] });
     expect(issues).toEqual(['장면 2(bars) 막대 3: 허브 의 나트륨 값이 없다']);
+    // 막대가 셋이면 '약 N분의 1'은 없다.
+    expect(bars.fraction).toBeNull();
   });
 
   it('못 푼 가리킴은 issues — 없는 출처·단계·사진, foods.json 에 없는 식품', () => {

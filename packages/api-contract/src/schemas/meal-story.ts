@@ -66,6 +66,20 @@ export const MealStoryTopic = z.object({
 });
 export type MealStoryTopicType = z.infer<typeof MealStoryTopic>;
 
+/**
+ * 같은 양을 다른 단위로 본 값(나트륨 → 소금) — 서버가 환산하고 근거를 숫자의 sources 에 넣는다.
+ * 내 기록(my)은 서버가 값을 모르므로 value 는 null 이고, 화면이 내 값 ÷ per 로 같은 식을 쓴다.
+ */
+export const MealStoryEquivalent = z.object({
+  // 무엇으로 바꿨는지(예: '소금').
+  label: z.string(),
+  value: z.number().nullable(),
+  unit: z.string(),
+  // 환산 단위 1 이 원래 단위로 얼마인지(소금 1g = 나트륨 400mg) — 환산 값 = 원래 값 ÷ per.
+  per: z.number().positive(),
+});
+export type MealStoryEquivalentType = z.infer<typeof MealStoryEquivalent>;
+
 /** 장면 속 숫자 하나 — 서버가 계산한 값과 그 근거. */
 export const MealStoryFigure = z.object({
   // 계산한 값(단위대로 반올림). 내 기록(my)은 서버가 모르니 null — 화면이 통계(stats/nutrients)에서 채운다.
@@ -79,6 +93,8 @@ export const MealStoryFigure = z.object({
   sources: z.array(z.string()),
   // 내 기록 값이면 통계 영양소 키.
   my: MealStatsNutrientKey.nullable(),
+  // 다른 단위로 본 값 — 큰 숫자(stat) 장면의 나트륨 숫자에만(소금 몇 g). 없으면 null.
+  equivalent: MealStoryEquivalent.nullable(),
 });
 export type MealStoryFigureType = z.infer<typeof MealStoryFigure>;
 
@@ -130,6 +146,9 @@ export const MealStoryScene = z.discriminatedUnion('type', [
         highlight: z.boolean(),
       }),
     ),
+    // 막대가 둘이고 작은 쪽이 큰 쪽의 '약 N분의 1'로 말해도 될 때(서버가 두 값으로 계산 — 어림이 15% 넘게 벗어나면 null).
+    // bar = 작은 막대의 차례(0부터), denominator = N.
+    fraction: z.object({ bar: z.number().int(), denominator: z.number().int() }).nullable(),
     note: z.string().nullable(),
   }),
   z.object({
