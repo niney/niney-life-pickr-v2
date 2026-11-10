@@ -10,7 +10,16 @@ import { MEAL_PATH, MEAL_STORY_PATH } from '../meal/mealPaths';
 // 스토리 끝의 행동 — [이 레시피로 기록]은 레시피를 카탈로그 음식으로 맞춘 뒤(서버) 새 기록을 그 음식으로 채워 입력 화면으로
 // 간다. 로그인 전이면 로그인 뒤 이 장면으로 돌아온다. [공유하기]는 휴대폰 공유창, 없으면 링크 복사.
 
-export const RecordRecipeButton = ({ story, primary = true }: { story: MealStoryType; primary?: boolean }) => {
+export const RecordRecipeButton = ({
+  story,
+  primary = true,
+  returnTo,
+}: {
+  story: MealStoryType;
+  primary?: boolean;
+  /** 로그인 뒤 돌아올 주소 — 없으면 지금 주소(영상은 주소의 장면이 따라가지 않아 마무리 장면 주소를 넘긴다). */
+  returnTo?: string;
+}) => {
   const token = useAuthStore((s) => s.token);
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,7 +28,7 @@ export const RecordRecipeButton = ({ story, primary = true }: { story: MealStory
 
   const onClick = () => {
     if (!token) {
-      navigate(`/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`);
+      navigate(`/login?next=${encodeURIComponent(returnTo ?? `${location.pathname}${location.search}`)}`);
       return;
     }
     food.mutate(story.slug, {

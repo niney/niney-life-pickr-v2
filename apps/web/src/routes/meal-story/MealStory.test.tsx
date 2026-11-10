@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -7,6 +7,89 @@ import type { MealStoryFigureType, MealStoryType } from '@repo/api-contract';
 import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/shared';
 import { server } from '~/test/msw';
 import MealStoryApp from './MealStoryApp';
+import { startStoryFonts } from './mealStoryFont';
+import { toMotionMine } from './mealStoryMine';
+import type { StoryVideoProps } from './motion/StoryVideo';
+import { TRANSITION_FRAMES, buildTimeline, chapterSeekFrame } from './motion/timeline';
+
+// 영상 재생기(@remotion/player)는 jsdom 에서 그릴 수 없어 가짜로 — 재생기 메서드·이벤트만 흉내 내고 받은 props 를 남긴다.
+const fake = vi.hoisted(() => {
+  type Listener = (e: { detail: unknown }) => void;
+  const listeners = new Map<string, Set<Listener>>();
+  const state = { frame: 0, playing: false };
+  const emit = (name: string, detail?: unknown) => {
+    for (const l of listeners.get(name) ?? []) l({ detail });
+  };
+  const api = {
+    play: vi.fn(() => {
+      state.playing = true;
+      emit('play');
+    }),
+    pause: vi.fn(() => {
+      state.playing = false;
+      emit('pause');
+    }),
+    toggle: vi.fn(() => (state.playing ? api.pause() : api.play())),
+    seekTo: vi.fn((frame: number) => {
+      state.frame = frame;
+      emit('seeked', { frame });
+      emit('frameupdate', { frame });
+    }),
+    getCurrentFrame: () => state.frame,
+    isPlaying: () => state.playing,
+    addEventListener: (name: string, l: Listener) => {
+      listeners.set(name, (listeners.get(name) ?? new Set<Listener>()).add(l));
+    },
+    removeEventListener: (name: string, l: Listener) => {
+      listeners.get(name)?.delete(l);
+    },
+  };
+  const seen = { props: null as Record<string, unknown> | null };
+  return {
+    api,
+    state,
+    seen,
+    /** 재생기가 받은 props 를 남긴다(그릴 때마다). */
+    record: (props: Record<string, unknown>) => {
+      seen.props = props;
+    },
+    /** 재생기가 붙을 때 — 시작 프레임·자동 재생대로. */
+    mount: (initialFrame: number, autoPlay: boolean) => {
+      state.frame = initialFrame;
+      state.playing = autoPlay;
+      return api;
+    },
+    /** 재생이 그 프레임에 닿았다. */
+    reach: (frame: number) => {
+      state.frame = frame;
+      emit('frameupdate', { frame });
+    },
+    /** 끝까지 재생했다. */
+    end: () => {
+      state.playing = false;
+      emit('pause');
+      emit('ended');
+    },
+    reset: () => {
+      listeners.clear();
+      state.frame = 0;
+      state.playing = false;
+      for (const fn of [api.play, api.pause, api.toggle, api.seekTo]) fn.mockClear();
+    },
+  };
+});
+
+vi.mock('@remotion/player', async () => {
+  const React = await import('react');
+  const Player = ({ ref, ...props }: { ref?: React.Ref<unknown>; initialFrame?: number; autoPlay?: boolean } & Record<string, unknown>) => {
+    fake.record(props);
+    const initialFrame = props.initialFrame ?? 0;
+    const autoPlay = !!props.autoPlay;
+    React.useImperativeHandle(ref, () => fake.mount(initialFrame, autoPlay), [initialFrame, autoPlay]);
+    return React.createElement('div', { 'data-testid': 'remotion-player' });
+  };
+  return { Player };
+});
 
 // 건강식단 스토리(웹) — 누구나 보는 목록·전체 화면 재생기·레시피 전체 보기. 숫자는 서버가 계산해 주고(그대로 그린다),
 // 내 평균은 로그인했을 때만 통계 영양소에서, [이 레시피로 기록]은 레시피 음식을 받아 새 기록 draft 를 채운다.
@@ -62,7 +145,7 @@ const story: MealStoryType = {
     name: '저염 토마토 스파게티',
     servings: 1,
     dishType: 'noodle',
-    ingredients: [{ label: '스파게티 건면', grams: 80, note: '소금 없이 삶기', food: '스파게티(건면)' }],
+    ingredients: [{ label: '스파게티 건면', grams: 80, note: '소금 없이 삶기', food: '스파게티(건면)', icon: null }],
     steps: [{ text: '물에 소금 없이 삶아요.', tip: '면수를 남겨요.', image: null }],
     nutrition: [
       { key: 'kcal', label: '열량', figure: fig({ value: 481, unit: 'kcal', basis: '1인분' }) },
@@ -217,5 +300,301 @@ describe('건강식단 스토리 — 주소', () => {
     renderAt(`/meal/stories/${story.slug}?s=99`);
     expect(await screen.findByRole('heading', { name: '오늘 한 끼로' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: '다음 장면' })).toHaveAttribute('aria-disabled', 'true'));
+  });
+
+  it('막대 장면 — 값마다 서버가 단 덧말(표시한 제품 수)은 막대 아래에 한 번만', async () => {
+    const detail = '통밀 스파게티의 식이섬유 값은 표시한 제품 4개의 중앙값이에요';
+    const withDetail: MealStoryType = {
+      ...story,
+      scenes: story.scenes.map((s) =>
+        s.type === 'bars' ? { ...s, bars: s.bars.map((b) => ({ ...b, figure: { ...b.figure, detail } })) } : s,
+      ),
+    };
+    server.use(http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(withDetail)));
+    renderAt(`/meal/stories/${story.slug}?s=3`);
+    expect(await screen.findByRole('heading', { name: '같은 스파게티, 다른 나트륨' })).toBeInTheDocument();
+    expect(screen.getAllByText(`※ ${detail}`)).toHaveLength(1);
+  });
+});
+
+describe('건강식단 스토리 — 영상으로 보기', () => {
+  const timeline = buildTimeline(story);
+  const restore: (() => void)[] = [];
+  // jsdom 에 없는 브라우저 기능을 이 묶음에서만 — 영상 재생기는 ResizeObserver 가 있어야 켠다.
+  const setWindow = (name: 'ResizeObserver' | 'matchMedia', value: unknown) => {
+    Object.defineProperty(window, name, { configurable: true, writable: true, value });
+    restore.push(() => Reflect.deleteProperty(window, name));
+  };
+  const findPlayer = () => screen.findByTestId('remotion-player', {}, { timeout: 5000 });
+  const input = () => fake.seen.props?.inputProps as StoryVideoProps;
+
+  beforeEach(() => {
+    setWindow(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    fake.reset();
+    useAuthStore.setState({ token: null, user: null, isGuest: false });
+    server.use(http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(story)));
+  });
+  afterEach(() => {
+    for (const fn of restore.splice(0)) fn();
+  });
+
+  it('기본은 영상 — 장면마다 진행 칸, 다음 단추·→ 키·누르기는 그 장면 시작으로 건너뛰어 재생하고, 길게 누르면 멈춘다', async () => {
+    renderAt(`/meal/stories/${story.slug}`);
+    await findPlayer();
+    expect(fake.seen.props).toMatchObject({ durationInFrames: timeline.total, initialFrame: 0, autoPlay: true, initiallyMuted: true, controls: false, fps: 30 });
+    expect(input()).toMatchObject({ mine: null, loggedIn: false });
+    expect(screen.getByText('1 / 4')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이전 장면' })).toHaveAttribute('aria-disabled', 'true');
+
+    // 재생 중 건너뛰기는 seekTo 만 — 다시 트는 건 재생기 몫이다(여기서 또 play() 하면 영상 끝에서 처음부터 돈다).
+    fireEvent.click(screen.getByRole('button', { name: '다음 장면' }));
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 1));
+    expect(fake.api.play).not.toHaveBeenCalled();
+    expect(screen.getByText('2 / 4')).toBeInTheDocument();
+
+    const region = screen.getByRole('region', { name: story.title });
+    fireEvent.keyDown(region, { key: 'ArrowRight' });
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 2));
+    fireEvent.keyDown(region, { key: 'ArrowLeft' });
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 1));
+
+    // 멈춰 있을 때 건너뛰면 그 장면부터 튼다.
+    fireEvent.click(screen.getByRole('button', { name: '멈춤' }));
+    expect(fake.api.pause).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(region, { key: 'ArrowRight' });
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 2));
+    expect(fake.api.play).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(region, { key: 'ArrowLeft' });
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 1));
+
+    // 재생이 흘러가면 장면 수·진행 칸이 따라간다(지난 칸은 꽉, 지금 칸은 막 시작).
+    act(() => fake.reach(timeline.chapters[2]!.from + TRANSITION_FRAMES));
+    expect(screen.getByText('3 / 4')).toBeInTheDocument();
+    const fills = [...document.querySelectorAll<HTMLElement>('.msp-seg > i')].map((i) => i.style.transform);
+    expect(fills).toEqual(['scaleX(1)', 'scaleX(1)', 'scaleX(0)', 'scaleX(0)']);
+
+    // 누르기 — 왼쪽 30% 는 이전, 나머지는 다음.
+    const tap = document.querySelector<HTMLElement>('.msm-tap')!;
+    tap.getBoundingClientRect = () => ({ left: 0, top: 0, right: 300, bottom: 600, width: 300, height: 600, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(tap, { clientX: 40, clientY: 200, button: 0 });
+    fireEvent.pointerUp(tap, { clientX: 40, clientY: 200, button: 0 });
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 1));
+    fireEvent.pointerDown(tap, { clientX: 250, clientY: 200, button: 0 });
+    fireEvent.pointerUp(tap, { clientX: 250, clientY: 200, button: 0 });
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 2));
+
+    // 길게 누르면 멈추고, 떼면 다시 — 장면은 그대로.
+    const seeks = fake.api.seekTo.mock.calls.length;
+    fireEvent.pointerDown(tap, { clientX: 250, clientY: 200, button: 0 });
+    await act(() => new Promise((r) => setTimeout(r, 300)));
+    expect(fake.api.pause).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: '재생' })).toBeInTheDocument();
+    fireEvent.pointerUp(tap, { clientX: 250, clientY: 200, button: 0 });
+    expect(screen.getByRole('button', { name: '멈춤' })).toBeInTheDocument();
+    expect(fake.api.seekTo).toHaveBeenCalledTimes(seeks);
+  });
+
+  it('?s= 장면에서 시작 — 글로 보기는 지금 장면을 글로(주소에 남긴다), 영상으로 보기로 돌아온다', async () => {
+    renderAt(`/meal/stories/${story.slug}?s=3`);
+    await findPlayer();
+    expect(fake.seen.props).toMatchObject({ initialFrame: chapterSeekFrame(timeline, 2) });
+    expect(screen.getByText('3 / 4')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '글로 보기' }));
+    expect(await screen.findByRole('heading', { name: '같은 스파게티, 다른 나트륨' })).toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent(`/meal/stories/${story.slug}?s=3&view=text`);
+
+    fireEvent.click(screen.getByRole('button', { name: '영상으로 보기' }));
+    await findPlayer();
+    expect(screen.getByTestId('where')).toHaveTextContent(`/meal/stories/${story.slug}?s=3&view=motion`);
+  });
+
+  it('마무리 장면 — 영상 위에 진짜 단추(원고 actions), 다 보면 다시 보기, 로그인 전 기록은 마무리 장면으로 돌아올 주소', async () => {
+    renderAt(`/meal/stories/${story.slug}`);
+    await findPlayer();
+    expect(screen.queryByRole('link', { name: '레시피 전체 보기' })).not.toBeInTheDocument();
+
+    act(() => fake.reach(timeline.total - 1));
+    expect(screen.getByText('4 / 4')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '레시피 전체 보기' })).toHaveAttribute('href', `/meal/stories/${story.slug}/recipe`);
+    expect(screen.getByRole('button', { name: '공유하기' })).toBeInTheDocument();
+
+    act(() => fake.end());
+    fireEvent.click(screen.getByRole('button', { name: '처음부터 다시 보기' }));
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(0);
+    act(() => fake.reach(timeline.total - 1));
+
+    fireEvent.click(screen.getByRole('button', { name: '로그인하고 이 레시피로 기록' }));
+    expect(screen.getByTestId('where')).toHaveTextContent(`/login?next=${encodeURIComponent(`/meal/stories/${story.slug}?s=4`)}`);
+  });
+
+  it('내 값 — 로그인하면 최근 2주 통계 영양소가 영상 입력으로(판정 글자는 영양 탭 라벨, 값 없는 줄은 뺀다)', async () => {
+    useAuthStore.setState({ token: 't', user, isGuest: false });
+    server.use(
+      http.get(STATS_NUTRIENTS_URL, () =>
+        HttpResponse.json({
+          status: 'ok',
+          rows: [
+            { key: 'sodium', unit: 'mg', intakePerDay: 3120, percent: 136, status: 'high', recordGap: false },
+            { key: 'potassium', unit: 'mg', intakePerDay: null, percent: null, status: null, recordGap: false },
+          ],
+        }),
+      ),
+    );
+    renderAt(`/meal/stories/${story.slug}`);
+    await findPlayer();
+    await waitFor(() =>
+      expect(input()).toMatchObject({
+        loggedIn: true,
+        mine: { sodium: { value: 3120, unit: 'mg', percent: 136, statusLabel: '많음', over: true } },
+      }),
+    );
+    expect(Object.keys(input().mine ?? {})).toEqual(['sodium']);
+  });
+
+  it('다른 탭·앱으로 가면 멈추고 돌아오면 이어 튼다 — 멈춰 둔 영상은 돌아와도 그대로 멈춰 있다', async () => {
+    const setVisibility = (state: 'hidden' | 'visible') => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    restore.push(() => Reflect.deleteProperty(document, 'visibilityState'));
+    renderAt(`/meal/stories/${story.slug}`);
+    await findPlayer();
+
+    act(() => setVisibility('hidden'));
+    expect(fake.api.pause).toHaveBeenCalledTimes(1);
+    act(() => setVisibility('visible'));
+    expect(fake.api.play).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '멈춤' }));
+    expect(fake.api.pause).toHaveBeenCalledTimes(2);
+    act(() => setVisibility('hidden'));
+    act(() => setVisibility('visible'));
+    expect(fake.api.pause).toHaveBeenCalledTimes(2);
+    expect(fake.api.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('휴대폰(좁은 화면) — 아래 단추 줄 없이 영상을 키우고, 재생 단추는 위 막대에, 넘기기는 누르기로', async () => {
+    setWindow('matchMedia', (query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    renderAt(`/meal/stories/${story.slug}`);
+    await findPlayer();
+    expect(screen.queryByRole('button', { name: '다음 장면' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '이전 장면' })).not.toBeInTheDocument();
+    expect(screen.getByText('누르면 다음 · 길게 누르면 멈춤')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '멈춤' }));
+    expect(fake.api.pause).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: '재생' })).toBeInTheDocument();
+
+    const tap = document.querySelector<HTMLElement>('.msm-tap')!;
+    tap.getBoundingClientRect = () => ({ left: 0, top: 0, right: 300, bottom: 600, width: 300, height: 600, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(tap, { clientX: 250, clientY: 200, button: 0 });
+    fireEvent.pointerUp(tap, { clientX: 250, clientY: 200, button: 0 });
+    expect(fake.api.seekTo).toHaveBeenLastCalledWith(chapterSeekFrame(timeline, 1));
+    // 첫 장면을 벗어나면 손짓 안내는 사라진다.
+    expect(screen.queryByText('누르면 다음 · 길게 누르면 멈춤')).not.toBeInTheDocument();
+  });
+
+  it('영상 안의 글은 읽기 프로그램에 숨기고(굴러가는 숫자 띠가 통째로 읽힌다), 장면 번호를 소리 내어 알리지 않는다', async () => {
+    renderAt(`/meal/stories/${story.slug}`);
+    const player = await findPlayer();
+    expect(player.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByText('1 / 4')).not.toHaveAttribute('aria-live');
+    expect(screen.getByText(/장면 글을 읽으려면 ‘글로 보기’/)).toBeInTheDocument();
+  });
+
+  it('동작 줄이기면 글로 보기가 기본 — 영상으로 보기를 고를 수 있다', async () => {
+    setWindow('matchMedia', (query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    renderAt(`/meal/stories/${story.slug}`);
+    expect(await screen.findByRole('heading', { name: '시험 표지 제목' })).toBeInTheDocument();
+    expect(screen.queryByTestId('remotion-player')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '영상으로 보기' }));
+    await findPlayer();
+  });
+});
+
+describe('영상 글꼴 미리 받기(startStoryFonts)', () => {
+  // 글꼴 조각은 글자가 처음 그려질 때 받는다 — 미리 받아 두지 않으면 영상이 도는 중에 제목 글꼴이 바뀐다.
+  const withFonts = () => {
+    const pending: (() => void)[] = [];
+    const load = vi.fn((_font: string, _text?: string) => new Promise<unknown[]>((resolve) => pending.push(() => resolve([]))));
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { load } });
+    return { load, finish: () => pending.splice(0).forEach((fn) => fn()) };
+  };
+  // jsdom 은 바깥 CSS 를 받지 않는다 — 글꼴 CSS 가 다 왔다고 알린다.
+  const stylesheetsArrive = () => {
+    for (const link of document.head.querySelectorAll('link[rel="stylesheet"]')) link.dispatchEvent(new Event('load'));
+  };
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'fonts');
+    vi.useRealTimers();
+  });
+
+  it('글꼴 API 가 없으면 기다리지 않는다', () => {
+    expect(startStoryFonts({ ...story, slug: 'font-none' }).ready).toBe(true);
+  });
+
+  it('글꼴 CSS 가 온 뒤 스토리 글자로 두 글꼴을 받고, 다 받으면 준비됐다고 알린다 — 같은 스토리는 한 번만', async () => {
+    const fonts = withFonts();
+    const entry = startStoryFonts({ ...story, slug: 'font-ok' });
+    const told = vi.fn();
+    entry.subscribe(told);
+    expect(entry.ready).toBe(false);
+    expect(fonts.load).not.toHaveBeenCalled();
+
+    stylesheetsArrive();
+    await waitFor(() => expect(fonts.load).toHaveBeenCalledTimes(2));
+    expect(fonts.load.mock.calls.map((c) => c[0])).toEqual(['700 100px "Wanted Sans Variable"', '700 100px Gaegu']);
+    // 원고 글자와 장면 틀의 고정 문구가 함께 간다.
+    expect(fonts.load.mock.calls[1]![1]).toContain('시험 표지 제목');
+    expect(fonts.load.mock.calls[1]![1]).toContain('값 없음');
+    expect(entry.ready).toBe(false);
+
+    fonts.finish();
+    await waitFor(() => expect(entry.ready).toBe(true));
+    expect(told).toHaveBeenCalledTimes(1);
+    expect(startStoryFonts({ ...story, slug: 'font-ok' })).toBe(entry);
+    expect(fonts.load).toHaveBeenCalledTimes(2);
+  });
+
+  it('글꼴이 늦으면 1.5초만 기다리고 영상을 시작한다', () => {
+    vi.useFakeTimers();
+    withFonts();
+    const entry = startStoryFonts({ ...story, slug: 'font-slow' });
+    vi.advanceTimersByTime(1400);
+    expect(entry.ready).toBe(false);
+    vi.advanceTimersByTime(200);
+    expect(entry.ready).toBe(true);
+  });
+});
+
+describe('영상의 내 값(toMotionMine)', () => {
+  const result = (rows: unknown[], status: 'ok' | 'insufficient' = 'ok') =>
+    ({ status, rows }) as unknown as Parameters<typeof toMotionMine>[0];
+
+  it('기록이 모자라면 빈 값, 부족이어도 기록 공백이면 기록 더 필요', () => {
+    expect(
+      toMotionMine(result([{ key: 'sodium', unit: 'mg', intakePerDay: 900, percent: 39, status: 'ok', recordGap: false }], 'insufficient')),
+    ).toEqual({});
+    expect(toMotionMine(result([{ key: 'fiber', unit: 'g', intakePerDay: 9, percent: 36, status: 'low', recordGap: true }]))).toEqual({
+      fiber: { value: 9, unit: 'g', percent: 36, statusLabel: '기록 더 필요', over: false },
+    });
   });
 });

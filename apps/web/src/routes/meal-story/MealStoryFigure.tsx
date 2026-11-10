@@ -1,10 +1,10 @@
 import type { CSSProperties } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { MealStatsNutrientKeyType, MealStoryFigureType } from '@repo/api-contract';
-import { useAuthStore, useMealStatsNutrients } from '@repo/shared';
-import { mealNutrientDisplayStatus, toLocalDateKey } from '@repo/utils';
+import { mealNutrientDisplayStatus } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { MealNutrientChip } from '../meal/MealNutrientLine';
+import { useStoryMyStats } from './mealStoryMine';
 
 // 스토리 장면의 숫자 — 서버가 계산한 값(figure)을 굴러 올라가는 숫자로 그리고, 내 기록 값(figure.my)은 통계 영양소로 채운다.
 
@@ -68,18 +68,10 @@ export const AmountText = ({ figure }: { figure: MealStoryFigureType }) =>
     </span>
   );
 
-const daysAgoKey = (days: number): string => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return toLocalDateKey(d);
-};
-
 /** 내 최근 2주 하루 평균 — 로그인했을 때만 통계 영양소에서. 두 끼 이상 적은 날이 없으면 기록을 권한다. */
 const MyFigure = ({ nutrient, size }: { nutrient: MealStatsNutrientKeyType; size: 'xl' | 'lg' | 'md' | 'sm' }) => {
-  const token = useAuthStore((s) => s.token);
+  const { token, stats } = useStoryMyStats();
   const location = useLocation();
-  const today = daysAgoKey(0);
-  const stats = useMealStatsNutrients(daysAgoKey(13), today, !!token);
   if (!token) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
     return (

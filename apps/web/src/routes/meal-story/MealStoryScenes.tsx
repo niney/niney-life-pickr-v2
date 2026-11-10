@@ -60,6 +60,8 @@ const Stat = ({ scene }: { scene: Scene<'stat'> }) => (
 
 const Bars = ({ scene }: { scene: Scene<'bars'> }) => {
   const max = Math.max(1, ...scene.bars.map((b) => b.figure.value ?? 0));
+  // 값마다 서버가 단 덧말(예: 식이섬유는 표시한 제품 몇 개의 중앙값) — 같은 것은 한 번만, 막대 목록 아래에 작게.
+  const footnotes = [...new Set(scene.bars.map((b) => b.figure.detail).filter((d): d is string => !!d))];
   return (
     <div className="mss mss-bars">
       <h2 className="mss-title msp-rise">{scene.title}</h2>
@@ -84,6 +86,13 @@ const Bars = ({ scene }: { scene: Scene<'bars'> }) => {
           </li>
         ))}
       </ul>
+      {footnotes.length > 0 ? (
+        <ul className="mss-bar-foot msp-rise" style={order(scene.bars.length + 1)}>
+          {footnotes.map((d) => (
+            <li key={d}>※ {d}</li>
+          ))}
+        </ul>
+      ) : null}
       {scene.note ? (
         <p className="mss-note msp-rise" style={order(scene.bars.length + 1)}>
           {scene.note}

@@ -82,6 +82,59 @@
   .msp-nav-hint { font-size: 0.75rem; color: var(--muted-foreground); }
   .msp-status { display: flex; flex: 1; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
 
+  /* ── 영상으로 보기(MealStoryMotion) ── 무대는 9:16 틀 하나(남는 자리에 꼭 맞게 — 컨테이너 단위), 그 위에 누르기 판과
+   * 마무리 단추. 영상 안의 움직임은 재생기가 그린다(여기 CSS 는 틀·단추만). */
+  .msm-view { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding: 0 0.2rem; font-size: 0.8rem; font-weight: 800; }
+  .msm-stage { position: relative; display: grid; flex: 1; min-height: 0; place-items: center; container-type: size; }
+  .msm-frame { position: relative; width: min(100cqw, 100cqh * 9 / 16); height: min(100cqh, 100cqw * 16 / 9); }
+  /* 영상(읽기 프로그램에는 숨긴다)과, 글꼴을 받는 동안의 빈 종이 */
+  .msm-video,
+  .msm-wait { position: absolute; inset: 0; }
+  .msm-wait { display: grid; place-items: center; color: #6b5a4f; }
+  /* 휴대폰(좁은 화면) — 아래 단추 줄이 없다(영상이 그만큼 커진다). 재생 단추는 위 막대로, 장면 번호는 진행 칸이 대신한다. */
+  .msm-bar-play { margin-right: -0.35rem; margin-left: auto; }
+  @media (max-width: 39.99rem) {
+    .msm .msp-count { display: none; }
+    .msm .msm-stage { padding-bottom: env(safe-area-inset-bottom); }
+  }
+  /* 첫 장면에 잠깐 뜨는 손짓 안내 — 떴다가 사라진다(기본은 안 보임: '동작 줄이기'로 애니메이션이 꺼지면 뜨지 않는다) */
+  .msm-hint {
+    position: absolute;
+    bottom: 3%;
+    left: 50%;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    white-space: nowrap;
+    color: #fff;
+    background: rgb(11 13 12 / 0.78);
+    border-radius: 999px;
+    opacity: 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+    animation: msm-hint 4.2s ease-out 0.9s both;
+  }
+  /* 길게 누르면 멈추므로 휴대폰의 길게 누르기 메뉴·글자 고르기를 끈다 */
+  .msm-tap { position: absolute; inset: 0; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .msm-end {
+    position: absolute;
+    right: 6%;
+    bottom: 4%;
+    left: 6%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    animation: msp-rise 560ms cubic-bezier(0.2, 0.7, 0.2, 1) 1.4s both;
+  }
+  .msm-end .mss-btn { border-color: #fff; background: #fff; color: #0b0d0c; }
+  .msm-end .mss-btn-primary { border-color: #0b0d0c; background: #0b0d0c; color: #fff; }
+  /* 영상 마무리는 깅엄 식탁보 위라 흰 글씨가 묻힌다 — 크림 쪽지 위 먹색 */
+  .msm-sources { align-self: flex-start; max-width: 100%; padding: 0.2rem 0.55rem; font-size: 0.72rem; line-height: 1.5; color: #2a1d18; background: rgb(251 246 234 / 0.94); }
+  .msm-sources summary { font-weight: 800; cursor: pointer; }
+  .msm-sources ul { max-height: 5.5rem; margin-top: 0.3rem; overflow-y: auto; }
+  .msp-nav .msm-play { width: 3.25rem; height: 3.25rem; border-color: var(--foreground); background: var(--foreground); color: var(--card); }
+  .msm-error { padding: 2rem; font-weight: 700; text-align: center; }
+
   /* ── 장면 공통 ── */
   .mss { display: flex; flex: 1; flex-direction: column; gap: 1rem; padding: 1.25rem 1.5rem 1rem; }
   .mss-title { font-size: 1.65rem; line-height: 1.2; font-weight: 800; letter-spacing: -0.035em; text-wrap: balance; }
@@ -151,6 +204,7 @@
   .mss-bar.is-highlight .mss-bar-fill { background: var(--foreground); }
   .mss-bar.is-highlight .mss-bar-label { font-weight: 800; }
   .mss-bar-aside { margin-top: 0.3rem; font-size: 0.8rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .mss-bar-foot { font-size: 0.75rem; line-height: 1.5; color: var(--muted-foreground); }
 
   /* 목록 */
   .mss-list { display: flex; flex-direction: column; border-top: var(--meal-line-heavy) solid var(--foreground); }
@@ -276,6 +330,13 @@
 @keyframes mss-grow { from { transform: scaleX(0); } }
 @keyframes mss-kb { from { transform: scale(1.08); } }
 @keyframes msn-roll { from { transform: translateY(0); } }
+/* 손짓 안내만 예외로 중간 단계를 둔다(떴다가 사라진다 — 끝 상태가 '안 보임') */
+@keyframes msm-hint {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .meal-story-app *,

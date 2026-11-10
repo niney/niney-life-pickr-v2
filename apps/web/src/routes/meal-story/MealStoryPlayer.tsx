@@ -1,39 +1,45 @@
-import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import { Suspense, lazy, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { preload } from 'react-dom';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Clapperboard, Loader2, X } from 'lucide-react';
 import type { MealStoryType } from '@repo/api-contract';
 import { useMealStory } from '@repo/shared';
+import { useMediaQuery } from '~/lib/useMediaQuery';
 import { MEAL_STORY_PATH } from '../meal/mealPaths';
 import { MealStorySceneView } from './MealStoryScenes';
+import { startStoryFonts } from './mealStoryFont';
+import {
+  PREV_ZONE,
+  SWIPE_PX,
+  TAP_PX,
+  focusOnMount,
+  isInteractive,
+  sceneIndexFrom,
+  useCloseStory,
+  useStoryParams,
+} from './mealStoryNav';
 
-// 스토리 재생기 — 장면은 손으로 넘긴다(오른쪽 누르기·왼쪽으로 밀기·→ 키 = 다음, 왼쪽 30% 누르기·오른쪽으로 밀기·← 키 = 이전,
-// Esc = 닫기). 장면 안의 움직임만 저절로 돈다. 지금 장면은 주소 ?s=N(1부터) — 바꿀 때 기록을 쌓지 않아 뒤로 가기는 스토리를
-// 떠난다. 레시피 전체 보기에서 돌아와도 같은 장면이다.
+// 스토리 재생기 — 두 가지 보기. 영상으로 보기(기본, MealStoryMotion — 장면이 이어 재생되는 모션 그래픽)와 글로 보기(이 파일 —
+// 장면을 손으로 넘기고 장면 안의 움직임만 CSS 로 돈다). '동작 줄이기'를 켰거나 영상을 돌릴 수 없는 환경이면 글로 본다.
+// 글로 보기: 오른쪽 누르기·왼쪽으로 밀기·→ 키 = 다음, 왼쪽 30% 누르기·오른쪽으로 밀기·← 키 = 이전, Esc = 닫기. 지금 장면은
+// 주소 ?s=N(1부터) — 바꿀 때 기록을 쌓지 않아 뒤로 가기는 스토리를 떠난다. 레시피 전체 보기에서 돌아와도 같은 장면이다.
 
-const SWIPE_PX = 48;
-const TAP_PX = 10;
-const PREV_ZONE = 0.3;
+// 영상 재생기는 무거워 나눠 받는다. 스토리 응답을 기다리는 동안 미리 받기 시작한다(같은 import 는 한 번만 받는다) —
+// 응답 뒤에야 받기 시작하면 첫 화면이 그만큼 늦는다.
+const loadMotion = () => import('./MealStoryMotion');
+const MealStoryMotion = lazy(loadMotion);
 
-const isInteractive = (target: EventTarget | null): boolean =>
-  target instanceof Element && !!target.closest('a, button, summary, input, select, textarea, label');
-
-// 처음 그릴 때 한 번 — 키보드(←·→)를 바로 받게. 함수가 늘 같아 다시 그려도 다시 부르지 않는다.
-const focusOnMount = (el: HTMLElement | null): void => {
-  el?.focus({ preventScroll: true });
-};
+// 영상 재생기(@remotion/player)는 ResizeObserver 로 크기를 잰다 — 없는 환경(테스트 jsdom·아주 낡은 브라우저)은 글로 본다.
+const canPlayMotion = (): boolean => typeof window !== 'undefined' && typeof window.ResizeObserver === 'function';
 
 const sceneImage = (scene: MealStoryType['scenes'][number] | undefined): string | null =>
   scene && (scene.type === 'cover' || scene.type === 'step') ? scene.image : null;
 
-const Player = ({ story }: { story: MealStoryType }) => {
-  const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
-  const location = useLocation();
+const TextPlayer = ({ story, index, motionAvailable }: { story: MealStoryType; index: number; motionAvailable: boolean }) => {
+  const { update } = useStoryParams();
+  const close = useCloseStory();
   const start = useRef<{ x: number; y: number } | null>(null);
   const total = story.scenes.length;
-  const raw = Number.parseInt(params.get('s') ?? '1', 10);
-  const index = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), total) - 1 : 0;
   const scene = story.scenes[index]!;
 
   // 다음 장면 사진을 미리 받는다(React 가 head 에 한 번만 건다).
@@ -42,18 +48,7 @@ const Player = ({ story }: { story: MealStoryType }) => {
 
   const go = (i: number) => {
     if (i < 0 || i >= total || i === index) return;
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set('s', String(i + 1));
-        return next;
-      },
-      { replace: true },
-    );
-  };
-  const close = () => {
-    if (location.key !== 'default') navigate(-1);
-    else navigate(MEAL_STORY_PATH.list);
+    update({ index: i });
   };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -110,6 +105,12 @@ const Player = ({ story }: { story: MealStoryType }) => {
             <span className="msp-count" aria-live="polite">
               {index + 1} / {total}
             </span>
+            {motionAvailable ? (
+              <button type="button" className="msm-view" onClick={() => update({ index, view: 'motion' })}>
+                <Clapperboard className="size-4" aria-hidden />
+                영상으로 보기
+              </button>
+            ) : null}
             <button type="button" className="msp-icon" onClick={close} aria-label="닫기">
               <X className="size-5" aria-hidden />
             </button>
@@ -142,26 +143,57 @@ const Player = ({ story }: { story: MealStoryType }) => {
   );
 };
 
+const StatusCard = ({ children }: { children: ReactNode }) => (
+  <div className="msp">
+    <div className="msp-card">
+      <div className="msp-status">{children}</div>
+    </div>
+  </div>
+);
+
+const Spinner = () => <Loader2 className="size-5 animate-spin" aria-label="불러오는 중" />;
+
 export const MealStoryPlayer = () => {
   const { slug } = useParams();
   const story = useMealStory(slug);
-  if (story.data) return <Player story={story.data} />;
+  const { params } = useStoryParams();
+  const reduced = useMediaQuery('(prefers-reduced-motion: reduce)', false);
+  const motionAvailable = canPlayMotion();
+  const view = params.get('view');
+  const motion = motionAvailable && (view === 'motion' || (view !== 'text' && !reduced));
+  // 받다가 실패하면 lazy 쪽이 알아서 다시 알린다 — 여기서는 조용히.
+  if (motion) void loadMotion().catch(() => undefined);
+  if (story.data) {
+    const index = sceneIndexFrom(params.get('s'), story.data.scenes.length);
+    if (motion) {
+      // 영상에 나올 글자의 글꼴 조각도 재생기 코드와 함께 받기 시작한다(준비되면 MealStoryMotion 이 재생기를 붙인다).
+      startStoryFonts(story.data);
+      return (
+        <Suspense
+          fallback={
+            <StatusCard>
+              <Spinner />
+            </StatusCard>
+          }
+        >
+          <MealStoryMotion story={story.data} index={index} />
+        </Suspense>
+      );
+    }
+    return <TextPlayer story={story.data} index={index} motionAvailable={motionAvailable} />;
+  }
   return (
-    <div className="msp">
-      <div className="msp-card">
-        <div className="msp-status">
-          {story.isLoading ? (
-            <Loader2 className="size-5 animate-spin" aria-label="불러오는 중" />
-          ) : (
-            <div className="space-y-3">
-              <p className="font-bold">이야기를 찾지 못했어요.</p>
-              <Link to={MEAL_STORY_PATH.list} className="underline underline-offset-4">
-                건강식단 목록으로
-              </Link>
-            </div>
-          )}
+    <StatusCard>
+      {story.isLoading ? (
+        <Spinner />
+      ) : (
+        <div className="space-y-3">
+          <p className="font-bold">이야기를 찾지 못했어요.</p>
+          <Link to={MEAL_STORY_PATH.list} className="underline underline-offset-4">
+            건강식단 목록으로
+          </Link>
         </div>
-      </div>
-    </div>
+      )}
+    </StatusCard>
   );
 };
