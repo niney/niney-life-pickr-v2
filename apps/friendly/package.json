@@ -33,6 +33,7 @@
     "load:food-catalog": "tsx --env-file=.env scripts/load-food-catalog.ts",
     "build:meal-stories": "tsx scripts/build-meal-stories.ts",
     "check:meal-stories": "tsx scripts/check-meal-stories.ts",
+    "export:meal-story": "tsx scripts/export-meal-story.ts",
     "build:tarot-deck": "tsx scripts/build-tarot-deck.ts",
     "probe:tarot-reading": "tsx --env-file=.env scripts/probe-tarot-reading.ts",
     "probe:saju-g-reading": "tsx --env-file=.env scripts/probe-saju-g-reading.ts",

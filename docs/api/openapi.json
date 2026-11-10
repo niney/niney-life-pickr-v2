@@ -12878,11 +12878,41 @@
                                     "text": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "icon": {
+                                      "type": "string",
+                                      "enum": [
+                                        "bowl",
+                                        "kimchi",
+                                        "sauce",
+                                        "can",
+                                        "ramen",
+                                        "shaker",
+                                        "spoon",
+                                        "lemon",
+                                        "magnifier",
+                                        "label",
+                                        "dip",
+                                        "noodle",
+                                        "tomato",
+                                        "onion",
+                                        "garlic",
+                                        "oil",
+                                        "leaf",
+                                        "cheese",
+                                        "pot",
+                                        "pan",
+                                        "plate",
+                                        "timer",
+                                        "clock"
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
                                     "title",
-                                    "text"
+                                    "text",
+                                    "icon"
                                   ],
                                   "additionalProperties": false
                                 }
@@ -12932,13 +12962,43 @@
                                     },
                                     "food": {
                                       "type": "string"
+                                    },
+                                    "icon": {
+                                      "type": "string",
+                                      "enum": [
+                                        "bowl",
+                                        "kimchi",
+                                        "sauce",
+                                        "can",
+                                        "ramen",
+                                        "shaker",
+                                        "spoon",
+                                        "lemon",
+                                        "magnifier",
+                                        "label",
+                                        "dip",
+                                        "noodle",
+                                        "tomato",
+                                        "onion",
+                                        "garlic",
+                                        "oil",
+                                        "leaf",
+                                        "cheese",
+                                        "pot",
+                                        "pan",
+                                        "plate",
+                                        "timer",
+                                        "clock"
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
                                     "label",
                                     "grams",
                                     "note",
-                                    "food"
+                                    "food",
+                                    "icon"
                                   ],
                                   "additionalProperties": false
                                 }
@@ -12977,6 +13037,35 @@
                               "image": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "icon": {
+                                "type": "string",
+                                "enum": [
+                                  "bowl",
+                                  "kimchi",
+                                  "sauce",
+                                  "can",
+                                  "ramen",
+                                  "shaker",
+                                  "spoon",
+                                  "lemon",
+                                  "magnifier",
+                                  "label",
+                                  "dip",
+                                  "noodle",
+                                  "tomato",
+                                  "onion",
+                                  "garlic",
+                                  "oil",
+                                  "leaf",
+                                  "cheese",
+                                  "pot",
+                                  "pan",
+                                  "plate",
+                                  "timer",
+                                  "clock"
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -12985,7 +13074,8 @@
                               "total",
                               "text",
                               "tip",
-                              "image"
+                              "image",
+                              "icon"
                             ],
                             "additionalProperties": false
                           },
@@ -13207,13 +13297,43 @@
                               },
                               "food": {
                                 "type": "string"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "enum": [
+                                  "bowl",
+                                  "kimchi",
+                                  "sauce",
+                                  "can",
+                                  "ramen",
+                                  "shaker",
+                                  "spoon",
+                                  "lemon",
+                                  "magnifier",
+                                  "label",
+                                  "dip",
+                                  "noodle",
+                                  "tomato",
+                                  "onion",
+                                  "garlic",
+                                  "oil",
+                                  "leaf",
+                                  "cheese",
+                                  "pot",
+                                  "pan",
+                                  "plate",
+                                  "timer",
+                                  "clock"
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
                               "label",
                               "grams",
                               "note",
-                              "food"
+                              "food",
+                              "icon"
                             ],
                             "additionalProperties": false
                           }

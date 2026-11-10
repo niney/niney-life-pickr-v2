@@ -25,6 +25,37 @@ export const MealStoryNutrient = z.enum([
 ]);
 export type MealStoryNutrientType = z.infer<typeof MealStoryNutrient>;
 
+/**
+ * 영상 소품(종이로 오린 그림) — 목록 항목·재료·만드는 법 단계 옆에 움직이는 그림. 없으면 화면이 번호·첫 글자로 대신한다.
+ * 새 이름은 웹 motion/paper 의 그림과 함께 늘린다.
+ */
+export const MealStoryIcon = z.enum([
+  'bowl',
+  'kimchi',
+  'sauce',
+  'can',
+  'ramen',
+  'shaker',
+  'spoon',
+  'lemon',
+  'magnifier',
+  'label',
+  'dip',
+  'noodle',
+  'tomato',
+  'onion',
+  'garlic',
+  'oil',
+  'leaf',
+  'cheese',
+  'pot',
+  'pan',
+  'plate',
+  'timer',
+  'clock',
+]);
+export type MealStoryIconType = z.infer<typeof MealStoryIcon>;
+
 export const MealStoryStatus = z.enum(['draft', 'published']);
 export type MealStoryStatusType = z.infer<typeof MealStoryStatus>;
 
@@ -57,6 +88,7 @@ export const MealStoryIngredient = z.object({
   note: z.string().nullable(),
   // 값을 가져온 식품 이름(원고 foods 의 label).
   food: z.string(),
+  icon: MealStoryIcon.nullable(),
 });
 export type MealStoryIngredientType = z.infer<typeof MealStoryIngredient>;
 
@@ -103,7 +135,7 @@ export const MealStoryScene = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('list'),
     title: z.string(),
-    items: z.array(z.object({ title: z.string(), text: z.string().nullable() })),
+    items: z.array(z.object({ title: z.string(), text: z.string().nullable(), icon: MealStoryIcon.nullable() })),
     note: z.string().nullable(),
   }),
   z.object({
@@ -119,6 +151,7 @@ export const MealStoryScene = z.discriminatedUnion('type', [
     text: z.string(),
     tip: z.string().nullable(),
     image: ImageUrl,
+    icon: MealStoryIcon.nullable(),
   }),
   z.object({
     type: z.literal('nutrition'),

@@ -5,6 +5,7 @@ import {
   MEAL_STORY_SLUG_PATTERN,
   MealStatsNutrientKey,
   MealStoryAction,
+  MealStoryIcon,
   MealStoryNutrient,
   MealStoryStatus,
   MealStoryTopic,
@@ -16,6 +17,7 @@ import {
 // 원고에는 숫자를 적지 않는다. 숫자는 아래 MealStoryValueRef 로 가리킨다:
 //   { kdri: 'sodium' }                         2020 한국인 영양소 섭취기준(성인 기준, 나이별 차이는 서버가 덧말로)
 //   { food: 'spaghetti', nutrient, grams }     foods 의 100g당 값 × 그램
+//   { foods: [{ food, grams }, …], nutrient }  섞은 값(예: 건면 40g + 통밀 40g) — 식품마다 100g당 값 × 그램의 합
 //   { recipe: 'sodiumMg', part?: 'sauce' }     레시피 1인분 합계(part 를 주면 그 묶음 재료만)
 //   { my: 'sodium' }                           보는 사람의 최근 2주 하루 평균(로그인했을 때만, 화면이 채운다)
 //   { value, unit, source }                    출처가 있는 고정값 — sources 의 id 를 꼭 단다
@@ -29,6 +31,15 @@ const text = (max: number) => z.string().trim().min(1).max(max);
 export const MealStoryValueRef = z.union([
   z.object({ kdri: z.enum(['sodium', 'potassium']) }).strict(),
   z.object({ food: Id, nutrient: MealStoryNutrient, grams: z.number().positive().max(5000) }).strict(),
+  z
+    .object({
+      foods: z
+        .array(z.object({ food: Id, grams: z.number().positive().max(5000) }).strict())
+        .min(2)
+        .max(4),
+      nutrient: MealStoryNutrient,
+    })
+    .strict(),
   z.object({ recipe: MealStoryNutrient, part: Id.optional() }).strict(),
   z.object({ my: MealStatsNutrientKey }).strict(),
   z.object({ value: z.number().finite(), unit: z.enum(['mg', 'g', 'kcal', '%']), source: Id }).strict(),
@@ -80,7 +91,7 @@ export const MealStoryScriptScene = z.discriminatedUnion('type', [
       type: z.literal('list'),
       title: text(32),
       items: z
-        .array(z.object({ title: text(22), text: text(70).optional() }).strict())
+        .array(z.object({ title: text(22), text: text(70).optional(), icon: MealStoryIcon.optional() }).strict())
         .min(2)
         .max(6),
       note: text(90).optional(),
@@ -123,6 +134,12 @@ export const MealStoryPer100 = z
   })
   .strict();
 export type MealStoryPer100Type = z.infer<typeof MealStoryPer100>;
+
+const count = z.number().int().nonnegative().optional();
+export const MealStoryPer100Counts = z
+  .object({ kcal: count, carbG: count, proteinG: count, fatG: count, sugarG: count, fiberG: count, sodiumMg: count, potassiumMg: count })
+  .strict();
+export type MealStoryPer100CountsType = z.infer<typeof MealStoryPer100Counts>;
 
 // 식약처 표준데이터 식품코드(R101-024020002-0000 · P113-206020400-0227).
 const FoodCode = z.string().regex(/^[A-Z]\d{3}-\d{9}-\d{4}$/, '식품코드 형식(R101-024020002-0000)');
@@ -170,13 +187,15 @@ export const MealStoryRecipeSpec = z
             note: text(30).optional(),
             // 묶음(예: sauce) — { recipe, part } 가 이 묶음 재료만 더한다.
             part: Id.optional(),
+            // 영상 소품 그림(재료가 냄비로 날아든다) — 없으면 첫 글자.
+            icon: MealStoryIcon.optional(),
           })
           .strict(),
       )
       .min(1)
       .max(20),
     steps: z
-      .array(z.object({ text: text(100), tip: text(60).optional(), image: ImageName.optional() }).strict())
+      .array(z.object({ text: text(100), tip: text(60).optional(), image: ImageName.optional(), icon: MealStoryIcon.optional() }).strict())
       .min(1)
       .max(8),
   })
@@ -218,8 +237,16 @@ export const MealStoryFoodsFile = z
           basis: z.enum(['100g', '100ml']),
           provenance: text(240),
           source: Id,
-          // 묶음 중앙값이면 고른 제품 수와 이름 몇 개.
-          matched: z.object({ count: z.number().int().positive(), names: z.array(z.string()).max(10) }).strict().optional(),
+          // 묶음 중앙값이면 고른 제품 수와 이름 몇 개. counts — 값을 적은 제품이 묶음보다 적은 영양소만(식이섬유는 라벨에
+          // 없는 제품이 많다). 화면이 'N개 제품의 중앙값'이라고 밝힌다.
+          matched: z
+            .object({
+              count: z.number().int().positive(),
+              names: z.array(z.string()).max(10),
+              counts: MealStoryPer100Counts.optional(),
+            })
+            .strict()
+            .optional(),
         })
         .strict(),
     ),

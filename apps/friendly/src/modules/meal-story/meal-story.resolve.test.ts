@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { MealStorySceneType } from '@repo/api-contract';
 import { checkMealStory } from './meal-story.check.js';
+import { buildMealStoryFoods, type FoodRow } from './meal-story.foods.js';
 import { resolveMealStory } from './meal-story.resolve.js';
-import { MealStoryScript, type MealStoryFoodsFileType, type MealStoryScriptType } from './meal-story.script.js';
+import {
+  MealStoryScript,
+  type MealStoryFoodsFileType,
+  type MealStoryPer100Type,
+  type MealStoryScriptType,
+} from './meal-story.script.js';
 import type { LoadedMealStory } from './meal-story.store.js';
 
 // 원고 → 화면 스토리: 숫자는 가리킴에서 계산하고(섭취기준·식품 100g당·레시피 합계·내 기록), 못 푼 가리킴은 issues 로.
@@ -111,6 +117,72 @@ describe('resolveMealStory', () => {
     expect(story.recipe?.steps[1]?.image).toBeNull();
   });
 
+  it('섞은 값은 식품마다 100g당 × 그램의 합 — 묶음 중 일부 제품만 적은 영양소는 덧말로, 하나라도 모르면 합을 내지 않는다', () => {
+    const half = [
+      { food: 'noodle', grams: 40 },
+      { food: 'wheat', grams: 40 },
+    ];
+    const script = base({
+      foods: [
+        { id: 'noodle', label: '국수', ref: { db: 'raw', code: 'R101-000000001-0000' } },
+        { id: 'sauce', label: '소스', ref: { db: 'processed', code: 'P113-000000001-0000' } },
+        { id: 'herb', label: '허브', manual: { per100: { kcal: 30, sodiumMg: null }, source: 'my-book' } },
+        { id: 'wheat', label: '통밀국수', group: { db: 'processed', all: ['통밀'] } },
+      ],
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        {
+          type: 'bars',
+          title: '섞기',
+          bars: [
+            { label: '반반', value: { foods: half, nutrient: 'fiberG' }, aside: { foods: half, nutrient: 'kcal' } },
+            { label: '통밀', value: { food: 'wheat', nutrient: 'fiberG', grams: 80 }, highlight: true },
+            {
+              label: '모름',
+              value: {
+                foods: [
+                  { food: 'noodle', grams: 40 },
+                  { food: 'herb', grams: 40 },
+                ],
+                nutrient: 'sodiumMg',
+              },
+            },
+          ],
+        },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+    const file: MealStoryFoodsFileType = {
+      generatedBy: 'build:meal-stories',
+      foods: {
+        ...foods.foods,
+        noodle: { per100: { kcal: 350, sodiumMg: 5, fiberG: 2.5 }, basis: '100g', provenance: '원재료 R101', source: 'mfds-raw' },
+        wheat: {
+          per100: { kcal: 325, fiberG: 8 },
+          basis: '100g',
+          provenance: "가공 '통밀' 제품 17개의 중앙값",
+          source: 'mfds-processed',
+          matched: { count: 17, names: ['통밀국수'], counts: { fiberG: 4 } },
+        },
+      },
+    };
+    const { story, issues } = resolveMealStory(script, file, imageUrl);
+    const bars = sceneOf(story.scenes, 'bars');
+    const partial = '통밀국수의 식이섬유 값은 표시한 제품 4개의 중앙값이에요';
+    // 식이섬유 2.5×0.4 + 8×0.4 = 4.2g, 열량 140 + 130 = 270kcal(열량은 모든 제품이 적어 덧말 없음).
+    expect(bars.bars[0]!.figure).toMatchObject({
+      value: 4.2,
+      unit: 'g',
+      basis: '국수 40g + 통밀국수 40g',
+      detail: partial,
+      sources: ['mfds-raw', 'mfds-processed'],
+    });
+    expect(bars.bars[0]!.aside).toMatchObject({ label: '열량', figure: { value: 270, unit: 'kcal', detail: null } });
+    expect(bars.bars[1]!.figure).toMatchObject({ value: 6.4, basis: '통밀국수 80g', detail: partial });
+    expect(bars.bars[2]!.figure).toMatchObject({ value: null, basis: '국수 40g + 허브 40g', sources: [] });
+    expect(issues).toEqual(['장면 2(bars) 막대 3: 허브 의 나트륨 값이 없다']);
+  });
+
   it('못 푼 가리킴은 issues — 없는 출처·단계·사진, foods.json 에 없는 식품', () => {
     const script = base({
       cover: 'cover.jpg',
@@ -129,6 +201,44 @@ describe('resolveMealStory', () => {
         expect.stringContaining('noodle: foods.json 에 값이 없다'),
       ]),
     );
+  });
+});
+
+describe('buildMealStoryFoods', () => {
+  it('묶음은 제품 중앙값(같은 제품 두 번은 한 번) — 값을 적은 제품이 묶음보다 적으면 그 수를, 최소 수보다 적으면 값을 비운다', () => {
+    const row = (name: string, per100: MealStoryPer100Type, category = '면류'): FoodRow => ({
+      code: 'P108-000000001-0000',
+      name,
+      category,
+      basis: '100g',
+      per100,
+    });
+    const script = base({
+      foods: [
+        {
+          id: 'wheat',
+          label: '통밀 스파게티',
+          group: { db: 'processed', all: ['통밀'], any: ['스파게티'], none: ['렌틸'], category: '면류', min: 2 },
+        },
+      ],
+    });
+    const { file, problems } = buildMealStoryFoods(script, {
+      processed: [
+        row('통밀 스파게티', { kcal: 295, fiberG: 10, sodiumMg: 5 }),
+        row('통밀 스파게티', { kcal: 295, fiberG: 10, sodiumMg: 5 }),
+        row('통밀스파게티', { kcal: 325, fiberG: null }),
+        row('유기농 통밀 스파게티', { kcal: 350, fiberG: 8 }),
+        row('렌틸 통밀 스파게티', { kcal: 334, fiberG: 5.9 }),
+        row('통밀 스파게티 과자', { kcal: 480, fiberG: 6 }, '과자류'),
+      ],
+    });
+    expect(problems).toEqual([]);
+    expect(file.foods.wheat).toMatchObject({
+      // 나트륨은 한 제품만 적었다 → 비운다(최소 2).
+      per100: { kcal: 325, fiberG: 9, sodiumMg: null },
+      matched: { count: 3, counts: { fiberG: 2 } },
+    });
+    expect(file.foods.wheat?.matched?.counts).toEqual({ fiberG: 2 });
   });
 });
 
@@ -162,5 +272,51 @@ describe('checkMealStory', () => {
     expect(r.warnings.some((w) => w.includes('1인분만'))).toBe(false);
     // 손으로 적은 값은 사람 확인 목록에.
     expect(r.review.some((x) => x.includes('허브') && x.includes('손으로 적은 값'))).toBe(true);
+  });
+
+  it('영상 틀의 한도 — 형식은 통과해도 영상에서 글씨가 작아지거나 잘리는 원고는 경고로 알린다', () => {
+    const fine = checkMealStory(loaded(base()));
+    expect(fine.warnings.filter((w) => w.includes('영상에서'))).toEqual([]);
+
+    const script = base({
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '표지 제목은 세 줄이 되어도 괜찮은 큰 카드예요' },
+        {
+          type: 'bars',
+          title: '머리 제목이 두 줄을 넘을 만큼 아주 긴 막대 장면',
+          bars: [
+            { label: '이름표가 값 쪽지와 겹칠 만큼 아주 긴 막대', value: { food: 'sauce', nutrient: 'sodiumMg', grams: 150 } },
+            { label: '직접', value: { recipe: 'sodiumMg' } },
+          ],
+        },
+        {
+          type: 'list',
+          title: '방법',
+          items: [
+            { title: '하나', text: '두 줄까지는 보이는 길이의 설명이라 경고하지 않아요 괜찮아요' },
+            { title: '둘', text: '두 줄을 넘는 설명은 영상에서 끝이 잘려요 그래서 미리 알려 줘요 이만큼 길면 넘쳐요 정말로 넘쳐요' },
+          ],
+        },
+        { type: 'ingredients', title: '재료' },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+      recipe: {
+        name: '시험 국수',
+        servings: 2,
+        dishType: 'noodle',
+        ingredients: Array.from({ length: 10 }, (_, i) => ({ food: 'noodle', grams: 10, label: `재료 ${i + 1}` })),
+        steps: [{ text: '삶는다' }],
+      },
+    });
+    const r = checkMealStory(loaded(script));
+    const motion = r.warnings.filter((w) => w.includes('영상에서'));
+    expect(motion).toEqual([
+      expect.stringContaining('장면 2 제목'),
+      expect.stringContaining('장면 2 막대 1 이름'),
+      expect.stringContaining('장면 3 항목 2 설명'),
+      expect.stringContaining('장면 4 재료: 10개'),
+    ]);
+    // 한도는 경고일 뿐 — 글로 보기에는 다 보이므로 오류로 막지 않는다.
+    expect(r.errors.filter((e) => e.includes('영상에서'))).toEqual([]);
   });
 });

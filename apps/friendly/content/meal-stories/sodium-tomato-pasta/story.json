@@ -21,6 +21,11 @@
       "id": "store-sauce",
       "label": "시판 토마토 파스타 소스",
       "group": { "db": "processed", "all": ["토마토", "소스"], "any": ["스파게티", "파스타"], "none": ["소스파스타"] }
+    },
+    {
+      "id": "wholewheat-spaghetti",
+      "label": "통밀 스파게티",
+      "group": { "db": "processed", "all": ["통밀"], "any": ["스파게티"], "none": ["렌틸"], "category": "면류" }
     }
   ],
   "recipe": {
@@ -28,25 +33,28 @@
     "servings": 1,
     "dishType": "noodle",
     "ingredients": [
-      { "food": "spaghetti", "grams": 80, "label": "스파게티 건면", "note": "소금 없이 삶기" },
-      { "food": "tomato", "grams": 250, "label": "토마토 2개(중간 크기)", "part": "sauce" },
-      { "food": "onion", "grams": 50, "label": "양파 1/4개", "part": "sauce" },
-      { "food": "garlic", "grams": 10, "label": "마늘 2쪽", "part": "sauce" },
-      { "food": "olive-oil", "grams": 10, "label": "올리브유 2작은술", "part": "sauce" },
-      { "food": "basil", "grams": 3, "label": "바질 잎 6장", "part": "sauce" },
-      { "food": "parmesan", "grams": 5, "label": "파마산 치즈 1큰술(간 것)", "part": "sauce" }
+      { "food": "spaghetti", "grams": 80, "label": "스파게티 건면", "note": "소금 없이 삶기", "icon": "noodle" },
+      { "food": "tomato", "grams": 250, "label": "토마토 2개(중간 크기)", "part": "sauce", "icon": "tomato" },
+      { "food": "onion", "grams": 50, "label": "양파 1/4개", "part": "sauce", "icon": "onion" },
+      { "food": "garlic", "grams": 10, "label": "마늘 2쪽", "part": "sauce", "icon": "garlic" },
+      { "food": "olive-oil", "grams": 10, "label": "올리브유 2작은술", "part": "sauce", "icon": "oil" },
+      { "food": "basil", "grams": 3, "label": "바질 잎 6장", "part": "sauce", "icon": "leaf" },
+      { "food": "parmesan", "grams": 5, "label": "파마산 치즈 1큰술(간 것)", "part": "sauce", "icon": "cheese" }
     ],
     "steps": [
       {
         "text": "물을 넉넉히 끓여 스파게티를 포장에 적힌 시간만큼 삶아요. 물에 소금은 넣지 않아요.",
-        "tip": "면 삶은 물을 한 국자 남겨 두면 소스와 버무릴 때 잘 섞여요."
+        "tip": "면 삶은 물을 한 국자 남겨 두면 소스와 버무릴 때 잘 섞여요.",
+        "icon": "pot"
       },
       {
-        "text": "올리브유에 다진 마늘과 양파를 약한 불로 볶아 향을 낸 뒤, 깍둑 썬 토마토를 넣고 10분쯤 눌러 가며 끓여요."
+        "text": "올리브유에 다진 마늘과 양파를 약한 불로 볶아 향을 낸 뒤, 깍둑 썬 토마토를 넣고 10분쯤 눌러 가며 끓여요.",
+        "icon": "pan"
       },
       {
         "text": "삶은 면을 소스에 넣어 버무리고 바질과 후추로 맛을 낸 뒤 파마산을 조금 뿌려요.",
-        "tip": "싱거우면 소금 대신 레몬즙이나 후추를 더해 보세요."
+        "tip": "싱거우면 소금 대신 레몬즙이나 후추를 더해 보세요.",
+        "icon": "plate"
       }
     ]
   },
@@ -70,21 +78,21 @@
       "type": "list",
       "title": "나트륨은 어디서 많이 올까요",
       "items": [
-        { "title": "국물", "text": "국·찌개·라면 국물에 많이 녹아 있어요" },
-        { "title": "김치·장아찌", "text": "절이고 담그는 데 소금이 많이 들어가요" },
-        { "title": "소스·양념", "text": "간장·고추장·시판 소스가 생각보다 짜요" },
-        { "title": "가공식품", "text": "햄·소시지·즉석식품은 성분표를 먼저 봐요" }
+        { "title": "국물", "text": "국·찌개·라면 국물에 많이 녹아 있어요", "icon": "bowl" },
+        { "title": "김치·장아찌", "text": "절이고 담그는 데 소금이 많이 들어가요", "icon": "kimchi" },
+        { "title": "소스·양념", "text": "간장·고추장·시판 소스가 생각보다 짜요", "icon": "sauce" },
+        { "title": "가공식품", "text": "햄·소시지·즉석식품은 성분표를 먼저 봐요", "icon": "can" }
       ]
     },
     {
       "type": "list",
       "title": "줄이는 방법",
       "items": [
-        { "title": "국물은 남기기", "text": "건더기 위주로 먹고 국물은 덜 먹어요" },
-        { "title": "간은 마지막에", "text": "먹기 직전에 맛보고 모자랄 때만 더해요" },
-        { "title": "향과 신맛 쓰기", "text": "마늘·후추·바질·레몬으로 싱거움을 채워요" },
-        { "title": "성분표 확인", "text": "같은 종류라도 제품마다 나트륨이 달라요" },
-        { "title": "소스는 덜어 먹기", "text": "부어 먹기보다 찍어 먹으면 덜 먹게 돼요" }
+        { "title": "국물은 남기기", "text": "건더기 위주로 먹고 국물은 덜 먹어요", "icon": "bowl" },
+        { "title": "간은 마지막에", "text": "먹기 직전에 맛보고 모자랄 때만 더해요", "icon": "shaker" },
+        { "title": "향과 신맛 쓰기", "text": "마늘·후추·바질·레몬으로 싱거움을 채워요", "icon": "lemon" },
+        { "title": "성분표 확인", "text": "같은 종류라도 제품마다 나트륨이 달라요", "icon": "magnifier" },
+        { "title": "소스는 덜어 먹기", "text": "부어 먹기보다 찍어 먹으면 덜 먹게 돼요", "icon": "dip" }
       ]
     },
     {
@@ -135,6 +143,41 @@
         }
       ],
       "note": "열량은 크게 줄지만 포만감과 단백질도 함께 줄어요. 달걀이나 두부를 곁들여 보세요."
+    },
+    {
+      "type": "bars",
+      "title": "덤: 통밀로 식이섬유 채우기",
+      "bars": [
+        {
+          "label": "스파게티 건면 80g",
+          "value": { "food": "spaghetti", "nutrient": "fiberG", "grams": 80 },
+          "aside": { "food": "spaghetti", "nutrient": "kcal", "grams": 80 }
+        },
+        {
+          "label": "반반(건면 40g + 통밀 40g)",
+          "value": {
+            "foods": [
+              { "food": "spaghetti", "grams": 40 },
+              { "food": "wholewheat-spaghetti", "grams": 40 }
+            ],
+            "nutrient": "fiberG"
+          },
+          "aside": {
+            "foods": [
+              { "food": "spaghetti", "grams": 40 },
+              { "food": "wholewheat-spaghetti", "grams": 40 }
+            ],
+            "nutrient": "kcal"
+          }
+        },
+        {
+          "label": "통밀 스파게티 80g",
+          "value": { "food": "wholewheat-spaghetti", "nutrient": "fiberG", "grams": 80 },
+          "aside": { "food": "wholewheat-spaghetti", "nutrient": "kcal", "grams": 80 },
+          "highlight": true
+        }
+      ],
+      "note": "열량은 비슷하고 식이섬유가 늘어요. 처음엔 반반 섞어 삶으면 식감이 덜 낯설어요."
     },
     {
       "type": "outro",

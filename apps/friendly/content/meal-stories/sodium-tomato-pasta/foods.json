@@ -143,9 +143,9 @@
         "proteinG": 1,
         "fatG": 3.45,
         "sugarG": 6.8,
-        "fiberG": 2.7,
+        "fiberG": null,
         "sodiumMg": 635,
-        "potassiumMg": 340
+        "potassiumMg": null
       },
       "basis": "100g",
       "provenance": "식약처 가공식품 표준데이터 '토마토·소스 + 스파게티|파스타' 제품 12개의 중앙값",
@@ -164,6 +164,39 @@
           "프레스코 바질토마토 파스타소스",
           "프레스코 올리브토마토 파스타소스"
         ]
+      }
+    },
+    "wholewheat-spaghetti": {
+      "per100": {
+        "kcal": 323,
+        "carbG": 64,
+        "proteinG": 13,
+        "fatG": 2.5,
+        "sugarG": 3,
+        "fiberG": 8,
+        "sodiumMg": 4,
+        "potassiumMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 표준데이터 '통밀 + 스파게티 (면류)' 제품 17개의 중앙값",
+      "source": "mfds-processed",
+      "matched": {
+        "count": 17,
+        "names": [
+          "테스코유기농파스타(통밀스파게티)",
+          "테스코파스타(통밀스파게티)",
+          "통밀 스파게티",
+          "통밀 스파게티 1Kg",
+          "통밀 스파게티 인테그랄레",
+          "통밀 스파게티 N.3",
+          "통밀 스파게티니 500g",
+          "통밀스파게티",
+          "통밀스파게티인테그랄레",
+          "펠리체티 유기농 통밀 스파게티"
+        ],
+        "counts": {
+          "fiberG": 4
+        }
       }
     }
   }

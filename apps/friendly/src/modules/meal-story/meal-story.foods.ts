@@ -4,7 +4,12 @@ import { parseCsv } from '../../lib/csv.js';
 import { numOrNull } from '../../lib/narrow.js';
 import { looseNutrientHeader } from '../food/food-nutrients.js';
 import { decodeLifeCsv } from '../life-map/life-map-master.service.js';
-import type { MealStoryFoodsFileType, MealStoryPer100Type, MealStoryScriptType } from './meal-story.script.js';
+import type {
+  MealStoryFoodsFileType,
+  MealStoryPer100CountsType,
+  MealStoryPer100Type,
+  MealStoryScriptType,
+} from './meal-story.script.js';
 
 // 원고 foods 의 가리킴(식품코드·제품 묶음) → 100g당 값(foods.json). build:meal-stories 가 쓰고, check:meal-stories 가 다시
 // 계산해 foods.json 과 같은지 본다. 원본은 식약처 전국통합식품영양성분정보 표준데이터 CSV(data/open/food/, git 밖 — 받는
@@ -155,8 +160,16 @@ export const buildMealStoryFoods = (
         continue;
       }
       const per100: MealStoryPer100Type = {};
+      const counts: MealStoryPer100CountsType = {};
       for (const k of PER100_KEYS) {
-        per100[k] = median(hits.map((h) => h.per100[k]).filter((v): v is number => v !== null && v !== undefined));
+        const values = hits.map((h) => h.per100[k]).filter((v): v is number => v !== null && v !== undefined);
+        // 그 영양소를 적은 제품이 최소 수보다 적으면 비운다(제품 하나의 값을 '중앙값'이라 부르지 않는다).
+        if (values.length < (g.min ?? DEFAULT_GROUP_MIN)) {
+          per100[k] = null;
+          continue;
+        }
+        per100[k] = median(values);
+        if (values.length < hits.length) counts[k] = values.length;
       }
       const ml = hits.filter((h) => h.basis === '100ml').length;
       const words = `${g.all.join('·')}${g.any?.length ? ` + ${g.any.join('|')}` : ''}${g.category ? ` (${g.category})` : ''}`;
@@ -168,6 +181,7 @@ export const buildMealStoryFoods = (
         matched: {
           count: hits.length,
           names: [...new Set(hits.map((h) => h.name))].sort((a, b) => a.localeCompare(b, 'ko')).slice(0, 10),
+          ...(Object.keys(counts).length > 0 ? { counts } : {}),
         },
       };
     }

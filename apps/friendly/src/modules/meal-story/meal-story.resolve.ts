@@ -17,6 +17,7 @@ import {
 } from './meal-story.defs.js';
 import type {
   MealStoryFoodsFileType,
+  MealStoryPer100CountsType,
   MealStoryPer100Type,
   MealStoryScriptSceneType,
   MealStoryScriptType,
@@ -37,6 +38,8 @@ interface FoodValues {
   label: string;
   per100: MealStoryPer100Type;
   source: string;
+  /** 묶음 중앙값이면 — 제품 수와, 값을 적은 제품이 그보다 적은 영양소의 수. */
+  group?: { count: number; counts: MealStoryPer100CountsType };
 }
 
 const MY_BASIS = '내 최근 2주 하루 평균';
@@ -63,7 +66,12 @@ export const resolveMealStory = (
       foods.set(spec.id, { label: spec.label, per100: {}, source: spec.ref?.db === 'processed' || spec.group?.db === 'processed' ? 'mfds-processed' : 'mfds-raw' });
       continue;
     }
-    foods.set(spec.id, { label: spec.label, per100: built.per100, source: built.source });
+    foods.set(spec.id, {
+      label: spec.label,
+      per100: built.per100,
+      source: built.source,
+      group: built.matched ? { count: built.matched.count, counts: built.matched.counts ?? {} } : undefined,
+    });
   }
 
   const unitOf = (n: MealStoryNutrientType) => MEAL_STORY_NUTRIENTS[n].unit;
@@ -120,6 +128,14 @@ export const resolveMealStory = (
     });
   };
 
+  // 묶음 중 일부 제품만 그 영양소를 적었으면 밝힌다(통밀 파스타 식이섬유 — 라벨에 없는 제품이 많다).
+  const partialNote = (food: FoodValues, n: MealStoryNutrientType): string | null => {
+    const c = food.group?.counts[n];
+    return food.group && c !== undefined && c < food.group.count
+      ? `${food.label}의 ${MEAL_STORY_NUTRIENTS[n].label} 값은 표시한 제품 ${c}개의 중앙값이에요`
+      : null;
+  };
+
   const valueFigure = (ref: MealStoryValueRefType, where: string): MealStoryFigureType => {
     if ('kdri' in ref) {
       usedSources.add('kdri-2020');
@@ -140,7 +156,46 @@ export const resolveMealStory = (
         value: v === null || v === undefined ? null : roundForUnit((v * ref.grams) / 100, unit),
         unit,
         basis: `${food.label} ${ref.grams.toLocaleString('ko-KR')}g`,
+        detail: v === null || v === undefined ? null : partialNote(food, ref.nutrient),
         sources: v === null || v === undefined ? [] : [food.source],
+      });
+    }
+    if ('foods' in ref) {
+      const unit = unitOf(ref.nutrient);
+      let sum = 0;
+      let complete = true;
+      const parts: string[] = [];
+      const notes: string[] = [];
+      const sources = new Set<string>();
+      for (const part of ref.foods) {
+        const food = foods.get(part.food);
+        const grams = `${part.grams.toLocaleString('ko-KR')}g`;
+        if (!food) {
+          issues.push(`${where}: 식품 '${part.food}' 가 foods 에 없다`);
+          parts.push(`${part.food} ${grams}`);
+          complete = false;
+          continue;
+        }
+        parts.push(`${food.label} ${grams}`);
+        const v = food.per100[ref.nutrient];
+        if (v === null || v === undefined) {
+          issues.push(`${where}: ${food.label} 의 ${MEAL_STORY_NUTRIENTS[ref.nutrient].label} 값이 없다`);
+          complete = false;
+          continue;
+        }
+        sum += (v * part.grams) / 100;
+        sources.add(food.source);
+        const note = partialNote(food, ref.nutrient);
+        if (note) notes.push(note);
+      }
+      // 하나라도 모르면 합을 내지 않는다(반쪽 합은 틀린 값이다).
+      if (complete) for (const s of sources) usedSources.add(s);
+      return figure({
+        value: complete ? roundForUnit(sum, unit) : null,
+        unit,
+        basis: parts.join(' + '),
+        detail: complete && notes.length > 0 ? [...new Set(notes)].join(' · ') : null,
+        sources: complete ? [...sources] : [],
       });
     }
     if ('recipe' in ref) return recipeFigure(ref.recipe, ref.part, where);
@@ -151,7 +206,7 @@ export const resolveMealStory = (
   };
 
   const asideLabel = (ref: MealStoryValueRefType, where: string): string => {
-    if ('food' in ref) return MEAL_STORY_NUTRIENTS[ref.nutrient].label;
+    if ('food' in ref || 'foods' in ref) return MEAL_STORY_NUTRIENTS[ref.nutrient].label;
     if ('recipe' in ref) return MEAL_STORY_NUTRIENTS[ref.recipe].label;
     issues.push(`${where}: aside 는 food·recipe 값만 쓴다`);
     return '';
@@ -162,6 +217,7 @@ export const resolveMealStory = (
     grams: i.grams,
     note: i.note ?? null,
     food: foods.get(i.food)?.label ?? i.food,
+    icon: i.icon ?? null,
   }));
   if (recipe) {
     for (const i of recipe.ingredients) {
@@ -215,7 +271,7 @@ export const resolveMealStory = (
         return {
           type: 'list',
           title: s.title,
-          items: s.items.map((it) => ({ title: it.title, text: it.text ?? null })),
+          items: s.items.map((it) => ({ title: it.title, text: it.text ?? null, icon: it.icon ?? null })),
           note: s.note ?? null,
         };
       case 'ingredients':
@@ -231,6 +287,7 @@ export const resolveMealStory = (
           text: step?.text ?? '',
           tip: step?.tip ?? null,
           image: image(step?.image, where),
+          icon: step?.icon ?? null,
         };
       }
       case 'nutrition':

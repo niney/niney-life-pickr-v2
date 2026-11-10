@@ -95,6 +95,56 @@ const textFields = (s: LoadedMealStory): TextField[] => {
   return out;
 };
 
+// ── 영상 틀의 한도 ──
+// 영상(웹 motion/, 세로 1080×1920 한 화면)은 넘치는 글을 보여 줄 자리가 없다 — 틀이 글씨를 줄이거나 말줄임표로 자른다.
+// 형식(zod)은 통과해도 영상에서 그렇게 되는 원고를 미리 알린다. 글 너비는 화면과 같은 어림(한글 1, 그 밖 0.6, 빈칸 0.3)으로
+// 센다. 숫자를 고치면 웹 motion/layout.ts(제목 줄 수·목록 줄 수·막대 이름표)·ChapterIngredients(재료 줄 높이)와 맞춘다.
+const MOTION_LIMIT = {
+  /** 장면 머리 제목 두 줄(한 줄 약 8.5자). 넘으면 세 줄이 되며 글씨가 줄어든다. */
+  headingUnits: 17,
+  /** 막대 이름표 — 옆의 값 쪽지와 겹치지 않는 너비. */
+  barLabelUnits: 16,
+  /** 목록 설명 한 줄(약 20자). 항목이 많으면 한 줄만, 적으면 두 줄까지 보인다. */
+  listTextLineUnits: 20,
+  /** 재료 줄 — 이보다 많으면 이름 글씨가 보조 글 하한(34px) 아래로 내려간다. */
+  ingredients: 9,
+} as const;
+
+const textUnits = (text: string): number =>
+  [...text].reduce((n, ch) => n + (ch === ' ' ? 0.3 : /[가-힣]/.test(ch) ? 1 : 0.6), 0);
+
+/** 영상에서 글씨가 작아지거나 잘리는 원고 — 고칠지 말지는 쓰는 사람이 정한다(글로 보기에는 다 보인다). */
+export const motionLimitWarnings = (s: LoadedMealStory): string[] => {
+  const out: string[] = [];
+  s.script.scenes.forEach((sc, i) => {
+    const w = `장면 ${i + 1}`;
+    // 표지·마무리는 큰 카드라 세 줄도 괜찮다 — 머리 제목 띠를 쓰는 장면만.
+    if ((sc.type === 'stat' || sc.type === 'bars' || sc.type === 'list' || sc.type === 'nutrition') && textUnits(sc.title) > MOTION_LIMIT.headingUnits) {
+      out.push(`${w} 제목: '${sc.title}' — 영상에서 세 줄이 되어 글씨가 작아진다(두 줄은 한글 약 16자까지)`);
+    }
+    if (sc.type === 'bars') {
+      sc.bars.forEach((b, k) => {
+        if (textUnits(b.label) > MOTION_LIMIT.barLabelUnits) {
+          out.push(`${w} 막대 ${k + 1} 이름: '${b.label}' — 영상에서 값 쪽지와 겹칠 수 있다(한글 약 15자까지)`);
+        }
+      });
+    }
+    if (sc.type === 'list') {
+      // 화면과 같은 규칙 — 여섯이거나, 다섯에 덧말이 있으면 설명은 한 줄.
+      const lines = sc.items.length >= 6 || (sc.items.length === 5 && sc.note) ? 1 : 2;
+      sc.items.forEach((it, k) => {
+        if (it.text && textUnits(it.text) > MOTION_LIMIT.listTextLineUnits * lines) {
+          out.push(`${w} 항목 ${k + 1} 설명: '${it.text}' — 영상에서 ${lines}줄만 보여 끝이 잘린다(한글 약 ${MOTION_LIMIT.listTextLineUnits * lines}자까지)`);
+        }
+      });
+    }
+    if (sc.type === 'ingredients' && (s.script.recipe?.ingredients.length ?? 0) > MOTION_LIMIT.ingredients) {
+      out.push(`${w} 재료: ${s.script.recipe?.ingredients.length}개 — 영상에서 재료 이름 글씨가 작아진다(${MOTION_LIMIT.ingredients}개까지 권장)`);
+    }
+  });
+  return out;
+};
+
 /** 사진 크기 — 바이트·가로세로. 사진 검사는 부르는 쪽이 sharp 로 잰 값을 넘긴다(테스트는 생략 가능). */
 export interface ImageInfo {
   file: string;
@@ -127,12 +177,14 @@ export const checkMealStory = (
   const scenes = s.script.scenes;
   if (scenes[0]?.type !== 'cover') warnings.push('첫 장면은 표지(cover)가 좋다');
   if (scenes[scenes.length - 1]?.type !== 'outro') warnings.push('마지막 장면은 마무리(outro)가 좋다');
-  if (scenes.length > 12) warnings.push(`장면이 ${scenes.length}장 — 12장 안쪽을 권한다`);
+  if (scenes.length > 13) warnings.push(`장면이 ${scenes.length}장 — 13장 안쪽을 권한다(영상 약 80초)`);
   const steps = scenes.filter((sc) => sc.type === 'step').map((sc) => (sc.type === 'step' ? sc.step : 0));
   const total = s.script.recipe?.steps.length ?? 0;
   if (s.script.recipe && steps.length > 0 && steps.length < total) {
     warnings.push(`레시피 ${total}단계 중 ${steps.length}단계만 장면에 있다(나머지는 레시피 전체 보기에만)`);
   }
+
+  warnings.push(...motionLimitWarnings(s));
 
   if (s.script.status === 'published') {
     if (!s.script.reviewedAt) errors.push('게시하려면 검수일(reviewedAt)이 있어야 한다');
