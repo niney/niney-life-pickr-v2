@@ -97,7 +97,8 @@ niney@life.com 에 최근 14일 기록이 있어 아래 예시 값으로 맞춰 
   보는 재생기·레시피 전체 보기. 앱은 같은 API(`GET /meal-stories`·`/meal-stories/:slug` — 숫자는 서버가 계산해 준다,
   `POST /meal-stories/:slug/food` → `prepareMealEntry` 와 같은 draft 채우기)와 공용 훅(`useMealStories`·`useMealStory`·
   `useMealStoryFood`)으로 RN 재생기만 만들면 된다. 움직임은 웹이 CSS 라 앱은 Reanimated 로 따로(숫자 굴러가기·막대 자라기).
-  입구는 웹과 같이 식단 홈 한 줄·분석 탭 영양소 줄의 '줄이는 법 보기'. 사진 주소는 `/api/v1/...` 상대 경로라 앱은 API 기준
+  입구는 웹과 같이 식단 홈 한 줄(내 판정에 맞는 이야기 먼저 · 모두 보기)·분석 탭 영양소 줄의 '줄이는 법 보기' — 웹은 2026-11-10 에
+  별도 메뉴를 없앴다(PLAN-meal-story.md 9번), 앱도 메뉴·탭을 따로 두지 않는다. 사진 주소는 `/api/v1/...` 상대 경로라 앱은 API 기준
   주소를 붙인다.
 
 ## 3. 끝났다고 볼 기준
