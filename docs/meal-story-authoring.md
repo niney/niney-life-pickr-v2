@@ -9,7 +9,7 @@
 | 누가 | 무엇을 |
 |---|---|
 | 사람 | 주제·레시피를 정하고 **직접 만들어 보고 사진을 찍는다**(완성 1장 + 단계별). 출처를 확인하고, 화면에서 움직임 느낌을 보고, 게시를 정한다 |
-| Claude Code | 원고(`story.json`)를 쓰고, 재료의 식품코드를 찾고, `build:meal-stories`·`check:meal-stories` 를 돌려 고치고, 화면을 캡처해 보여 준다 |
+| Claude Code | 원고(`story.json`)를 쓰고, 재료의 식품코드를 찾고, `build:meal-stories`·`check:meal-stories` 를 돌려 고치고, 화면을 캡처하고 영상(MP4)·프레임 격자를 렌더해 보여 준다 |
 
 원고에는 **숫자를 직접 적지 않는다**. 섭취기준·식품 100g당 값·레시피 합계·내 기록을 *가리키면* 서버가 계산한다. 숫자를 상식으로
 적으면 틀리기 쉽고(예: "통밀면은 열량이 적다" — 실제로는 거의 같고 식이섬유가 늘어난다), 영양 탭 판정과 어긋난다.
@@ -22,6 +22,9 @@ apps/friendly/content/meal-stories/<slug>/
   foods.json      재료 100g당 값 — build:meal-stories 가 만든다(손으로 고치지 않는다)
   images/*.jpg    화면에 쓰는 사진 — build:meal-stories 가 originals/ 에서 만든다
   originals/      찍은 원본 사진 — git 밖(.gitignore), 위치 정보가 있을 수 있다
+
+apps/web/src/routes/meal-story/motion/   장면 틀 8종의 영상 그림(Remotion) — 편마다 고치지 않는다
+tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검수용, npm(워크스페이스 밖)
 ```
 
 - `slug` 는 폴더 이름과 같다(소문자·숫자·하이픈, 예: `sodium-tomato-pasta`).
@@ -45,7 +48,7 @@ apps/friendly/content/meal-stories/<slug>/
   "sources": [{ "id": "mfds-sodium-guide", "label": "…", "url": "…" }],
   "foods": [ … ],
   "recipe": { … },
-  "scenes": [ … ]                    // 3~14장(12장 안쪽 권장), 첫 장 cover · 끝 장 outro
+  "scenes": [ … ]                    // 3~14장(13장 안쪽 권장 — 영상 약 80초), 첫 장 cover · 끝 장 outro
 }
 ```
 
@@ -55,6 +58,7 @@ apps/friendly/content/meal-stories/<slug>/
 |---|---|---|
 | `{ "kdri": "sodium" }` | 2020 한국인 영양소 섭취기준 성인 값(나트륨 2,300mg = 만성질환위험감소섭취량, 칼륨 3,500mg). 나이별로 다르면 서버가 덧말로 붙인다 | 자동 |
 | `{ "food": "spaghetti", "nutrient": "kcal", "grams": 80 }` | foods 의 100g당 값 × 그램 | 자동(식품의 출처) |
+| `{ "foods": [{ "food": "spaghetti", "grams": 40 }, { "food": "wholewheat-spaghetti", "grams": 40 }], "nutrient": "fiberG" }` | 섞은 값 — 식품마다 100g당 값 × 그램의 합(2~4가지). 하나라도 값을 모르면 합을 내지 않는다 | 자동 |
 | `{ "recipe": "sodiumMg", "part": "sauce" }` | 레시피 1인분 합계(`part` 를 주면 그 묶음 재료만) | 자동 |
 | `{ "my": "sodium" }` | 보는 사람의 최근 2주 하루 평균 — 로그인했을 때만, 화면이 통계로 채운다 | — |
 | `{ "value": 3000, "unit": "mg", "source": "id" }` | 출처가 있는 고정값(예: 국민건강통계 평균). **sources 의 id 필수** | 그 출처 |
@@ -70,14 +74,15 @@ apps/friendly/content/meal-stories/<slug>/
   `pnpm --filter friendly build:meal-stories --find=스파게티,파마산` 으로 찾는다(이름에 그 말이 든 식품의 코드·분류·100g당
   열량·나트륨). 생것·말린것·데친것을 구별해 고른다(스파게티 건면은 `_말린것`, 삶은 면은 `_말린것을 삶은것`).
 - `"group": { "db": "processed", "all": ["토마토","소스"], "any": ["스파게티","파스타"], "none": ["소스파스타"] }` — 시판
-  제품 여러 개의 **중앙값**. 특정 제품을 고르지 않아 브랜드를 밝히지 않아도 된다. build 출력의 제품 이름을 보고 다른 것이 섞였으면
+  제품 여러 개의 **중앙값**(영양소마다 값을 적은 제품만으로 — 그 수가 묶음보다 적으면 화면이 '표시한 제품 N개의 중앙값'이라고
+  밝히고, 최소 수(`min`, 기본 3)보다 적으면 그 영양소는 비운다. 통밀 파스타 식이섬유는 17개 중 4개). 특정 제품을 고르지 않아 브랜드를 밝히지 않아도 된다. build 출력의 제품 이름을 보고 다른 것이 섞였으면
   `none` 으로 뺀다(첫 편: 완성 요리 '토마토소스파스타'를 뺐다). 최소 3개(`min`).
 - `"manual": { "per100": { … }, "source": "id", "note": "…" }` — 표준데이터에 없을 때만. 점검이 '사람 확인 목록'에 올린다.
 
 ### 레시피(recipe)
 
 `name`(30자) · `servings` · `dishType`(카탈로그 조리형태, 예: `noodle`) · `ingredients`(식품 id·그램·표시 이름 24자·메모 30자·묶음
-`part`) · `steps`(100자, 팁 60자, 사진). 그램은 **조리 전 무게**로 적는다(건면 80g — 삶으면 두 배 넘게 늘어난다).
+`part`·소품 `icon`) · `steps`(100자, 팁 60자, 사진, 소품 `icon`). 그램은 **조리 전 무게**로 적는다(건면 80g — 삶으면 두 배 넘게 늘어난다).
 [이 레시피로 기록]을 누르면 서버가 이 레시피를 카탈로그 음식(`source manual`, `sourceId meal-story:<slug>`)으로 맞춰,
 기록에도 스토리와 같은 1인분 값이 들어간다.
 
@@ -94,8 +99,46 @@ apps/friendly/content/meal-stories/<slug>/
 | `nutrition` | 1인분 영양정보 라벨 | title · nutrients[2~6] · cautions(`potassium` — 영양 탭과 같은 주의 문구) · note |
 | `outro` | 마무리 + 행동 | title · text · actions(`record` `recipe` `share` `stats`) |
 
-`bars` 의 `aside` 는 막대 옆 작은 값(예: 열량 막대 옆 단백질) — food·recipe 값만. `highlight` 막대만 먹색이고 나머지는 회색이다
-(식단 화면은 색을 상태에만 쓴다).
+`bars` 의 `aside` 는 막대 옆 작은 값(예: 열량 막대 옆 단백질) — food·foods·recipe 값만. `highlight` 막대만 강조(글로 보기는 먹색,
+영상은 노란 색종이)이고 나머지는 회색·옅은 하늘색이다.
+
+**영상에서 잘 보이는 길이** — 위 글자 수는 형식 한도다. 영상(세로 한 화면)은 넘치는 글을 보여 줄 자리가 없어 틀이 글씨를
+줄이거나 말줄임표로 자른다. 아래를 넘으면 점검(`check:meal-stories`)이 경고(△)로 알린다 — 글로 보기에는 다 보이므로 오류는
+아니다.
+
+| 무엇 | 영상에서 온전한 길이 | 넘으면 |
+|---|---|---|
+| `stat`·`bars`·`list`·`nutrition` 제목 | 두 줄(한글 약 16자) | 세 줄이 되며 글씨가 작아진다 |
+| `bars` 막대 이름(label) | 한글 약 15자 | 값 쪽지와 겹칠 수 있다 |
+| `list` 설명(text) | 항목 2~4개(5개에 덧말 없음)는 두 줄(약 40자), 그보다 많으면 한 줄(약 20자) | 끝이 … 로 잘린다 |
+| 재료 수 | 9개 | 재료 이름 글씨가 작아진다 |
+
+막대는 둘일 때 띠와 숫자가 가장 크다(가장 힘주어 보일 비교는 둘로).
+
+### 소품 그림(icon) — 영상
+
+영상은 종이 오리기 그림체다(찢긴 색종이·테이프·손글씨 제목·얼굴 있는 소금통과 숟가락). 목록 항목(`items[].icon`)·레시피 재료
+(`ingredients[].icon`)·만드는 법 단계(`steps[].icon`)에 소품 이름을 달면 그 그림이 카드 옆에서 움직이고, 재료는 그램 쪽지를 달고
+그릇으로 날아든다. 없으면 번호·첫 글자 동그라미. 쓸 수 있는 이름(계약 `MealStoryIcon`):
+
+`bowl`(국그릇) `kimchi` `sauce`(소스병) `can`(햄 통조림) `ramen`(컵라면) `shaker`(소금통) `spoon` `lemon` `magnifier`(돋보기)
+`label`(성분표) `dip`(덜어 먹는 종지) `noodle`(면 다발) `tomato` `onion` `garlic` `oil`(올리브유) `leaf`(바질) `cheese` `pot`(냄비)
+`pan` `plate`(완성 접시) `timer` `clock`
+
+새 소품이 필요하면 `apps/web/src/routes/meal-story/motion/paper/props.tsx` 에 그리고(원점 가운데, 약 240 크기, 찢긴 가장자리는
+`tornRect`·`tornEllipse`·`tornPath`), 계약 enum 과 `paper/icons.ts` 에 이름을 더한다. 한 장으로 보기:
+`cd tools/meal-motion && npx remotion still src/index.ts Props out/props.png --scale=0.6`. 숫자·작은 글은 앱 글꼴, 손글씨(개구)는
+제목·짧은 덧말에만 쓴다.
+
+**장면 틀을 고칠 때**(편이 아니라 `motion/Chapter*.tsx`·`motion/layout.ts`) 지킬 것:
+
+- 읽으라고 놓는 글은 `motion/theme.ts` 의 `TYPE` 아래로 줄이지 않는다(본문 40·보조 34·각주 30 — 1080 폭 기준. 실제 휴대폰
+  브라우저에서는 영상이 폭 320~340px 로 줄어 0.3배가 된다). 소품 안의 꾸밈 글자만 예외(`data-deco`).
+- 첫 편에 없는 모양도 함께 본다 — `motion/storyFixture.ts`(사진 있는 표지·단계, 일반 숫자, 소품 없는 항목, 값 없는 막대, 한도까지
+  찬 줄 수)를 `pnpm --filter web exec vitest run src/routes/meal-story/motion` 이 모든 프레임으로 그려 예외·NaN·글씨 하한을 보고,
+  눈으로는 `cd tools/meal-motion && npx remotion render src/index.ts Variants out/frames-variants --sequence --every-nth-frame=6
+  --image-format=jpeg --scale=0.5` → `npm run sheet -- out/frames-variants out/variants.png --cols=4 --every=4`.
+- 틀에 새 고정 문구를 넣으면 `motion/fonts.ts` 의 글자 묶음에도 넣는다(웹·MP4 가 그 글자의 글꼴 조각을 미리 받는다).
 
 ## 말투
 
@@ -116,18 +159,40 @@ apps/friendly/content/meal-stories/<slug>/
 6. **만들기** — `pnpm --filter friendly build:meal-stories --slug=<slug>` → `foods.json`·`images/`.
 7. **점검** — `pnpm --filter friendly check:meal-stories --slug=<slug>` — 오류(✗)는 고치고 경고(△)는 판단한다. 출력의
    '계산된 숫자'와 '값의 출처'를 사람이 원본과 맞춰 본다. `pnpm --filter friendly test` 의 내용 테스트도 같은 규칙으로 막는다.
-8. **화면** — 로컬 웹(`/meal/stories/<slug>`)을 관리자로 열면 초안이 보인다(목록·장면에 '초안' 표시). 휴대폰 폭 360·390,
-   다크 모드, 데스크톱에서 장면마다 캡처해 글이 넘치지 않는지 본다. 움직임(숫자 굴러가기·막대 자라기)은 캡처로는 일부만 보이니
-   사람이 직접 넘겨 본다. 시스템 '동작 줄이기'가 켜져 있으면 움직임 없이 끝 상태만 보인다.
-9. **검수·게시** — 사람이 레시피를 실제로 만들어 보고 출처를 확인한 뒤 `reviewedAt` 을 채우고 `status: "published"`. 점검을
+8. **화면** — 로컬 웹(`/meal/stories/<slug>`)을 관리자로 열면 초안이 보인다(목록·장면에 '초안' 표시). 기본은 영상으로 보기,
+   위의 '글로 보기'로 장면 글을 넘겨 본다. 휴대폰 폭 360·390, 다크 모드, 데스크톱에서 글로 보기 장면마다 캡처해 글이 넘치지
+   않는지 본다. 시스템 '동작 줄이기'가 켜져 있으면 글로 보기가 기본이고 움직임 없이 끝 상태만 보인다. 휴대폰은 화면 높이를
+   실제 브라우저처럼 낮게 잡아 본다(360×640·390×664 — 주소창을 뺀 높이. 기기 화면 크기 390×844 로 보면 영상이 실제보다 크게
+   나온다). 휴대폰의 영상 보기는 아래 단추 줄이 없다(누르기·밀기·길게 누르기, 재생 단추는 위 막대).
+9. **영상 검수** — 영상은 캡처 몇 장으로는 흐름이 안 보여 프레임 격자와 MP4 로 본다. 처음 한 번 `cd tools/meal-motion && npm ci`.
+
+   ```bash
+   pnpm --filter friendly export:meal-story --slug=<slug> --out=../../tools/meal-motion/out/<slug>.json            # 로그인 전 화면
+   pnpm --filter friendly export:meal-story --slug=<slug> --out=../../tools/meal-motion/out/<slug>-mine.json --mine=3120  # 로그인 화면(예시 값)
+   cd tools/meal-motion
+   npm run frames -- out/frames --props=out/<slug>.json       # 6프레임마다 1장(1/4 크기)
+   npm run sheet -- out/frames out/sheet.png --every=2        # 2초마다 한 칸 격자(--at=1.5,3 으로 골라도 된다)
+   npm run render -- out/<slug>.mp4 --props=out/<slug>.json   # 전체 MP4(1080×1920·30fps)
+   ```
+
+   `--mine` 은 '내 최근 2주 하루 평균 나트륨'(mg) 예시 값이다(진짜 기록이 아니다). 격자에서 글이 넘치거나 겹치는 장면, 읽기 전에
+   넘어가는 장면을 찾는다. 전체 빠르기는 `motion/theme.ts` 의 `TEMPO` 하나(움직임만 빨라지고 글 읽는 시간 — 공백 뺀 글자당
+   2.4프레임 — 은 `motion/timeline.ts` 가 따로 지킨다), 장면별 시각표·길이는 `motion/timeline.ts`, 그림은 `motion/Chapter*.tsx`
+   (편마다가 아니라 틀을 고친다). 렌더러는
+   처음 렌더할 때 크롬 헤드리스(약 100MB)를 `node_modules/.remotion` 에 받는다 — 이미 있는 것을 쓰려면 `--browser-executable=<경로>`.
+   `out/` 은 git 밖이다.
+10. **검수·게시** — 사람이 레시피를 실제로 만들어 보고 출처를 확인한 뒤 `reviewedAt` 을 채우고 `status: "published"`. 점검을
    다시 돌린다(게시본은 검수일·표지가 없으면 오류).
-10. **올리기** — 커밋 → 배포(git pull). 서버는 몇 초마다 파일을 다시 읽어 재시작 없이도 보인다. 공유 미리보기는 nginx
+11. **올리기** — 커밋 → 배포(git pull). 서버는 몇 초마다 파일을 다시 읽어 재시작 없이도 보인다. 공유 미리보기는 nginx
     `location ^~ /meal/stories` 가 있어야 한다([deploy-friendly.md](deploy-friendly.md)).
 
 ## 화면
 
 - 목록 `/meal/stories` · 스토리 `/meal/stories/<slug>?s=N`(N 번째 장면) · 레시피 전체 보기 `/meal/stories/<slug>/recipe`.
-- 넘기기: 오른쪽 누르기·왼쪽으로 밀기·→ = 다음, 왼쪽 30% 누르기·오른쪽으로 밀기·← = 이전, Esc = 닫기. 장면은 저절로 넘어가지
-  않는다(장면 안의 움직임만 돈다).
+- **영상으로 보기**(기본) — 장면이 저절로 이어 재생된다. 위 막대 한 칸 = 장면. 오른쪽 누르기·왼쪽으로 밀기·→ = 다음 장면,
+  왼쪽 30% 누르기·오른쪽으로 밀기·← = 이전 장면, 길게 누르기 = 멈춤(떼면 다시), Space = 재생·멈춤, Esc = 닫기. 마무리 장면에서
+  원고 `actions` 의 단추(기록·레시피·통계·공유)와 출처가 영상 위에 진짜 단추로 뜬다. 내 평균은 로그인했을 때 통계 영양소에서.
+- **글로 보기**(위 단추, `?view=text`) — 장면을 손으로 넘기고 장면 안의 움직임만 돈다. 같은 손짓·키. '동작 줄이기'를 켰거나
+  영상을 돌릴 수 없는 브라우저면 이게 기본이다. 영상에서 글로 바꾸면 보던 장면(`?s=`)에서 이어진다.
 - 입구: 사이트 메뉴 '건강식단', 식단 사이드 메뉴 '건강식단', 식단 홈 '건강식단 새 이야기'(게시 30일 안), 영양 탭에서 그 영양소가
   '많음'·'부족'이면 '줄이는 법 보기'·'채우는 법 보기'.
