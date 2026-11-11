@@ -64,7 +64,8 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 | `{ "my": "sodium" }` | 보는 사람의 최근 2주 하루 평균 — 로그인했을 때만, 화면이 통계로 채운다 | — |
 | `{ "value": 3000, "unit": "mg", "source": "id" }` | 출처가 있는 고정값(예: 국민건강통계 평균). **sources 의 id 필수** | 그 출처 |
 
-영양 값 이름: `kcal` `carbG` `proteinG` `fatG` `sugarG` `fiberG` `sodiumMg` `potassiumMg` `calciumMg`. 레시피 전체 보기의 표는 앞의
+영양 값 이름: `kcal` `carbG` `proteinG` `fatG` `sugarG` `fiberG` `sodiumMg` `potassiumMg` `calciumMg`(재료 값에 이름을 더하면
+`build:meal-stories` 를 slug 없이 돌려 **모든 편**의 `foods.json` 을 다시 만든다 — 안 하면 점검이 ✗, 내용 테스트도 막는다). 레시피 전체 보기의 표는 앞의
 여덟 줄이 늘 나오고, 칼슘은 그 편의 영양정보 장면(`nutrition`)이 가리킬 때만 붙는다.
 기준값은 영양 탭과 같은 KDRI 를 쓴다 — WHO 2,000mg 같은 다른 기준을 글로 섞지 않는다.
 
