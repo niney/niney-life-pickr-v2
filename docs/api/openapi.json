@@ -12942,11 +12942,15 @@
                                   },
                                   "denominator": {
                                     "type": "integer"
+                                  },
+                                  "multiple": {
+                                    "type": "boolean"
                                   }
                                 },
                                 "required": [
                                   "bar",
-                                  "denominator"
+                                  "denominator",
+                                  "multiple"
                                 ],
                                 "additionalProperties": false,
                                 "nullable": true
@@ -13034,7 +13038,14 @@
                                         "yogurt",
                                         "scallion",
                                         "sesameseed",
-                                        "friedrice"
+                                        "friedrice",
+                                        "paprika",
+                                        "broccoli",
+                                        "kiwi",
+                                        "tangerine",
+                                        "chicken",
+                                        "sweetpotato",
+                                        "salad"
                                       ],
                                       "nullable": true
                                     }
@@ -13138,7 +13149,14 @@
                                         "yogurt",
                                         "scallion",
                                         "sesameseed",
-                                        "friedrice"
+                                        "friedrice",
+                                        "paprika",
+                                        "broccoli",
+                                        "kiwi",
+                                        "tangerine",
+                                        "chicken",
+                                        "sweetpotato",
+                                        "salad"
                                       ],
                                       "nullable": true
                                     }
@@ -13233,7 +13251,14 @@
                                   "yogurt",
                                   "scallion",
                                   "sesameseed",
-                                  "friedrice"
+                                  "friedrice",
+                                  "paprika",
+                                  "broccoli",
+                                  "kiwi",
+                                  "tangerine",
+                                  "chicken",
+                                  "sweetpotato",
+                                  "salad"
                                 ],
                                 "nullable": true
                               }
@@ -13280,7 +13305,8 @@
                                         "fiberG",
                                         "sodiumMg",
                                         "potassiumMg",
-                                        "calciumMg"
+                                        "calciumMg",
+                                        "vitaminCMg"
                                       ]
                                     },
                                     "label": {
@@ -13543,7 +13569,14 @@
                                   "yogurt",
                                   "scallion",
                                   "sesameseed",
-                                  "friedrice"
+                                  "friedrice",
+                                  "paprika",
+                                  "broccoli",
+                                  "kiwi",
+                                  "tangerine",
+                                  "chicken",
+                                  "sweetpotato",
+                                  "salad"
                                 ],
                                 "nullable": true
                               }
@@ -13599,7 +13632,8 @@
                                   "fiberG",
                                   "sodiumMg",
                                   "potassiumMg",
-                                  "calciumMg"
+                                  "calciumMg",
+                                  "vitaminCMg"
                                 ]
                               },
                               "label": {

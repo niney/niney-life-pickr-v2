@@ -23,6 +23,7 @@ export const MealStoryNutrient = z.enum([
   'sodiumMg',
   'potassiumMg',
   'calciumMg',
+  'vitaminCMg',
 ]);
 export type MealStoryNutrientType = z.infer<typeof MealStoryNutrient>;
 
@@ -76,6 +77,14 @@ export const MealStoryIcon = z.enum([
   'scallion',
   'sesameseed',
   'friedrice',
+  // 비타민 C 편(2026-11-11) — 파프리카·브로콜리·키위·귤·닭가슴살·고구마·샐러드 그릇
+  'paprika',
+  'broccoli',
+  'kiwi',
+  'tangerine',
+  'chicken',
+  'sweetpotato',
+  'salad',
 ]);
 export type MealStoryIconType = z.infer<typeof MealStoryIcon>;
 
@@ -169,9 +178,10 @@ export const MealStoryScene = z.discriminatedUnion('type', [
         highlight: z.boolean(),
       }),
     ),
-    // 막대가 둘이고 작은 쪽이 큰 쪽의 '약 N분의 1'로 말해도 될 때(서버가 두 값으로 계산 — 어림이 15% 넘게 벗어나면 null).
-    // bar = 작은 막대의 차례(0부터), denominator = N.
-    fraction: z.object({ bar: z.number().int(), denominator: z.number().int() }).nullable(),
+    // 막대가 둘이고 한쪽이 다른 쪽의 정수배로 말해도 될 때(서버가 두 값으로 계산 — 어림이 15% 넘게 벗어나면 null).
+    // 보통은 작은 쪽에 '약 N분의 1'(bar = 작은 막대의 차례, denominator = N). 강조한 막대가 큰 쪽이면 그 막대에 '약 N배'
+    // (multiple true, bar = 큰 막대의 차례 — '한 접시면 권장량의 약 2배').
+    fraction: z.object({ bar: z.number().int(), denominator: z.number().int(), multiple: z.boolean() }).nullable(),
     note: z.string().nullable(),
   }),
   z.object({

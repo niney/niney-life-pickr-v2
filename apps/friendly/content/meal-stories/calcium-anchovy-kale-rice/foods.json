@@ -11,7 +11,8 @@
         "fiberG": 0.9,
         "sodiumMg": 0,
         "potassiumMg": 20,
-        "calciumMg": 2
+        "calciumMg": 2,
+        "vitaminCMg": 0
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R101-013000300-0000 '멥쌀밥_백미'",
@@ -27,7 +28,8 @@
         "fiberG": 3.2,
         "sodiumMg": 47,
         "potassiumMg": 594,
-        "calciumMg": 328
+        "calciumMg": 328,
+        "vitaminCMg": null
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R106-180000001-0000 '케일_생것'",
@@ -43,7 +45,8 @@
         "fiberG": 0,
         "sodiumMg": 139,
         "potassiumMg": 127,
-        "calciumMg": 47
+        "calciumMg": 47,
+        "vitaminCMg": 0
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R210-003000001-0000 '달걀_생것'",
@@ -59,7 +62,8 @@
         "fiberG": 1.6,
         "sodiumMg": 0,
         "potassiumMg": 181,
-        "calciumMg": 24
+        "calciumMg": 24,
+        "vitaminCMg": 3.55
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R106-191040001-0000 '파_대파_생것'",
@@ -75,7 +79,8 @@
         "fiberG": 14.1,
         "sodiumMg": 2,
         "potassiumMg": 459,
-        "calciumMg": 854
+        "calciumMg": 854,
+        "vitaminCMg": 0
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R105-026020058-0000 '참깨_흰깨_볶은것'",
@@ -91,7 +96,8 @@
         "fiberG": 0,
         "sodiumMg": 0,
         "potassiumMg": 0,
-        "calciumMg": 0
+        "calciumMg": 0,
+        "vitaminCMg": 0
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R114-020000000-0000 '참기름'",
@@ -107,7 +113,8 @@
         "fiberG": 0,
         "sodiumMg": 40,
         "potassiumMg": 162,
-        "calciumMg": 118
+        "calciumMg": 118,
+        "vitaminCMg": 0.79
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R213-009000000-0000 '우유'",

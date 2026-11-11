@@ -196,11 +196,67 @@ describe('resolveMealStory', () => {
     expect(plain.recipe?.nutrition.map((r) => r.key)).not.toContain('calciumMg');
   });
 
+  it('비타민 C — 성인은 남녀·나이가 같아 덧말이 없고(100mg), 영양정보 장면이 가리키면 레시피 표에 그 줄이 붙는다', () => {
+    expect(kdriFigure('vitaminC')).toEqual({ value: 100, unit: 'mg', basis: '성인 하루 권장섭취량', detail: null });
+    expect(kdriFigure('vitaminC', 'female')).toMatchObject({ value: 100, detail: null });
+    const withC: MealStoryFoodsFileType = {
+      generatedBy: 'build:meal-stories',
+      foods: {
+        noodle: { per100: { kcal: 350, sodiumMg: 5, vitaminCMg: 0 }, basis: '100g', provenance: '원재료 R101', source: 'mfds-raw' },
+        sauce: { per100: { kcal: 70, sodiumMg: 600, vitaminCMg: 110.6 }, basis: '100g', provenance: '가공 P113', source: 'mfds-processed' },
+      },
+    };
+    const { story } = resolveMealStory(
+      base({
+        scenes: [
+          { type: 'cover', kicker: '시험', title: '시험 표지' },
+          { type: 'nutrition', title: '영양', nutrients: ['kcal', 'vitaminCMg'] },
+          { type: 'outro', title: '끝', actions: ['share'] },
+        ],
+      } as Partial<MealStoryScriptType>),
+      withC,
+      imageUrl,
+    );
+    // 소스 100g × 110.6 = 110.6mg, 2인분이라 55.3 → mg 은 정수로.
+    expect(sceneOf(story.scenes, 'nutrition').rows.map((r) => [r.key, r.label, r.figure.value])).toEqual([
+      ['kcal', '열량', 387],
+      ['vitaminCMg', '비타민 C', 55],
+    ]);
+    expect(story.recipe?.nutrition.map((r) => r.key).slice(-1)).toEqual(['vitaminCMg']);
+  });
+
   it('막대 둘 — 작은 쪽이 큰 쪽의 약 N분의 1(어림이 15% 넘게 벗어나면 말하지 않는다), 큰 숫자 장면 밖의 숫자에는 소금 환산이 없다', () => {
     const { story } = resolveMealStory(base(), foods, imageUrl);
     const bars = sceneOf(story.scenes, 'bars');
     // 소스 150g 900mg · 직접 300mg → 둘째 막대가 첫째의 3분의 1.
-    expect(bars.fraction).toEqual({ bar: 1, denominator: 3 });
+    expect(bars.fraction).toEqual({ bar: 1, denominator: 3, multiple: false });
+    // 강조한 막대가 큰 쪽이면 그 막대에 '약 N배' — 기준 막대에 'N분의 1'을 붙이면 거꾸로 읽힌다(한 접시가 권장량의 2배).
+    const flipped = (highlight: [boolean, boolean]) =>
+      sceneOf(
+        resolveMealStory(
+          base({
+            scenes: [
+              { type: 'cover', kicker: '시험', title: '시험 표지' },
+              {
+                type: 'bars',
+                title: '비교',
+                bars: [
+                  { label: '소스 150g', value: { food: 'sauce', nutrient: 'sodiumMg', grams: 150 }, highlight: highlight[0] },
+                  { label: '직접', value: { recipe: 'sodiumMg', part: 'sauce' }, highlight: highlight[1] },
+                ],
+              },
+              { type: 'outro', title: '끝', actions: ['share'] },
+            ],
+          } as Partial<MealStoryScriptType>),
+          foods,
+          imageUrl,
+        ).story.scenes,
+        'bars',
+      ).fraction;
+    expect(flipped([true, false])).toEqual({ bar: 0, denominator: 3, multiple: true });
+    expect(flipped([false, true])).toEqual({ bar: 1, denominator: 3, multiple: false });
+    // 둘 다 강조했거나 아무것도 강조하지 않았으면 예전대로 작은 쪽에.
+    expect(flipped([true, true])).toEqual({ bar: 1, denominator: 3, multiple: false });
     expect(bars.bars[0]!.figure.equivalent).toBeNull();
     expect(fractionOf(97, 953)).toBe(10);
     expect(fractionOf(100, 230)).toBe(2);

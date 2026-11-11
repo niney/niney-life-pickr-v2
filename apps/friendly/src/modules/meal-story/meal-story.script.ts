@@ -26,7 +26,7 @@ import {
 // 글자 수 상한은 휴대폰 360px 화면 한 장에 들어가게 잡았다.
 
 /** 원고가 가리킬 수 있는 섭취기준 — 서버 표(meal-story.defs 의 KDRI_KIND)와 같은 이름. */
-export const MEAL_STORY_KDRI_KEYS = ['sodium', 'potassium', 'fiber', 'calcium'] as const;
+export const MEAL_STORY_KDRI_KEYS = ['sodium', 'potassium', 'fiber', 'calcium', 'vitaminC'] as const;
 export type MealStoryKdriKey = (typeof MEAL_STORY_KDRI_KEYS)[number];
 /** 영양 탭과 같은 주의 문구를 붙일 수 있는 영양소. */
 export const MEAL_STORY_CAUTION_KEYS = ['potassium', 'fiber', 'calcium'] as const;
@@ -141,13 +141,14 @@ export const MealStoryPer100 = z
     sodiumMg: num,
     potassiumMg: num,
     calciumMg: num,
+    vitaminCMg: num,
   })
   .strict();
 export type MealStoryPer100Type = z.infer<typeof MealStoryPer100>;
 
 const count = z.number().int().nonnegative().optional();
 export const MealStoryPer100Counts = z
-  .object({ kcal: count, carbG: count, proteinG: count, fatG: count, sugarG: count, fiberG: count, sodiumMg: count, potassiumMg: count, calciumMg: count })
+  .object({ kcal: count, carbG: count, proteinG: count, fatG: count, sugarG: count, fiberG: count, sodiumMg: count, potassiumMg: count, calciumMg: count, vitaminCMg: count })
   .strict();
 export type MealStoryPer100CountsType = z.infer<typeof MealStoryPer100Counts>;
 

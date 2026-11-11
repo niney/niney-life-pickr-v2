@@ -15,6 +15,7 @@ export const MEAL_STORY_NUTRIENTS: Readonly<Record<MealStoryNutrientType, { labe
   sodiumMg: { label: '나트륨', unit: 'mg' },
   potassiumMg: { label: '칼륨', unit: 'mg' },
   calciumMg: { label: '칼슘', unit: 'mg' },
+  vitaminCMg: { label: '비타민 C', unit: 'mg' },
 };
 
 /**
@@ -74,6 +75,8 @@ const KDRI_KIND: Readonly<Record<MealStoryKdriKey, { kind: 'cdrr' | 'ai' | 'rni'
   potassium: { kind: 'ai', basis: '성인 하루 충분섭취량', unit: 'mg' },
   fiber: { kind: 'ai', basis: '성인 하루 충분섭취량', unit: 'g' },
   calcium: { kind: 'rni', basis: '성인 하루 권장섭취량', unit: 'mg' },
+  // 비타민 C 는 성인 남녀·나이가 모두 같다(100mg) — 덧말이 없다.
+  vitaminC: { kind: 'rni', basis: '성인 하루 권장섭취량', unit: 'mg' },
 };
 
 const SEX_LABEL = { male: '남자', female: '여자' } as const;

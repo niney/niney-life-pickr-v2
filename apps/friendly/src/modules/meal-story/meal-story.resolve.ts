@@ -295,13 +295,16 @@ export const resolveMealStory = (
             : null,
           highlight: b.highlight ?? false,
         }));
-        // 둘을 견주는 장면이고 단위가 같으면 — 작은 쪽이 큰 쪽의 '약 N분의 1'.
+        // 둘을 견주는 장면이고 단위가 같으면 — 작은 쪽이 큰 쪽의 '약 N분의 1'. 강조한 막대가 큰 쪽이면(한 접시가 권장량보다
+        // 많다) 그 막대에 '약 N배'라고 한다 — 기준 막대에 '2분의 1'을 붙이면 거꾸로 읽힌다.
         const [a, b] = bars;
-        let fraction: { bar: number; denominator: number } | null = null;
+        let fraction: { bar: number; denominator: number; multiple: boolean } | null = null;
         if (bars.length === 2 && a && b && a.figure.value !== null && b.figure.value !== null && a.figure.unit === b.figure.unit) {
-          const bar = a.figure.value <= b.figure.value ? 0 : 1;
+          const small = a.figure.value <= b.figure.value ? 0 : 1;
+          const large = 1 - small;
           const denominator = fractionOf(Math.min(a.figure.value, b.figure.value), Math.max(a.figure.value, b.figure.value));
-          if (denominator !== null) fraction = { bar, denominator };
+          const multiple = bars[large]!.highlight && !bars[small]!.highlight;
+          if (denominator !== null) fraction = { bar: multiple ? large : small, denominator, multiple };
         }
         return { type: 'bars', title: s.title, bars, fraction, note: s.note ?? null };
       }

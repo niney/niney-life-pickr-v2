@@ -220,9 +220,10 @@ export const checkMealStory = (
       }
     }
     if (sc.type === 'bars' && sc.fraction) {
-      const small = sc.bars[sc.fraction.bar];
-      const large = sc.bars[1 - sc.fraction.bar];
-      review.push(`장면 ${i + 1}: ${small?.label} ${small?.figure.value}${small?.figure.unit} 은 ${large?.label} ${large?.figure.value}${large?.figure.unit} 의 '약 ${sc.fraction.denominator}분의 1'`);
+      const tagged = sc.bars[sc.fraction.bar];
+      const other = sc.bars[1 - sc.fraction.bar];
+      const words = sc.fraction.multiple ? `약 ${sc.fraction.denominator}배` : `약 ${sc.fraction.denominator}분의 1`;
+      review.push(`장면 ${i + 1}: ${tagged?.label} ${tagged?.figure.value}${tagged?.figure.unit} 은 ${other?.label} ${other?.figure.value}${other?.figure.unit} 의 '${words}'`);
     }
   }
 

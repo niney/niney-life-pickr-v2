@@ -135,7 +135,7 @@ const main = async (): Promise<void> => {
       console.log('  foods.json 그대로');
     }
     for (const [id, f] of Object.entries(file.foods)) {
-      const values = (['kcal', 'sodiumMg', 'potassiumMg', 'proteinG', 'fiberG', 'calciumMg'] as const)
+      const values = (['kcal', 'sodiumMg', 'potassiumMg', 'proteinG', 'fiberG', 'calciumMg', 'vitaminCMg'] as const)
         .map((k) => `${MEAL_STORY_NUTRIENTS[k].label} ${f.per100[k] ?? '—'}`)
         .join(' · ');
       console.log(`  ${id}: ${f.basis}당 ${values}\n      ← ${f.provenance}${f.matched ? `\n      제품: ${f.matched.names.join(', ')}` : ''}`);
