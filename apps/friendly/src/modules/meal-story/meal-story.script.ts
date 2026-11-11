@@ -17,7 +17,7 @@ import {
 //
 // 원고에는 숫자를 적지 않는다. 숫자는 아래 MealStoryValueRef 로 가리킨다:
 //   { kdri: 'sodium' }                         2020 한국인 영양소 섭취기준(성인 기준, 나이별 차이는 서버가 덧말로)
-//   { kdri: 'fiber', sex: 'female' }           남녀 값이 다른 기준(식이섬유 30g·20g)은 성별을 골라 나란히 보인다
+//   { kdri: 'fiber', sex: 'female' }           남녀 값이 다른 기준(식이섬유 30g·20g, 칼슘 800mg·700mg)은 성별을 골라 나란히 보인다
 //   { food: 'spaghetti', nutrient, grams }     foods 의 100g당 값 × 그램
 //   { foods: [{ food, grams }, …], nutrient }  섞은 값(예: 건면 40g + 통밀 40g) — 식품마다 100g당 값 × 그램의 합
 //   { recipe: 'sodiumMg', part?: 'sauce' }     레시피 1인분 합계(part 를 주면 그 묶음 재료만)
@@ -26,10 +26,10 @@ import {
 // 글자 수 상한은 휴대폰 360px 화면 한 장에 들어가게 잡았다.
 
 /** 원고가 가리킬 수 있는 섭취기준 — 서버 표(meal-story.defs 의 KDRI_KIND)와 같은 이름. */
-export const MEAL_STORY_KDRI_KEYS = ['sodium', 'potassium', 'fiber'] as const;
+export const MEAL_STORY_KDRI_KEYS = ['sodium', 'potassium', 'fiber', 'calcium'] as const;
 export type MealStoryKdriKey = (typeof MEAL_STORY_KDRI_KEYS)[number];
 /** 영양 탭과 같은 주의 문구를 붙일 수 있는 영양소. */
-export const MEAL_STORY_CAUTION_KEYS = ['potassium', 'fiber'] as const;
+export const MEAL_STORY_CAUTION_KEYS = ['potassium', 'fiber', 'calcium'] as const;
 export type MealStoryCautionKey = (typeof MEAL_STORY_CAUTION_KEYS)[number];
 
 const Id = z.string().max(40).regex(MEAL_STORY_SLUG_PATTERN, '소문자·숫자·하이픈만');
@@ -140,13 +140,14 @@ export const MealStoryPer100 = z
     fiberG: num,
     sodiumMg: num,
     potassiumMg: num,
+    calciumMg: num,
   })
   .strict();
 export type MealStoryPer100Type = z.infer<typeof MealStoryPer100>;
 
 const count = z.number().int().nonnegative().optional();
 export const MealStoryPer100Counts = z
-  .object({ kcal: count, carbG: count, proteinG: count, fatG: count, sugarG: count, fiberG: count, sodiumMg: count, potassiumMg: count })
+  .object({ kcal: count, carbG: count, proteinG: count, fatG: count, sugarG: count, fiberG: count, sodiumMg: count, potassiumMg: count, calciumMg: count })
   .strict();
 export type MealStoryPer100CountsType = z.infer<typeof MealStoryPer100Counts>;
 

@@ -13026,7 +13026,15 @@
                                         "sesame",
                                         "soy",
                                         "stirfry",
-                                        "bibimbap"
+                                        "bibimbap",
+                                        "milk",
+                                        "anchovy",
+                                        "kale",
+                                        "tofu",
+                                        "yogurt",
+                                        "scallion",
+                                        "sesameseed",
+                                        "friedrice"
                                       ],
                                       "nullable": true
                                     }
@@ -13122,7 +13130,15 @@
                                         "sesame",
                                         "soy",
                                         "stirfry",
-                                        "bibimbap"
+                                        "bibimbap",
+                                        "milk",
+                                        "anchovy",
+                                        "kale",
+                                        "tofu",
+                                        "yogurt",
+                                        "scallion",
+                                        "sesameseed",
+                                        "friedrice"
                                       ],
                                       "nullable": true
                                     }
@@ -13209,7 +13225,15 @@
                                   "sesame",
                                   "soy",
                                   "stirfry",
-                                  "bibimbap"
+                                  "bibimbap",
+                                  "milk",
+                                  "anchovy",
+                                  "kale",
+                                  "tofu",
+                                  "yogurt",
+                                  "scallion",
+                                  "sesameseed",
+                                  "friedrice"
                                 ],
                                 "nullable": true
                               }
@@ -13255,7 +13279,8 @@
                                         "sugarG",
                                         "fiberG",
                                         "sodiumMg",
-                                        "potassiumMg"
+                                        "potassiumMg",
+                                        "calciumMg"
                                       ]
                                     },
                                     "label": {
@@ -13510,7 +13535,15 @@
                                   "sesame",
                                   "soy",
                                   "stirfry",
-                                  "bibimbap"
+                                  "bibimbap",
+                                  "milk",
+                                  "anchovy",
+                                  "kale",
+                                  "tofu",
+                                  "yogurt",
+                                  "scallion",
+                                  "sesameseed",
+                                  "friedrice"
                                 ],
                                 "nullable": true
                               }
@@ -13565,7 +13598,8 @@
                                   "sugarG",
                                   "fiberG",
                                   "sodiumMg",
-                                  "potassiumMg"
+                                  "potassiumMg",
+                                  "calciumMg"
                                 ]
                               },
                               "label": {

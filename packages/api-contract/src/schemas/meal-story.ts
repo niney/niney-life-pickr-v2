@@ -22,6 +22,7 @@ export const MealStoryNutrient = z.enum([
   'fiberG',
   'sodiumMg',
   'potassiumMg',
+  'calciumMg',
 ]);
 export type MealStoryNutrientType = z.infer<typeof MealStoryNutrient>;
 
@@ -66,6 +67,15 @@ export const MealStoryIcon = z.enum([
   'soy',
   'stirfry',
   'bibimbap',
+  // 칼슘 편(2026-11-11) — 우유·멸치·케일·두부·요거트·대파·깨·볶음밥 그릇
+  'milk',
+  'anchovy',
+  'kale',
+  'tofu',
+  'yogurt',
+  'scallion',
+  'sesameseed',
+  'friedrice',
 ]);
 export type MealStoryIconType = z.infer<typeof MealStoryIcon>;
 

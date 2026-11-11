@@ -14,9 +14,13 @@ export const MEAL_STORY_NUTRIENTS: Readonly<Record<MealStoryNutrientType, { labe
   fiberG: { label: '식이섬유', unit: 'g' },
   sodiumMg: { label: '나트륨', unit: 'mg' },
   potassiumMg: { label: '칼륨', unit: 'mg' },
+  calciumMg: { label: '칼슘', unit: 'mg' },
 };
 
-/** 레시피 전체 보기의 영양 표 차례. */
+/**
+ * 레시피 전체 보기의 영양 표 차례 — 늘 보이는 줄. 그 편의 영양정보 장면이 여기 없는 영양소(칼슘)를 가리키면 그 줄을 뒤에 붙인다
+ * (resolve). 모든 편에 줄을 늘리지 않는 까닭: 값을 모르는 재료(가공식품 묶음)가 있는 편은 그 줄이 '일부만 셌어요'가 된다.
+ */
 export const MEAL_STORY_RECIPE_NUTRIENTS: readonly MealStoryNutrientType[] = [
   'kcal',
   'carbG',
@@ -63,11 +67,13 @@ export const fractionOf = (small: number, large: number): number | null => {
   return n >= 2 && Math.abs(ratio - n) / ratio <= 0.15 ? n : null;
 };
 
-const KDRI_KIND: Readonly<Record<MealStoryKdriKey, { kind: 'cdrr' | 'ai'; basis: string; unit: 'mg' | 'g' }>> = {
-  // 나트륨은 '이보다 적게'(만성질환위험감소섭취량), 칼륨·식이섬유는 '이만큼'(충분섭취량). basis 의 '성인' 자리에 성별이 들어간다.
+const KDRI_KIND: Readonly<Record<MealStoryKdriKey, { kind: 'cdrr' | 'ai' | 'rni'; basis: string; unit: 'mg' | 'g' }>> = {
+  // 나트륨은 '이보다 적게'(만성질환위험감소섭취량), 칼륨·식이섬유는 '이만큼'(충분섭취량), 칼슘은 권장섭취량. basis 의 '성인' 자리에
+  // 성별이 들어간다.
   sodium: { kind: 'cdrr', basis: '성인 하루 기준(이보다 적게)', unit: 'mg' },
   potassium: { kind: 'ai', basis: '성인 하루 충분섭취량', unit: 'mg' },
   fiber: { kind: 'ai', basis: '성인 하루 충분섭취량', unit: 'g' },
+  calcium: { kind: 'rni', basis: '성인 하루 권장섭취량', unit: 'mg' },
 };
 
 const SEX_LABEL = { male: '남자', female: '여자' } as const;
@@ -84,6 +90,36 @@ const AGE_LABEL: Readonly<Record<KdriAgeGroup, string>> = {
 
 const ADULT_GROUPS: readonly KdriAgeGroup[] = KDRI_AGE_GROUPS.filter((g) => g !== '12-14' && g !== '15-18');
 
+/** 나이 구간의 시작 나이('50-64' → 50, '75+' → 75). */
+const startAge = (g: KdriAgeGroup): string => g.replace(/[-+].*$/, '');
+/** 나이 구간의 끝 나이('50-64' → 64). 끝이 없는 구간('75+')은 null. */
+const endAge = (g: KdriAgeGroup): string | null => (g.includes('-') ? g.slice(g.indexOf('-') + 1) : null);
+
+/**
+ * 성인 나이 구간 가운데 기본(19~29세)과 값이 다른 것 — 값이 같은 이어진 구간은 하나로 묶는다('65~74세 700mg · 75세 이상
+ * 700mg' 이 아니라 '65세 이상 700mg'). 덧말 한 줄이 짧아야 영상 쪽지에 들어간다.
+ */
+const ageNotes = (valueAt: (g: KdriAgeGroup) => number | undefined, base: number | null, unit: string): string[] => {
+  const runs: { from: KdriAgeGroup; to: KdriAgeGroup; value: number }[] = [];
+  let open = false;
+  for (const g of ADULT_GROUPS) {
+    const v = g === '19-29' ? undefined : valueAt(g);
+    if (v === undefined || v === base) {
+      open = false;
+      continue;
+    }
+    const last = runs[runs.length - 1];
+    if (open && last && last.value === v) last.to = g;
+    else runs.push({ from: g, to: g, value: v });
+    open = true;
+  }
+  return runs.map((r) => {
+    const end = endAge(r.to);
+    const label = r.from === r.to ? AGE_LABEL[r.from] : end === null ? `${startAge(r.from)}세 이상` : `${startAge(r.from)}~${end}세`;
+    return `${label} ${formatAmount(r.value, unit)}`;
+  });
+};
+
 /**
  * 섭취기준 하나 — 성인(19~29세) 값과, 성인 안에서 값이 다른 나이·성별을 덧말로. 성별이 다르면 낮은 쪽이 아니라
  * 둘을 함께 밝힌다(19~29세 남녀가 다르면 basis 를 '성인 남자 …'로 쓰고 덧말에 여자 값).
@@ -98,10 +134,7 @@ export const kdriFigure = (
   const at = (s: 'male' | 'female', g: KdriAgeGroup) => nutrientReference(nutrient as KdriNutrient, s, g)[kind];
   if (sex) {
     const own = at(sex, '19-29') ?? null;
-    const ages = ADULT_GROUPS.flatMap((g) => {
-      const v = at(sex, g);
-      return g !== '19-29' && v !== undefined && v !== own ? [`${AGE_LABEL[g]} ${formatAmount(v, unit)}`] : [];
-    });
+    const ages = ageNotes((g) => at(sex, g), own, unit);
     return {
       value: own,
       unit,

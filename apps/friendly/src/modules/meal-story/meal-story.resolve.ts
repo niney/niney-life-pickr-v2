@@ -252,6 +252,12 @@ export const resolveMealStory = (
     }
   }
 
+  // 레시피 영양 표의 줄 — 늘 보이는 줄 뒤에, 이 편의 영양정보 장면이 가리키는 그 밖의 영양소(칼슘)를 붙인다.
+  const recipeNutrients: MealStoryNutrientType[] = [...MEAL_STORY_RECIPE_NUTRIENTS];
+  for (const s of script.scenes) {
+    if (s.type !== 'nutrition') continue;
+    for (const n of s.nutrients) if (!recipeNutrients.includes(n)) recipeNutrients.push(n);
+  }
   const nutritionRows = (keys: readonly MealStoryNutrientType[], where: string): MealStoryNutritionRowType[] =>
     keys.map((key) => ({ key, label: MEAL_STORY_NUTRIENTS[key].label, figure: recipeFigure(key, undefined, where) }));
 
@@ -352,7 +358,7 @@ export const resolveMealStory = (
           tip: st.tip ?? null,
           image: image(st.image, `레시피 ${k + 1}단계`),
         })),
-        nutrition: nutritionRows(MEAL_STORY_RECIPE_NUTRIENTS, '레시피 영양'),
+        nutrition: nutritionRows(recipeNutrients, '레시피 영양'),
       }
     : null;
 

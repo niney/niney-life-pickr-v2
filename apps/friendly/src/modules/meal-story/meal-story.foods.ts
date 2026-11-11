@@ -41,8 +41,9 @@ const HEADER: Readonly<Record<string, string>> = {
   '식이섬유(g)': 'fiberG',
   '나트륨(mg)': 'sodiumMg',
   '칼륨(mg)': 'potassiumMg',
+  '칼슘(mg)': 'calciumMg',
 };
-const PER100_KEYS = ['kcal', 'carbG', 'proteinG', 'fatG', 'sugarG', 'fiberG', 'sodiumMg', 'potassiumMg'] as const;
+const PER100_KEYS = ['kcal', 'carbG', 'proteinG', 'fatG', 'sugarG', 'fiberG', 'sodiumMg', 'potassiumMg', 'calciumMg'] as const;
 
 export interface FoodRow {
   code: string;

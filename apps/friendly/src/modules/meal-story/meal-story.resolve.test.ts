@@ -106,7 +106,8 @@ describe('resolveMealStory', () => {
       value: 30,
       unit: 'g',
       basis: '성인 남자 하루 충분섭취량',
-      detail: '65~74세 25g · 75세 이상 25g',
+      // 값이 같은 이어진 나이는 하나로 묶는다(영상 쪽지 한 줄에 들어가게).
+      detail: '65세 이상 25g',
     });
     expect(kdriFigure('fiber', 'female')).toEqual({ value: 20, unit: 'g', basis: '성인 여자 하루 충분섭취량', detail: null });
     // 성별을 고르지 않으면 앞의 숫자가 남자 값임을 basis 가 밝히고, 여자 값과 나이 차이를 덧말에 모은다.
@@ -149,6 +150,50 @@ describe('resolveMealStory', () => {
     expect(stat.figures[0]!.figure.sources).toEqual(['kdri-2020']);
     // 주의 문구는 영양 탭과 같은 글(식이섬유 — 갑자기 늘리면 가스).
     expect(sceneOf(story.scenes, 'nutrition').cautions[0]).toContain('천천히 늘리세요');
+  });
+
+  it('칼슘 — 기준은 권장섭취량(남 800·여 700, 이어진 나이는 묶어서), 영양정보 장면이 가리키면 레시피 표에도 그 줄이 붙는다', () => {
+    expect(kdriFigure('calcium', 'male')).toEqual({
+      value: 800,
+      unit: 'mg',
+      basis: '성인 남자 하루 권장섭취량',
+      detail: '50~64세 750mg · 65세 이상 700mg',
+    });
+    expect(kdriFigure('calcium', 'female')).toEqual({
+      value: 700,
+      unit: 'mg',
+      basis: '성인 여자 하루 권장섭취량',
+      detail: '50세 이상 800mg',
+    });
+
+    const withCalcium: MealStoryFoodsFileType = {
+      generatedBy: 'build:meal-stories',
+      foods: {
+        noodle: { per100: { kcal: 350, sodiumMg: 5, calciumMg: 20 }, basis: '100g', provenance: '원재료 R101', source: 'mfds-raw' },
+        sauce: { per100: { kcal: 70, sodiumMg: 600, calciumMg: 100 }, basis: '100g', provenance: '가공 P113', source: 'mfds-processed' },
+      },
+    };
+    const script = (nutrients: string[]) =>
+      base({
+        scenes: [
+          { type: 'cover', kicker: '시험', title: '시험 표지' },
+          { type: 'nutrition', title: '영양', nutrients, cautions: ['calcium'] },
+          { type: 'outro', title: '끝', actions: ['share'] },
+        ],
+      } as Partial<MealStoryScriptType>);
+    const { story } = resolveMealStory(script(['kcal', 'calciumMg']), withCalcium, imageUrl);
+    const scene = sceneOf(story.scenes, 'nutrition');
+    // 국수 200g × 20 + 소스 100g × 100 = 140mg, 2인분이라 70mg(값을 모르는 허브는 빼고 덧말로).
+    expect(scene.rows.map((r) => [r.key, r.figure.value, r.figure.unit])).toEqual([
+      ['kcal', 387, 'kcal'],
+      ['calciumMg', 70, 'mg'],
+    ]);
+    expect(scene.cautions[0]).toContain('나눠 먹는 편이');
+    // 레시피 전체 보기의 표 — 늘 보이는 줄 뒤에 칼슘 줄.
+    expect(story.recipe?.nutrition.map((r) => r.key).slice(-2)).toEqual(['potassiumMg', 'calciumMg']);
+    // 영양정보 장면이 칼슘을 가리키지 않는 편은 표가 그대로다.
+    const plain = resolveMealStory(script(['kcal', 'sodiumMg']), withCalcium, imageUrl).story;
+    expect(plain.recipe?.nutrition.map((r) => r.key)).not.toContain('calciumMg');
   });
 
   it('막대 둘 — 작은 쪽이 큰 쪽의 약 N분의 1(어림이 15% 넘게 벗어나면 말하지 않는다), 큰 숫자 장면 밖의 숫자에는 소금 환산이 없다', () => {

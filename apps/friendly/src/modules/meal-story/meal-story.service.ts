@@ -44,6 +44,8 @@ const PER100_KEYS: readonly Exclude<MealStoryNutrientType, 'kcal'>[] = [
   'fiberG',
   'sodiumMg',
   'potassiumMg',
+  // 레시피 영양에 그 줄이 있을 때만 들어간다(칼슘 편) — 기록의 영양 점검이 이 값으로 칼슘을 센다.
+  'calciumMg',
 ];
 
 const round2 = (v: number): number => Math.round(v * 100) / 100;
