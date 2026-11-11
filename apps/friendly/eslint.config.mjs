@@ -14,6 +14,8 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', '.turbo/**', 'node_modules/**', 'prisma/migrations/**'],
+    // data/ 는 git 밖(.gitignore — DB·내려받은 원본·측정용 임시 스크립트). 거기 남은 임시 .ts/.js 가 린트 오류를 내면
+    // 진짜 오류가 묻힌다(2026-11-10: perf2·perf3 의 262건으로 pnpm lint 가 실패하고 있었다).
+    ignores: ['dist/**', '.turbo/**', 'node_modules/**', 'prisma/migrations/**', 'data/**'],
   },
 ];
