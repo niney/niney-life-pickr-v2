@@ -13,7 +13,7 @@ import {
 import { RATE } from '../../plugins/rate-limit.js';
 import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
 import { mealStoryStore } from './meal-story.instance.js';
-import { MealStoryFoodError, ensureMealStoryFood } from './meal-story.service.js';
+import { MealStoryFoodError, ensureMealStoryFood, mealStoryFoodIds } from './meal-story.service.js';
 
 // 건강식단 스토리 — 누구나 보는 손수 만든 콘텐츠. 원고는 서버 파일(content/meal-stories)이라 쓰기 API 는 없고,
 // [이 레시피로 기록]만 로그인해 레시피를 카탈로그 음식으로 맞춘다. 초안은 관리자에게만 보인다.
@@ -42,7 +42,11 @@ const mealStoryRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req) => {
       const items = await store.list({ includeDrafts: await isAdmin(req) });
-      return { items: items.map((s) => s.listItem) };
+      const foods = await mealStoryFoodIds(
+        app.prisma,
+        items.filter((s) => s.story.recipe).map((s) => s.script.slug),
+      );
+      return { items: items.map((s) => ({ ...s.listItem, recipeFoodId: foods.get(s.script.slug) ?? null })) };
     },
   });
 

@@ -53,6 +53,19 @@ export const MealStoryIcon = z.enum([
   'plate',
   'timer',
   'clock',
+  // 식이섬유 편(2026-11-10) — 밥공기·버섯·당근·달걀·콩나물·콩·사과·물컵·참기름·간장·볶는 팬·비빔밥 그릇
+  'rice',
+  'mushroom',
+  'carrot',
+  'egg',
+  'sprout',
+  'bean',
+  'apple',
+  'water',
+  'sesame',
+  'soy',
+  'stirfry',
+  'bibimbap',
 ]);
 export type MealStoryIconType = z.infer<typeof MealStoryIcon>;
 
@@ -230,6 +243,9 @@ export const MealStoryListItem = z.object({
   publishedAt: DateString,
   coverUrl: z.string().nullable(),
   sceneCount: z.number().int(),
+  // 이 스토리 레시피를 맞춘 카탈로그 음식 id — 누군가 [이 레시피로 기록]을 누른 적이 있을 때만 있다(없으면 null).
+  // 식단 기록 상세가 항목의 foodId 와 맞춰 '이 레시피 이야기 보기'를 잇는다.
+  recipeFoodId: z.string().nullable(),
 });
 export type MealStoryListItemType = z.infer<typeof MealStoryListItem>;
 

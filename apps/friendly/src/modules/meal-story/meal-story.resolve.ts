@@ -142,7 +142,7 @@ export const resolveMealStory = (
   const valueFigure = (ref: MealStoryValueRefType, where: string): MealStoryFigureType => {
     if ('kdri' in ref) {
       usedSources.add('kdri-2020');
-      const k = kdriFigure(ref.kdri);
+      const k = kdriFigure(ref.kdri, ref.sex);
       return figure({ value: k.value, unit: k.unit, basis: k.basis, detail: k.detail, sources: ['kdri-2020'] });
     }
     if ('food' in ref) {
@@ -387,6 +387,8 @@ export const resolveMealStory = (
     publishedAt: story.publishedAt,
     coverUrl,
     sceneCount: scenes.length,
+    // 카탈로그 음식은 DB 에 있다 — 목록 라우트가 채운다(mealStoryFoodIds).
+    recipeFoodId: null,
   };
   return { story, listItem, issues: [...new Set(issues)] };
 };

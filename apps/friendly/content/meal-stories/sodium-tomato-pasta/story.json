@@ -32,6 +32,7 @@
     "name": "저염 토마토 스파게티",
     "servings": 1,
     "dishType": "noodle",
+    "cuisine": "western",
     "ingredients": [
       { "food": "spaghetti", "grams": 80, "label": "스파게티 건면", "note": "소금 없이 삶기", "icon": "noodle" },
       { "food": "tomato", "grams": 250, "label": "토마토 2개(중간 크기)", "part": "sauce", "icon": "tomato" },

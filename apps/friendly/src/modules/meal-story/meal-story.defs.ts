@@ -1,6 +1,7 @@
 import type { MealStoryNutrientType } from '@repo/api-contract';
 import { KDRI_AGE_GROUPS, nutrientReference, type KdriAgeGroup, type KdriNutrient } from '../meal-nutrition/kdri.js';
 import { NUTRIENT_DEFS } from '../meal-nutrition/meal-nutrition.defs.js';
+import type { MealStoryCautionKey, MealStoryKdriKey } from './meal-story.script.js';
 
 // 건강식단 스토리의 표 — 영양 값 이름·단위·반올림, 서버가 스스로 붙이는 출처, 섭취기준 해석.
 
@@ -62,11 +63,14 @@ export const fractionOf = (small: number, large: number): number | null => {
   return n >= 2 && Math.abs(ratio - n) / ratio <= 0.15 ? n : null;
 };
 
-const KDRI_KIND: Readonly<Record<'sodium' | 'potassium', { kind: 'cdrr' | 'ai'; basis: string; unit: 'mg' }>> = {
-  // 나트륨은 '이보다 적게'(만성질환위험감소섭취량), 칼륨은 '이만큼'(충분섭취량).
+const KDRI_KIND: Readonly<Record<MealStoryKdriKey, { kind: 'cdrr' | 'ai'; basis: string; unit: 'mg' | 'g' }>> = {
+  // 나트륨은 '이보다 적게'(만성질환위험감소섭취량), 칼륨·식이섬유는 '이만큼'(충분섭취량). basis 의 '성인' 자리에 성별이 들어간다.
   sodium: { kind: 'cdrr', basis: '성인 하루 기준(이보다 적게)', unit: 'mg' },
   potassium: { kind: 'ai', basis: '성인 하루 충분섭취량', unit: 'mg' },
+  fiber: { kind: 'ai', basis: '성인 하루 충분섭취량', unit: 'g' },
 };
+
+const SEX_LABEL = { male: '남자', female: '여자' } as const;
 
 const AGE_LABEL: Readonly<Record<KdriAgeGroup, string>> = {
   '12-14': '12~14세',
@@ -82,13 +86,29 @@ const ADULT_GROUPS: readonly KdriAgeGroup[] = KDRI_AGE_GROUPS.filter((g) => g !=
 
 /**
  * 섭취기준 하나 — 성인(19~29세) 값과, 성인 안에서 값이 다른 나이·성별을 덧말로. 성별이 다르면 낮은 쪽이 아니라
- * 둘을 함께 밝힌다(19~29세 남녀가 다르면 basis 에 '남자' 값을 쓰고 덧말에 여자 값).
+ * 둘을 함께 밝힌다(19~29세 남녀가 다르면 basis 를 '성인 남자 …'로 쓰고 덧말에 여자 값).
+ * sex 를 주면 그 성별의 값만 — 남녀 값이 크게 다른 기준(식이섬유 30g·20g)을 숫자 둘로 나란히 보일 때 쓴다. basis 가
+ * '성인 여자 …'가 되고 덧말은 그 성별 안의 나이 차이만 담는다.
  */
 export const kdriFigure = (
-  nutrient: 'sodium' | 'potassium',
+  nutrient: MealStoryKdriKey,
+  sex?: 'male' | 'female',
 ): { value: number | null; unit: string; basis: string; detail: string | null } => {
   const { kind, basis, unit } = KDRI_KIND[nutrient];
-  const at = (sex: 'male' | 'female', g: KdriAgeGroup) => nutrientReference(nutrient as KdriNutrient, sex, g)[kind];
+  const at = (s: 'male' | 'female', g: KdriAgeGroup) => nutrientReference(nutrient as KdriNutrient, s, g)[kind];
+  if (sex) {
+    const own = at(sex, '19-29') ?? null;
+    const ages = ADULT_GROUPS.flatMap((g) => {
+      const v = at(sex, g);
+      return g !== '19-29' && v !== undefined && v !== own ? [`${AGE_LABEL[g]} ${formatAmount(v, unit)}`] : [];
+    });
+    return {
+      value: own,
+      unit,
+      basis: basis.replace('성인', `성인 ${SEX_LABEL[sex]}`),
+      detail: ages.length > 0 ? ages.join(' · ') : null,
+    };
+  }
   const base = at('male', '19-29') ?? null;
   const notes: string[] = [];
   const femaleBase = at('female', '19-29');
@@ -104,9 +124,16 @@ export const kdriFigure = (
       if (f !== undefined && f !== femaleBase) notes.push(`${AGE_LABEL[g]} 여자 ${formatAmount(f, unit)}`);
     }
   }
-  return { value: base, unit, basis, detail: notes.length > 0 ? notes.join(' · ') : null };
+  // 남녀 값이 다르면 앞의 숫자가 누구 값인지 basis 가 밝힌다.
+  const sexed = femaleBase !== undefined && femaleBase !== base;
+  return {
+    value: base,
+    unit,
+    basis: sexed ? basis.replace('성인', `성인 ${SEX_LABEL.male}`) : basis,
+    detail: notes.length > 0 ? notes.join(' · ') : null,
+  };
 };
 
 /** 영양 탭과 같은 주의 문구. */
-export const cautionText = (key: 'potassium'): string =>
+export const cautionText = (key: MealStoryCautionKey): string =>
   NUTRIENT_DEFS.find((d) => d.key === key)?.caution ?? '';

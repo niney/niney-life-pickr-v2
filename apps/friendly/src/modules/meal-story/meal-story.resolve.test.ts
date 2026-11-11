@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { MealStorySceneType } from '@repo/api-contract';
 import { checkMealStory } from './meal-story.check.js';
 import { buildMealStoryFoods, type FoodRow } from './meal-story.foods.js';
-import { fractionOf } from './meal-story.defs.js';
+import { fractionOf, kdriFigure } from './meal-story.defs.js';
 import { resolveMealStory } from './meal-story.resolve.js';
 import {
   MealStoryScript,
@@ -99,6 +99,56 @@ describe('resolveMealStory', () => {
       sources: ['who-sodium-2012'],
       equivalent: { label: '소금', value: null, unit: 'g', per: 400 },
     });
+  });
+
+  it('남녀 값이 다른 기준(식이섬유) — 성별을 고르면 그 값과 그 성별 안의 나이 차이만, 안 고르면 남자 값에 여자 값을 덧말로', () => {
+    expect(kdriFigure('fiber', 'male')).toEqual({
+      value: 30,
+      unit: 'g',
+      basis: '성인 남자 하루 충분섭취량',
+      detail: '65~74세 25g · 75세 이상 25g',
+    });
+    expect(kdriFigure('fiber', 'female')).toEqual({ value: 20, unit: 'g', basis: '성인 여자 하루 충분섭취량', detail: null });
+    // 성별을 고르지 않으면 앞의 숫자가 남자 값임을 basis 가 밝히고, 여자 값과 나이 차이를 덧말에 모은다.
+    const both = kdriFigure('fiber');
+    expect(both).toMatchObject({ value: 30, basis: '성인 남자 하루 충분섭취량' });
+    expect(both.detail).toContain('여자 20g');
+    expect(both.detail).toContain('65~74세 남자 25g');
+    // 남녀 값이 같은 기준(나트륨)은 그대로 '성인'.
+    expect(kdriFigure('sodium').basis).toBe('성인 하루 기준(이보다 적게)');
+
+    const { story, issues } = resolveMealStory(
+      base({
+        scenes: [
+          { type: 'cover', kicker: '시험', title: '시험 표지' },
+          {
+            type: 'stat',
+            title: '기준',
+            figures: [
+              { label: '남자', value: { kdri: 'fiber', sex: 'male' } },
+              { label: '여자', value: { kdri: 'fiber', sex: 'female' } },
+              { label: '내 평균', value: { my: 'fiber' } },
+            ],
+          },
+          { type: 'nutrition', title: '영양', nutrients: ['kcal', 'sodiumMg'], cautions: ['fiber'] },
+          { type: 'outro', title: '끝', actions: ['share'] },
+        ],
+      }),
+      foods,
+      imageUrl,
+    );
+    expect(issues).toEqual([]);
+    const stat = sceneOf(story.scenes, 'stat');
+    expect(stat.figures.map((f) => [f.figure.value, f.figure.unit, f.figure.my])).toEqual([
+      [30, 'g', null],
+      [20, 'g', null],
+      [null, '', 'fiber'],
+    ]);
+    // 식이섬유 숫자에는 소금 환산이 없다(나트륨만).
+    expect(stat.figures.every((f) => f.figure.equivalent === null)).toBe(true);
+    expect(stat.figures[0]!.figure.sources).toEqual(['kdri-2020']);
+    // 주의 문구는 영양 탭과 같은 글(식이섬유 — 갑자기 늘리면 가스).
+    expect(sceneOf(story.scenes, 'nutrition').cautions[0]).toContain('천천히 늘리세요');
   });
 
   it('막대 둘 — 작은 쪽이 큰 쪽의 약 N분의 1(어림이 15% 넘게 벗어나면 말하지 않는다), 큰 숫자 장면 밖의 숫자에는 소금 환산이 없다', () => {

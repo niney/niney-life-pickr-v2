@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  FoodCuisine,
   FoodDishType,
   MEAL_STORY_IMAGE_PATTERN,
   MEAL_STORY_SLUG_PATTERN,
@@ -16,6 +17,7 @@ import {
 //
 // 원고에는 숫자를 적지 않는다. 숫자는 아래 MealStoryValueRef 로 가리킨다:
 //   { kdri: 'sodium' }                         2020 한국인 영양소 섭취기준(성인 기준, 나이별 차이는 서버가 덧말로)
+//   { kdri: 'fiber', sex: 'female' }           남녀 값이 다른 기준(식이섬유 30g·20g)은 성별을 골라 나란히 보인다
 //   { food: 'spaghetti', nutrient, grams }     foods 의 100g당 값 × 그램
 //   { foods: [{ food, grams }, …], nutrient }  섞은 값(예: 건면 40g + 통밀 40g) — 식품마다 100g당 값 × 그램의 합
 //   { recipe: 'sodiumMg', part?: 'sauce' }     레시피 1인분 합계(part 를 주면 그 묶음 재료만)
@@ -23,13 +25,20 @@ import {
 //   { value, unit, source }                    출처가 있는 고정값 — sources 의 id 를 꼭 단다
 // 글자 수 상한은 휴대폰 360px 화면 한 장에 들어가게 잡았다.
 
+/** 원고가 가리킬 수 있는 섭취기준 — 서버 표(meal-story.defs 의 KDRI_KIND)와 같은 이름. */
+export const MEAL_STORY_KDRI_KEYS = ['sodium', 'potassium', 'fiber'] as const;
+export type MealStoryKdriKey = (typeof MEAL_STORY_KDRI_KEYS)[number];
+/** 영양 탭과 같은 주의 문구를 붙일 수 있는 영양소. */
+export const MEAL_STORY_CAUTION_KEYS = ['potassium', 'fiber'] as const;
+export type MealStoryCautionKey = (typeof MEAL_STORY_CAUTION_KEYS)[number];
+
 const Id = z.string().max(40).regex(MEAL_STORY_SLUG_PATTERN, '소문자·숫자·하이픈만');
 const ImageName = z.string().max(60).regex(MEAL_STORY_IMAGE_PATTERN, '소문자·숫자·하이픈 + .jpg/.png/.webp');
 const DateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 const text = (max: number) => z.string().trim().min(1).max(max);
 
 export const MealStoryValueRef = z.union([
-  z.object({ kdri: z.enum(['sodium', 'potassium']) }).strict(),
+  z.object({ kdri: z.enum(MEAL_STORY_KDRI_KEYS), sex: z.enum(['male', 'female']).optional() }).strict(),
   z.object({ food: Id, nutrient: MealStoryNutrient, grams: z.number().positive().max(5000) }).strict(),
   z
     .object({
@@ -105,7 +114,7 @@ export const MealStoryScriptScene = z.discriminatedUnion('type', [
       title: text(32),
       nutrients: z.array(MealStoryNutrient).min(2).max(6),
       // 영양 탭과 같은 주의 문구(meal-nutrition.defs 의 caution)를 붙인다.
-      cautions: z.array(z.enum(['potassium'])).max(2).optional(),
+      cautions: z.array(z.enum(MEAL_STORY_CAUTION_KEYS)).max(2).optional(),
       note: text(90).optional(),
     })
     .strict(),
@@ -175,8 +184,9 @@ export const MealStoryRecipeSpec = z
   .object({
     name: text(30),
     servings: z.number().int().min(1).max(4),
-    // 카탈로그 음식으로 맞출 때의 조리형태([이 레시피로 기록]).
+    // 카탈로그 음식으로 맞출 때의 조리형태·요리 계통([이 레시피로 기록]). 계통을 적지 않으면 'other'.
     dishType: FoodDishType,
+    cuisine: FoodCuisine.optional(),
     ingredients: z
       .array(
         z

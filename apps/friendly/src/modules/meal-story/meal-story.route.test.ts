@@ -32,6 +32,8 @@ const story = (slug: string, status: 'draft' | 'published', title: string) => ({
     name: '시험 저염 파스타',
     servings: 1,
     dishType: 'noodle',
+    // 요리 계통은 원고가 정한다 — 게시본만 적고 초안은 비워 'other' 가 되는지 본다.
+    ...(status === 'published' ? { cuisine: 'western' } : {}),
     ingredients: [{ food: 'noodle', grams: 200, label: '국수 200g' }],
     steps: [{ text: '삶는다' }],
   },
@@ -105,6 +107,8 @@ describe('meal story routes (픽스처 폴더 · 격리 DB)', () => {
     expect(anon.items.map((s) => s.slug)).toEqual(['pub-story']);
     expect(anon.items[0]).toMatchObject({ title: '게시한 이야기', sceneCount: 3, topic: { nutrient: 'sodium' } });
     expect(anon.items[0]!.coverUrl).toMatch(/^\/api\/v1\/meal-stories\/pub-story\/images\/cover\.jpg\?v=\d+$/);
+    // 아직 아무도 [이 레시피로 기록]을 누르지 않았다 — 맞춘 음식이 없다.
+    expect(anon.items[0]!.recipeFoodId).toBeNull();
     const all = (await app.inject({ method: 'GET', url: LIST, headers: admin })).json<MealStoryListResultType>();
     expect(all.items.map((s) => s.slug)).toEqual(['draft-story', 'pub-story']);
   });
@@ -146,6 +150,7 @@ describe('meal story routes (픽스처 폴더 · 격리 DB)', () => {
     const row = await app.prisma.foodItem.findUnique({ where: { id: made.foodId } });
     expect(row).toMatchObject({
       name: '시험 저염 파스타(건강식단)',
+      cuisine: 'western',
       source: 'manual',
       sourceId: 'meal-story:pub-story',
       servingG: 200,
@@ -163,6 +168,13 @@ describe('meal story routes (픽스처 폴더 · 격리 DB)', () => {
     expect(draft.statusCode).toBe(200);
     const draftRow = await app.prisma.foodItem.findUnique({ where: { id: draft.json<MealStoryFoodResultType>().foodId } });
     expect(draftRow?.name).toBe('시험 저염 파스타(건강식단·draft-story)');
+    expect(draftRow?.cuisine).toBe('other');
+    // 목록이 맞춘 음식 id 를 실어 보낸다 — 기록 상세가 항목의 foodId 와 맞춰 이야기를 잇는다.
+    const list = (await app.inject({ method: 'GET', url: LIST, headers: admin })).json<MealStoryListResultType>();
+    expect(list.items.map((s) => [s.slug, s.recipeFoodId])).toEqual([
+      ['draft-story', draft.json<MealStoryFoodResultType>().foodId],
+      ['pub-story', made.foodId],
+    ]);
   });
 
   it('공유 링크 — 게시본은 제목·요약·표지로 OG, 초안·없는 스토리는 기본 미리보기', async () => {

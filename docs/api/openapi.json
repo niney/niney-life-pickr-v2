@@ -12399,6 +12399,10 @@
                           },
                           "sceneCount": {
                             "type": "integer"
+                          },
+                          "recipeFoodId": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -12409,7 +12413,8 @@
                           "topic",
                           "publishedAt",
                           "coverUrl",
-                          "sceneCount"
+                          "sceneCount",
+                          "recipeFoodId"
                         ],
                         "additionalProperties": false
                       }
@@ -13009,7 +13014,19 @@
                                         "pan",
                                         "plate",
                                         "timer",
-                                        "clock"
+                                        "clock",
+                                        "rice",
+                                        "mushroom",
+                                        "carrot",
+                                        "egg",
+                                        "sprout",
+                                        "bean",
+                                        "apple",
+                                        "water",
+                                        "sesame",
+                                        "soy",
+                                        "stirfry",
+                                        "bibimbap"
                                       ],
                                       "nullable": true
                                     }
@@ -13093,7 +13110,19 @@
                                         "pan",
                                         "plate",
                                         "timer",
-                                        "clock"
+                                        "clock",
+                                        "rice",
+                                        "mushroom",
+                                        "carrot",
+                                        "egg",
+                                        "sprout",
+                                        "bean",
+                                        "apple",
+                                        "water",
+                                        "sesame",
+                                        "soy",
+                                        "stirfry",
+                                        "bibimbap"
                                       ],
                                       "nullable": true
                                     }
@@ -13168,7 +13197,19 @@
                                   "pan",
                                   "plate",
                                   "timer",
-                                  "clock"
+                                  "clock",
+                                  "rice",
+                                  "mushroom",
+                                  "carrot",
+                                  "egg",
+                                  "sprout",
+                                  "bean",
+                                  "apple",
+                                  "water",
+                                  "sesame",
+                                  "soy",
+                                  "stirfry",
+                                  "bibimbap"
                                 ],
                                 "nullable": true
                               }
@@ -13457,7 +13498,19 @@
                                   "pan",
                                   "plate",
                                   "timer",
-                                  "clock"
+                                  "clock",
+                                  "rice",
+                                  "mushroom",
+                                  "carrot",
+                                  "egg",
+                                  "sprout",
+                                  "bean",
+                                  "apple",
+                                  "water",
+                                  "sesame",
+                                  "soy",
+                                  "stirfry",
+                                  "bibimbap"
                                 ],
                                 "nullable": true
                               }

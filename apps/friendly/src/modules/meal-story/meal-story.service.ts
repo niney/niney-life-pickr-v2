@@ -17,7 +17,24 @@ export class MealStoryFoodError extends Error {
   }
 }
 
-const sourceIdOf = (slug: string): string => `meal-story:${slug}`;
+const SOURCE_ID_PREFIX = 'meal-story:';
+const sourceIdOf = (slug: string): string => `${SOURCE_ID_PREFIX}${slug}`;
+
+/**
+ * 스토리별 레시피 음식 id — [이 레시피로 기록]으로 이미 만든 것만(slug → foodId). 목록이 이 값을 실어 보내 식단 기록
+ * 상세가 '이 레시피로 적은 항목'을 알아본다(기록 항목은 foodId 만 갖는다).
+ */
+export const mealStoryFoodIds = async (
+  prisma: PrismaClient,
+  slugs: readonly string[],
+): Promise<Map<string, string>> => {
+  if (slugs.length === 0) return new Map();
+  const rows = await prisma.foodItem.findMany({
+    where: { source: 'manual', sourceId: { in: slugs.map(sourceIdOf) } },
+    select: { id: true, sourceId: true },
+  });
+  return new Map(rows.flatMap((r) => (r.sourceId ? [[r.sourceId.slice(SOURCE_ID_PREFIX.length), r.id] as const] : [])));
+};
 
 const PER100_KEYS: readonly Exclude<MealStoryNutrientType, 'kcal'>[] = [
   'carbG',
@@ -47,6 +64,7 @@ export const recipeFoodValues = (loaded: LoadedMealStory) => {
   return {
     name: spec.name,
     dishType: spec.dishType,
+    cuisine: spec.cuisine ?? ('other' as const),
     servingG,
     kcal: perServing.get('kcal') ?? null,
     carbG: perServing.get('carbG') ?? null,
@@ -70,7 +88,7 @@ export const ensureMealStoryFood = async (
   const allergens = serializeFoodAllergenMetadata(inferFoodAllergens(values.ingredients));
   const nutrition = {
     dishType: values.dishType,
-    cuisine: 'western' as const,
+    cuisine: values.cuisine,
     ingredientsJson: JSON.stringify(values.ingredients),
     ...allergens,
     servingG: values.servingG,
