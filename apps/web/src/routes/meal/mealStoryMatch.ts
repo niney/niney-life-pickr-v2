@@ -23,3 +23,9 @@ export const findStoryFor = (
     items.find((s) => s.topic?.nutrient === nutrient && s.topic.direction === direction) ?? null
   );
 };
+
+/** 이 음식(기록 항목의 foodId)이 건강식단 레시피로 적은 것이면 그 이야기 — 서버가 목록에 맞춘 음식 id 를 실어 보낸다. */
+export const storyForFood = (
+  items: readonly MealStoryListItemType[],
+  foodId: string | null | undefined,
+): MealStoryListItemType | null => (foodId ? (items.find((s) => s.recipeFoodId === foodId) ?? null) : null);

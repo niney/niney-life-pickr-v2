@@ -47,16 +47,19 @@ export const useStoryParams = () => {
 /**
  * 나가기 — 앞 화면에서 왔으면 뒤로, 주소로 바로 들어왔으면(공유 링크) 건강식단 목록으로. 단추 글자도 그에 맞춘다
  * (식단 상세·입력 화면 MealSurface 와 같은 규칙 — 나가는 단추는 왼쪽 위 '← 뒤로' 하나다).
+ * 레시피 화면은 바로 들어왔을 때 갈 곳이 그 이야기라 fallback 으로 넘긴다.
  */
-export const useLeaveStory = (): { leave: () => void; label: string } => {
+export const useLeaveStory = (
+  fallback: { to: string; label: string } = { to: MEAL_STORY_PATH.list, label: '건강식단' },
+): { leave: () => void; label: string } => {
   const navigate = useNavigate();
   const location = useLocation();
   const direct = location.key === 'default';
   return {
     leave: () => {
-      if (direct) navigate(MEAL_STORY_PATH.list);
+      if (direct) navigate(fallback.to);
       else navigate(-1);
     },
-    label: direct ? '건강식단' : '뒤로',
+    label: direct ? fallback.label : '뒤로',
   };
 };

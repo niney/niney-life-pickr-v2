@@ -178,6 +178,7 @@ const listItem = (over: Record<string, unknown> = {}) => ({
   publishedAt: story.publishedAt,
   coverUrl: null,
   sceneCount: story.scenes.length,
+  recipeFoodId: null,
   ...over,
 });
 
@@ -263,6 +264,30 @@ describe('건강식단 스토리', () => {
     // 내 값의 소금 환산은 서버가 준 식(÷ 400)으로.
     expect(screen.getByText('소금 약 7.8g')).toBeInTheDocument();
     expect(asked).toHaveLength(1);
+  });
+
+  it('내 기준이 장면의 기준 숫자와 다르면(나이·성별) 어느 기준인지 밝힌다 — 같으면 그냥 기준의 N%', async () => {
+    useAuthStore.setState({ token: 't', user, isGuest: false });
+    const row = (amount: number, percent: number) => ({
+      key: 'sodium',
+      unit: 'mg',
+      intakePerDay: 2200,
+      percent,
+      status: percent > 100 ? 'high' : 'ok',
+      recordGap: false,
+      reference: { kind: 'cdrr', amount, ear: null },
+    });
+    // 65~74세의 기준은 2,100mg — 장면의 성인 기준(2,300)과 다르다.
+    server.use(http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json({ status: 'ok', rows: [row(2100, 105)] })));
+    const first = renderAt(`/meal/stories/${story.slug}?s=2`);
+    expect(await screen.findByText('내 기준 2,100mg의 105%')).toBeInTheDocument();
+    first.unmount();
+    // 내 기준이 장면의 숫자와 같으면 되풀이하지 않는다. 지킨 나트륨 기준은 '충분'이 아니라 '기준 안'.
+    server.use(http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json({ status: 'ok', rows: [row(2300, 96)] })));
+    renderAt(`/meal/stories/${story.slug}?s=2`);
+    expect(await screen.findByText('기준의 96%')).toBeInTheDocument();
+    expect(screen.queryByText(/내 기준/)).not.toBeInTheDocument();
+    expect(screen.getByText('기준 안')).toBeInTheDocument();
   });
 
   it('내 평균이 기준 안 — 글로 보기 칩도 충분이 아니라 기준 안', async () => {
@@ -365,6 +390,17 @@ describe('건강식단 스토리', () => {
     expect(label).toHaveTextContent('481kcal');
     expect(label).toHaveTextContent('99mg');
     expect(screen.getByRole('region', { name: '출처' })).toHaveTextContent('검수 2026-11-09');
+  });
+
+  it('레시피의 나가는 단추는 하나 — 주소로 바로 들어왔으면 이 레시피의 이야기로, 이야기로 가는 링크는 제목 아래에', async () => {
+    renderAt(`/meal/stories/${story.slug}/recipe`);
+    expect(await screen.findByRole('heading', { name: '저염 토마토 스파게티' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /이야기 보기/ })).toHaveAttribute('href', `/meal/stories/${story.slug}`);
+    // 예전의 '스토리로'·'건강식단' 두 링크 대신 단추 하나.
+    expect(screen.queryByRole('link', { name: '건강식단' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /스토리로/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '이야기' }));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe(`/meal/stories/${story.slug}`));
   });
 });
 
@@ -617,6 +653,9 @@ describe('건강식단 스토리 — 영상으로 보기', () => {
     // 레시피로 떠날 때는 돌아올 장면을 주소에 적는다(영상은 주소가 재생을 따라가지 않는다).
     fireEvent.click(within(aside).getByRole('link', { name: '레시피 전체 보기' }));
     expect(await screen.findByRole('heading', { name: '저염 토마토 스파게티' }, { timeout: 5000 })).toBeInTheDocument();
+    // 이야기에서 왔으니 '뒤로' — 보던 이야기로 돌아간다.
+    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toMatch(new RegExp(`^/meal/stories/${story.slug}\\?`)));
   });
 
   it('동작 줄이기면 글로 보기가 기본 — 영상으로 보기를 고를 수 있다', async () => {

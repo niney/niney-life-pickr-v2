@@ -351,7 +351,10 @@
   .msl-empty { margin-top: 2rem; color: var(--muted-foreground); }
 
   .msr-kicker { font-size: 0.8rem; font-weight: 800; color: var(--muted-foreground); }
-  .msr-from { margin-top: 0.4rem; color: var(--muted-foreground); }
+  .msr-from { margin-top: 0.15rem; color: var(--muted-foreground); }
+  /* 이 레시피의 이야기로 — 나가는 단추('← 뒤로')와 따로 있는 본문 링크 */
+  .msr-from a { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; min-height: 2.75rem; }
+  .msr-from-go { font-weight: 800; color: var(--foreground); text-decoration: underline; text-underline-offset: 4px; }
   .msr-cover { width: 100%; aspect-ratio: 4 / 3; margin-top: 1.25rem; object-fit: cover; }
   .msr-sec { margin-top: 2rem; }
   .msr-sec > h2 { margin-bottom: 0.75rem; font-size: 1.15rem; font-weight: 800; }

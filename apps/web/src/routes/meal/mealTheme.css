@@ -485,6 +485,8 @@ html.dark:has(.meal-app) {
   .meal-food-tag { margin-right: 0.4rem; padding: 0.05rem 0.35rem; font-size: 0.6875rem; font-weight: 800; vertical-align: 0.15em; border: 1.5px solid currentColor; border-radius: 3px; color: var(--muted-foreground); }
   .meal-food-sub { margin-top: 0.15rem; font-size: 0.8125rem; color: var(--muted-foreground); }
   .meal-food-note { margin-top: 0.15rem; font-size: 0.75rem; font-style: italic; color: var(--meal-faint); }
+  /* 건강식단 레시피로 적은 음식 — 그 이야기로 */
+  .meal-food-story { display: inline-block; margin-top: 0.1rem; padding: 0.3rem 0; font-size: 0.75rem; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
   .meal-food-kcal { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   /* 상세·입력 안 배치 — 담긴 폭(패널 640·880px, 화면)으로 접는다. 48rem 이상이면 오른쪽 20rem 단을 붙인다. */

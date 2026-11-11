@@ -1,18 +1,31 @@
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { useMealStory } from '@repo/shared';
 import { MEAL_STORY_PATH } from '../meal/mealPaths';
 import { AmountText } from './MealStoryFigure';
 import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
+import { useLeaveStory } from './mealStoryNav';
 
 // 레시피 전체 보기 — 요리하면서 보는 한 장(스크롤). 재료·만드는 법·1인분 영양정보·출처.
+// 나가는 단추는 왼쪽 위 '← 뒤로' 하나(이야기·식단 상세와 같다) — 이야기에서 왔으면 그 장면으로, 기록 상세에서 왔으면 그
+// 기록으로 돌아간다. 주소로 바로 들어왔으면 이 레시피의 이야기로 간다. 이야기로 가는 길은 제목 아래 한 줄이 따로 있다.
 export const MealStoryRecipe = () => {
   const { slug = '' } = useParams();
   const q = useMealStory(slug);
+  const { leave, label: backLabel } = useLeaveStory({ to: MEAL_STORY_PATH.story(slug), label: '이야기' });
   const story = q.data;
+  const back = (
+    <div className="msl-head">
+      <button type="button" className="msp-back" onClick={leave}>
+        <ArrowLeft className="size-5" aria-hidden />
+        {backLabel}
+      </button>
+    </div>
+  );
   if (!story) {
     return (
       <main className="msr">
+        {back}
         {q.isLoading ? <Loader2 className="size-5 animate-spin" aria-label="불러오는 중" /> : <p>레시피를 찾지 못했어요.</p>}
       </main>
     );
@@ -20,15 +33,15 @@ export const MealStoryRecipe = () => {
   const recipe = story.recipe;
   return (
     <main className="msr">
-      <div className="msl-head">
-        <Link to={MEAL_STORY_PATH.story(story.slug)}>
-          <ArrowLeft className="size-4" aria-hidden /> 스토리로
-        </Link>
-        <Link to={MEAL_STORY_PATH.list}>건강식단</Link>
-      </div>
+      {back}
       <p className="msr-kicker">건강식단 레시피{story.status === 'draft' ? ' · 초안' : ''}</p>
       <h1 className="meal-title">{recipe?.name ?? story.title}</h1>
-      <p className="msr-from">{story.title}</p>
+      <p className="msr-from">
+        <Link to={MEAL_STORY_PATH.story(story.slug)}>
+          {story.title} <span className="msr-from-go">이야기 보기</span>
+          <ArrowRight className="size-4" aria-hidden />
+        </Link>
+      </p>
       {story.coverUrl ? <img src={story.coverUrl} alt="" className="msr-cover" /> : null}
       {recipe ? (
         <>

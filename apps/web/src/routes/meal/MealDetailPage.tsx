@@ -25,6 +25,7 @@ import { ConfirmDialog } from '~/components/ui/confirm-dialog';
 import { MealPhotoImg } from './MealPhotoImg';
 import { MealPhotoLightbox } from './MealPhotoLightbox';
 import { MealSurface, type MealSurfaceNav } from './MealSurface';
+import { RecipeStoryLink } from './MealStoryLink';
 import { useMealDraftReady } from './useMealDraftReady';
 import { mealPanelStateOf, useMealFrame, useMealLeave, useMealOpen } from './mealPanel';
 import { MEAL_PATH } from './mealPaths';
@@ -278,6 +279,7 @@ const FoodRow = ({ item }: { item: MealItem }) => {
         ) : item.nutritionBasis === 'missing' ? (
           <p className="meal-food-note">공개된 영양 근거 없음</p>
         ) : null}
+        <RecipeStoryLink foodId={item.foodId} />
       </div>
       <span className="meal-food-kcal">{item.kcal !== null ? `${fmt(item.kcal)}kcal` : '—'}</span>
     </li>

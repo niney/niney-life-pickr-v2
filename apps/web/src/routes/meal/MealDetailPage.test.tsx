@@ -10,6 +10,7 @@ import { MealDetailPage } from './MealDetailPage';
 // 식단 상세(웹) — 표시, 수정·같은 메뉴로 새 기록이 채우는 draft, 삭제 확인과 요청을 고정한다.
 
 const ENTRY_URL = '/api/v1/meals/e1';
+const STORIES_URL = '/api/v1/meal-stories';
 
 const entry = {
   id: 'e1',
@@ -86,6 +87,7 @@ const renderDetail = () =>
         <Routes>
           <Route path="/meal/records" element={<p>목록 화면</p>} />
           <Route path="/meal/new" element={<p>새 기록 화면</p>} />
+          <Route path="/meal/stories/:slug" element={<p>이야기 화면</p>} />
           <Route path="/meal/:id" element={<MealDetailPage />} />
           <Route path="/meal/:id/edit" element={<p>수정 화면</p>} />
         </Routes>
@@ -109,7 +111,11 @@ describe('MealDetailPage', () => {
     });
     await setMealDraftPrincipal('u1');
     useMealDraftStore.getState().clear();
-    server.use(http.get(ENTRY_URL, () => HttpResponse.json(entry)));
+    // 카탈로그 음식(foodId)이 있는 항목은 건강식단 목록에서 '이 레시피의 이야기'를 찾는다 — 기본은 이야기 없음.
+    server.use(
+      http.get(ENTRY_URL, () => HttpResponse.json(entry)),
+      http.get(STORIES_URL, () => HttpResponse.json({ items: [] })),
+    );
   });
 
   it('음식·영양 합계와 반영 개수, 식당·메모·출처를 보여 준다', async () => {
@@ -123,6 +129,41 @@ describe('MealDetailPage', () => {
     expect(screen.getByRole('link', { name: '상세 보기' })).toHaveAttribute('href', '/restaurants-v2/place-1');
     expect(screen.getByText('팀 점심')).toBeInTheDocument();
     expect(screen.getByText(/직접 기록/)).toBeInTheDocument();
+  });
+
+  it('건강식단 레시피로 적은 음식은 그 이야기로 잇는다 — 음식 id 가 같을 때만', async () => {
+    const storyItem = (over: Record<string, unknown>) => ({
+      slug: 'sodium-tomato-pasta',
+      status: 'published',
+      title: '토마토 스파게티로 나트륨 줄이기',
+      summary: '요약',
+      topic: { nutrient: 'sodium', direction: 'reduce' },
+      publishedAt: '2026-11-09',
+      coverUrl: null,
+      sceneCount: 13,
+      recipeFoodId: null,
+      ...over,
+    });
+    server.use(
+      http.get(STORIES_URL, () =>
+        HttpResponse.json({
+          items: [
+            // 아직 아무도 이 레시피로 기록하지 않은 이야기(recipeFoodId null)와 음식 id 가 다른 이야기는 잇지 않는다.
+            storyItem({ slug: 'fiber-up', title: '식이섬유 채우기' }),
+            storyItem({ slug: 'other', title: '다른 이야기', recipeFoodId: 'f9' }),
+            storyItem({ recipeFoodId: 'f1', status: 'draft' }),
+          ],
+        }),
+      ),
+    );
+    renderDetail();
+    const link = await screen.findByRole('link', { name: '건강식단 레시피 — 이야기 보기 (초안)' });
+    expect(link).toHaveAttribute('href', '/meal/stories/sodium-tomato-pasta');
+    // 김치찌개(f1) 줄에만 — 카탈로그에 없는 계란말이 줄에는 없다.
+    expect(link.closest('li')).toHaveTextContent('김치찌개');
+    expect(screen.getAllByRole('link', { name: /이야기 보기/ })).toHaveLength(1);
+    fireEvent.click(link);
+    expect(await screen.findByText('이야기 화면')).toBeInTheDocument();
   });
 
   it('수정은 이 기록으로 draft 를 채우고 수정 화면으로 간다', async () => {

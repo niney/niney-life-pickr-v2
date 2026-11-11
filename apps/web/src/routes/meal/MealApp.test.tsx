@@ -343,6 +343,7 @@ describe('MealHomePage — 식단 홈', () => {
       publishedAt: '2026-01-05',
       coverUrl: null,
       sceneCount: 13,
+      recipeFoodId: null,
       ...over,
     });
     const proteinStory = storyItem({ slug: 'protein-up', title: '단백질 채우는 한 끼', topic: { nutrient: 'protein', direction: 'increase' }, publishedAt: today });
