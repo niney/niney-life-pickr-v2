@@ -56,7 +56,8 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 | 쓰는 법 | 값 | 출처 |
 |---|---|---|
-| `{ "kdri": "sodium" }` | 2020 한국인 영양소 섭취기준 성인 값(나트륨 2,300mg = 만성질환위험감소섭취량, 칼륨 3,500mg). 나이별로 다르면 서버가 덧말로 붙인다 | 자동 |
+| `{ "kdri": "sodium" }` | 2020 한국인 영양소 섭취기준 성인 값(나트륨 2,300mg = 만성질환위험감소섭취량, 칼륨 3,500mg, 식이섬유 `fiber`). 나이별로 다르면 서버가 덧말로 붙인다 | 자동 |
+| `{ "kdri": "fiber", "sex": "female" }` | 남녀 값이 다른 기준(식이섬유 남자 30g·여자 20g)은 **성별을 골라 숫자 둘로 나란히** 보인다 — 한 숫자만 보이면 절반에게 틀린 기준이다. 성별을 안 고르면 남자 값이 나오고 여자 값은 덧말로 간다 | 자동 |
 | `{ "food": "spaghetti", "nutrient": "kcal", "grams": 80 }` | foods 의 100g당 값 × 그램 | 자동(식품의 출처) |
 | `{ "foods": [{ "food": "spaghetti", "grams": 40 }, { "food": "wholewheat-spaghetti", "grams": 40 }], "nutrient": "fiberG" }` | 섞은 값 — 식품마다 100g당 값 × 그램의 합(2~4가지). 하나라도 값을 모르면 합을 내지 않는다 | 자동 |
 | `{ "recipe": "sodiumMg", "part": "sauce" }` | 레시피 1인분 합계(`part` 를 주면 그 묶음 재료만) | 자동 |
@@ -76,6 +77,9 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 둘 다 점검 출력의 '사람이 확인할 값'에 찍힌다 — 환산 값과 말이 어색하지 않은지 본다.
 
+내 값(`my`) 옆의 '기준 대비 %' 도 화면이 붙인다 — 그 장면의 기준 숫자가 하나이고 보는 사람의 기준과 같으면 '기준의 136%',
+기준 숫자가 여럿이거나(남·여) 그 사람의 기준이 다르면(나이) '내 기준 20g의 82%'. 글로 보기와 영상이 같은 규칙이다.
+
 ### 재료(foods)
 
 하나만 고른다.
@@ -91,10 +95,12 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 ### 레시피(recipe)
 
-`name`(30자) · `servings` · `dishType`(카탈로그 조리형태, 예: `noodle`) · `ingredients`(식품 id·그램·표시 이름 24자·메모 30자·묶음
+`name`(30자) · `servings` · `dishType`(카탈로그 조리형태, 예: `noodle`) · `cuisine`(요리 계통 `korean` `western` … — 안 적으면 `other`) · `ingredients`(식품 id·그램·표시 이름 24자·메모 30자·묶음
 `part`·소품 `icon`) · `steps`(100자, 팁 60자, 사진, 소품 `icon`). 그램은 **조리 전 무게**로 적는다(건면 80g — 삶으면 두 배 넘게 늘어난다).
 [이 레시피로 기록]을 누르면 서버가 이 레시피를 카탈로그 음식(`source manual`, `sourceId meal-story:<slug>`)으로 맞춰,
-기록에도 스토리와 같은 1인분 값이 들어간다.
+기록에도 스토리와 같은 1인분 값이 들어간다. 그렇게 적은 기록의 상세에는 '건강식단 레시피 — 이야기 보기'가 붙는다(목록 API 가
+레시피 음식 id 를 실어 보낸다 — 원고에서 할 일은 없다). 밥처럼 지은 것을 재료로 쓸 때는 지은 무게로 적고 식품도 지은 것
+(`멥쌀밥_현미`)을 고른다.
 
 ### 장면(scenes) — 틀 8종
 
@@ -106,7 +112,7 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 | `list` | 방법·원인 목록 2~6개 | title · items[{title 22, text 70}] · note |
 | `ingredients` | 재료(레시피에서) | title |
 | `step` | 만드는 법 한 단계(레시피에서) | step(1부터) |
-| `nutrition` | 1인분 영양정보 라벨 | title · nutrients[2~6] · cautions(`potassium` — 영양 탭과 같은 주의 문구) · note |
+| `nutrition` | 1인분 영양정보 라벨 | title · nutrients[2~6] · cautions(`potassium` `fiber` — 영양 탭과 같은 주의 문구) · note |
 | `outro` | 마무리 + 행동 | title · text · actions(`record` `recipe` `share` `stats`) |
 
 `bars` 의 `aside` 는 막대 옆 작은 값(예: 열량 막대 옆 단백질) — food·foods·recipe 값만. `highlight` 막대만 강조(글로 보기는 먹색,
@@ -132,8 +138,15 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 그릇으로 날아든다. 없으면 번호·첫 글자 동그라미. 쓸 수 있는 이름(계약 `MealStoryIcon`):
 
 `bowl`(국그릇) `kimchi` `sauce`(소스병) `can`(햄 통조림) `ramen`(컵라면) `shaker`(소금통) `spoon` `lemon` `magnifier`(돋보기)
-`label`(성분표) `dip`(덜어 먹는 종지) `noodle`(면 다발) `tomato` `onion` `garlic` `oil`(올리브유) `leaf`(바질) `cheese` `pot`(냄비)
-`pan` `plate`(완성 접시) `timer` `clock`
+`label`(성분표 — '나트륨' 줄이 칠해져 있다) `dip`(덜어 먹는 종지) `noodle`(면 다발) `tomato` `onion` `garlic` `oil`(올리브유) `leaf`(바질·나물)
+`cheese` `pot`(냄비) `pan`(토마토 소스 팬) `plate`(파스타 접시) `timer` `clock` `rice`(잡곡 밥공기) `mushroom` `carrot` `egg` `sprout`(콩나물)
+`bean` `apple` `water`(물컵) `sesame`(참기름) `soy`(간장) `stirfry`(버섯·당근 볶는 팬) `bibimbap`(비빔밥 그릇)
+
+**그 편의 그림은 원고가 정한다** — 표지 식탁에는 그 편 레시피의 재료 둘(첫째·둘째 재료의 소품)과 완성 그릇이, 영양정보 장면의
+식탁 끝에도 완성 그릇이 놓인다. 완성 그릇 = **마지막 만드는 법 단계의 `icon`** 이니 거기에 그 요리의 그림을 단다(첫 편 `plate`,
+식이섬유 편 `bibimbap`). 소품을 달지 않으면 그 자리는 빈다. 무대 색과 마무리 장면에서 손 흔드는 짝은 `topic.nutrient` 로 정해진다
+(나트륨 = 파랑·소금통과 숟가락, 식이섬유 = 초록·밥공기와 버섯). **새 주제를 열 때**는 `paper/palette.ts` 의 `TOPIC_STAGE` 에 색을,
+`ChapterOutro.tsx` 에 짝을 더한다 — 안 하면 나트륨의 색과 소금통이 나온다.
 
 새 소품이 필요하면 `apps/web/src/routes/meal-story/motion/paper/props.tsx` 에 그리고(원점 가운데, 약 240 크기, 찢긴 가장자리는
 `tornRect`·`tornEllipse`·`tornPath`), 계약 enum 과 `paper/icons.ts` 에 이름을 더한다. 한 장으로 보기:
@@ -185,8 +198,9 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
    npm run render -- out/<slug>.mp4 --props=out/<slug>.json   # 전체 MP4(1080×1920·30fps)
    ```
 
-   `--mine` 은 '내 최근 2주 하루 평균 나트륨'(mg) 예시 값이다(진짜 기록이 아니다). `--standard=2100` 을 더하면 기준이 다른 사람
-   (65~74세)의 화면 — 숟가락·%·도장이 그 기준을 따르고 쪽지가 '내 기준 2,100mg의 N%'로 밝히는지 본다. `--dark` 는 다크 모드. 격자에서 글이 넘치거나 겹치는 장면, 읽기 전에
+   `--mine` 은 '내 최근 2주 하루 평균' 예시 값이다(진짜 기록이 아니다) — 어느 영양소인지는 원고의 '내 기록' 숫자가 정한다
+   (`{ "my": "sodium" }` 이면 나트륨 mg, `{ "my": "fiber" }` 면 식이섬유 g — `--mine=10.6`). `--standard=2100` 을 더하면 기준이 다른 사람
+   (나트륨 65~74세, 식이섬유는 `--standard=20` 이 여자)의 화면 — 숟가락·%·도장이 그 기준을 따르고 쪽지가 '내 기준 2,100mg의 N%'로 밝히는지 본다. `--dark` 는 다크 모드. 격자에서 글이 넘치거나 겹치는 장면, 읽기 전에
    넘어가는 장면을 찾는다. 전체 빠르기는 `motion/theme.ts` 의 `TEMPO` 하나(움직임만 빨라지고 글 읽는 시간 — 공백 뺀 글자당
    2.4프레임 — 은 `motion/timeline.ts` 가 따로 지킨다), 장면별 시각표·길이는 `motion/timeline.ts`, 그림은 `motion/Chapter*.tsx`
    (편마다가 아니라 틀을 고친다). 렌더러는
@@ -205,6 +219,8 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
   원고 `actions` 의 단추(기록·레시피·통계·공유)와 출처가 영상 위에 진짜 단추로 뜬다. 내 평균은 로그인했을 때 통계 영양소에서.
 - **글로 보기**(위 단추, `?view=text`) — 장면을 손으로 넘기고 장면 안의 움직임만 돈다. 같은 손짓·키. '동작 줄이기'를 켰거나
   영상을 돌릴 수 없는 브라우저면 이게 기본이다. 영상에서 글로 바꾸면 보던 장면(`?s=`)에서 이어진다.
+- 기록에서 돌아오는 길: 이 레시피로 적은 기록의 상세에 '건강식단 레시피 — 이야기 보기'. 레시피 전체 보기의 나가는 단추도 왼쪽 위
+  '← 뒤로' 하나(바로 들어왔으면 '← 이야기')이고, 이야기로 가는 링크는 제목 아래에 있다.
 - 입구(메뉴 항목은 없다 — 식단 안에서 맥락으로): 식단 홈의 건강식단 한 줄(내 14일 판정에 맞는 이야기 먼저, 없으면 가장 새 것 ·
   '모두 보기'), 영양 탭과 통계 영양소 흐름에서 그 영양소가 '많음'·'부족'이면 '줄이는 법 보기'·'채우는 법 보기', 식단 안 목록
   `/meal/stories`. 로그인하면 이야기·레시피도 식단 셸 안에 뜬다(넓은 화면은 사이드 메뉴 옆, 휴대폰은 화면 가득 — 나가는 단추는
