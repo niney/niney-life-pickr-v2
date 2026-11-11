@@ -1,0 +1,172 @@
+{
+  "slug": "fiber-mushroom-bibimbap",
+  "status": "draft",
+  "title": "버섯 나물 비빔밥으로 식이섬유 채우기",
+  "summary": "밥을 현미로 바꾸고 버섯과 나물을 올리면 한 그릇으로 식이섬유가 꽤 채워져요. 많이 든 음식과 채우는 방법, 레시피까지.",
+  "topic": { "nutrient": "fiber", "direction": "increase" },
+  "publishedAt": "2026-11-10",
+  "reviewedAt": null,
+  "sources": [],
+  "foods": [
+    { "id": "white-rice", "label": "흰쌀밥", "ref": { "db": "raw", "code": "R101-013000300-0000" } },
+    { "id": "brown-rice", "label": "현미밥", "ref": { "db": "raw", "code": "R101-013000500-0000" } },
+    { "id": "barley-rice", "label": "보리밥(쌀보리)", "ref": { "db": "raw", "code": "R101-026010000-0000" } },
+    { "id": "shiitake", "label": "표고버섯", "ref": { "db": "raw", "code": "R107-027007101-0000" } },
+    { "id": "oyster-mushroom", "label": "느타리버섯", "ref": { "db": "raw", "code": "R107-004000001-0000" } },
+    { "id": "spinach", "label": "시금치", "ref": { "db": "raw", "code": "R106-115000001-0000" } },
+    { "id": "bean-sprout", "label": "콩나물", "ref": { "db": "raw", "code": "R106-182000001-0000" } },
+    { "id": "carrot", "label": "당근", "ref": { "db": "raw", "code": "R106-041007601-0000" } },
+    { "id": "egg", "label": "달걀", "ref": { "db": "raw", "code": "R210-003000001-0000" } },
+    { "id": "sesame-oil", "label": "참기름", "ref": { "db": "raw", "code": "R114-020000000-0000" } },
+    { "id": "soy-sauce", "label": "간장(재래식)", "ref": { "db": "raw", "code": "R118-001030000-0000" } },
+    { "id": "apple", "label": "사과", "ref": { "db": "raw", "code": "R108-050000001-0000" } },
+    { "id": "sweet-potato", "label": "찐 고구마", "ref": { "db": "raw", "code": "R102-006000049-0000" } },
+    { "id": "almond", "label": "아몬드(볶은 것)", "ref": { "db": "raw", "code": "R105-020000058-0000" } }
+  ],
+  "recipe": {
+    "name": "현미 버섯 나물 비빔밥",
+    "servings": 1,
+    "dishType": "rice",
+    "cuisine": "korean",
+    "ingredients": [
+      { "food": "brown-rice", "grams": 210, "label": "현미밥 한 공기", "note": "즉석밥도 좋아요", "icon": "rice" },
+      { "food": "shiitake", "grams": 50, "label": "표고버섯 3개", "icon": "mushroom" },
+      { "food": "oyster-mushroom", "grams": 50, "label": "느타리버섯 한 줌", "icon": "mushroom" },
+      { "food": "spinach", "grams": 70, "label": "시금치 한 줌", "icon": "leaf" },
+      { "food": "bean-sprout", "grams": 70, "label": "콩나물 한 줌", "icon": "sprout" },
+      { "food": "carrot", "grams": 40, "label": "당근 1/4개", "icon": "carrot" },
+      { "food": "egg", "grams": 50, "label": "달걀 1개", "icon": "egg" },
+      { "food": "sesame-oil", "grams": 5, "label": "참기름 1작은술", "icon": "sesame" },
+      { "food": "soy-sauce", "grams": 5, "label": "간장 1작은술", "icon": "soy" }
+    ],
+    "steps": [
+      {
+        "text": "달걀을 삶는 동안 시금치와 콩나물을 끓는 물에 살짝 데쳐 물기를 꼭 짜요. 소금은 넣지 않아요.",
+        "tip": "물기를 꼭 짜야 비볐을 때 밥이 질어지지 않아요.",
+        "icon": "pot"
+      },
+      {
+        "text": "마른 팬에 찢은 버섯을 먼저 볶아 물기를 날리고, 채 썬 당근을 넣어 2~3분 더 볶아요.",
+        "tip": "버섯은 물에 씻지 말고 닦아 쓰면 물이 덜 생겨요.",
+        "icon": "stirfry"
+      },
+      {
+        "text": "현미밥 위에 나물과 버섯, 반으로 가른 달걀을 올리고 간장과 참기름을 둘러 비벼요.",
+        "tip": "싱거우면 간장 대신 깨를 넉넉히 뿌려 고소함을 더해 보세요.",
+        "icon": "bibimbap"
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "식이섬유 채우기",
+      "title": "버섯 나물 비빔밥으로 식이섬유 채우기",
+      "subtitle": "밥을 바꾸고 버섯과 나물을 올리면 한 그릇으로 꽤 채워져요"
+    },
+    {
+      "type": "stat",
+      "title": "하루 식이섬유, 이만큼",
+      "figures": [
+        { "label": "성인 남자 하루 기준", "value": { "kdri": "fiber", "sex": "male" } },
+        { "label": "성인 여자 하루 기준", "value": { "kdri": "fiber", "sex": "female" } },
+        { "label": "내 최근 2주 하루 평균", "value": { "my": "fiber" } }
+      ],
+      "note": "이만큼 먹으면 충분하다고 정한 양(충분섭취량)이에요."
+    },
+    {
+      "type": "list",
+      "title": "식이섬유는 어디에 많을까요",
+      "items": [
+        { "title": "잡곡", "text": "현미·보리·귀리처럼 덜 깎은 곡물에 많아요", "icon": "rice" },
+        { "title": "콩", "text": "검은콩·팥·강낭콩을 밥에 섞어 지어 보세요", "icon": "bean" },
+        { "title": "채소·나물", "text": "시금치·콩나물·당근 같은 반찬에 들어 있어요", "icon": "carrot" },
+        { "title": "버섯·해조류", "text": "표고·느타리, 미역·다시마에도 들어 있어요", "icon": "mushroom" },
+        { "title": "과일", "text": "주스보다 통째로 먹어야 식이섬유가 남아요", "icon": "apple" }
+      ]
+    },
+    {
+      "type": "list",
+      "title": "채우는 방법",
+      "items": [
+        { "title": "흰쌀에 잡곡 섞기", "text": "처음엔 조금만 섞고 차츰 늘려요", "icon": "rice" },
+        { "title": "나물 반찬 한 가지 더", "text": "끼니마다 채소 반찬을 하나씩 더해요", "icon": "leaf" },
+        { "title": "간식은 과일·견과로", "text": "과자 대신 사과 한 개, 견과 한 줌", "icon": "apple" },
+        { "title": "성분표 확인", "text": "빵·시리얼은 식이섬유 줄을 보고 골라요", "icon": "magnifier" },
+        { "title": "물과 함께 천천히", "text": "갑자기 늘리면 배에 가스가 찰 수 있어요", "icon": "water" }
+      ]
+    },
+    {
+      "type": "bars",
+      "title": "밥만 바꿔도 달라져요",
+      "bars": [
+        {
+          "label": "흰쌀밥 한 공기 210g",
+          "value": { "food": "white-rice", "nutrient": "fiberG", "grams": 210 },
+          "aside": { "food": "white-rice", "nutrient": "kcal", "grams": 210 }
+        },
+        {
+          "label": "현미밥 한 공기 210g",
+          "value": { "food": "brown-rice", "nutrient": "fiberG", "grams": 210 },
+          "aside": { "food": "brown-rice", "nutrient": "kcal", "grams": 210 },
+          "highlight": true
+        },
+        {
+          "label": "보리밥 한 공기 210g",
+          "value": { "food": "barley-rice", "nutrient": "fiberG", "grams": 210 },
+          "aside": { "food": "barley-rice", "nutrient": "kcal", "grams": 210 }
+        }
+      ],
+      "note": "열량은 크게 다르지 않고 식이섬유가 늘어요. 처음엔 흰쌀에 조금씩 섞어 지어 보세요."
+    },
+    { "type": "ingredients", "title": "재료" },
+    { "type": "step", "step": 1 },
+    { "type": "step", "step": 2 },
+    { "type": "step", "step": 3 },
+    {
+      "type": "nutrition",
+      "title": "영양정보",
+      "nutrients": ["kcal", "carbG", "proteinG", "fiberG", "sodiumMg"],
+      "cautions": ["fiber"]
+    },
+    {
+      "type": "bars",
+      "title": "한 그릇이면 이만큼 채워져요",
+      "bars": [
+        { "label": "성인 남자 하루 기준", "value": { "kdri": "fiber", "sex": "male" } },
+        { "label": "성인 여자 하루 기준", "value": { "kdri": "fiber", "sex": "female" } },
+        { "label": "버섯 나물 비빔밥 한 그릇", "value": { "recipe": "fiberG" }, "highlight": true }
+      ],
+      "note": "나머지는 다른 끼니의 채소 반찬과 과일로 채워 보세요."
+    },
+    {
+      "type": "bars",
+      "title": "덤: 간식으로 더 채우기",
+      "bars": [
+        {
+          "label": "사과 1개(200g)",
+          "value": { "food": "apple", "nutrient": "fiberG", "grams": 200 },
+          "aside": { "food": "apple", "nutrient": "kcal", "grams": 200 }
+        },
+        {
+          "label": "찐 고구마 1개(130g)",
+          "value": { "food": "sweet-potato", "nutrient": "fiberG", "grams": 130 },
+          "aside": { "food": "sweet-potato", "nutrient": "kcal", "grams": 130 },
+          "highlight": true
+        },
+        {
+          "label": "아몬드 한 줌(25g)",
+          "value": { "food": "almond", "nutrient": "fiberG", "grams": 25 },
+          "aside": { "food": "almond", "nutrient": "kcal", "grams": 25 }
+        }
+      ],
+      "note": "견과는 열량이 높아 한 줌만, 고구마는 밥 양을 조금 줄여 함께 먹어요."
+    },
+    {
+      "type": "outro",
+      "title": "오늘 한 끼로 해 볼까요",
+      "text": "기록해 두면 통계에서 식이섬유가 채워지는 게 보여요.",
+      "actions": ["record", "recipe", "share"]
+    }
+  ]
+}

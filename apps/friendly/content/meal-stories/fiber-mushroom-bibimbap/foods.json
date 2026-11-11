@@ -1,0 +1,215 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "white-rice": {
+      "per100": {
+        "kcal": 146,
+        "carbG": 31.71,
+        "proteinG": 2.65,
+        "fatG": 0.33,
+        "sugarG": 0.01,
+        "fiberG": 0.9,
+        "sodiumMg": 0,
+        "potassiumMg": 20
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-013000300-0000 '멥쌀밥_백미'",
+      "source": "mfds-raw"
+    },
+    "brown-rice": {
+      "per100": {
+        "kcal": 166,
+        "carbG": 35.34,
+        "proteinG": 3.47,
+        "fatG": 0.96,
+        "sugarG": 0.4,
+        "fiberG": 2.2,
+        "sodiumMg": 0,
+        "potassiumMg": 122
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-013000500-0000 '멥쌀밥_현미'",
+      "source": "mfds-raw"
+    },
+    "barley-rice": {
+      "per100": {
+        "kcal": 144,
+        "carbG": 31.72,
+        "proteinG": 3.58,
+        "fatG": 0.73,
+        "sugarG": 0.08,
+        "fiberG": 3.3,
+        "sodiumMg": 1,
+        "potassiumMg": 66
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-026010000-0000 '보리밥_쌀보리'",
+      "source": "mfds-raw"
+    },
+    "shiitake": {
+      "per100": {
+        "kcal": 22,
+        "carbG": 7.38,
+        "proteinG": 2.74,
+        "fatG": 0.38,
+        "sugarG": 0.43,
+        "fiberG": 5,
+        "sodiumMg": 3,
+        "potassiumMg": 278
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R107-027007101-0000 '표고버섯_전체_생것'",
+      "source": "mfds-raw"
+    },
+    "oyster-mushroom": {
+      "per100": {
+        "kcal": 15,
+        "carbG": 4.7,
+        "proteinG": 2.6,
+        "fatG": 0.14,
+        "sugarG": 0.74,
+        "fiberG": 2.9,
+        "sodiumMg": 2,
+        "potassiumMg": 256
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R107-004000001-0000 '느타리버섯_생것'",
+      "source": "mfds-raw"
+    },
+    "spinach": {
+      "per100": {
+        "kcal": 29,
+        "carbG": 4.86,
+        "proteinG": 3.35,
+        "fatG": 0.39,
+        "sugarG": 0.4,
+        "fiberG": 3.1,
+        "sodiumMg": 23,
+        "potassiumMg": 691
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-115000001-0000 '시금치_생것'",
+      "source": "mfds-raw"
+    },
+    "bean-sprout": {
+      "per100": {
+        "kcal": 43,
+        "carbG": 3.44,
+        "proteinG": 4.66,
+        "fatG": 1.19,
+        "sugarG": 0.47,
+        "fiberG": 2.2,
+        "sodiumMg": 3,
+        "potassiumMg": 218
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-182000001-0000 '콩나물_생것'",
+      "source": "mfds-raw"
+    },
+    "carrot": {
+      "per100": {
+        "kcal": 31,
+        "carbG": 7.03,
+        "proteinG": 1.02,
+        "fatG": 0.13,
+        "sugarG": 6.23,
+        "fiberG": 3.1,
+        "sodiumMg": 23,
+        "potassiumMg": 299
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-041007601-0000 '당근_뿌리_생것'",
+      "source": "mfds-raw"
+    },
+    "egg": {
+      "per100": {
+        "kcal": 136,
+        "carbG": 0.79,
+        "proteinG": 12.91,
+        "fatG": 8.25,
+        "sugarG": 0.11,
+        "fiberG": 0,
+        "sodiumMg": 139,
+        "potassiumMg": 127
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R210-003000001-0000 '달걀_생것'",
+      "source": "mfds-raw"
+    },
+    "sesame-oil": {
+      "per100": {
+        "kcal": 920,
+        "carbG": 0.13,
+        "proteinG": 0,
+        "fatG": 99.84,
+        "sugarG": 0,
+        "fiberG": 0,
+        "sodiumMg": 0,
+        "potassiumMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R114-020000000-0000 '참기름'",
+      "source": "mfds-raw"
+    },
+    "soy-sauce": {
+      "per100": {
+        "kcal": 34,
+        "carbG": 2.47,
+        "proteinG": 5.92,
+        "fatG": 0.03,
+        "sugarG": 0.29,
+        "fiberG": 0.4,
+        "sodiumMg": 7999,
+        "potassiumMg": 657
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R118-001030000-0000 '간장_재래'",
+      "source": "mfds-raw"
+    },
+    "apple": {
+      "per100": {
+        "kcal": 57,
+        "carbG": 14.11,
+        "proteinG": 0.2,
+        "fatG": 0.66,
+        "sugarG": 10.93,
+        "fiberG": 2,
+        "sodiumMg": 0,
+        "potassiumMg": 111
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R108-050000001-0000 '사과_생것'",
+      "source": "mfds-raw"
+    },
+    "sweet-potato": {
+      "per100": {
+        "kcal": 163,
+        "carbG": 39.41,
+        "proteinG": 1.08,
+        "fatG": 0.15,
+        "sugarG": 13.75,
+        "fiberG": 3.8,
+        "sodiumMg": 6,
+        "potassiumMg": 428
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R102-006000049-0000 '고구마_찐것'",
+      "source": "mfds-raw"
+    },
+    "almond": {
+      "per100": {
+        "kcal": 594,
+        "carbG": 20.49,
+        "proteinG": 23.45,
+        "fatG": 51.29,
+        "sugarG": 3.91,
+        "fiberG": 11.3,
+        "sodiumMg": 2,
+        "potassiumMg": 759
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R105-020000058-0000 '아몬드_볶은것'",
+      "source": "mfds-raw"
+    }
+  }
+}
