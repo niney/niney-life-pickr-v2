@@ -475,6 +475,132 @@ export const Bibimbap = ({ pal, v }: PropProps) => (
   </g>
 );
 
+// ── 칼슘 편(2026-11-11) — 유제품·멸치·잎채소 ──
+/** 우유곽 — 흰 몸통에 파란 띠. face 를 주면 이름표 대신 얼굴(마무리 장면의 짝). */
+export const Milk = ({ pal, f, v, face }: PropProps & { face?: Mood }) => (
+  <g>
+    <Paper d={tp('M -72 -66 L 0 -116 L 72 -66 Z', 411, v)} fill="#d9e4f2" lift={0.6} />
+    <Paper d={tr(-14, -132, 28, 22, 412, v, 1.2)} fill="#c3d1e6" lift={0.2} />
+    <Paper d={tr(-72, -68, 144, 192, 413, v)} fill="#f6f9fd" lift={1} />
+    <Paper d={tr(-72, 52, 144, 44, 414, v, 1.6)} fill="#4f8fd6" lift={0} />
+    {face ? (
+      <Face x={0} y={-6} s={0.86} mood={face} f={f} pal={pal} seed={31} />
+    ) : (
+      <text data-deco="" x={0} y={12} textAnchor="middle" fontFamily={FONT} fontWeight={900} fontSize={46} fill="#2f5fa8">
+        우유
+      </text>
+    )}
+  </g>
+);
+
+/** 멸치 한 마리 — 은빛 몸에 꼬리. face 를 주면 눈 대신 얼굴. */
+const Fish = ({ pal, f, v, seed, face }: PropProps & { seed: number; face?: Mood }) => (
+  <g>
+    <Paper d={tp('M 74 0 L 122 -36 L 110 0 L 122 36 Z', seed, v, 1.8)} fill="#8fa3bd" lift={0.4} />
+    <Paper d={tp('M -112 0 C -92 -42, 40 -46, 86 0 C 40 46, -92 42, -112 0 Z', seed + 1, v)} fill="#b9c6d8" lift={0.8} />
+    <path d="M -70 -22 C -30 -32, 30 -30, 66 -8" stroke="#eef2f7" strokeWidth={9} fill="none" strokeLinecap="round" />
+    {face ? <Face x={-30} y={4} s={0.52} mood={face} f={f} pal={pal} seed={33} /> : <circle cx={-80} cy={-6} r={8} fill={pal.ink} />}
+  </g>
+);
+
+/** 멸치 — 세 마리(목록·재료), face 를 주면 얼굴 있는 한 마리(마무리 장면의 짝). */
+export const Anchovy = ({ face, ...p }: PropProps & { face?: Mood }) =>
+  face ? (
+    <g transform="rotate(-8)">
+      <Fish {...p} seed={421} face={face} />
+    </g>
+  ) : (
+    <g>
+      <g transform="translate(-6 -58) rotate(-10) scale(0.8)">
+        <Fish {...p} seed={421} />
+      </g>
+      <g transform="translate(10 6) rotate(6) scale(0.86)">
+        <Fish {...p} seed={423} />
+      </g>
+      <g transform="translate(-10 66) rotate(-4) scale(0.74)">
+        <Fish {...p} seed={425} />
+      </g>
+    </g>
+  );
+
+export const Kale = ({ v }: PropProps) => (
+  <g transform="rotate(-12)">
+    <Paper d={tp('M 0 116 C -40 96, -116 60, -104 -14 C -126 -40, -84 -98, -44 -84 C -30 -126, 30 -126, 44 -84 C 84 -98, 126 -40, 104 -14 C 116 60, 40 96, 0 116 Z', 431, v, 3.4)} fill="#2f7d4f" lift={0.9} />
+    <path d="M 0 126 L 0 -70 M 0 42 L -56 -6 M 0 42 L 56 -6 M 0 -8 L -44 -52 M 0 -8 L 44 -52" stroke="#cfe6c4" strokeWidth={7} fill="none" strokeLinecap="round" />
+  </g>
+);
+
+export const Tofu = ({ v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -104 -30 L 96 -30 L 96 84 L -104 84 Z', 441, v)} fill="#f1e7d0" lift={0.9} />
+    <Paper d={tp('M -104 -30 L -72 -76 L 124 -76 L 96 -30 Z', 442, v, 1.8)} fill="#fbf7ec" lift={0} />
+    <Paper d={tp('M 96 -30 L 124 -76 L 124 40 L 96 84 Z', 443, v, 1.8)} fill="#e2d6ba" lift={0} />
+    <path d="M -80 0 L 72 0 M -80 34 L 72 34" stroke="#e2d6ba" strokeWidth={5} strokeLinecap="round" />
+  </g>
+);
+
+export const Yogurt = ({ pal, v }: PropProps) => (
+  <g>
+    <g transform="rotate(24 44 -60)">
+      <Paper d={tr(37, -150, 14, 96, 454, v, 1.2)} fill={pal.silver} lift={0.3} />
+    </g>
+    <Paper d={tp('M -76 -52 L 76 -52 L 60 106 L -60 106 Z', 451, v)} fill="#f4f7fb" lift={0.9} />
+    <Paper d={tr(-71, -6, 142, 52, 452, v, 1.6)} fill={pal.pink} lift={0} />
+    <Paper d={te(0, -54, 80, 20, 453, v, 1.8)} fill="#fffdf6" lift={0.3} />
+    <path d="M -34 -60 C -12 -74, 20 -72, 36 -58" stroke="#e6dfcc" strokeWidth={6} fill="none" strokeLinecap="round" />
+  </g>
+);
+
+export const Scallion = ({ v }: PropProps) => (
+  <g transform="rotate(32)">
+    <Paper d={tp('M -16 6 L -42 -116 L -16 -124 L 0 -24 L 16 -124 L 42 -116 L 16 6 Z', 462, v, 2)} fill="#4f9a5a" lift={0.6} />
+    <Paper d={tr(-16, 0, 32, 118, 461, v)} fill="#f4f2e4" lift={0.8} />
+    <path d="M -10 118 L -16 132 M 0 120 L 0 136 M 10 118 L 16 132" stroke="#cfc8b0" strokeWidth={4} strokeLinecap="round" />
+  </g>
+);
+
+/** 깨 한 종지. */
+export const SesameSeed = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={te(0, 44, 116, 40, 471, v)} fill={pal.paper} lift={0.9} />
+    <Paper d={tp('M -82 40 C -70 -6, 70 -6, 82 40 C 50 58, -50 58, -82 40 Z', 472, v, 1.8)} fill="#e6d3a0" lift={0} />
+    {Array.from({ length: 16 }, (_, i) => {
+      const a = ((i * 137.5) % 360) * (Math.PI / 180);
+      const r = 0.25 + ((i * 0.618) % 1) * 0.7;
+      const x = Math.cos(a) * 62 * r;
+      const y = 28 + Math.sin(a) * 18 * r - 8;
+      return <ellipse key={i} cx={x} cy={y} rx={7} ry={4} fill={i % 4 === 0 ? '#3a3330' : '#c2a05e'} transform={`rotate(${i * 47} ${x} ${y})`} />;
+    })}
+  </g>
+);
+
+/** 볶음밥 한 접시 — 밥 더미에 초록 잎·노란 달걀·은빛 멸치. */
+export const FriedRice = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={te(0, 48, 144, 46, 481, v)} fill={pal.paper} lift={1} />
+    <Paper d={tp('M -104 44 C -100 -28, -50 -64, 0 -64 C 50 -64, 100 -28, 104 44 C 60 64, -60 64, -104 44 Z', 482, v)} fill="#efe2c4" lift={0.3} />
+    {[
+      { x: -56, y: 4, fill: '#2f7d4f' },
+      { x: -8, y: -36, fill: '#2f7d4f' },
+      { x: 44, y: -8, fill: '#2f7d4f' },
+      { x: 12, y: 26, fill: '#2f7d4f' },
+      { x: -30, y: -12, fill: '#f2c94c' },
+      { x: 26, y: -40, fill: '#f2c94c' },
+      { x: 62, y: 24, fill: '#f2c94c' },
+      { x: -66, y: 34, fill: '#f2c94c' },
+    ].map(({ x, y, fill }, i) => (
+      <ellipse key={i} cx={x} cy={y} rx={16} ry={9} fill={fill} transform={`rotate(${i * 38} ${x} ${y})`} />
+    ))}
+    {[
+      { x: -26, y: 30, rot: 16 },
+      { x: 30, y: 8, rot: -24 },
+      { x: -4, y: -10, rot: 40 },
+    ].map(({ x, y, rot }, i) => (
+      <path key={i} d={`M ${x - 16} ${y} L ${x + 16} ${y}`} stroke="#9fb0c6" strokeWidth={7} strokeLinecap="round" transform={`rotate(${rot} ${x} ${y})`} />
+    ))}
+  </g>
+);
+
 /** 목록·단계 아이콘 크기(약 240) 숟가락·소금통. */
 export const SpoonIcon = (p: PropProps) => (
   <g transform="scale(0.48) translate(0 -128)">

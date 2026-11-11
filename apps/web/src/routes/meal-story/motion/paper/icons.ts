@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { MealStoryIconType } from '@repo/api-contract';
 import {
+  Anchovy,
   Apple,
   Bean,
   Bibimbap,
@@ -10,11 +11,14 @@ import {
   Clock,
   Dip,
   Egg,
+  FriedRice,
   Garlic,
+  Kale,
   Kimchi,
   Leaf,
   Lemon,
   Magnifier,
+  Milk,
   Mushroom,
   Noodle,
   NutritionLabel,
@@ -26,7 +30,9 @@ import {
   Ramen,
   RiceBowl,
   SauceBottle,
+  Scallion,
   SesameOil,
+  SesameSeed,
   ShakerIcon,
   SoupBowl,
   SoySauce,
@@ -34,8 +40,10 @@ import {
   Sprout,
   StirFry,
   Timer,
+  Tofu,
   Tomato,
   WaterGlass,
+  Yogurt,
   type PropProps,
 } from './props';
 
@@ -76,4 +84,12 @@ export const PROP_FOR: Record<MealStoryIconType, ComponentType<PropProps>> = {
   soy: SoySauce,
   stirfry: StirFry,
   bibimbap: Bibimbap,
+  milk: Milk,
+  anchovy: Anchovy,
+  kale: Kale,
+  tofu: Tofu,
+  yogurt: Yogurt,
+  scallion: Scallion,
+  sesameseed: SesameSeed,
+  friedrice: FriedRice,
 };

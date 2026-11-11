@@ -194,7 +194,8 @@ describe('장면 그림 — 변형 원고', () => {
     expect(paperPalette('fiber', false).stage).not.toBe(paperPalette('sodium', false).stage);
     // 다크 모드의 짙은 줄무늬도 주제색(빠지면 undefined 가 그림에 박힌다), 모르는 주제는 기본(나트륨) 색.
     expect(paperPalette('fiber', true).stageDeep).not.toBe(paperPalette('sodium', true).stageDeep);
-    expect(paperPalette('calcium', false).stage).toBe(paperPalette('sodium', false).stage);
+    expect(new Set(['sodium', 'fiber', 'calcium'].map((t) => paperPalette(t, false).stage)).size).toBe(3);
+    expect(paperPalette('vitaminD', false).stage).toBe(paperPalette('sodium', false).stage);
     expect(paperPalette(null, true).stageDeep).toBe(paperPalette('sodium', true).stageDeep);
     const outro = scenes.find((s) => s.type === 'outro')!;
     const end = chapterFrames(variantStory, outro) - 1;
@@ -203,10 +204,17 @@ describe('장면 그림 — 변형 원고', () => {
     const fiber = draw(outro, VIEWERS[0]!, end, 'c0', fiberStory);
     expect(fiber).not.toContain('소금');
     expect(fiber).not.toMatch(/NaN|undefined|Infinity/);
-    for (const scene of scenes) {
-      for (const dark of [false, true]) {
-        const markup = draw(scene, { name: '식이섬유', mine: variantMineFiber, loggedIn: true, dark }, chapterFrames(fiberStory, scene) - 1, 'c0', fiberStory);
-        expect(markup, sceneName(scene, 0)).not.toMatch(/NaN|undefined|Infinity/);
+    // 칼슘의 짝은 우유곽·멸치 — 우유곽은 얼굴이라 '우유' 이름표가 없고, 소금통도 없다.
+    const calciumStory: MealStoryType = { ...variantStory, topic: { nutrient: 'calcium', direction: 'increase' } };
+    const calcium = draw(outro, VIEWERS[0]!, end, 'c0', calciumStory);
+    expect(calcium).not.toContain('소금');
+    expect(calcium).not.toBe(fiber);
+    for (const story of [fiberStory, calciumStory]) {
+      for (const scene of scenes) {
+        for (const dark of [false, true]) {
+          const markup = draw(scene, { name: '주제 바꿈', mine: variantMineFiber, loggedIn: true, dark }, chapterFrames(story, scene) - 1, 'c0', story);
+          expect(markup, sceneName(scene, 0)).not.toMatch(/NaN|undefined|Infinity/);
+        }
       }
     }
   });

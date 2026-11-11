@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react';
 import type { MealStorySceneType } from '@repo/api-contract';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
 import { pop, prog, rand, useClock } from './anim';
 import { KineticTitle } from './KineticTitle';
 import { cardHeight, titleHeight, wrapText } from './layout';
 import { Card, Paper, Sheet, Tape } from './paper/kit';
-import { Mushroom, PaperShaker, PaperSpoon, RiceBowl } from './paper/props';
+import { Anchovy, Milk, Mushroom, PaperShaker, PaperSpoon, RiceBowl, type PropProps } from './paper/props';
 import { boil, tornRect } from './paper/torn';
 import { PaperStage } from './Stage';
 import { HAND } from './theme';
@@ -16,9 +17,16 @@ type OutroScene = Extract<MealStorySceneType, { type: 'outro' }>;
 const TITLE = { top: 300, size: 112, width: 860 };
 const CONFETTI = ['#f6cf55', '#f3a3bf', '#ffffff', '#a9d9c6', '#ffb36b'];
 
+/** 주제마다 손 흔드는 짝 — 왼쪽·오른쪽 그림과 크기. 모르는 주제는 나트륨의 짝. */
+const PALS: Readonly<Record<string, { left: (p: PropProps) => ReactNode; leftScale: number; right: (p: PropProps) => ReactNode; rightScale: number }>> = {
+  sodium: { left: (p) => <PaperShaker {...p} mood="happy" />, leftScale: 0.82, right: (p) => <PaperSpoon {...p} fill={1} mood="happy" seed={131} />, rightScale: 0.5 },
+  fiber: { left: (p) => <RiceBowl {...p} face="happy" />, leftScale: 1.25, right: (p) => <Mushroom {...p} face="happy" />, rightScale: 1.2 },
+  calcium: { left: (p) => <Milk {...p} face="happy" />, leftScale: 1.2, right: (p) => <Anchovy {...p} face="happy" />, rightScale: 1.25 },
+};
+
 /**
  * 마무리 — 화면 가득 색종이 부엌으로 돌아와 제목 카드가 붙고, 식탁 끝에서 그 주제의 짝(나트륨 = 소금통·숟가락, 식이섬유 =
- * 밥공기·버섯)이 손(몸)을 흔든다. 종이 조각이
+ * 밥공기·버섯, 칼슘 = 우유곽·멸치)이 손(몸)을 흔든다. 종이 조각이
  * 천천히 흩날린다. 아래쪽 식탁 자리는 웹이 진짜 단추(기록·레시피·공유)를 얹는 곳이라 비워 둔다.
  */
 export const ChapterOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterContext }) => {
@@ -37,7 +45,7 @@ export const ChapterOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterCo
   // 글 쪽지 아래 끝 — 쪽지가 길면 소금통·숟가락을 그만큼 내린다(얼굴이 쪽지에 가리지 않게).
   const textBottom = textLines.length ? textY + cardHeight(textLines.length, 40) : textY - 40;
   const palsY = Math.max(1060, textBottom + 190);
-  const grainPals = ctx.story.topic?.nutrient === 'fiber';
+  const duo = PALS[ctx.story.topic?.nutrient ?? ''] ?? PALS.sodium!;
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <PaperStage ctx={ctx} table={1180} area={{ x: -30, y: -30, w: 1140, h: 1980 }} />
@@ -78,11 +86,9 @@ export const ChapterOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterCo
         </Sheet>
       ) : null}
       <Sheet>
-        <g transform={`translate(300 ${palsY + (1 - pals) * 500}) rotate(${wave}) scale(${grainPals ? 1.25 : 0.82})`}>
-          {grainPals ? <RiceBowl pal={pal} f={f} v={v} face="happy" /> : <PaperShaker pal={pal} f={f} v={v} mood="happy" />}
-        </g>
-        <g transform={`translate(780 ${palsY - 50 + (1 - pals) * 500 + Math.sin(f / 8) * 8}) rotate(${-wave * 0.6}) scale(${grainPals ? 1.2 : 0.5})`}>
-          {grainPals ? <Mushroom pal={pal} f={f} v={v} face="happy" /> : <PaperSpoon pal={pal} f={f} v={v} fill={1} mood="happy" seed={131} />}
+        <g transform={`translate(300 ${palsY + (1 - pals) * 500}) rotate(${wave}) scale(${duo.leftScale})`}>{duo.left({ pal, f, v })}</g>
+        <g transform={`translate(780 ${palsY - 50 + (1 - pals) * 500 + Math.sin(f / 8) * 8}) rotate(${-wave * 0.6}) scale(${duo.rightScale})`}>
+          {duo.right({ pal, f, v })}
         </g>
       </Sheet>
     </AbsoluteFill>
