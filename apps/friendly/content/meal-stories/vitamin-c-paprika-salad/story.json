@@ -1,0 +1,163 @@
+{
+  "slug": "vitamin-c-paprika-salad",
+  "status": "draft",
+  "title": "파프리카 샐러드로 비타민 C 채우기",
+  "summary": "생으로 먹기 좋은 색색 채소를 한 접시에 담았어요. 비타민 C가 많이 든 음식과 채우는 방법, 과일 간식까지.",
+  "topic": { "nutrient": "vitaminC", "direction": "increase" },
+  "publishedAt": "2026-11-11",
+  "reviewedAt": null,
+  "sources": [],
+  "foods": [
+    { "id": "chicken-breast", "label": "삶은 닭가슴살", "ref": { "db": "raw", "code": "R209-008000546-0000" } },
+    { "id": "yellow-paprika", "label": "노란 파프리카", "ref": { "db": "raw", "code": "R106-194008001-0000" } },
+    { "id": "red-paprika", "label": "빨간 파프리카", "ref": { "db": "raw", "code": "R106-194008101-0000" } },
+    { "id": "broccoli", "label": "브로콜리(데친 것)", "ref": { "db": "raw", "code": "R106-092000047-0000" } },
+    { "id": "lettuce", "label": "양상추", "ref": { "db": "raw", "code": "R106-101143601-0000" } },
+    { "id": "cherry-tomato", "label": "방울토마토", "ref": { "db": "raw", "code": "R106-186010001-0000" } },
+    { "id": "sweet-potato", "label": "찐 고구마", "ref": { "db": "raw", "code": "R102-006000049-0000" } },
+    { "id": "olive-oil", "label": "올리브유", "ref": { "db": "raw", "code": "R114-017000000-0000" } },
+    { "id": "lemon", "label": "레몬", "ref": { "db": "raw", "code": "R108-024000001-0000" } },
+    { "id": "kiwi", "label": "그린 키위", "ref": { "db": "raw", "code": "R108-090020001-0000" } },
+    { "id": "strawberry", "label": "딸기(설향)", "ref": { "db": "raw", "code": "R108-019020001-0000" } },
+    { "id": "tangerine", "label": "귤(온주밀감)", "ref": { "db": "raw", "code": "R108-010020001-0000" } }
+  ],
+  "recipe": {
+    "name": "파프리카 닭가슴살 샐러드",
+    "servings": 1,
+    "dishType": "salad",
+    "cuisine": "western",
+    "ingredients": [
+      { "food": "chicken-breast", "grams": 100, "label": "삶은 닭가슴살", "note": "시판 제품도 좋아요", "icon": "chicken" },
+      { "food": "yellow-paprika", "grams": 70, "label": "노란 파프리카 1/2개", "icon": "paprika" },
+      { "food": "red-paprika", "grams": 70, "label": "빨간 파프리카 1/2개", "icon": "paprika" },
+      { "food": "broccoli", "grams": 70, "label": "브로콜리 한 줌", "icon": "broccoli" },
+      { "food": "lettuce", "grams": 60, "label": "양상추 2~3장", "icon": "leaf" },
+      { "food": "cherry-tomato", "grams": 75, "label": "방울토마토 5개", "icon": "tomato" },
+      { "food": "sweet-potato", "grams": 100, "label": "찐 고구마 1/2개", "icon": "sweetpotato" },
+      { "food": "olive-oil", "grams": 5, "label": "올리브유 1작은술", "icon": "oil" },
+      { "food": "lemon", "grams": 10, "label": "레몬즙 2작은술", "icon": "lemon" }
+    ],
+    "steps": [
+      {
+        "text": "브로콜리는 한입 크기로 잘라 끓는 물에 30초만 데친 뒤 찬물에 헹궈 물기를 빼요.",
+        "tip": "오래 삶지 않아요 — 비타민 C는 물과 열에 약해요.",
+        "icon": "broccoli"
+      },
+      {
+        "text": "파프리카는 씨를 빼고 길게 썰고, 방울토마토는 반으로 갈라요. 닭가슴살은 결대로 찢어요.",
+        "tip": "파프리카는 익히지 않고 그대로 써요.",
+        "icon": "paprika"
+      },
+      {
+        "text": "양상추를 깔고 손질한 재료와 찐 고구마를 올린 뒤 올리브유와 레몬즙, 후추를 뿌려요.",
+        "tip": "소금 대신 레몬즙을 넉넉히 뿌려 보세요.",
+        "icon": "salad"
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "비타민 C 채우기",
+      "title": "파프리카 샐러드로 비타민 C 채우기",
+      "subtitle": "생으로 먹기 좋은 색색 채소를 한 접시에 담았어요"
+    },
+    {
+      "type": "stat",
+      "title": "비타민 C, 하루 이만큼",
+      "figures": [
+        { "label": "성인 하루 권장량", "value": { "kdri": "vitaminC" } },
+        { "label": "내 최근 2주 하루 평균", "value": { "my": "vitaminC" } }
+      ],
+      "note": "이만큼 먹도록 권하는 양(권장섭취량)이에요. 성인은 남녀가 같아요."
+    },
+    {
+      "type": "list",
+      "title": "비타민 C는 어디에 많을까요",
+      "items": [
+        { "title": "파프리카", "text": "노랑·주황·빨강 모두 넉넉해요. 생으로 먹기 좋아요", "icon": "paprika" },
+        { "title": "키위·딸기·귤", "text": "과일은 제철 것으로 한두 개씩", "icon": "kiwi" },
+        { "title": "브로콜리·양배추", "text": "짧게 데치거나 생으로 먹어요", "icon": "broccoli" },
+        { "title": "고구마", "text": "찐 고구마에도 꽤 들어 있어요", "icon": "sweetpotato" }
+      ]
+    },
+    {
+      "type": "list",
+      "title": "채우는 방법",
+      "items": [
+        { "title": "생으로 곁들이기", "text": "파프리카·양배추는 썰어서 그대로 먹어요", "icon": "paprika" },
+        { "title": "살짝만 익히기", "text": "채소는 짧게 데쳐요. 오래 삶지 않아요", "icon": "pot" },
+        { "title": "과일은 통째로", "text": "주스보다 과일 그대로 한두 개", "icon": "tangerine" },
+        { "title": "끼니마다 조금씩", "text": "한 번에 몰아 먹기보다 날마다 조금씩", "icon": "clock" }
+      ]
+    },
+    {
+      "type": "bars",
+      "title": "한 번 먹는 양의 비타민 C",
+      "bars": [
+        {
+          "label": "노란 파프리카 반 개(70g)",
+          "value": { "food": "yellow-paprika", "nutrient": "vitaminCMg", "grams": 70 },
+          "highlight": true
+        },
+        {
+          "label": "브로콜리 한 줌(70g)",
+          "value": { "food": "broccoli", "nutrient": "vitaminCMg", "grams": 70 }
+        },
+        {
+          "label": "방울토마토 5개(75g)",
+          "value": { "food": "cherry-tomato", "nutrient": "vitaminCMg", "grams": 75 }
+        }
+      ],
+      "note": "채소마다 차이가 커요. 파프리카가 유난히 많아요."
+    },
+    { "type": "ingredients", "title": "재료" },
+    { "type": "step", "step": 1 },
+    { "type": "step", "step": 2 },
+    { "type": "step", "step": 3 },
+    {
+      "type": "nutrition",
+      "title": "영양정보",
+      "nutrients": ["kcal", "proteinG", "fiberG", "vitaminCMg", "sodiumMg"],
+      "note": "간은 레몬즙과 후추로만 했어요. 소금을 넣지 않아 나트륨도 적어요."
+    },
+    {
+      "type": "bars",
+      "title": "한 접시면 이만큼 채워져요",
+      "bars": [
+        { "label": "성인 하루 권장량", "value": { "kdri": "vitaminC" } },
+        { "label": "파프리카 샐러드 한 접시", "value": { "recipe": "vitaminCMg" }, "highlight": true }
+      ],
+      "note": "다른 끼니에는 과일 하나만 곁들여도 좋아요."
+    },
+    {
+      "type": "bars",
+      "title": "덤: 과일로 더 채우기",
+      "bars": [
+        {
+          "label": "그린 키위 1개(100g)",
+          "value": { "food": "kiwi", "nutrient": "vitaminCMg", "grams": 100 },
+          "aside": { "food": "kiwi", "nutrient": "kcal", "grams": 100 },
+          "highlight": true
+        },
+        {
+          "label": "딸기 7알(100g)",
+          "value": { "food": "strawberry", "nutrient": "vitaminCMg", "grams": 100 },
+          "aside": { "food": "strawberry", "nutrient": "kcal", "grams": 100 }
+        },
+        {
+          "label": "귤 2개(160g)",
+          "value": { "food": "tangerine", "nutrient": "vitaminCMg", "grams": 160 },
+          "aside": { "food": "tangerine", "nutrient": "kcal", "grams": 160 }
+        }
+      ],
+      "note": "과일은 주스보다 그대로 — 제철 것으로 골라 보세요."
+    },
+    {
+      "type": "outro",
+      "title": "오늘 한 끼로 해 볼까요",
+      "text": "기록해 두면 통계에서 비타민 C가 채워지는 게 보여요.",
+      "actions": ["record", "recipe", "share"]
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "chicken-breast": {
+      "per100": {
+        "kcal": 127,
+        "carbG": 0,
+        "proteinG": 28.09,
+        "fatG": 0.93,
+        "sugarG": 0,
+        "fiberG": 0,
+        "sodiumMg": 40,
+        "potassiumMg": 324,
+        "calciumMg": 4,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R209-008000546-0000 '닭고기_가슴(껍질 제거)_삶은것'",
+      "source": "mfds-raw"
+    },
+    "yellow-paprika": {
+      "per100": {
+        "kcal": 24,
+        "carbG": 5.95,
+        "proteinG": 0.77,
+        "fatG": 0.12,
+        "sugarG": 2.79,
+        "fiberG": 1.3,
+        "sodiumMg": 0,
+        "potassiumMg": 209,
+        "calciumMg": 7,
+        "vitaminCMg": 110.6
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-194008001-0000 '파프리카(착색단고추)_노란색_생것'",
+      "source": "mfds-raw"
+    },
+    "red-paprika": {
+      "per100": {
+        "kcal": 26,
+        "carbG": 6.42,
+        "proteinG": 0.91,
+        "fatG": 0.13,
+        "sugarG": 2.65,
+        "fiberG": 1.6,
+        "sodiumMg": 0,
+        "potassiumMg": 234,
+        "calciumMg": 6,
+        "vitaminCMg": 91.75
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-194008101-0000 '파프리카(착색단고추)_빨간색_생것'",
+      "source": "mfds-raw"
+    },
+    "broccoli": {
+      "per100": {
+        "kcal": 28,
+        "carbG": 5.34,
+        "proteinG": 2.8,
+        "fatG": 0.31,
+        "sugarG": 0.4,
+        "fiberG": 3.1,
+        "sodiumMg": 4,
+        "potassiumMg": 301,
+        "calciumMg": 37,
+        "vitaminCMg": 29.17
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-092000047-0000 '브로콜리_데친것'",
+      "source": "mfds-raw"
+    },
+    "lettuce": {
+      "per100": {
+        "kcal": 14,
+        "carbG": 3.37,
+        "proteinG": 0.72,
+        "fatG": 0.08,
+        "sugarG": 1.77,
+        "fiberG": 1.5,
+        "sodiumMg": 4,
+        "potassiumMg": 155,
+        "calciumMg": 26,
+        "vitaminCMg": 3.56
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-101143601-0000 '상추_완전결구상추(양상추)_청상추_생것'",
+      "source": "mfds-raw"
+    },
+    "cherry-tomato": {
+      "per100": {
+        "kcal": 25,
+        "carbG": 6.02,
+        "proteinG": 1,
+        "fatG": 0.13,
+        "sugarG": 3.89,
+        "fiberG": 2.1,
+        "sodiumMg": 5,
+        "potassiumMg": 209,
+        "calciumMg": 10,
+        "vitaminCMg": 11.37
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-186010001-0000 '토마토_방울토마토_생것'",
+      "source": "mfds-raw"
+    },
+    "sweet-potato": {
+      "per100": {
+        "kcal": 163,
+        "carbG": 39.41,
+        "proteinG": 1.08,
+        "fatG": 0.15,
+        "sugarG": 13.75,
+        "fiberG": 3.8,
+        "sodiumMg": 6,
+        "potassiumMg": 428,
+        "calciumMg": 20,
+        "vitaminCMg": 22.99
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R102-006000049-0000 '고구마_찐것'",
+      "source": "mfds-raw"
+    },
+    "olive-oil": {
+      "per100": {
+        "kcal": 921,
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 100,
+        "sugarG": 0,
+        "fiberG": 0,
+        "sodiumMg": 7,
+        "potassiumMg": 13,
+        "calciumMg": null,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R114-017000000-0000 '올리브유'",
+      "source": "mfds-raw"
+    },
+    "lemon": {
+      "per100": {
+        "kcal": 36,
+        "carbG": 9.27,
+        "proteinG": 0.71,
+        "fatG": 0.08,
+        "sugarG": 1.87,
+        "fiberG": 1.1,
+        "sodiumMg": 2,
+        "potassiumMg": 122,
+        "calciumMg": 32,
+        "vitaminCMg": 52.07
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R108-024000001-0000 '레몬_생것'",
+      "source": "mfds-raw"
+    },
+    "kiwi": {
+      "per100": {
+        "kcal": 66,
+        "carbG": 16.08,
+        "proteinG": 0.93,
+        "fatG": 0.63,
+        "sugarG": 6.73,
+        "fiberG": 2.6,
+        "sodiumMg": 2,
+        "potassiumMg": 284,
+        "calciumMg": 30,
+        "vitaminCMg": 86.51
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R108-090020001-0000 '키위_그린_생것'",
+      "source": "mfds-raw"
+    },
+    "strawberry": {
+      "per100": {
+        "kcal": 34,
+        "carbG": 8.33,
+        "proteinG": 0.74,
+        "fatG": 0.14,
+        "sugarG": 6.61,
+        "fiberG": 1.5,
+        "sodiumMg": 1,
+        "potassiumMg": 164,
+        "calciumMg": 14,
+        "vitaminCMg": 65.74
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R108-019020001-0000 '딸기_설향_생것'",
+      "source": "mfds-raw"
+    },
+    "tangerine": {
+      "per100": {
+        "kcal": 39,
+        "carbG": 10.04,
+        "proteinG": 0.53,
+        "fatG": 0.1,
+        "sugarG": 7.99,
+        "fiberG": 1.6,
+        "sodiumMg": 2,
+        "potassiumMg": 101,
+        "calciumMg": 13,
+        "vitaminCMg": 30.69
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R108-010020001-0000 '귤_온주밀감_생것'",
+      "source": "mfds-raw"
+    }
+  }
+}
