@@ -1,0 +1,201 @@
+{
+  "slug": "calcium-anchovy-kale-rice",
+  "status": "draft",
+  "title": "멸치 케일 볶음밥으로 칼슘 채우기",
+  "summary": "뼈째 먹는 멸치와 짙은 잎채소, 깨를 한 그릇에 담았어요. 칼슘이 많이 든 음식과 채우는 방법, 유제품 간식까지.",
+  "topic": { "nutrient": "calcium", "direction": "increase" },
+  "publishedAt": "2026-11-11",
+  "reviewedAt": null,
+  "sources": [
+    {
+      "id": "rda-fct-10",
+      "label": "농촌진흥청 국가표준식품성분표 제10개정판(국가표준식품성분 DB 10.4)",
+      "url": "https://www.nics.go.kr/food/kfi/fct/fctIntro/list?menuId=PS03562"
+    }
+  ],
+  "foods": [
+    { "id": "rice", "label": "흰쌀밥", "ref": { "db": "raw", "code": "R101-013000300-0000" } },
+    { "id": "kale", "label": "케일", "ref": { "db": "raw", "code": "R106-180000001-0000" } },
+    { "id": "egg", "label": "달걀", "ref": { "db": "raw", "code": "R210-003000001-0000" } },
+    { "id": "scallion", "label": "대파", "ref": { "db": "raw", "code": "R106-191040001-0000" } },
+    { "id": "sesame", "label": "참깨(볶은 것)", "ref": { "db": "raw", "code": "R105-026020058-0000" } },
+    { "id": "sesame-oil", "label": "참기름", "ref": { "db": "raw", "code": "R114-020000000-0000" } },
+    { "id": "milk", "label": "우유", "ref": { "db": "raw", "code": "R213-009000000-0000" } },
+    {
+      "id": "small-anchovy",
+      "label": "잔멸치(말린 것)",
+      "manual": {
+        "per100": { "kcal": 226, "carbG": 0.32, "proteinG": 42.94, "fatG": 4.59, "sugarG": 0, "fiberG": 0, "sodiumMg": 2646, "potassiumMg": 531, "calciumMg": 620 },
+        "source": "rda-fct-10",
+        "note": "DB 10.4 '멸치, 잔멸치, 삶아서 말린것'(색인 2247). 표준데이터의 말린 멸치는 크기를 가리지 않은 평균이다"
+      }
+    },
+    {
+      "id": "tofu",
+      "label": "두부",
+      "manual": {
+        "per100": { "kcal": 97, "carbG": 3.75, "proteinG": 9.62, "fatG": 4.63, "sugarG": 0, "fiberG": 2.9, "sodiumMg": 1, "potassiumMg": 132, "calciumMg": 64 },
+        "source": "rda-fct-10",
+        "note": "DB 10.4 '두부'(색인 565). 식약처 원재료 표준데이터에는 두부가 없다"
+      }
+    },
+    {
+      "id": "yogurt",
+      "label": "플레인 요거트(떠먹는)",
+      "manual": {
+        "per100": { "kcal": 86, "carbG": 9.69, "proteinG": 4.53, "fatG": 3.21, "sugarG": 8.51, "fiberG": 1, "sodiumMg": 56, "potassiumMg": 176, "calciumMg": 136 },
+        "source": "rda-fct-10",
+        "note": "DB 10.4 '요구르트, 호상, 플레인'(색인 2845)"
+      }
+    },
+    {
+      "id": "cheddar",
+      "label": "체다 치즈",
+      "manual": {
+        "per100": { "kcal": 298, "carbG": 6.17, "proteinG": 18.76, "fatG": 21.3, "sugarG": 0.24, "fiberG": 0, "sodiumMg": 928, "potassiumMg": 62, "calciumMg": 626 },
+        "source": "rda-fct-10",
+        "note": "DB 10.4 '치즈, 체다'(색인 2861)"
+      }
+    }
+  ],
+  "recipe": {
+    "name": "멸치 케일 볶음밥",
+    "servings": 1,
+    "dishType": "rice",
+    "cuisine": "korean",
+    "ingredients": [
+      { "food": "rice", "grams": 210, "label": "밥 한 공기", "note": "찬밥이 잘 볶여요", "icon": "rice" },
+      { "food": "small-anchovy", "grams": 15, "label": "잔멸치 한 줌", "icon": "anchovy" },
+      { "food": "kale", "grams": 60, "label": "케일 한 줌", "note": "쌈케일 5장쯤", "icon": "kale" },
+      { "food": "egg", "grams": 50, "label": "달걀 1개", "icon": "egg" },
+      { "food": "scallion", "grams": 20, "label": "대파 1/4대", "icon": "scallion" },
+      { "food": "sesame", "grams": 5, "label": "참깨 1/2큰술", "icon": "sesameseed" },
+      { "food": "sesame-oil", "grams": 5, "label": "참기름 1작은술", "icon": "sesame" }
+    ],
+    "steps": [
+      {
+        "text": "마른 팬에 잔멸치를 약한 불로 1~2분 볶아 비린내를 날린 뒤 덜어 둬요.",
+        "tip": "멸치가 짜서 소금·간장은 따로 넣지 않아요.",
+        "icon": "anchovy"
+      },
+      {
+        "text": "참기름을 두르고 송송 썬 대파와 채 썬 케일을 볶다가, 한쪽에 달걀을 풀어 넣고 저어 익혀요.",
+        "tip": "케일은 숨이 죽을 만큼만 — 오래 볶으면 질겨져요.",
+        "icon": "kale"
+      },
+      {
+        "text": "밥과 볶아 둔 멸치를 넣어 고루 볶고, 불을 끈 뒤 참깨를 듬뿍 뿌려요.",
+        "tip": "싱거우면 깨를 더 뿌리거나 김을 부숴 올려 보세요.",
+        "icon": "friedrice"
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "칼슘 채우기",
+      "title": "멸치 케일 볶음밥으로 칼슘 채우기",
+      "subtitle": "뼈째 먹는 멸치와 짙은 잎채소, 깨를 한 그릇에 담았어요"
+    },
+    {
+      "type": "stat",
+      "title": "하루 칼슘, 이만큼",
+      "figures": [
+        { "label": "성인 남자 하루 권장량", "value": { "kdri": "calcium", "sex": "male" } },
+        { "label": "성인 여자 하루 권장량", "value": { "kdri": "calcium", "sex": "female" } },
+        { "label": "내 최근 2주 하루 평균", "value": { "my": "calcium" } }
+      ]
+    },
+    {
+      "type": "list",
+      "title": "칼슘은 어디에 많을까요",
+      "items": [
+        { "title": "우유·요거트·치즈", "text": "한 번 먹는 양으로 가장 손쉽게 채워요", "icon": "milk" },
+        { "title": "뼈째 먹는 생선", "text": "멸치처럼 뼈까지 먹는 생선에 많아요", "icon": "anchovy" },
+        { "title": "짙은 잎채소", "text": "케일·무청·깻잎에 꽤 들어 있어요", "icon": "kale" },
+        { "title": "깨", "text": "참깨·검정깨는 적은 양으로도 보탬이 돼요", "icon": "sesameseed" },
+        { "title": "두부", "text": "아주 많지는 않아도 자주 먹으면 보탬이 돼요", "icon": "tofu" }
+      ]
+    },
+    {
+      "type": "list",
+      "title": "채우는 방법",
+      "items": [
+        { "title": "우유 한 컵 곁들이기", "text": "아침이나 간식에 한 컵을 더해요", "icon": "milk" },
+        { "title": "멸치는 뼈째", "text": "볶음밥·주먹밥에 잔멸치를 넣어요", "icon": "anchovy" },
+        { "title": "잎채소는 짙은 것으로", "text": "쌈이나 볶음에 케일·깻잎을 써요", "icon": "kale" },
+        { "title": "깨는 넉넉히", "text": "무침·볶음 끝에 듬뿍 뿌려요", "icon": "sesameseed" },
+        { "title": "끼니마다 나눠서", "text": "한 번에 몰아 먹기보다 조금씩 자주", "icon": "clock" }
+      ]
+    },
+    {
+      "type": "bars",
+      "title": "한 번 먹는 양의 칼슘",
+      "bars": [
+        {
+          "label": "케일 한 줌(60g)",
+          "value": { "food": "kale", "nutrient": "calciumMg", "grams": 60 },
+          "highlight": true
+        },
+        {
+          "label": "두부 반 모(150g)",
+          "value": { "food": "tofu", "nutrient": "calciumMg", "grams": 150 }
+        },
+        {
+          "label": "잔멸치 한 줌(15g)",
+          "value": { "food": "small-anchovy", "nutrient": "calciumMg", "grams": 15 }
+        }
+      ],
+      "note": "한 가지로 채우기보다 여러 가지를 조금씩 함께 먹는 편이 쉬워요."
+    },
+    { "type": "ingredients", "title": "재료" },
+    { "type": "step", "step": 1 },
+    { "type": "step", "step": 2 },
+    { "type": "step", "step": 3 },
+    {
+      "type": "nutrition",
+      "title": "영양정보",
+      "nutrients": ["kcal", "proteinG", "fiberG", "calciumMg", "sodiumMg"],
+      "cautions": ["calcium"]
+    },
+    {
+      "type": "bars",
+      "title": "한 그릇이면 이만큼 채워져요",
+      "bars": [
+        { "label": "성인 남자 하루 권장량", "value": { "kdri": "calcium", "sex": "male" } },
+        { "label": "성인 여자 하루 권장량", "value": { "kdri": "calcium", "sex": "female" } },
+        { "label": "멸치 케일 볶음밥 한 그릇", "value": { "recipe": "calciumMg" }, "highlight": true }
+      ],
+      "note": "나머지는 우유 한 컵이나 다른 끼니의 반찬으로 채워 보세요."
+    },
+    {
+      "type": "bars",
+      "title": "덤: 유제품으로 더 채우기",
+      "bars": [
+        {
+          "label": "우유 한 컵(200g)",
+          "value": { "food": "milk", "nutrient": "calciumMg", "grams": 200 },
+          "aside": { "food": "milk", "nutrient": "kcal", "grams": 200 },
+          "highlight": true
+        },
+        {
+          "label": "플레인 요거트(100g)",
+          "value": { "food": "yogurt", "nutrient": "calciumMg", "grams": 100 },
+          "aside": { "food": "yogurt", "nutrient": "kcal", "grams": 100 }
+        },
+        {
+          "label": "체다 치즈 한 장(20g)",
+          "value": { "food": "cheddar", "nutrient": "calciumMg", "grams": 20 },
+          "aside": { "food": "cheddar", "nutrient": "kcal", "grams": 20 }
+        }
+      ],
+      "note": "유제품이 맞지 않으면 멸치·잎채소·깨를 조금씩 더해 보세요."
+    },
+    {
+      "type": "outro",
+      "title": "오늘 한 끼로 해 볼까요",
+      "text": "기록해 두면 통계에서 칼슘이 채워지는 게 보여요.",
+      "actions": ["record", "recipe", "share"]
+    }
+  ]
+}

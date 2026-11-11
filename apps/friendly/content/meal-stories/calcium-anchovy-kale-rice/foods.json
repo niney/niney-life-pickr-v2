@@ -1,0 +1,117 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "rice": {
+      "per100": {
+        "kcal": 146,
+        "carbG": 31.71,
+        "proteinG": 2.65,
+        "fatG": 0.33,
+        "sugarG": 0.01,
+        "fiberG": 0.9,
+        "sodiumMg": 0,
+        "potassiumMg": 20,
+        "calciumMg": 2
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-013000300-0000 '멥쌀밥_백미'",
+      "source": "mfds-raw"
+    },
+    "kale": {
+      "per100": {
+        "kcal": 26,
+        "carbG": 4.61,
+        "proteinG": 3.11,
+        "fatG": 0.24,
+        "sugarG": 0,
+        "fiberG": 3.2,
+        "sodiumMg": 47,
+        "potassiumMg": 594,
+        "calciumMg": 328
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-180000001-0000 '케일_생것'",
+      "source": "mfds-raw"
+    },
+    "egg": {
+      "per100": {
+        "kcal": 136,
+        "carbG": 0.79,
+        "proteinG": 12.91,
+        "fatG": 8.25,
+        "sugarG": 0.11,
+        "fiberG": 0,
+        "sodiumMg": 139,
+        "potassiumMg": 127,
+        "calciumMg": 47
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R210-003000001-0000 '달걀_생것'",
+      "source": "mfds-raw"
+    },
+    "scallion": {
+      "per100": {
+        "kcal": 23,
+        "carbG": 4.8,
+        "proteinG": 1.78,
+        "fatG": 0.15,
+        "sugarG": 2.63,
+        "fiberG": 1.6,
+        "sodiumMg": 0,
+        "potassiumMg": 181,
+        "calciumMg": 24
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-191040001-0000 '파_대파_생것'",
+      "source": "mfds-raw"
+    },
+    "sesame": {
+      "per100": {
+        "kcal": 557,
+        "carbG": 21.83,
+        "proteinG": 25.96,
+        "fatG": 45.11,
+        "sugarG": 0,
+        "fiberG": 14.1,
+        "sodiumMg": 2,
+        "potassiumMg": 459,
+        "calciumMg": 854
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R105-026020058-0000 '참깨_흰깨_볶은것'",
+      "source": "mfds-raw"
+    },
+    "sesame-oil": {
+      "per100": {
+        "kcal": 920,
+        "carbG": 0.13,
+        "proteinG": 0,
+        "fatG": 99.84,
+        "sugarG": 0,
+        "fiberG": 0,
+        "sodiumMg": 0,
+        "potassiumMg": 0,
+        "calciumMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R114-020000000-0000 '참기름'",
+      "source": "mfds-raw"
+    },
+    "milk": {
+      "per100": {
+        "kcal": 67,
+        "carbG": 4.86,
+        "proteinG": 3.09,
+        "fatG": 3.85,
+        "sugarG": 4.81,
+        "fiberG": 0,
+        "sodiumMg": 40,
+        "potassiumMg": 162,
+        "calciumMg": 118
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R213-009000000-0000 '우유'",
+      "source": "mfds-raw"
+    }
+  }
+}
