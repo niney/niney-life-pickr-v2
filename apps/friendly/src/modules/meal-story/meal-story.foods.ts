@@ -43,7 +43,13 @@ const HEADER: Readonly<Record<string, string>> = {
   '칼륨(mg)': 'potassiumMg',
   '칼슘(mg)': 'calciumMg',
 };
-const PER100_KEYS = ['kcal', 'carbG', 'proteinG', 'fatG', 'sugarG', 'fiberG', 'sodiumMg', 'potassiumMg', 'calciumMg'] as const;
+/**
+ * 표준데이터에서 읽어 foods.json 에 적는 값 이름 — 표준데이터로 푼 식품(ref·group)은 이 이름을 모두 적는다(모르면 null).
+ * 여기에 이름을 더하면 모든 편의 foods.json 을 다시 만든다(pnpm --filter friendly build:meal-stories) — 내용 테스트가 값 이름이
+ * 맞는지 본다.
+ */
+export const MEAL_STORY_PER100_KEYS = ['kcal', 'carbG', 'proteinG', 'fatG', 'sugarG', 'fiberG', 'sodiumMg', 'potassiumMg', 'calciumMg'] as const;
+const PER100_KEYS = MEAL_STORY_PER100_KEYS;
 
 export interface FoodRow {
   code: string;

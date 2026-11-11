@@ -10,7 +10,8 @@
         "sugarG": 1.39,
         "fiberG": 2.7,
         "sodiumMg": 2,
-        "potassiumMg": 234
+        "potassiumMg": 234,
+        "calciumMg": 24
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R101-024020002-0000 '파스타_스파게티_말린것'",
@@ -25,7 +26,8 @@
         "sugarG": 2.37,
         "fiberG": 2.6,
         "sodiumMg": 2,
-        "potassiumMg": 250
+        "potassiumMg": 250,
+        "calciumMg": 9
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R106-186000001-0000 '토마토_생것'",
@@ -40,7 +42,8 @@
         "sugarG": 4.71,
         "fiberG": 1.6,
         "sodiumMg": 2,
-        "potassiumMg": 148
+        "potassiumMg": 148,
+        "calciumMg": 16
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R106-132000001-0000 '양파_생것'",
@@ -55,7 +58,8 @@
         "sugarG": 0.23,
         "fiberG": 3.8,
         "sodiumMg": 3,
-        "potassiumMg": 531
+        "potassiumMg": 531,
+        "calciumMg": 12
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R106-053002201-0000 '마늘_구근_생것'",
@@ -70,7 +74,8 @@
         "sugarG": 0,
         "fiberG": 0,
         "sodiumMg": 7,
-        "potassiumMg": 13
+        "potassiumMg": 13,
+        "calciumMg": null
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R114-017000000-0000 '올리브유'",
@@ -85,7 +90,8 @@
         "sugarG": 0.8,
         "fiberG": 2.6,
         "sodiumMg": 3,
-        "potassiumMg": 340
+        "potassiumMg": 340,
+        "calciumMg": 238
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R106-080007801-0000 '바질_잎_생것'",
@@ -100,7 +106,8 @@
         "sugarG": 0.07,
         "fiberG": 0,
         "sodiumMg": 1804,
-        "potassiumMg": 180
+        "potassiumMg": 180,
+        "calciumMg": 853
       },
       "basis": "100g",
       "provenance": "식약처 가공식품 표준데이터 P119-900090100-0348 '파르메산(파마산)'",
@@ -115,7 +122,8 @@
         "sugarG": 2.43,
         "fiberG": 2.2,
         "sodiumMg": 0,
-        "potassiumMg": 224
+        "potassiumMg": 224,
+        "calciumMg": 15
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R106-198050001-0000 '호박_애호박_생것'",
@@ -130,7 +138,8 @@
         "sugarG": 0,
         "fiberG": 2.4,
         "sodiumMg": 2,
-        "potassiumMg": 13
+        "potassiumMg": 13,
+        "calciumMg": 41
       },
       "basis": "100g",
       "provenance": "식약처 원재료성식품 표준데이터 R102-009010001-0000 '곤약(구약나물)_국수형_생것'",
@@ -145,7 +154,8 @@
         "sugarG": 6.8,
         "fiberG": null,
         "sodiumMg": 635,
-        "potassiumMg": null
+        "potassiumMg": null,
+        "calciumMg": null
       },
       "basis": "100g",
       "provenance": "식약처 가공식품 표준데이터 '토마토·소스 + 스파게티|파스타' 제품 12개의 중앙값",
@@ -175,7 +185,8 @@
         "sugarG": 3,
         "fiberG": 8,
         "sodiumMg": 4,
-        "potassiumMg": null
+        "potassiumMg": null,
+        "calciumMg": null
       },
       "basis": "100g",
       "provenance": "식약처 가공식품 표준데이터 '통밀 + 스파게티 (면류)' 제품 17개의 중앙값",
