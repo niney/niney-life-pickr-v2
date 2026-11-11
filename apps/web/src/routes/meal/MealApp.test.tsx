@@ -378,6 +378,18 @@ describe('MealHomePage — 식단 홈', () => {
       expect(within(line).getByRole('link', { name: '모두 보기' })).toHaveAttribute('href', '/meal/stories');
     });
 
+    it('내 판정에 맞는 이야기가 여럿이면 첫째를 보이고 나머지는 몇 편인지 알려 목록으로 잇는다', async () => {
+      // 나트륨 많음 + 칼슘 부족(기본 응답) — 판정 차례는 많음이 먼저다. 단백질 이야기는 맞지 않아 세지 않는다.
+      const calciumStory = storyItem({ slug: 'calcium-up', title: '칼슘 채우는 한 끼', topic: { nutrient: 'calcium', direction: 'increase' } });
+      server.use(http.get(STORIES_URL, () => HttpResponse.json({ items: [calciumStory, proteinStory, storyItem({})] })));
+      renderHome();
+      const line = await screen.findByRole('region', { name: '건강식단' });
+      const main = await within(line).findByRole('link', { name: /토마토 스파게티로 나트륨 줄이기/ });
+      expect(main).toHaveTextContent('건강식단 · 나트륨 많음');
+      expect(within(line).getByRole('link', { name: '맞는 이야기 1편 더' })).toHaveAttribute('href', '/meal/stories');
+      expect(within(line).queryByRole('link', { name: '모두 보기' })).not.toBeInTheDocument();
+    });
+
     it('맞는 이야기가 없으면 가장 새 이야기 — 게시 30일 안이면 새 이야기', async () => {
       server.use(http.get(STORIES_URL, () => HttpResponse.json({ items: [proteinStory] })));
       renderHome();

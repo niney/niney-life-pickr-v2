@@ -533,7 +533,8 @@ const Week = ({
 
 // 건강식단 한 줄 — 늘 있는 자리(2026-11-10: 건강식단을 별도 메뉴가 아니라 식단 안에 둔다). 내 최근 14일 판정에 맞는 이야기
 // ('나트륨 많음' → 나트륨 줄이기)를 먼저(라벨과 같은 차례 — 많음·부족·조금 부족), 없으면 가장 새 이야기. 판정이 '기록 더 필요'면
-// 잇지 않는다(빠진 끼니 탓일 수 있다). 모든 이야기는 '모두 보기'(식단 안 목록)로.
+// 잇지 않는다(빠진 끼니 탓일 수 있다). 모든 이야기는 '모두 보기'(식단 안 목록)로 — 내 판정에 맞는 이야기가 여럿이면(식이섬유도
+// 칼슘도 부족) 이 줄에는 첫째만 보이니 그 단추가 '맞는 이야기 N편 더'가 된다(2026-11-11).
 // 초안은 관리자에게만 온다 — 받은 대로 보이고 '초안'이라고 표시한다(메뉴 항목이 없어 초안도 여기로 들어간다).
 // 내 판정에 맞는 이야기를 이을 때는 그 영양소가 직전 2주보다 얼마나 달라졌는지도 한 줄(2026-11-11 — 이야기의 레시피로 기록한
 // 뒤의 변화가 들어오는 문에서 보인다. 10% 넘게 달라졌고 두 기간의 기록량(하루 평균 열량)이 비슷할 때만 — 덜 적은 것을 좋아진
@@ -550,14 +551,16 @@ const HomeStory = ({ analysis, today }: { analysis: MealNutritionAnalysisType | 
           .map((n) => ({ n, d: mealNutrientDisplayStatus(n) }))
           .sort((a, b) => FLAG_ORDER[a.d] - FLAG_ORDER[b.d])
       : [];
-  let matched: { story: (typeof items)[number]; label: string; nutrient: (typeof rows)[number]['n'] } | null = null;
+  // 내 판정에 맞는 이야기들 — 판정 차례대로, 같은 이야기는 한 번. 첫째를 이 줄에 보이고 나머지는 몇 편인지만 알린다.
+  const matches: { story: (typeof items)[number]; label: string; nutrient: (typeof rows)[number]['n'] }[] = [];
   for (const { n, d } of rows) {
     const story = findStoryFor(items, n.key, d);
-    if (story) {
-      matched = { story, label: `${n.label} ${MEAL_NUTRIENT_STATUS_LABEL[d]}`, nutrient: n };
-      break;
+    if (story && !matches.some((m) => m.story.slug === story.slug)) {
+      matches.push({ story, label: `${n.label} ${MEAL_NUTRIENT_STATUS_LABEL[d]}`, nutrient: n });
     }
   }
+  const matched = matches[0] ?? null;
+  const more = Math.max(0, matches.length - 1);
   const range = periodAndPrevious(STORY_DAYS);
   const previous = useMealStatsNutrients(range.previous.from, range.previous.to, matched !== null);
   if (!newest) return null;
@@ -588,8 +591,9 @@ const HomeStory = ({ analysis, today }: { analysis: MealNutritionAnalysisType | 
         </span>
         {change ? <span className="meal-story-card-change">{nutrientChangeText(change, '직전 2주')}</span> : null}
       </Link>
+      {/* 맞는 이야기가 더 있으면 그 수를 — 목록은 내 판정에 맞는 이야기를 앞에 둔다. */}
       <Link to={MEAL_STORY_PATH.list} className="meal-story-card-all">
-        모두 보기
+        {more > 0 ? `맞는 이야기 ${more}편 더` : '모두 보기'}
       </Link>
     </section>
   );
