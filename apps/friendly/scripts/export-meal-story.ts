@@ -6,6 +6,7 @@
 //          원고가 정한다 — 큰 숫자 장면의 '내 기록' 숫자({ my: 'sodium' } → 나트륨 mg, { my: 'fiber' } → 식이섬유 g).
 //   --standard 는 그 사람의 기준 — 나이·성별에 따라 원고의 기준 숫자와 다를 때(나트륨 65~74세 2,100, 식이섬유 여자 20)의
 //          화면을 본다. 없으면 그 장면의 첫 기준 숫자.
+//   --change 는 내 값 아래 붙는 변화 한 줄을 그대로(웹이 통계로 만드는 글의 예시 — "--change=직전 2주보다 20% 늘었어요").
 /* eslint-disable no-console */
 import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -40,7 +41,7 @@ const reduce = loaded.story.topic?.direction !== 'increase';
 const statusLabel = reduce ? (value > standard ? '많음' : '기준 안') : percent >= 100 ? '충분' : percent >= 75 ? '조금 부족' : '부족';
 const mine =
   mineArg && myKey && standard > 0
-    ? { [myKey]: { value, unit, percent, standard, statusLabel, over: reduce && value > standard } }
+    ? { [myKey]: { value, unit, percent, standard, statusLabel, over: reduce && value > standard, change: arg('change') } }
     : null;
 writeFileSync(
   out,

@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { useIsDesktopLg } from '~/lib/useMediaQuery';
 import { MealNutrientLine, MealNutrientMeter } from './MealNutrientLine';
+import { NUTRIENT_CHANGE_MIN, comparableNutrientChange, comparableRecording, nutrientChange, nutrientChangeText } from './mealNutrientChange';
 import { nutrientVsRefText } from './mealNutrientTone';
 import { MEAL_PATH } from './mealPaths';
 import { NutrientStoryLink } from './MealStoryLink';
@@ -81,30 +82,20 @@ const displayOf = (r: MealStatsNutrientRowType, judged: boolean): MealNutrientDi
   judged && r.status ? mealNutrientDisplayStatus({ status: r.status, recordGap: r.recordGap }) : null;
 const rankOf = (d: MealNutrientDisplayKey | null): number => (d ? MEAL_NUTRIENT_STATUS_ORDER[d] : 99);
 
-// 직전 같은 길이 기간과 견주기(2026-11-09) — 두 기간 모두 판정이 나온(평균에 든 날 4일 이상) 때만, 하루 평균이 이만큼 넘게
-// 달라진 줄에만 한 줄을 붙인다(21줄에 '비슷해요'를 다 달면 시끄럽다). 하루하루 들쭉날쭉한 기록에 음식 표준값 어림까지 얹혀 있어
-// 10% 안쪽은 뜻이 없다(실데이터 5% 문턱에서는 단백질 5%·지방 8% 같은 잡음까지 '줄었어요'로 보였다).
-const CHANGE_MIN = 0.1;
+const kcalOf = (d: MealStatsNutrientsResultType): number | null => d.rows.find((r) => r.key === 'kcal')?.intakePerDay ?? null;
 
-/** 줄 아래 변화 한 줄 — '직전 1달보다 하루 800mg(31%) 늘었어요 · 직전엔 충분'. 견줄 수 없거나 차이가 작으면 null. */
+/**
+ * 줄 아래 변화 한 줄 — '직전 1달보다 하루 800mg(31%) 늘었어요 · 직전엔 충분'. 견줄 수 없거나 차이가 작으면 null.
+ * 열량 줄은 달라진 대로 말하고, 영양소 줄은 두 기간의 기록량(하루 열량)이 비슷할 때만 말한다(mealNutrientChange).
+ */
 const changeText = (
   r: MealStatsNutrientRowType,
   p: MealStatsNutrientRowType | undefined,
   prevLabel: string,
+  energy: { now: number | null; before: number | null },
 ): string | null => {
-  if (!p || r.intakePerDay === null || p.intakePerDay === null || p.intakePerDay <= 0) return null;
-  // 정보가 모자란 쪽이 있으면 양이 실제보다 적게 잡혀 차이가 정보 차이일 수 있다.
-  if (r.coverage < MEAL_NUTRIENT_MIN_COVERAGE || p.coverage < MEAL_NUTRIENT_MIN_COVERAGE) return null;
-  const diff = r.intakePerDay - p.intakePerDay;
-  const rel = diff / p.intakePerDay;
-  if (Math.abs(rel) < CHANGE_MIN) return null;
-  const now = displayOf(r, true);
-  const before = displayOf(p, true);
-  const status = before && now !== before ? ` · 직전엔 ${MEAL_NUTRIENT_STATUS_LABEL[before]}` : '';
-  return (
-    `${prevLabel}보다 하루 ${formatNutrientAmount(Math.abs(diff))}${r.unit}(${Math.round(Math.abs(rel) * 100)}%) ` +
-    `${diff > 0 ? '늘었어요' : '줄었어요'}${status}`
-  );
+  const change = r.key === 'kcal' ? nutrientChange(r, p) : comparableNutrientChange(r, p, energy);
+  return change ? nutrientChangeText(change, prevLabel) : null;
 };
 
 interface RowView {
@@ -210,12 +201,19 @@ export const MealStatsNutrients = ({
   const prevLabel = `직전 ${rangeLabel}`;
   const prevData = judged && previous && previous.days === data.days ? previous : null;
   const prevByKey = prevData?.status === 'ok' ? new Map(prevData.rows.map((p) => [p.key, p])) : null;
+  // 두 기간의 기록량 — 하루 열량이 많이 다르면 영양소마다의 차이는 '적은 양'의 차이라 열량 줄만 견주고 그 까닭을 알린다
+  // (2026-11-11 — 전에는 모든 영양소가 함께 '줄었어요'로 나왔다).
+  const energy = { now: kcalOf(data), before: prevData ? kcalOf(prevData) : null };
+  const sameVolume = comparableRecording(energy.now, energy.before);
+  const kcalText = (v: number | null): string => (v === null ? '모름' : `${Math.round(v).toLocaleString('ko-KR')}kcal`);
   const compareNote =
     prevData === null
       ? null
-      : prevByKey
-        ? `${prevLabel}(평균에 든 날 ${prevData.analyzedDays}일)보다 하루 평균이 ${Math.round(CHANGE_MIN * 100)}% 넘게 달라진 영양소는 줄 아래에 적었어요.`
-        : `${prevLabel}${topicParticle(rangeLabel)} 평균에 든 날이 ${prevData.analyzedDays > 0 ? `${prevData.analyzedDays}일뿐이라` : '없어'} 견주지 않았어요.`;
+      : !prevByKey
+        ? `${prevLabel}${topicParticle(rangeLabel)} 평균에 든 날이 ${prevData.analyzedDays > 0 ? `${prevData.analyzedDays}일뿐이라` : '없어'} 견주지 않았어요.`
+        : sameVolume
+          ? `${prevLabel}(평균에 든 날 ${prevData.analyzedDays}일)보다 하루 평균이 ${Math.round(NUTRIENT_CHANGE_MIN * 100)}% 넘게 달라진 영양소는 줄 아래에 적었어요.`
+          : `${prevLabel}${topicParticle(rangeLabel)} 기록한 양이 달라(하루 열량 ${kcalText(energy.before)} → ${kcalText(energy.now)}) 열량 말고는 견주지 않았어요.`;
   const core = data.rows.filter((r) => r.group === 'core');
   // 아래 묶음 — 영양 탭처럼 판정 순(같은 판정은 원래 차례 — sort 는 안정 정렬).
   const micro = data.rows
@@ -253,7 +251,7 @@ export const MealStatsNutrients = ({
         <StatsRow
           row={r}
           view={viewOf(r, judged)}
-          change={prevByKey ? changeText(r, prevByKey.get(r.key), prevLabel) : null}
+          change={prevByKey ? changeText(r, prevByKey.get(r.key), prevLabel, energy) : null}
           active={active}
           wide={wide}
           detailId={detailId}

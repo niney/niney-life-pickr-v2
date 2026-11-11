@@ -220,6 +220,8 @@
   .mss-figure-eq { margin-top: 0.2rem; font-size: 0.95rem; font-weight: 800; }
   .mss-my { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
   .mss-my-pct { font-size: 0.85rem; font-weight: 700; color: var(--muted-foreground); }
+  /* 직전 2주보다 달라진 정도 — 한 줄을 다 쓴다 */
+  .mss-my-change { flex: 0 0 100%; font-size: 0.85rem; font-weight: 700; }
   .mss-my-hint { font-size: 0.92rem; line-height: 1.5; color: var(--muted-foreground); }
   .mss-my-hint a { font-weight: 800; color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; }
   .mss-skeleton { display: block; width: 9rem; height: 3rem; background: var(--muted); }

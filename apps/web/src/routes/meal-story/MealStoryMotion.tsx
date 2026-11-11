@@ -120,7 +120,7 @@ const EndCard = ({ story, onLeave }: { story: MealStoryType; onLeave: () => void
 const MealStoryMotion = ({ story, index, inShell = false }: { story: MealStoryType; index: number; inShell?: boolean }) => {
   const { leave, label: backLabel } = useLeaveStory();
   const { update } = useStoryParams();
-  const { token, stats } = useStoryMyStats();
+  const { token, stats, previous } = useStoryMyStats();
   const dark = useThemeStore((s) => s.mode) === 'dark';
   const timeline = useMemo(() => buildTimeline(story), [story]);
   const total = timeline.chapters.length;
@@ -129,10 +129,12 @@ const MealStoryMotion = ({ story, index, inShell = false }: { story: MealStoryTy
   const press = useRef<{ x: number; y: number; timer: number; held: boolean; wasPlaying: boolean } | null>(null);
 
   // 영상 입력 — 바뀔 때만 새 객체(재생기가 장면을 다시 그리는 기준). 로그인했는데 아직 받는 중이면 mine null(장면이 말을 아낀다).
+  // 직전 2주(변화 한 줄)는 늦게 와도 된다 — 오면 그때 쪽지가 하나 더 붙는다.
   const statsData = stats.data;
+  const previousData = previous.data;
   const inputProps = useMemo<StoryVideoProps>(
-    () => ({ story, mine: token && statsData ? toMotionMine(statsData) : null, loggedIn: !!token, dark }),
-    [story, token, statsData, dark],
+    () => ({ story, mine: token && statsData ? toMotionMine(statsData, previousData) : null, loggedIn: !!token, dark }),
+    [story, token, statsData, previousData, dark],
   );
   const chapter = usePlayerValue(player, FRAME_EVENTS, (p) => chapterAt(timeline, p.getCurrentFrame()), chapterAt(timeline, initialFrame));
   const paper = paperPalette(story.topic?.nutrient ?? null, dark).bg;

@@ -18,6 +18,7 @@ const ENTRIES_URL = '/api/v1/meals';
 const CALENDAR_URL = '/api/v1/meals/calendar';
 const STATS_URL = '/api/v1/meals/stats';
 const NUTRITION_URL = '/api/v1/meals/nutrition';
+const STATS_NUTRIENTS_URL = '/api/v1/meals/stats/nutrients';
 const CONTEXT_URL = '/api/v1/meals/recommendations/context';
 const FREQUENT_URL = '/api/v1/meals/items/frequent';
 const SKIPS_URL = '/api/v1/meals/skips';
@@ -347,6 +348,18 @@ describe('MealHomePage — 식단 홈', () => {
       ...over,
     });
     const proteinStory = storyItem({ slug: 'protein-up', title: '단백질 채우는 한 끼', topic: { nutrient: 'protein', direction: 'increase' }, publishedAt: today });
+    // 내 판정에 맞는 이야기를 이을 때만 직전 2주를 묻는다 — 기본은 기록이 모자라 견줄 수 없는 응답.
+    const previous = (rows: unknown[], status = 'ok') => ({ status, rows });
+    const asked: string[] = [];
+    beforeEach(() => {
+      asked.length = 0;
+      server.use(
+        http.get(STATS_NUTRIENTS_URL, ({ request }) => {
+          asked.push(new URL(request.url).search);
+          return HttpResponse.json(previous([], 'insufficient'));
+        }),
+      );
+    });
 
     it('이야기가 없으면 자리도 없다', async () => {
       renderHome();
@@ -373,6 +386,42 @@ describe('MealHomePage — 식단 홈', () => {
       expect(main).toHaveAttribute('href', '/meal/stories/protein-up');
       expect(main).toHaveTextContent('건강식단 새 이야기');
       expect(within(line).queryByText(/초안/)).not.toBeInTheDocument();
+      // 이을 판정이 없으면 직전 2주도 묻지 않는다(홈이 늘 부르는 요청을 늘리지 않는다).
+      expect(asked).toEqual([]);
+    });
+
+    it('내 판정에 맞는 이야기에는 그 영양소가 직전 2주보다 얼마나 달라졌는지도 — 10% 넘게 달라졌고 직전 기간도 판정이 나왔고 기록량이 비슷할 때만', async () => {
+      const prevSodium = { key: 'sodium', unit: 'mg', intakePerDay: 2800, coverage: 1, status: 'high', recordGap: false };
+      const prevKcal = (intakePerDay: number) => ({ key: 'kcal', unit: 'kcal', intakePerDay, coverage: 1, status: null, recordGap: false });
+      server.use(
+        http.get(STORIES_URL, () => HttpResponse.json({ items: [storyItem({})] })),
+        // 지금 3,343mg(많음)·하루 1,446kcal — 직전 2주는 2,800mg·1,500kcal(기록량이 비슷하다).
+        http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json(previous([prevKcal(1500), prevSodium]))),
+      );
+      const first = renderHome();
+      const line = await screen.findByRole('region', { name: '건강식단' });
+      expect(await within(line).findByText('직전 2주보다 하루 543mg(19%) 늘었어요')).toBeInTheDocument();
+      first.unmount();
+      // 직전 2주에 기록이 모자라면 견주지 않는다.
+      server.use(http.get(STATS_NUTRIENTS_URL, () => HttpResponse.json(previous([prevKcal(1500), prevSodium], 'insufficient'))));
+      const second = renderHome();
+      const again = await screen.findByRole('region', { name: '건강식단' });
+      await within(again).findByRole('link', { name: /토마토 스파게티로 나트륨 줄이기/ });
+      expect(within(again).queryByText(/직전 2주보다/)).not.toBeInTheDocument();
+      second.unmount();
+      // 기록량이 다르면(직전 2주의 하루 열량이 훨씬 적다 — 덜 적었다) 견주지 않는다.
+      const got = vi.fn();
+      server.use(
+        http.get(STATS_NUTRIENTS_URL, () => {
+          got();
+          return HttpResponse.json(previous([prevKcal(1000), prevSodium]));
+        }),
+      );
+      renderHome();
+      const third = await screen.findByRole('region', { name: '건강식단' });
+      await within(third).findByRole('link', { name: /토마토 스파게티로 나트륨 줄이기/ });
+      await vi.waitFor(() => expect(got).toHaveBeenCalled());
+      expect(within(third).queryByText(/직전 2주보다/)).not.toBeInTheDocument();
     });
 
     it('초안뿐이어도(관리자에게만 온다) 들어가는 길이 있다 — 받은 대로 보이고 초안이라고 표시한다', async () => {

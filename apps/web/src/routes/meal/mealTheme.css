@@ -326,9 +326,11 @@ html.dark:has(.meal-app) {
   .meal-story-card-kicker { flex: 0 0 100%; font-size: 0.8rem; font-weight: 800; color: var(--muted-foreground); }
   /* '건강식단' — 메뉴 항목이 없어 이 줄이 들어가는 문이다. 흐린 머리말 속에서 이것만 또렷하게. */
   .meal-story-card-kicker b { font-weight: 900; color: var(--foreground); }
-  .meal-story-card-title { flex: 1 1 14rem; min-width: 0; font-weight: 800; letter-spacing: -0.01em; }
+  .meal-story-card-title { flex: 1 1 14rem; min-width: 0; font-weight: 800; letter-spacing: -0.01em; word-break: keep-all; }
   /* 링크 전체가 눌리므로 화살표는 넓은 화면에서만 */
   .meal-story-card-go { display: none; font-size: 0.875rem; font-weight: 800; }
+  /* 직전 2주보다 달라진 정도 — 제목 아래 한 줄 */
+  .meal-story-card-change { flex: 0 0 100%; font-size: 0.8rem; font-weight: 700; color: var(--muted-foreground); }
   @media (min-width: 40rem) {
     .meal-story-card-kicker { flex: 0 0 auto; }
     .meal-story-card-go { display: inline; }

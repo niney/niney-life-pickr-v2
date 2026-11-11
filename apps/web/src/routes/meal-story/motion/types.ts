@@ -12,6 +12,8 @@ export type MotionMineValue = {
   statusLabel: string | null;
   /** 기준을 넘었다(많음) — 넘치는 연출·빨간 도장. */
   over: boolean;
+  /** 직전 같은 길이 기간보다 달라진 정도 한 줄('직전 2주보다 20% 늘었어요') — 견줄 수 없거나 차이가 작으면 null. 글자는 웹이 정한다. */
+  change: string | null;
 };
 
 /** 통계 영양소 키(sodium …)별 내 값. 로그인했지만 값이 없으면 키가 없다. */

@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -96,6 +96,11 @@ vi.mock('@remotion/player', async () => {
 // 재생기), 로그인하면 식단 셸 안에 뜬다(주소는 App 과 같은 짜임 — /meal/* 는 모두 식단 들머리 MealEntry 가 가른다).
 // 숫자는 서버가 계산해 주고(그대로 그린다),
 // 내 평균은 로그인했을 때만 통계 영양소에서, [이 레시피로 기록]은 레시피 음식을 받아 새 기록 draft 를 채운다.
+
+// 이 파일의 화면은 조각(lazy)을 여러 겹 거쳐 뜬다(식단 들머리 → 건강식단 앱·식단 셸 → 재생기). 파일의 첫 테스트는 그 조각들을
+// 처음 불러와, 컴퓨터가 바쁠 때(다른 검사·렌더가 함께 돌 때) 기본 1초 안에 첫 화면을 못 찾고 실패했다(2026-11-11 두 번).
+// 기다리는 한도만 넉넉히 — 통과하는 테스트의 속도는 그대로다.
+configure({ asyncUtilTimeout: 5000 });
 
 const LIST_URL = '/api/v1/meal-stories';
 const STATS_NUTRIENTS_URL = '/api/v1/meals/stats/nutrients';
@@ -263,7 +268,56 @@ describe('건강식단 스토리', () => {
     expect(screen.getByText('많음')).toBeInTheDocument();
     // 내 값의 소금 환산은 서버가 준 식(÷ 400)으로.
     expect(screen.getByText('소금 약 7.8g')).toBeInTheDocument();
-    expect(asked).toHaveLength(1);
+    // 최근 2주와 그 직전 2주(변화 한 줄) — 두 번. 값이 같으면 변화 줄은 없다.
+    await waitFor(() => expect(asked).toHaveLength(2));
+    expect(screen.queryByText(/직전 2주보다/)).not.toBeInTheDocument();
+  });
+
+  it('직전 2주보다 달라졌으면 내 값 아래에 한 줄 — 10% 넘게 달라졌고 두 기간 모두 판정이 나왔을 때만', async () => {
+    useAuthStore.setState({ token: 't', user, isGuest: false });
+    const d = new Date();
+    const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const row = (intakePerDay: number, percent: number) => ({
+      key: 'sodium',
+      unit: 'mg',
+      intakePerDay,
+      coverage: 1,
+      percent,
+      status: percent > 100 ? 'high' : 'ok',
+      recordGap: false,
+      reference: { kind: 'cdrr', amount: 2300, ear: null },
+    });
+    const kcal = (intakePerDay: number) => ({ key: 'kcal', unit: 'kcal', intakePerDay, coverage: 1, percent: null, status: null, recordGap: false });
+    // 오늘로 끝나는 조회가 최근 2주(하루 1,900kcal), 그 앞에서 끝나는 조회가 직전 2주.
+    const answer = (previous: { status: string; rows: object[] }) =>
+      server.use(
+        http.get(STATS_NUTRIENTS_URL, ({ request }) =>
+          HttpResponse.json(new URL(request.url).searchParams.get('to') === todayKey ? { status: 'ok', rows: [kcal(1900), row(2200, 96)] } : previous),
+        ),
+      );
+    answer({ status: 'ok', rows: [kcal(2000), row(3000, 130)] });
+    const first = renderAt(`/meal/stories/${story.slug}?s=2`);
+    // 판정이 바뀌었으면 직전 판정도 — 이야기의 글자로(지킨 나트륨 기준은 '기준 안').
+    expect(await screen.findByText('직전 2주보다 하루 800mg(27%) 줄었어요 · 직전엔 많음')).toBeInTheDocument();
+    expect(screen.getByText('기준 안')).toBeInTheDocument();
+    first.unmount();
+    // 직전 2주에 기록이 모자라 판정이 안 나왔으면 견주지 않는다.
+    answer({ status: 'insufficient', rows: [kcal(2000), row(3000, 130)] });
+    const second = renderAt(`/meal/stories/${story.slug}?s=2`);
+    expect(await screen.findByText('2,200mg')).toBeInTheDocument();
+    expect(screen.queryByText(/직전 2주보다/)).not.toBeInTheDocument();
+    second.unmount();
+    // 10% 안쪽이면 말하지 않는다.
+    answer({ status: 'ok', rows: [kcal(2000), row(2350, 102)] });
+    const third = renderAt(`/meal/stories/${story.slug}?s=2`);
+    expect(await screen.findByText('2,200mg')).toBeInTheDocument();
+    expect(screen.queryByText(/직전 2주보다/)).not.toBeInTheDocument();
+    third.unmount();
+    // 기록량이 다르면(직전 2주의 하루 열량이 훨씬 많다) 말하지 않는다 — 덜 적은 것을 '줄었어요'로 읽지 않게.
+    answer({ status: 'ok', rows: [kcal(2800), row(3000, 130)] });
+    renderAt(`/meal/stories/${story.slug}?s=2`);
+    expect(await screen.findByText('2,200mg')).toBeInTheDocument();
+    expect(screen.queryByText(/직전 2주보다/)).not.toBeInTheDocument();
   });
 
   it('내 기준이 장면의 기준 숫자와 다르면(나이·성별) 어느 기준인지 밝힌다 — 같으면 그냥 기준의 N%', async () => {
@@ -879,8 +933,23 @@ describe('영상의 내 값(toMotionMine)', () => {
       toMotionMine(result([{ key: 'sodium', unit: 'mg', intakePerDay: 900, percent: 39, status: 'ok', recordGap: false }], 'insufficient')),
     ).toEqual({});
     expect(toMotionMine(result([{ key: 'fiber', unit: 'g', intakePerDay: 9, percent: 36, status: 'low', recordGap: true }]))).toEqual({
-      fiber: { value: 9, unit: 'g', percent: 36, standard: null, statusLabel: '기록 더 필요', over: false },
+      fiber: { value: 9, unit: 'g', percent: 36, standard: null, statusLabel: '기록 더 필요', over: false, change: null },
     });
+  });
+
+  it('직전 2주를 받았으면 변화 한 줄(짧게)을 싣는다 — 10% 넘게 달라졌고 직전도 판정이 나왔을 때만', () => {
+    const row = (intakePerDay: number, recordGap = false) => ({ key: 'fiber', unit: 'g', intakePerDay, coverage: 1, percent: 60, status: 'low', recordGap });
+    const kcal = (intakePerDay: number) => ({ key: 'kcal', unit: 'kcal', intakePerDay, coverage: 1, percent: null, status: null, recordGap: false });
+    expect(toMotionMine(result([kcal(1900), row(12.7)]), result([kcal(2000), row(10.6)])).fiber?.change).toBe('직전 2주보다 20% 늘었어요');
+    expect(toMotionMine(result([kcal(1900), row(10.9)]), result([kcal(2000), row(10.6)])).fiber?.change).toBeNull();
+    expect(toMotionMine(result([kcal(1900), row(12.7)]), result([kcal(2000), row(10.6)], 'insufficient')).fiber?.change).toBeNull();
+    // 기록량이 다르거나(하루 열량 15% 넘게), 열량을 모르거나, 어느 쪽이 '기록 더 필요'면 말하지 않는다.
+    expect(toMotionMine(result([kcal(1900), row(12.7)]), result([kcal(1500), row(10.6)])).fiber?.change).toBeNull();
+    expect(toMotionMine(result([row(12.7)]), result([row(10.6)])).fiber?.change).toBeNull();
+    expect(toMotionMine(result([kcal(1900), row(12.7)]), result([kcal(2000), row(10.6, true)])).fiber?.change).toBeNull();
+    // 직전 기간에 그 영양소 줄이 없거나 아직 못 받았으면(늦게 온다) 변화 없이 값만.
+    expect(toMotionMine(result([kcal(1900), row(12.7)]), result([kcal(2000)])).fiber?.change).toBeNull();
+    expect(toMotionMine(result([kcal(1900), row(12.7)]), undefined).fiber).toMatchObject({ value: 12.7, change: null });
   });
 
   it('나트륨이 기준 안이면 충분이 아니라 기준 안 — 이보다 적게인 기준(cdrr)만, 다른 영양소의 충분은 그대로', () => {

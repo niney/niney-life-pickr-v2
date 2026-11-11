@@ -4,7 +4,7 @@ import type { MealStatsNutrientKeyType, MealStoryEquivalentType, MealStoryFigure
 import { cn } from '~/lib/utils';
 import { MealNutrientChip } from '../meal/MealNutrientLine';
 import { ownStandardText } from './motion/layout';
-import { storyStatus, useStoryMyStats } from './mealStoryMine';
+import { storyChange, storyStatus, useStoryMyStats } from './mealStoryMine';
 
 // 스토리 장면의 숫자 — 서버가 계산한 값(figure)을 굴러 올라가는 숫자로 그리고, 내 기록 값(figure.my)은 통계 영양소로 채운다.
 
@@ -89,7 +89,7 @@ const MyFigure = ({
   /** 같은 장면의 기준 숫자들 — 내 값 옆의 '기준 대비 %' 가 어느 기준인지 가른다. */
   standards: readonly number[];
 }) => {
-  const { token, stats } = useStoryMyStats();
+  const { token, stats, previous } = useStoryMyStats();
   const location = useLocation();
   if (!token) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
@@ -106,6 +106,8 @@ const MyFigure = ({
   }
   const shown = storyStatus(row);
   const own = row.reference?.amount ?? null;
+  // 직전 2주보다 달라진 정도 — 10% 넘게 달라졌고 두 기간의 기록량이 비슷할 때만. [이 레시피로 기록]한 뒤 다시 오면 여기서 보인다.
+  const change = storyChange(row, stats.data, previous.data);
   return (
     <span className="mss-my">
       <RollingNumber value={row.intakePerDay} unit={row.unit} size={size} />
@@ -122,6 +124,7 @@ const MyFigure = ({
           <EquivalentText label={equivalent.label} value={row.intakePerDay / equivalent.per} unit={equivalent.unit} />
         </span>
       ) : null}
+      {change ? <span className="mss-my-change">{change.full}</span> : null}
     </span>
   );
 };

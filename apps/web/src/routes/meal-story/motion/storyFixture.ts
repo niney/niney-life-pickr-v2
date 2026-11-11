@@ -143,15 +143,21 @@ export const variantStory: MealStoryType = {
 
 /** 로그인한 사람의 값(예시) — 나트륨은 기준을 넘고, 식이섬유는 기록이 모자란 경우. */
 export const variantMine: MotionMine = {
-  sodium: { value: 3120, unit: 'mg', percent: 136, standard: 2300, statusLabel: '많음', over: true },
+  sodium: { value: 3120, unit: 'mg', percent: 136, standard: 2300, statusLabel: '많음', over: true, change: null },
 };
 
 /** 식이섬유 값이 있는 사람 — 내 기준(여자 20g)이 원고의 첫 기준 숫자와 다르고, 판정은 '조금 부족'. 일반 숫자 장면의 쪽지를 본다. */
 export const variantMineFiber: MotionMine = {
-  fiber: { value: 16.4, unit: 'g', percent: 82, standard: 20, statusLabel: '조금 부족', over: false },
+  fiber: { value: 16.4, unit: 'g', percent: 82, standard: 20, statusLabel: '조금 부족', over: false, change: null },
 };
 
 /** 내 기준이 원고의 성인 기준과 다른 사람(65~74세 2,100mg) — 2,200mg 은 성인 기준 안이지만 내 기준으로는 넘는다. */
 export const variantMineSenior: MotionMine = {
-  sodium: { value: 2200, unit: 'mg', percent: 105, standard: 2100, statusLabel: '많음', over: true },
+  sodium: { value: 2200, unit: 'mg', percent: 105, standard: 2100, statusLabel: '많음', over: true, change: null },
+};
+
+/** 직전 2주보다 달라진 사람 — 내 값 칸에 변화 쪽지가 하나 더 붙는다(나트륨은 줄고 식이섬유는 늘었다). */
+export const variantMineChanged: MotionMine = {
+  sodium: { value: 2760, unit: 'mg', percent: 120, standard: 2300, statusLabel: '많음', over: true, change: '직전 2주보다 12% 줄었어요' },
+  fiber: { value: 16.4, unit: 'g', percent: 82, standard: 20, statusLabel: '조금 부족', over: false, change: '직전 2주보다 20% 늘었어요' },
 };

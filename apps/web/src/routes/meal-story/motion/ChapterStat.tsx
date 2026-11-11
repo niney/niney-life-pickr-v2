@@ -20,6 +20,8 @@ type Col = { x: number; y: number; s: number };
 const T = SPOON;
 const SHAKER_DX = 120;
 const SHAKER_DY = -450;
+/** 일반 숫자 장면 — 숫자 아래 쪽지 줄 사이(쪽지 높이 68 + 틈). */
+const DETAIL_PITCH = 74;
 
 /** 숟가락 아래 숫자 쪽지(크림) + 이름 띠(남색) + 소금 쪽지(노랑) — 종이는 SVG, 숫자는 앱 글꼴(HTML). */
 const CounterPaper = ({ col, label, chips, enter, chip, ctx, v }: { col: Col; label: string; chips: string[]; enter: number; chip: number; ctx: ChapterContext; v: number }) => {
@@ -90,8 +92,15 @@ const SaltSpoonStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }
         ...(mineValue.percent !== null
           ? [ownStandardText(mineValue.percent, mineValue.standard, mineValue.standard !== null ? amountText(mineValue.standard, mineValue.unit) : null, [refMg])]
           : []),
+        // 직전 2주보다 달라진 정도 — 웹이 통계 탭과 같은 규칙으로 만든 한 줄(10% 넘게 달라졌을 때만 온다).
+        ...(mineValue.change ? [mineValue.change] : []),
       ]
     : [];
+  // 기준 숫자의 덧말(나이별 기준) — 내 값 칸이 있으면 기준 쪽 칸의 쪽지 아래에 줄을 나눠 붙인다(내 쪽 칸은 쪽지가 셋까지
+  // 내려와 무대 아래 가운데 자리를 쓴다). 기준 숫자만 있는 장면은 예전처럼 아래 가운데 한 줄.
+  const detailLines = myFig && refFig.figure.detail ? refFig.figure.detail.split(' · ') : [];
+  const detailSize = Math.min(TYPE.sub, ...detailLines.map((l) => fitSize(l, TYPE.sub, 400, TYPE.foot)));
+  const detailTop = colA.y + (440 + 256 + refChips.length * 80) * colA.s + 4;
   const pB = prog(f, T.fillB[0], T.fillB[1]);
   let overFrom = Infinity;
   if (mineValue && ratio > 1) {
@@ -196,7 +205,11 @@ const SaltSpoonStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }
               </text>
             </g>
           ) : null}
-          {refFig.figure.detail ? (
+          {detailLines.length ? (
+            <g opacity={detail} transform={`translate(0 ${(1 - detail) * 40})`}>
+              <Card x={colA.x} y={detailTop} lines={detailLines} size={detailSize} fill={pal.paper} color={pal.ink} padX={22} padY={14} angle={0.8} seed={71 + v * 101} />
+            </g>
+          ) : refFig.figure.detail ? (
             <g opacity={detail} transform={`translate(0 ${(1 - detail) * 40})`}>
               <Note x={540} y={1774} text={refFig.figure.detail} size={fitSize(refFig.figure.detail, TYPE.sub, 900, TYPE.foot)} fill={pal.paper} color={pal.ink} weight={700} angle={0.8} seed={71 + v * 101} />
             </g>
@@ -232,21 +245,31 @@ const PlainStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }) =>
   const noteTop = STAGE_BOTTOM - cardHeight(noteLines.length, TYPE.sub);
   const n = Math.max(1, scene.figures.length);
   const standards = scene.figures.flatMap((x) => (!x.figure.my && x.figure.value !== null ? [x.figure.value] : []));
-  const detailOf = (fig: StatScene['figures'][number]): string | null => {
-    if (!fig.figure.my) return fig.figure.detail;
+  // 숫자 아래 쪽지 줄 — 기준 숫자는 서버의 덧말 한 줄, 내 값은 내 기준 대비 %·판정과 직전 2주 대비 변화(있을 때만).
+  const detailsOf = (fig: StatScene['figures'][number]): string[] => {
+    if (!fig.figure.my) return fig.figure.detail ? [fig.figure.detail] : [];
     const my = ctx.mine?.[fig.figure.my];
-    if (!my || my.percent === null) return null;
-    const ratio = ownStandardText(my.percent, my.standard, my.standard !== null ? `${formatAmount(my.standard, my.unit)}${my.unit}` : null, standards);
-    return my.statusLabel ? `${ratio} · ${my.statusLabel}` : ratio;
+    if (!my) return [];
+    const lines: string[] = [];
+    if (my.percent !== null) {
+      const ratio = ownStandardText(my.percent, my.standard, my.standard !== null ? `${formatAmount(my.standard, my.unit)}${my.unit}` : null, standards);
+      lines.push(my.statusLabel ? `${ratio} · ${my.statusLabel}` : ratio);
+    }
+    if (my.change) lines.push(my.change);
+    return lines;
   };
-  const hasDetail = scene.figures.some((x) => detailOf(x));
+  const details = scene.figures.map(detailsOf);
+  // 쪽지 줄이 차지하는 높이 — 첫 줄은 숫자 종이와의 틈까지 82, 다음 줄부터 74.
+  const detailH = (lines: number): number => (lines === 0 ? 0 : 82 + (lines - 1) * DETAIL_PITCH);
   const areaTop = 740;
   const areaBottom = noteLines.length ? noteTop - 36 : 1800;
-  const pitch = clamp((areaBottom - areaTop) / n, 240, 420);
-  // 한 덩이 = 이름표(70) + 숫자 종이 + 값 덧말(있으면 82) + 덩이 사이 틈.
-  const paperH = clamp(pitch - 76 - (hasDetail ? 82 : 0) - 34, 120, 190);
+  // 한 덩이 = 이름표(76) + 숫자 종이 + 쪽지 줄(덩이마다 다르다) + 덩이 사이 틈(34). 숫자 종이는 남는 높이를 똑같이 나눈다.
+  const fixed = details.reduce((sum, d) => sum + 110 + detailH(d.length), 0);
+  const paperH = clamp((areaBottom - areaTop - fixed) / n, 120, 190);
   const numSize = Math.round(paperH * 0.68);
-  const first = areaTop + Math.max(0, (areaBottom - areaTop - n * pitch) / 2) + 70;
+  const blocks = details.map((d) => 110 + paperH + detailH(d.length));
+  const first = areaTop + Math.max(0, (areaBottom - areaTop - blocks.reduce((sum, b) => sum + b, 0)) / 2) + 70;
+  const tops = blocks.map((_, i) => first + blocks.slice(0, i).reduce((sum, b) => sum + b, 0));
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <PaperHeading ctx={ctx} title={scene.title} />
@@ -255,19 +278,20 @@ const PlainStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }) =>
         const start = timing.start(i);
         const p = pop(f, start, fps, { damping: 13, stiffness: 120 });
         const count = prog(f, start + 6, start + 60);
-        const top = first + i * pitch;
+        const top = tops[i]!;
         const my = fig.figure.my ? (ctx.mine?.[fig.figure.my] ?? null) : null;
         const value = fig.figure.my ? (my?.value ?? null) : fig.figure.value;
         const unit = fig.figure.my ? (my?.unit ?? '') : fig.figure.unit;
         // 내 기록이 아닌 숫자가 비었으면(서버가 값을 못 구했다) 로그인 안내가 아니라 '값 없음'.
         const missing = !fig.figure.my ? '값 없음' : !ctx.loggedIn ? '로그인하면 내 값도 보여요' : ctx.mine === null ? null : '기록이 더 필요해요';
-        const detail = detailOf(fig);
         return (
           <AbsoluteFill key={i} style={{ transform: `translateY(${(1 - p) * 140}px) rotate(${(1 - p) * (i % 2 ? 4 : -4)}deg)`, opacity: Math.min(1, p * 1.5) }}>
             <Sheet>
               <Note x={540} y={top - 70} text={fig.label} size={40} fill={pal.navy} color="#ffffff" weight={700} angle={i % 2 ? 1.5 : -1.5} seed={81 + i + v * 101} />
               <Paper d={tornRect(170, Math.round(top), 740, Math.round(paperH), { seed: 91 + i + v * 101, amp: 2.6, step: 7 })} fill={pal.paper} lift={1} />
-              {detail ? <Note x={540} y={top + paperH + 10} text={detail} size={fitSize(detail, TYPE.sub, 900, TYPE.foot)} fill={pal.yellow} color={pal.ink} weight={700} seed={95 + i + v * 101} /> : null}
+              {details[i]!.map((line, k) => (
+                <Note key={k} x={540} y={top + paperH + 10 + k * DETAIL_PITCH} text={line} size={fitSize(line, TYPE.sub, 900, TYPE.foot)} fill={pal.yellow} color={pal.ink} weight={700} angle={k % 2 ? 0.8 : 0} seed={95 + i + k * 7 + v * 101} />
+              ))}
             </Sheet>
             {value !== null ? (
               <div style={{ position: 'absolute', left: 540, top: top + (paperH - numSize) / 2 - 4, width: 'max-content', transform: 'translateX(-50%)' }}>

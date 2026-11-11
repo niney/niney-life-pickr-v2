@@ -16,6 +16,7 @@ import {
   useMealNutrition,
   useMealRecommendationContext,
   useMealStats,
+  useMealStatsNutrients,
   useMealStories,
 } from '@repo/shared';
 import {
@@ -32,6 +33,7 @@ import {
 import { cn } from '~/lib/utils';
 import { MealLink } from './MealLink';
 import { prepareMealEntry } from './mealDraftStart';
+import { nutrientChangeText, periodAndPrevious, comparableNutrientChange } from './mealNutrientChange';
 import { MEAL_NUTRIENT_TONE } from './mealNutrientTone';
 import { useMealOpen } from './mealPanel';
 import { MEAL_PATH, MEAL_STORY_PATH } from './mealPaths';
@@ -533,26 +535,41 @@ const Week = ({
 // ('나트륨 많음' → 나트륨 줄이기)를 먼저(라벨과 같은 차례 — 많음·부족·조금 부족), 없으면 가장 새 이야기. 판정이 '기록 더 필요'면
 // 잇지 않는다(빠진 끼니 탓일 수 있다). 모든 이야기는 '모두 보기'(식단 안 목록)로.
 // 초안은 관리자에게만 온다 — 받은 대로 보이고 '초안'이라고 표시한다(메뉴 항목이 없어 초안도 여기로 들어간다).
+// 내 판정에 맞는 이야기를 이을 때는 그 영양소가 직전 2주보다 얼마나 달라졌는지도 한 줄(2026-11-11 — 이야기의 레시피로 기록한
+// 뒤의 변화가 들어오는 문에서 보인다. 10% 넘게 달라졌고 두 기간의 기록량(하루 평균 열량)이 비슷할 때만 — 덜 적은 것을 좋아진
+// 것으로 읽지 않게). 직전 2주 조회는 이을 이야기가 있을 때만 부른다.
 const NEW_STORY_DAYS = 30;
+const STORY_DAYS = 14;
 const HomeStory = ({ analysis, today }: { analysis: MealNutritionAnalysisType | null; today: string }) => {
   const stories = useMealStories();
   const items = stories.data?.items ?? [];
   const newest = items[0];
-  if (!newest) return null;
   const rows =
     analysis && analysis.status !== 'insufficient'
       ? analysis.nutrients
           .map((n) => ({ n, d: mealNutrientDisplayStatus(n) }))
           .sort((a, b) => FLAG_ORDER[a.d] - FLAG_ORDER[b.d])
       : [];
-  let matched: { story: (typeof items)[number]; label: string } | null = null;
+  let matched: { story: (typeof items)[number]; label: string; nutrient: (typeof rows)[number]['n'] } | null = null;
   for (const { n, d } of rows) {
     const story = findStoryFor(items, n.key, d);
     if (story) {
-      matched = { story, label: `${n.label} ${MEAL_NUTRIENT_STATUS_LABEL[d]}` };
+      matched = { story, label: `${n.label} ${MEAL_NUTRIENT_STATUS_LABEL[d]}`, nutrient: n };
       break;
     }
   }
+  const range = periodAndPrevious(STORY_DAYS);
+  const previous = useMealStatsNutrients(range.previous.from, range.previous.to, matched !== null);
+  if (!newest) return null;
+  // 직전 2주도 판정이 나왔을 때만 견준다(평균에 든 날이 모자라면 말하지 않는다).
+  const prevRows = matched && previous.data?.status === 'ok' ? previous.data.rows : null;
+  const change =
+    matched && prevRows
+      ? comparableNutrientChange(matched.nutrient, prevRows.find((r) => r.key === matched.nutrient.key), {
+          now: analysis?.energy.intakePerDay,
+          before: prevRows.find((r) => r.key === 'kcal')?.intakePerDay,
+        })
+      : null;
   const story = matched?.story ?? newest;
   const age = daysBetween(story.publishedAt, today);
   // 머리말 — '건강식단'(이 줄이 건강식단으로 들어가는 문이라 굵게) 뒤에 왜 이 이야기인지.
@@ -569,6 +586,7 @@ const HomeStory = ({ analysis, today }: { analysis: MealNutritionAnalysisType | 
         <span className="meal-story-card-go" aria-hidden>
           보기 →
         </span>
+        {change ? <span className="meal-story-card-change">{nutrientChangeText(change, '직전 2주')}</span> : null}
       </Link>
       <Link to={MEAL_STORY_PATH.list} className="meal-story-card-all">
         모두 보기

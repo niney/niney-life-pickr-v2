@@ -7,7 +7,7 @@ import { Icon } from './paper/Icon';
 import { PROP_FOR } from './paper/icons';
 import { paperPalette } from './paper/palette';
 import { Chapter } from './StoryVideo';
-import { variantMine, variantMineFiber, variantMineSenior, variantStory } from './storyFixture';
+import { variantMine, variantMineChanged, variantMineFiber, variantMineSenior, variantStory } from './storyFixture';
 import { dishIcon, ingredientIcons } from './storyProps';
 import { TYPE } from './theme';
 import { buildTimeline, chapterFrames, isSaltSpoonScene } from './timeline';
@@ -44,6 +44,7 @@ const VIEWERS: Viewer[] = [
   { name: '내 값 있음', mine: variantMine, loggedIn: true },
   { name: '기록 부족', mine: {}, loggedIn: true },
   { name: '다크', mine: variantMine, loggedIn: true, dark: true },
+  { name: '직전보다 달라짐', mine: variantMineChanged, loggedIn: true },
 ];
 
 const draw = (scene: MealStorySceneType, viewer: Viewer, frame: number, id = 'c0', story: MealStoryType = variantStory): string => {
@@ -166,6 +167,27 @@ describe('장면 그림 — 변형 원고', () => {
     // 기준 대비 % 를 모르면(통계가 못 줬다) 말하지 않는다.
     const noPercent: MotionMine = { fiber: { ...variantMineFiber.fiber!, percent: null } };
     expect(last({ name: '% 없음', mine: noPercent, loggedIn: true })).not.toContain('내 기준');
+  });
+
+  it('직전 2주보다 달라졌으면 내 값 칸에 변화 쪽지가 하나 더 — 웹이 준 글 그대로, 없으면 붙이지 않는다', () => {
+    const [spoon, plain] = scenes.filter((s) => s.type === 'stat') as [MealStorySceneType, MealStorySceneType];
+    const last = (scene: MealStorySceneType, viewer: Viewer) => draw(scene, viewer, chapterFrames(variantStory, scene) - 1);
+    const changed = VIEWERS[5]!;
+    // 숟가락 장면 — 소금·기준 대비 % 아래 셋째 쪽지.
+    const s = last(spoon, changed);
+    expect(s).toContain('기준의 120%');
+    expect(s).toContain('직전 2주보다 12% 줄었어요');
+    expect(last(spoon, VIEWERS[2]!)).not.toContain('직전 2주보다');
+    // 내 쪽 칸이 길어져도 겹치지 않게, 기준 숫자의 덧말(나이별 기준)은 기준 쪽 칸 아래에 줄을 나눠 붙는다.
+    expect(s).not.toContain('65~74세 2,100mg · 75세 이상 1,700mg');
+    expect(s).toContain('65~74세 2,100mg');
+    expect(s).toContain('75세 이상 1,700mg');
+    // 일반 숫자 장면 — 기준 대비 % 아래 둘째 줄.
+    const p = last(plain, changed);
+    expect(p).toContain('내 기준 20g의 82% · 조금 부족');
+    expect(p).toContain('직전 2주보다 20% 늘었어요');
+    // 읽는 글 하한은 그대로.
+    for (const markup of [s, p]) expect(textSizes(markup).filter((t) => t.size < TYPE.foot - 0.01)).toEqual([]);
   });
 
   it('주제가 바뀌면 무대 색과 마무리의 짝이 바뀐다 — 나트륨은 소금통·숟가락, 식이섬유는 밥공기·버섯', () => {
