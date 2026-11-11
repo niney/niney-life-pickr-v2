@@ -6,7 +6,13 @@
   "topic": { "nutrient": "fiber", "direction": "increase" },
   "publishedAt": "2026-11-10",
   "reviewedAt": null,
-  "sources": [],
+  "sources": [
+    {
+      "id": "rda-fct-10",
+      "label": "농촌진흥청 국가표준식품성분표 제10개정판(국가표준식품성분 DB 10.4)",
+      "url": "https://www.nics.go.kr/food/kfi/fct/fctIntro/list?menuId=PS03562"
+    }
+  ],
   "foods": [
     { "id": "white-rice", "label": "흰쌀밥", "ref": { "db": "raw", "code": "R101-013000300-0000" } },
     { "id": "brown-rice", "label": "현미밥", "ref": { "db": "raw", "code": "R101-013000500-0000" } },
@@ -18,7 +24,15 @@
     { "id": "carrot", "label": "당근", "ref": { "db": "raw", "code": "R106-041007601-0000" } },
     { "id": "egg", "label": "달걀", "ref": { "db": "raw", "code": "R210-003000001-0000" } },
     { "id": "sesame-oil", "label": "참기름", "ref": { "db": "raw", "code": "R114-020000000-0000" } },
-    { "id": "soy-sauce", "label": "간장(재래식)", "ref": { "db": "raw", "code": "R118-001030000-0000" } },
+    {
+      "id": "soy-sauce",
+      "label": "양조간장",
+      "manual": {
+        "per100": { "kcal": 103, "carbG": 16.54, "proteinG": 9.15, "fatG": 0, "sugarG": 0, "fiberG": 0.8, "sodiumMg": 4783, "potassiumMg": 480 },
+        "source": "rda-fct-10",
+        "note": "DB 10.4 '간장, 개량, 양조'(색인 3011). 식약처 원재료 표준데이터에는 재래식 간장뿐이다"
+      }
+    },
     { "id": "apple", "label": "사과", "ref": { "db": "raw", "code": "R108-050000001-0000" } },
     { "id": "sweet-potato", "label": "찐 고구마", "ref": { "db": "raw", "code": "R102-006000049-0000" } },
     { "id": "almond", "label": "아몬드(볶은 것)", "ref": { "db": "raw", "code": "R105-020000058-0000" } }
@@ -37,7 +51,7 @@
       { "food": "carrot", "grams": 40, "label": "당근 1/4개", "icon": "carrot" },
       { "food": "egg", "grams": 50, "label": "달걀 1개", "icon": "egg" },
       { "food": "sesame-oil", "grams": 5, "label": "참기름 1작은술", "icon": "sesame" },
-      { "food": "soy-sauce", "grams": 5, "label": "간장 1작은술", "icon": "soy" }
+      { "food": "soy-sauce", "grams": 5, "label": "양조간장 1작은술", "icon": "soy" }
     ],
     "steps": [
       {

@@ -151,21 +151,6 @@
       "provenance": "식약처 원재료성식품 표준데이터 R114-020000000-0000 '참기름'",
       "source": "mfds-raw"
     },
-    "soy-sauce": {
-      "per100": {
-        "kcal": 34,
-        "carbG": 2.47,
-        "proteinG": 5.92,
-        "fatG": 0.03,
-        "sugarG": 0.29,
-        "fiberG": 0.4,
-        "sodiumMg": 7999,
-        "potassiumMg": 657
-      },
-      "basis": "100g",
-      "provenance": "식약처 원재료성식품 표준데이터 R118-001030000-0000 '간장_재래'",
-      "source": "mfds-raw"
-    },
     "apple": {
       "per100": {
         "kcal": 57,
