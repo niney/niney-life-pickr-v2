@@ -1,4 +1,4 @@
-// 종이 오리기 색 — 크림 바탕에 색종이. 무대 색종이만 주제색(나트륨 = 파랑), 빨강은 판정('많음')에만.
+// 종이 오리기 색 — 크림 바탕에 색종이. 무대 색종이만 주제색(나트륨 = 파랑, 식이섬유 = 초록), 빨강은 판정('많음')에만.
 // 다크 모드는 어두운 판지 위에 같은 색종이(종이는 종이 — 쪽지 글은 그대로 먹색), 바탕 위 글만 밝게.
 // 다만 어두운 화면에서 눈부시지 않게 밝은 종이(쪽지·식탁보·노랑·분홍)를 한 톤 낮추고, 낮춘 종이 위에서도 읽히게 보조 글은
 // 더 짙게, 판지 위에서 종이가 떠 보이게 그림자는 더 진하게 한다(DARK).
@@ -83,13 +83,15 @@ const DARK = {
   shadow: ['rgba(0,0,0,0.14)', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.22)'],
 } as const;
 
-const TOPIC_STAGE: Readonly<Record<string, { stage: string; stageDeep: string }>> = {
-  sodium: { stage: '#4c6fb5', stageDeep: '#3f5e9c' },
+// 무대 색 — 머리말 쪽지의 흰 손글씨가 읽히게 흰색과의 대비 4.5:1 안팎으로 잡는다. darkDeep 은 다크 모드의 줄무늬 짙은 쪽.
+const TOPIC_STAGE: Readonly<Record<string, { stage: string; stageDeep: string; darkDeep: string }>> = {
+  sodium: { stage: '#4c6fb5', stageDeep: '#3f5e9c', darkDeep: '#324d85' },
+  fiber: { stage: '#35805d', stageDeep: '#2c6d4f', darkDeep: '#235a41' },
 };
 const DEFAULT_STAGE = TOPIC_STAGE.sodium!;
 
 export const paperPalette = (topicNutrient: string | null, dark: boolean): PaperPalette => {
-  const stage = (topicNutrient && TOPIC_STAGE[topicNutrient]) || DEFAULT_STAGE;
+  const { darkDeep, ...stage } = (topicNutrient && TOPIC_STAGE[topicNutrient]) || DEFAULT_STAGE;
   return {
     ...BASE,
     ...stage,
@@ -98,6 +100,6 @@ export const paperPalette = (topicNutrient: string | null, dark: boolean): Paper
     onBgFaint: '#6b5a4f',
     cloth: '#ffffff',
     shadow: SHADOW,
-    ...(dark ? { ...DARK, stage: stage.stageDeep, stageDeep: '#324d85' } : {}),
+    ...(dark ? { ...DARK, stage: stage.stageDeep, stageDeep: darkDeep } : {}),
   };
 };

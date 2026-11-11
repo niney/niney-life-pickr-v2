@@ -35,34 +35,38 @@ const Cover = ({ scene }: { scene: Scene<'cover'> }) => (
   </div>
 );
 
-const Stat = ({ scene }: { scene: Scene<'stat'> }) => (
-  <div className="mss mss-stat">
-    <h2 className="mss-title msp-rise">{scene.title}</h2>
-    <ul className="mss-figures">
-      {scene.figures.map((f, i) => (
-        <li key={i} className="mss-figure msp-rise" style={order(i + 1)}>
-          <p className="mss-figure-label">{f.label}</p>
-          <FigureValue figure={f.figure} size="xl" />
-          {/* 다른 단위로 본 값(나트륨 → 소금) — 서버가 환산했다. 내 기록은 FigureValue 안에서. */}
-          {f.figure.equivalent && f.figure.equivalent.value !== null && !f.figure.my ? (
-            <p className="mss-figure-eq">
-              <EquivalentText label={f.figure.equivalent.label} value={f.figure.equivalent.value} unit={f.figure.equivalent.unit} />
-            </p>
-          ) : null}
-          {f.figure.basis && !f.figure.my && f.figure.basis !== f.label ? (
-            <p className="mss-figure-basis">{f.figure.basis}</p>
-          ) : null}
-          {f.figure.detail ? <p className="mss-figure-detail">{f.figure.detail}</p> : null}
-        </li>
-      ))}
-    </ul>
-    {scene.note ? (
-      <p className="mss-note msp-rise" style={order(scene.figures.length + 1)}>
-        {scene.note}
-      </p>
-    ) : null}
-  </div>
-);
+// 큰 숫자 — 그 장면의 기준 숫자들을 내 값에 넘겨 '기준 대비 %' 가 어느 기준인지 밝히게 한다(남·여 둘이면 '내 기준 …').
+const Stat = ({ scene }: { scene: Scene<'stat'> }) => {
+  const standards = scene.figures.flatMap((f) => (!f.figure.my && f.figure.value !== null ? [f.figure.value] : []));
+  return (
+    <div className="mss mss-stat">
+      <h2 className="mss-title msp-rise">{scene.title}</h2>
+      <ul className="mss-figures">
+        {scene.figures.map((f, i) => (
+          <li key={i} className="mss-figure msp-rise" style={order(i + 1)}>
+            <p className="mss-figure-label">{f.label}</p>
+            <FigureValue figure={f.figure} size="xl" standards={standards} />
+            {/* 다른 단위로 본 값(나트륨 → 소금) — 서버가 환산했다. 내 기록은 FigureValue 안에서. */}
+            {f.figure.equivalent && f.figure.equivalent.value !== null && !f.figure.my ? (
+              <p className="mss-figure-eq">
+                <EquivalentText label={f.figure.equivalent.label} value={f.figure.equivalent.value} unit={f.figure.equivalent.unit} />
+              </p>
+            ) : null}
+            {f.figure.basis && !f.figure.my && f.figure.basis !== f.label ? (
+              <p className="mss-figure-basis">{f.figure.basis}</p>
+            ) : null}
+            {f.figure.detail ? <p className="mss-figure-detail">{f.figure.detail}</p> : null}
+          </li>
+        ))}
+      </ul>
+      {scene.note ? (
+        <p className="mss-note msp-rise" style={order(scene.figures.length + 1)}>
+          {scene.note}
+        </p>
+      ) : null}
+    </div>
+  );
+};
 
 const Bars = ({ scene }: { scene: Scene<'bars'> }) => {
   const max = Math.max(1, ...scene.bars.map((b) => b.figure.value ?? 0));

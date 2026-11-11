@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import type { MealStatsNutrientKeyType, MealStoryEquivalentType, MealStoryFigureType } from '@repo/api-contract';
 import { cn } from '~/lib/utils';
 import { MealNutrientChip } from '../meal/MealNutrientLine';
+import { ownStandardText } from './motion/layout';
 import { storyStatus, useStoryMyStats } from './mealStoryMine';
 
 // 스토리 장면의 숫자 — 서버가 계산한 값(figure)을 굴러 올라가는 숫자로 그리고, 내 기록 값(figure.my)은 통계 영양소로 채운다.
@@ -80,10 +81,13 @@ const MyFigure = ({
   nutrient,
   size,
   equivalent,
+  standards,
 }: {
   nutrient: MealStatsNutrientKeyType;
   size: 'xl' | 'lg' | 'md' | 'sm';
   equivalent: MealStoryEquivalentType | null;
+  /** 같은 장면의 기준 숫자들 — 내 값 옆의 '기준 대비 %' 가 어느 기준인지 가른다. */
+  standards: readonly number[];
 }) => {
   const { token, stats } = useStoryMyStats();
   const location = useLocation();
@@ -101,11 +105,17 @@ const MyFigure = ({
     return <p className="mss-my-hint">기록이 더 필요해요 — 두 끼 이상 적은 날이 있어야 하루 평균을 내요.</p>;
   }
   const shown = storyStatus(row);
+  const own = row.reference?.amount ?? null;
   return (
     <span className="mss-my">
       <RollingNumber value={row.intakePerDay} unit={row.unit} size={size} />
       {shown ? <MealNutrientChip status={shown.key} label={shown.label} /> : null}
-      {row.percent !== null ? <span className="mss-my-pct">기준의 {row.percent}%</span> : null}
+      {/* 기준 숫자가 여럿이거나(남·여) 내 기준이 그 숫자와 다르면 어느 기준인지 밝힌다 — 영상과 같은 규칙. */}
+      {row.percent !== null ? (
+        <span className="mss-my-pct">
+          {ownStandardText(row.percent, own, own !== null ? `${formatStoryAmount(own, row.unit)}${row.unit}` : null, standards)}
+        </span>
+      ) : null}
       {/* 다른 단위로(소금) — 서버가 준 식(÷ per)으로 내 값을 환산한다. */}
       {equivalent ? (
         <span className="mss-my-pct">
@@ -116,9 +126,19 @@ const MyFigure = ({
   );
 };
 
-/** 장면 숫자 하나 — 내 기록이면 통계에서, 값이 없으면 '값 없음'. */
-export const FigureValue = ({ figure, size }: { figure: MealStoryFigureType; size: 'xl' | 'lg' | 'md' | 'sm' }) => {
-  if (figure.my) return <MyFigure nutrient={figure.my} size={size} equivalent={figure.equivalent} />;
+/**
+ * 장면 숫자 하나 — 내 기록이면 통계에서, 값이 없으면 '값 없음'. standards = 같은 장면의 기준 숫자들(큰 숫자 장면이 넘긴다).
+ */
+export const FigureValue = ({
+  figure,
+  size,
+  standards = [],
+}: {
+  figure: MealStoryFigureType;
+  size: 'xl' | 'lg' | 'md' | 'sm';
+  standards?: readonly number[];
+}) => {
+  if (figure.my) return <MyFigure nutrient={figure.my} size={size} equivalent={figure.equivalent} standards={standards} />;
   if (figure.value === null) return <span className="msn-missing">값 없음</span>;
   return <RollingNumber value={figure.value} unit={figure.unit} size={size} />;
 };

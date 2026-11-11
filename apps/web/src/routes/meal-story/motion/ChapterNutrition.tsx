@@ -4,9 +4,10 @@ import { pop, prog, useClock } from './anim';
 import { STAGE_BOTTOM, cardHeight, clamp, wrapText } from './layout';
 import { RollingNumber } from './RollingNumber';
 import { Card, Paper, Sheet, Tape } from './paper/kit';
-import { Plate } from './paper/props';
+import { Icon } from './paper/Icon';
 import { boil, tornRect } from './paper/torn';
 import { PaperHeading, PaperStage } from './Stage';
+import { dishIcon } from './storyProps';
 import { FONT, TYPE } from './theme';
 import { NUTRITION, nutritionTiming } from './timeline';
 import type { ChapterContext } from './types';
@@ -46,13 +47,17 @@ export const ChapterNutrition = ({ scene, ctx }: { scene: NutritionScene; ctx: C
     return { lines, at };
   });
   const rowTop = (i: number) => CARD.y + 206 + i * rowH;
+  const dish = dishIcon(ctx.story);
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <PaperHeading ctx={ctx} title={scene.title} />
       <PaperStage ctx={ctx} table={1620}>
-        <g transform="translate(840 1760) scale(0.8)">
-          <Plate pal={pal} f={f} v={v} />
-        </g>
+        {/* 식탁 끝의 완성 그릇 — 그 편의 것(없으면 비운다) */}
+        {dish ? (
+          <g transform="translate(840 1760) scale(0.8)">
+            <Icon icon={dish} fallback="" pal={pal} f={f} v={v} />
+          </g>
+        ) : null}
       </PaperStage>
       <AbsoluteFill style={{ transform: `translateY(${(1 - drop) * -700}px) rotate(${(1 - drop) * 4}deg)`, opacity: Math.min(1, drop * 2) }}>
         <Sheet>

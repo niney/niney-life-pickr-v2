@@ -110,6 +110,14 @@ export const cardHeight = (lines: number, size: number, lineHeight = 1.32, padY 
   lines * size * lineHeight + padY * 2;
 
 /** 무대 안에서 글·쪽지를 놓을 수 있는 아래 끝(y) — 무대 바닥(1870)에서 조금 안쪽. */
+/**
+ * 내 값 옆의 '기준 대비 %' 글 — 그 장면의 기준 숫자가 하나이고 내 기준과 같으면 그냥 '기준의 N%', 내 기준이 다르거나
+ * (나이가 달라서) 기준 숫자가 여럿이면(남·여) '내 기준 X의 N%'로 어느 기준인지 밝힌다. 글로 보기와 영상이 같이 쓴다.
+ * standards = 같은 장면의 (내 기록이 아닌) 기준 숫자들, amount = 형식을 갖춘 내 기준 글('30g'), 없으면 null.
+ */
+export const ownStandardText = (percent: number, own: number | null, amount: string | null, standards: readonly number[]): string =>
+  own === null || amount === null || (standards.length === 1 && standards[0] === own) ? `기준의 ${percent}%` : `내 기준 ${amount}의 ${percent}%`;
+
 export const STAGE_BOTTOM = 1836;
 
 /** 막대 값 쪽지의 폭 — 가장 긴 값 글(숫자 + 단위, 또는 값 없음)에 맞춘다. 모든 줄이 같은 폭이라 오른쪽이 가지런하다. */

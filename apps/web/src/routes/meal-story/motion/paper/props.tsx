@@ -222,16 +222,19 @@ export const Garlic = ({ v }: PropProps) => (
   </g>
 );
 
-export const OilBottle = ({ pal, v }: PropProps) => (
+/** 기름병 — 색과 이름표만 바꿔 쓴다(올리브유·참기름). */
+const Bottle = ({ pal, v, fill, label, seed }: PropProps & { fill: string; label: string; seed: number }) => (
   <g>
-    <Paper d={tp('M -18 -120 L 18 -120 L 18 -70 C 50 -50, 56 -30, 56 0 L 56 110 C 56 124, 46 130, 34 130 L -34 130 C -46 130, -56 124, -56 110 L -56 0 C -56 -30, -50 -50, -18 -70 Z', 211, v)} fill={pal.oil} lift={1} />
-    <Paper d={tr(-22, -140, 44, 26, 212, v, 1.4)} fill={pal.navy} lift={0.2} />
-    <Paper d={tr(-46, 10, 92, 56, 213, v, 1.6)} fill={pal.paper} lift={0} />
+    <Paper d={tp('M -18 -120 L 18 -120 L 18 -70 C 50 -50, 56 -30, 56 0 L 56 110 C 56 124, 46 130, 34 130 L -34 130 C -46 130, -56 124, -56 110 L -56 0 C -56 -30, -50 -50, -18 -70 Z', seed, v)} fill={fill} lift={1} />
+    <Paper d={tr(-22, -140, 44, 26, seed + 1, v, 1.4)} fill={pal.navy} lift={0.2} />
+    <Paper d={tr(-46, 10, 92, 56, seed + 2, v, 1.6)} fill={pal.paper} lift={0} />
     <text data-deco="" x={0} y={46} textAnchor="middle" fontFamily={FONT} fontWeight={900} fontSize={22} fill={pal.ink}>
-      올리브유
+      {label}
     </text>
   </g>
 );
+
+export const OilBottle = (p: PropProps) => <Bottle {...p} fill={p.pal.oil} label="올리브유" seed={211} />;
 
 export const Leaf = ({ pal, v }: PropProps) => (
   <g>
@@ -308,6 +311,167 @@ export const Timer = ({ pal, f, v }: PropProps) => (
       <rect key={i} x={-2} y={-58} width={4} height={14} fill={pal.ink} transform={`rotate(${i * 45} 0 4)`} />
     ))}
     <path d={`M 0 4 L ${Math.cos((-90 - f * 2) * (Math.PI / 180)) * 50} ${4 + Math.sin((-90 - f * 2) * (Math.PI / 180)) * 50}`} stroke={pal.red} strokeWidth={7} strokeLinecap="round" />
+  </g>
+);
+
+// ── 식이섬유 편(2026-11-10) — 밥·버섯·채소·콩·과일 ──
+/** 밥공기 — 잡곡이 섞인 밥 더미. face 를 주면 그릇에 얼굴(마무리 장면의 짝). */
+export const RiceBowl = ({ pal, f, v, face }: PropProps & { face?: Mood }) => (
+  <g>
+    <Steam x={0} y={-84} s={0.9} f={f} />
+    <Paper d={tp('M -100 -4 C -98 -66, -44 -98, 0 -98 C 44 -98, 98 -66, 100 -4 Z', 291, v)} fill="#efe2c4" lift={0.4} />
+    {[
+      [-60, -30],
+      [-34, -60],
+      [2, -44],
+      [34, -66],
+      [64, -30],
+      [-6, -80],
+      [26, -22],
+      [-40, -14],
+    ].map(([x, y], i) => (
+      <ellipse key={i} cx={x} cy={y} rx={9} ry={6} fill={i % 3 === 0 ? '#8a5a3c' : i % 3 === 1 ? '#c9a06a' : '#5e4636'} transform={`rotate(${i * 40} ${x} ${y})`} />
+    ))}
+    <Paper d={tp('M -112 -6 L 112 -6 C 106 66, 62 102, 0 102 C -62 102, -106 66, -112 -6 Z', 292, v)} fill={pal.paper} lift={0.9} />
+    {face ? <Face x={0} y={40} s={0.92} mood={face} f={f} pal={pal} seed={21} /> : <path d="M -102 30 C -60 40, 60 40, 102 30" stroke={pal.navy} strokeWidth={10} fill="none" />}
+    <Paper d={tr(-42, 96, 84, 18, 293, v, 1.6)} fill={pal.paper} lift={0.3} />
+  </g>
+);
+
+/** 표고버섯 — 갈색 갓에 크림색 대. face 를 주면 대에 얼굴. */
+export const Mushroom = ({ pal, f, v, face }: PropProps & { face?: Mood }) => (
+  <g>
+    <Paper d={tp('M -42 -6 L 42 -6 C 48 50, 50 86, 36 104 C 16 116, -16 116, -36 104 C -50 86, -48 50, -42 -6 Z', 301, v)} fill="#f3e7d0" lift={0.8} />
+    <Paper d={tp('M -116 4 C -116 -70, -60 -108, 0 -108 C 60 -108, 116 -70, 116 4 C 80 22, -80 22, -116 4 Z', 302, v)} fill="#a5683f" lift={0.6} />
+    <path d="M -62 -50 L -42 -30 M -10 -78 L 4 -54 M 48 -60 L 36 -36 M 74 -22 L 54 -10" stroke="#f3e7d0" strokeWidth={7} strokeLinecap="round" />
+    {face ? <Face x={0} y={54} s={0.6} mood={face} f={f} pal={pal} seed={23} /> : null}
+  </g>
+);
+
+export const Carrot = ({ pal, v }: PropProps) => (
+  <g transform="rotate(38) translate(0 14)">
+    <Paper d={tp('M -30 -110 C -54 -150, -20 -162, -8 -124 C -6 -166, 26 -162, 14 -122 C 40 -152, 62 -130, 30 -108 Z', 311, v, 1.8)} fill={pal.leaf} lift={0.4} />
+    <Paper d={tp('M -40 -112 C -14 -124, 14 -124, 40 -112 C 34 -30, 16 60, 0 118 C -16 60, -34 -30, -40 -112 Z', 312, v)} fill="#f08a34" lift={0.9} />
+    <path d="M -22 -70 L 0 -66 M 6 -30 L 24 -34 M -16 6 L 2 10 M 0 50 L 10 46" stroke="#c96a1c" strokeWidth={5} strokeLinecap="round" />
+  </g>
+);
+
+export const Egg = ({ v }: PropProps) => (
+  <g transform="rotate(-12)">
+    <Paper d={tp('M 0 -108 C 52 -108, 86 -30, 86 24 C 86 76, 48 108, 0 108 C -48 108, -86 76, -86 24 C -86 -30, -52 -108, 0 -108 Z', 321, v)} fill="#e9bd8f" lift={0.9} />
+    <path d="M -44 -40 C -36 -68, -18 -84, 0 -88" stroke="#f7dcbd" strokeWidth={12} fill="none" strokeLinecap="round" />
+  </g>
+);
+
+/** 콩나물 — 노란 머리에 하얀 줄기 셋. */
+export const Sprout = ({ v }: PropProps) => (
+  <g>
+    {[
+      { x: -62, tilt: -8, bend: -16 },
+      { x: 0, tilt: 5, bend: 8 },
+      { x: 62, tilt: -3, bend: 18 },
+    ].map(({ x, tilt, bend }, i) => (
+      <g key={i} transform={`translate(${x} 0) rotate(${tilt})`}>
+        <path d={`M 0 -58 C ${bend} -10, ${-bend} 50, ${bend * 0.6} 112`} stroke="#d6c9a8" strokeWidth={20} fill="none" strokeLinecap="round" />
+        <path d={`M 0 -58 C ${bend} -10, ${-bend} 50, ${bend * 0.6} 112`} stroke="#fbf7ea" strokeWidth={13} fill="none" strokeLinecap="round" />
+        <Paper d={te(-4, -80, 31, 23, 331 + i, v, 1.6)} fill="#f2cf4e" lift={0.5} />
+        <path d="M -30 -82 C -18 -72, 12 -72, 24 -82" stroke="#d9ae2e" strokeWidth={4} fill="none" />
+      </g>
+    ))}
+  </g>
+);
+
+/** 콩 — 검은콩·팥·노란콩 몇 알. */
+export const Bean = ({ v }: PropProps) => (
+  <g>
+    {[
+      { x: -52, y: -36, rx: 46, ry: 34, rot: -20, fill: '#2f2a2a' },
+      { x: 46, y: -46, rx: 42, ry: 32, rot: 24, fill: '#8d3b2e' },
+      { x: -6, y: 40, rx: 52, ry: 36, rot: 8, fill: '#c8a15a' },
+      { x: 74, y: 52, rx: 34, ry: 26, rot: -30, fill: '#2f2a2a' },
+      { x: -86, y: 58, rx: 30, ry: 24, rot: 30, fill: '#8d3b2e' },
+    ].map(({ x, y, rx, ry, rot, fill }, i) => (
+      <g key={i} transform={`rotate(${rot} ${x} ${y})`}>
+        <Paper d={te(x, y, rx, ry, 341 + i, v, 1.8)} fill={fill} lift={0.6} />
+        <path d={`M ${x - rx * 0.5} ${y - ry * 0.35} C ${x - rx * 0.2} ${y - ry * 0.7}, ${x + rx * 0.2} ${y - ry * 0.7}, ${x + rx * 0.45} ${y - ry * 0.4}`} stroke="rgba(255,255,255,0.45)" strokeWidth={5} fill="none" strokeLinecap="round" />
+      </g>
+    ))}
+  </g>
+);
+
+export const Apple = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={tp('M 0 -62 C 30 -92, 108 -70, 104 6 C 100 76, 52 112, 0 100 C -52 112, -100 76, -104 6 C -108 -70, -30 -92, 0 -62 Z', 351, v)} fill="#d94b3c" lift={0.9} />
+    <path d="M -66 -22 C -60 -48, -42 -62, -24 -62" stroke="#f39a8c" strokeWidth={12} fill="none" strokeLinecap="round" />
+    <path d="M 0 -62 C 0 -86, 6 -100, 14 -114" stroke="#6b4a2f" strokeWidth={9} fill="none" strokeLinecap="round" />
+    <Paper d={tp('M 14 -98 C 34 -132, 80 -130, 84 -114 C 70 -92, 40 -86, 14 -98 Z', 352, v, 1.4)} fill={pal.leaf} lift={0.3} />
+  </g>
+);
+
+export const WaterGlass = ({ v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -72 -110 L 72 -110 L 58 112 L -58 112 Z', 361, v)} fill="#dcebf3" lift={0.9} />
+    <Paper d={tp('M -64 -44 L 64 -44 L 54 104 L -54 104 Z', 362, v, 1.6)} fill="#8fc7ea" lift={0} />
+    <path d="M -64 -44 C -30 -56, 30 -32, 64 -44" stroke="#c4e3f5" strokeWidth={8} fill="none" />
+    <path d="M -46 -92 L -40 62" stroke="#ffffff" strokeWidth={10} strokeLinecap="round" opacity={0.8} />
+  </g>
+);
+
+/** 참기름병 — 올리브유 병과 같은 모양, 갈색에 이름표만 다르다. */
+export const SesameOil = (p: PropProps) => <Bottle {...p} fill="#9a6a2c" label="참기름" seed={371} />;
+
+export const SoySauce = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -30 -124 L 30 -124 L 30 -84 C 62 -70, 70 -44, 70 -16 L 70 110 C 70 126, -70 126, -70 110 L -70 -16 C -70 -44, -62 -70, -30 -84 Z', 381, v)} fill="#3b2a24" lift={1} />
+    <Paper d={tr(-34, -146, 68, 30, 382, v, 1.4)} fill={pal.red} lift={0.2} />
+    <Paper d={tr(-56, 4, 112, 60, 383, v, 1.8)} fill={pal.paper} lift={0.2} />
+    <text data-deco="" x={0} y={46} textAnchor="middle" fontFamily={FONT} fontWeight={900} fontSize={34} fill={pal.ink}>
+      간장
+    </text>
+  </g>
+);
+
+/** 볶는 팬 — 버섯 조각과 당근 채. */
+export const StirFry = ({ pal, f, v }: PropProps) => (
+  <g>
+    <Steam x={-10} y={-20} s={0.9} f={f} />
+    <g transform="rotate(-6)">
+      <Paper d={tr(110, 8, 160, 28, 391, v)} fill={pal.wood} lift={0.6} />
+    </g>
+    <Paper d={te(0, 24, 132, 46, 392, v)} fill="#3b3f48" lift={1} />
+    <Paper d={te(0, 16, 112, 34, 393, v, 1.8)} fill="#5a606c" lift={0} />
+    {[
+      { x: -58, y: 12, fill: '#a5683f' },
+      { x: -14, y: 26, fill: '#f3e7d0' },
+      { x: 28, y: 6, fill: '#a5683f' },
+      { x: 64, y: 20, fill: '#f3e7d0' },
+    ].map(({ x, y, fill }, i) => (
+      <ellipse key={i} cx={x} cy={y} rx={21} ry={11} fill={fill} transform={`rotate(${i % 2 ? 14 : -12} ${x} ${y})`} />
+    ))}
+    {[
+      { x: -34, y: 0, rot: 20 },
+      { x: 6, y: 34, rot: -24 },
+      { x: 46, y: 30, rot: 30 },
+      { x: -76, y: 26, rot: -16 },
+    ].map(({ x, y, rot }, i) => (
+      <rect key={i} x={x - 16} y={y - 4} width={32} height={8} rx={3} fill="#f08a34" transform={`rotate(${rot} ${x} ${y})`} />
+    ))}
+  </g>
+);
+
+/** 비빔밥 한 그릇 — 검은 그릇에 밥, 색색 나물과 반으로 가른 달걀. */
+export const Bibimbap = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -124 -6 L 124 -6 C 118 70, 68 106, 0 106 C -68 106, -118 70, -124 -6 Z', 401, v)} fill="#4b4540" lift={0.9} />
+    <path d="M -110 34 C -64 46, 64 46, 110 34" stroke="#6a625b" strokeWidth={8} fill="none" />
+    <Paper d={tr(-46, 100, 92, 18, 402, v, 1.6)} fill="#4b4540" lift={0.3} />
+    <Paper d={te(0, -8, 116, 36, 403, v)} fill="#efe2c4" lift={0} />
+    <Paper d={te(-70, -10, 32, 17, 404, v, 1.4)} fill={pal.leaf} lift={0} />
+    <Paper d={te(-30, -26, 30, 14, 405, v, 1.4)} fill="#f08a34" lift={0} />
+    <Paper d={te(30, -26, 30, 14, 406, v, 1.4)} fill="#a5683f" lift={0} />
+    <Paper d={te(70, -10, 32, 17, 407, v, 1.4)} fill="#f2cf4e" lift={0} />
+    <Paper d={te(0, 2, 34, 20, 408, v, 1.4)} fill="#fffdf6" lift={0.2} />
+    <circle cx={0} cy={2} r={11} fill="#f2b632" />
   </g>
 );
 

@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { MealStorySceneType } from '@repo/api-contract';
+import type { MealStoryIconType, MealStorySceneType, MealStoryType } from '@repo/api-contract';
 import { FONT_STYLESHEETS } from './fonts';
-import { BARS, STAGE_BOTTOM, barsLayout, cardHeight, clipLines, fitSize, headingBottom, headingSize, textWidth } from './layout';
+import { BARS, STAGE_BOTTOM, barsLayout, cardHeight, clipLines, fitSize, headingBottom, headingSize, ownStandardText, textWidth } from './layout';
+import { Icon } from './paper/Icon';
+import { PROP_FOR } from './paper/icons';
 import { paperPalette } from './paper/palette';
 import { Chapter } from './StoryVideo';
-import { variantMine, variantMineSenior, variantStory } from './storyFixture';
+import { variantMine, variantMineFiber, variantMineSenior, variantStory } from './storyFixture';
+import { dishIcon, ingredientIcons } from './storyProps';
 import { TYPE } from './theme';
 import { buildTimeline, chapterFrames, isSaltSpoonScene } from './timeline';
 import type { MotionMine } from './types';
@@ -43,17 +46,20 @@ const VIEWERS: Viewer[] = [
   { name: '다크', mine: variantMine, loggedIn: true, dark: true },
 ];
 
-const draw = (scene: MealStorySceneType, viewer: Viewer, frame: number, id = 'c0'): string => {
+const draw = (scene: MealStorySceneType, viewer: Viewer, frame: number, id = 'c0', story: MealStoryType = variantStory): string => {
   clock.frame = frame;
-  const pal = paperPalette(variantStory.topic?.nutrient ?? null, viewer.dark ?? false);
+  const pal = paperPalette(story.topic?.nutrient ?? null, viewer.dark ?? false);
   return renderToStaticMarkup(
     <Chapter
       scene={scene}
-      ctx={{ story: variantStory, pal, kicker: '변형 점검', mine: viewer.mine, loggedIn: viewer.loggedIn, id }}
-      saltSpoon={isSaltSpoonScene(variantStory, scene)}
+      ctx={{ story, pal, kicker: '변형 점검', mine: viewer.mine, loggedIn: viewer.loggedIn, id }}
+      saltSpoon={isSaltSpoonScene(story, scene)}
     />,
   );
 };
+
+/** 같은 장면들을 식이섬유 주제로 — 무대 색·마무리 짝이 주제를 따른다. */
+const fiberStory: MealStoryType = { ...variantStory, topic: { nutrient: 'fiber', direction: 'increase' } };
 
 const sceneName = (scene: MealStorySceneType, i: number): string =>
   `${i + 1} ${scene.type}${'title' in scene ? ` '${scene.title}'` : scene.type === 'step' ? ` ${scene.number}` : ''}`;
@@ -148,6 +154,67 @@ describe('장면 그림 — 변형 원고', () => {
     expect(draw(spoon, VIEWERS[2]!, chapterFrames(variantStory, spoon) - 1)).not.toContain('내 기준');
   });
 
+  it('일반 숫자 장면 — 내 값 아래에 내 기준 대비 % 와 판정을 밝힌다(기준이 남·여 둘로 나뉜 주제에서 내가 어느 쪽인지)', () => {
+    const plain = scenes.filter((s) => s.type === 'stat')[1]!;
+    const last = (viewer: Viewer) => draw(plain, viewer, chapterFrames(variantStory, plain) - 1);
+    const fiber = last({ name: '식이섬유 값 있음', mine: variantMineFiber, loggedIn: true });
+    expect(fiber).toContain('내 기준 20g의 82% · 조금 부족');
+    // 내 값이 없거나(나트륨만 있는 사람) 로그인 전이면 쪽지도 없다 — 기준 숫자의 덧말은 그대로.
+    expect(last(VIEWERS[2]!)).not.toContain('내 기준');
+    expect(last(VIEWERS[0]!)).not.toContain('내 기준');
+    expect(last(VIEWERS[0]!)).toContain('여성 20g · 남성 25~30g');
+    // 기준 대비 % 를 모르면(통계가 못 줬다) 말하지 않는다.
+    const noPercent: MotionMine = { fiber: { ...variantMineFiber.fiber!, percent: null } };
+    expect(last({ name: '% 없음', mine: noPercent, loggedIn: true })).not.toContain('내 기준');
+  });
+
+  it('주제가 바뀌면 무대 색과 마무리의 짝이 바뀐다 — 나트륨은 소금통·숟가락, 식이섬유는 밥공기·버섯', () => {
+    expect(paperPalette('fiber', false).stage).not.toBe(paperPalette('sodium', false).stage);
+    // 다크 모드의 짙은 줄무늬도 주제색(빠지면 undefined 가 그림에 박힌다), 모르는 주제는 기본(나트륨) 색.
+    expect(paperPalette('fiber', true).stageDeep).not.toBe(paperPalette('sodium', true).stageDeep);
+    expect(paperPalette('calcium', false).stage).toBe(paperPalette('sodium', false).stage);
+    expect(paperPalette(null, true).stageDeep).toBe(paperPalette('sodium', true).stageDeep);
+    const outro = scenes.find((s) => s.type === 'outro')!;
+    const end = chapterFrames(variantStory, outro) - 1;
+    // 소금통에는 '소금' 이름표가 있다.
+    expect(draw(outro, VIEWERS[0]!, end)).toContain('소금');
+    const fiber = draw(outro, VIEWERS[0]!, end, 'c0', fiberStory);
+    expect(fiber).not.toContain('소금');
+    expect(fiber).not.toMatch(/NaN|undefined|Infinity/);
+    for (const scene of scenes) {
+      for (const dark of [false, true]) {
+        const markup = draw(scene, { name: '식이섬유', mine: variantMineFiber, loggedIn: true, dark }, chapterFrames(fiberStory, scene) - 1, 'c0', fiberStory);
+        expect(markup, sceneName(scene, 0)).not.toMatch(/NaN|undefined|Infinity/);
+      }
+    }
+  });
+
+  it('틀은 그 편의 소품을 원고에서 고른다 — 완성 그릇은 마지막 만드는 법 단계, 재료는 나온 차례(같은 그림은 한 번)', () => {
+    expect(dishIcon(variantStory)).toBe('pan');
+    const icons = ingredientIcons(variantStory);
+    expect(icons.slice(0, 2)).toEqual(['noodle', 'tomato']);
+    expect(new Set(icons).size).toBe(icons.length);
+    // 소품을 달지 않은 원고는 비운다(틀이 다른 편의 그림을 대신 놓지 않는다).
+    const bare: MealStoryType = { ...variantStory, scenes: variantStory.scenes.filter((s) => s.type !== 'ingredients' && s.type !== 'step') };
+    expect(dishIcon(bare)).toBeNull();
+    expect(ingredientIcons(bare)).toEqual([]);
+    const cover = scenes.find((s) => s.type === 'cover')!;
+    expect(draw(cover, VIEWERS[0]!, 60, 'c0', bare)).not.toMatch(/NaN|undefined|Infinity/);
+  });
+
+  it('소품은 모두 예외·NaN 없이 그려진다(계약의 이름마다 그림이 있다)', () => {
+    const pal = paperPalette('fiber', false);
+    for (const icon of Object.keys(PROP_FOR) as MealStoryIconType[]) {
+      const markup = renderToStaticMarkup(
+        <svg>
+          <Icon icon={icon} fallback="" pal={pal} f={30} v={1} />
+        </svg>,
+      );
+      expect(markup.length, icon).toBeGreaterThan(80);
+      expect(markup, icon).not.toMatch(/NaN|undefined|Infinity/);
+    }
+  });
+
   it('시간표 — 장면마다 길이가 있고 전체가 이어진다', () => {
     const timeline = buildTimeline(variantStory);
     expect(timeline.chapters).toHaveLength(scenes.length);
@@ -191,6 +258,18 @@ describe('자리 계산', () => {
     expect(textWidth('가나다', 40)).toBeCloseTo(114);
     expect(clipLines(['한 줄', '두 줄.', '세 줄'], 2)).toEqual(['한 줄', '두 줄…']);
     expect(clipLines(['한 줄'], 2)).toEqual(['한 줄']);
+  });
+});
+
+describe('기준 대비 % 글', () => {
+  it('기준 숫자가 하나이고 내 기준과 같으면 기준의 N%, 다르거나 여럿이면(남·여) 내 기준을 밝힌다 — 글로 보기와 영상이 같이 쓴다', () => {
+    expect(ownStandardText(136, 2300, '2,300mg', [2300])).toBe('기준의 136%');
+    expect(ownStandardText(105, 2100, '2,100mg', [2300])).toBe('내 기준 2,100mg의 105%');
+    expect(ownStandardText(35, 30, '30g', [30, 20])).toBe('내 기준 30g의 35%');
+    // 내 기준을 모르면(통계가 주지 않았다) 지어내지 않는다.
+    expect(ownStandardText(80, null, null, [30, 20])).toBe('기준의 80%');
+    // 장면에 기준 숫자가 없으면 무엇의 % 인지 알 수 없으니 내 기준을 밝힌다.
+    expect(ownStandardText(80, 25, '25g', [])).toBe('내 기준 25g의 80%');
   });
 });
 

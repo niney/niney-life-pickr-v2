@@ -4,7 +4,7 @@ import { pop, prog, rand, useClock } from './anim';
 import { KineticTitle } from './KineticTitle';
 import { cardHeight, titleHeight, wrapText } from './layout';
 import { Card, Paper, Sheet, Tape } from './paper/kit';
-import { PaperShaker, PaperSpoon } from './paper/props';
+import { Mushroom, PaperShaker, PaperSpoon, RiceBowl } from './paper/props';
 import { boil, tornRect } from './paper/torn';
 import { PaperStage } from './Stage';
 import { HAND } from './theme';
@@ -17,7 +17,8 @@ const TITLE = { top: 300, size: 112, width: 860 };
 const CONFETTI = ['#f6cf55', '#f3a3bf', '#ffffff', '#a9d9c6', '#ffb36b'];
 
 /**
- * 마무리 — 화면 가득 색종이 부엌으로 돌아와 제목 카드가 붙고, 식탁 끝에서 소금통과 숟가락이 손(몸)을 흔든다. 종이 조각이
+ * 마무리 — 화면 가득 색종이 부엌으로 돌아와 제목 카드가 붙고, 식탁 끝에서 그 주제의 짝(나트륨 = 소금통·숟가락, 식이섬유 =
+ * 밥공기·버섯)이 손(몸)을 흔든다. 종이 조각이
  * 천천히 흩날린다. 아래쪽 식탁 자리는 웹이 진짜 단추(기록·레시피·공유)를 얹는 곳이라 비워 둔다.
  */
 export const ChapterOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterContext }) => {
@@ -36,6 +37,7 @@ export const ChapterOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterCo
   // 글 쪽지 아래 끝 — 쪽지가 길면 소금통·숟가락을 그만큼 내린다(얼굴이 쪽지에 가리지 않게).
   const textBottom = textLines.length ? textY + cardHeight(textLines.length, 40) : textY - 40;
   const palsY = Math.max(1060, textBottom + 190);
+  const grainPals = ctx.story.topic?.nutrient === 'fiber';
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <PaperStage ctx={ctx} table={1180} area={{ x: -30, y: -30, w: 1140, h: 1980 }} />
@@ -76,11 +78,11 @@ export const ChapterOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterCo
         </Sheet>
       ) : null}
       <Sheet>
-        <g transform={`translate(300 ${palsY + (1 - pals) * 500}) rotate(${wave}) scale(0.82)`}>
-          <PaperShaker pal={pal} f={f} v={v} mood="happy" />
+        <g transform={`translate(300 ${palsY + (1 - pals) * 500}) rotate(${wave}) scale(${grainPals ? 1.25 : 0.82})`}>
+          {grainPals ? <RiceBowl pal={pal} f={f} v={v} face="happy" /> : <PaperShaker pal={pal} f={f} v={v} mood="happy" />}
         </g>
-        <g transform={`translate(780 ${palsY - 50 + (1 - pals) * 500 + Math.sin(f / 8) * 8}) rotate(${-wave * 0.6}) scale(0.5)`}>
-          <PaperSpoon pal={pal} f={f} v={v} fill={1} mood="happy" seed={131} />
+        <g transform={`translate(780 ${palsY - 50 + (1 - pals) * 500 + Math.sin(f / 8) * 8}) rotate(${-wave * 0.6}) scale(${grainPals ? 1.2 : 0.5})`}>
+          {grainPals ? <Mushroom pal={pal} f={f} v={v} face="happy" /> : <PaperSpoon pal={pal} f={f} v={v} fill={1} mood="happy" seed={131} />}
         </g>
       </Sheet>
     </AbsoluteFill>

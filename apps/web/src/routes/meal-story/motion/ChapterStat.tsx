@@ -1,7 +1,7 @@
 import type { MealStorySceneType } from '@repo/api-contract';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
 import { lerp, pop, prog, useClock } from './anim';
-import { STAGE_BOTTOM, cardHeight, clamp, fitSize, headingBottom, textWidth, wrapText } from './layout';
+import { STAGE_BOTTOM, cardHeight, clamp, fitSize, headingBottom, ownStandardText, textWidth, wrapText } from './layout';
 import { RollingNumber } from './RollingNumber';
 import { PaperGrains, PaperSpill } from './paper/grains';
 import { Card, Note, Paper, Sheet, type Mood } from './paper/kit';
@@ -82,13 +82,13 @@ const SaltSpoonStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }
   const myEq = myFig?.figure.equivalent ?? null;
   const eqChip = (label: string, value: number, unit: string) => `${label} 약 ${formatAmount(value, unit)}${unit}`;
   const refChips = refEq && refEq.value !== null ? [eqChip(refEq.label, refEq.value, refEq.unit)] : [];
-  // 내 기준이 원고의 기준 숫자와 다르면(나이가 달라서) 어느 기준인지 밝힌다.
-  const ownStandard = mineValue && mineValue.standard !== null && mineValue.standard !== refMg ? mineValue.standard : null;
+  const amountText = (value: number, unit: string) => `${formatAmount(value, unit)}${unit}`;
   const myChips = mineValue
     ? [
         ...(myEq ? [eqChip(myEq.label, mineValue.value / myEq.per, myEq.unit)] : []),
+        // 내 기준이 원고의 기준 숫자와 다르면(나이가 달라서) 어느 기준인지 밝힌다(ownStandardText — 글로 보기와 같은 규칙).
         ...(mineValue.percent !== null
-          ? [ownStandard !== null ? `내 기준 ${formatAmount(ownStandard, mineValue.unit)}${mineValue.unit}의 ${mineValue.percent}%` : `기준의 ${mineValue.percent}%`]
+          ? [ownStandardText(mineValue.percent, mineValue.standard, mineValue.standard !== null ? amountText(mineValue.standard, mineValue.unit) : null, [refMg])]
           : []),
       ]
     : [];
@@ -217,7 +217,8 @@ const SaltSpoonStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }
 };
 
 /**
- * 일반 큰 숫자 — 숫자마다 쪽지가 날아와 붙고 숫자가 굴러 오른다. 내 기록 값은 로그인했을 때만.
+ * 일반 큰 숫자 — 숫자마다 쪽지가 날아와 붙고 숫자가 굴러 오른다. 내 기록 값은 로그인했을 때만 — 그 아래 노란 쪽지에 내
+ * 기준(나이·성별의 섭취기준) 대비 % 와 판정을 밝힌다(기준 숫자가 남·여 둘로 나뉜 장면에서 내가 어느 쪽인지 알 수 있게).
  * 자리는 숫자 수(1~3)와 아래 덧말 높이로 나눈다 — 셋이고 값 덧말·장면 덧말이 다 있어도 서로 겹치지 않게 숫자 종이를 줄인다.
  */
 const PlainStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }) => {
@@ -230,7 +231,15 @@ const PlainStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }) =>
   const noteLines = scene.note ? wrapText(scene.note, TYPE.sub, 820) : [];
   const noteTop = STAGE_BOTTOM - cardHeight(noteLines.length, TYPE.sub);
   const n = Math.max(1, scene.figures.length);
-  const hasDetail = scene.figures.some((x) => x.figure.detail);
+  const standards = scene.figures.flatMap((x) => (!x.figure.my && x.figure.value !== null ? [x.figure.value] : []));
+  const detailOf = (fig: StatScene['figures'][number]): string | null => {
+    if (!fig.figure.my) return fig.figure.detail;
+    const my = ctx.mine?.[fig.figure.my];
+    if (!my || my.percent === null) return null;
+    const ratio = ownStandardText(my.percent, my.standard, my.standard !== null ? `${formatAmount(my.standard, my.unit)}${my.unit}` : null, standards);
+    return my.statusLabel ? `${ratio} · ${my.statusLabel}` : ratio;
+  };
+  const hasDetail = scene.figures.some((x) => detailOf(x));
   const areaTop = 740;
   const areaBottom = noteLines.length ? noteTop - 36 : 1800;
   const pitch = clamp((areaBottom - areaTop) / n, 240, 420);
@@ -252,12 +261,13 @@ const PlainStat = ({ scene, ctx }: { scene: StatScene; ctx: ChapterContext }) =>
         const unit = fig.figure.my ? (my?.unit ?? '') : fig.figure.unit;
         // 내 기록이 아닌 숫자가 비었으면(서버가 값을 못 구했다) 로그인 안내가 아니라 '값 없음'.
         const missing = !fig.figure.my ? '값 없음' : !ctx.loggedIn ? '로그인하면 내 값도 보여요' : ctx.mine === null ? null : '기록이 더 필요해요';
+        const detail = detailOf(fig);
         return (
           <AbsoluteFill key={i} style={{ transform: `translateY(${(1 - p) * 140}px) rotate(${(1 - p) * (i % 2 ? 4 : -4)}deg)`, opacity: Math.min(1, p * 1.5) }}>
             <Sheet>
               <Note x={540} y={top - 70} text={fig.label} size={40} fill={pal.navy} color="#ffffff" weight={700} angle={i % 2 ? 1.5 : -1.5} seed={81 + i + v * 101} />
               <Paper d={tornRect(170, Math.round(top), 740, Math.round(paperH), { seed: 91 + i + v * 101, amp: 2.6, step: 7 })} fill={pal.paper} lift={1} />
-              {fig.figure.detail ? <Note x={540} y={top + paperH + 10} text={fig.figure.detail} size={fitSize(fig.figure.detail, TYPE.sub, 900, TYPE.foot)} fill={pal.yellow} color={pal.ink} weight={700} seed={95 + i + v * 101} /> : null}
+              {detail ? <Note x={540} y={top + paperH + 10} text={detail} size={fitSize(detail, TYPE.sub, 900, TYPE.foot)} fill={pal.yellow} color={pal.ink} weight={700} seed={95 + i + v * 101} /> : null}
             </Sheet>
             {value !== null ? (
               <div style={{ position: 'absolute', left: 540, top: top + (paperH - numSize) / 2 - 4, width: 'max-content', transform: 'translateX(-50%)' }}>
