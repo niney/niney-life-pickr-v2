@@ -1,7 +1,7 @@
 import type { MealStorySceneType } from '@repo/api-contract';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
 import { lerp, pop, prog, rand, useClock } from './anim';
-import { BARS, barsLayout, barsPaperWidth, fitSize, wrapText } from './layout';
+import { BARS, barsLayout, barsPaperWidth, fitSize, fractionText, wrapText } from './layout';
 import { RollingNumber } from './RollingNumber';
 import { Card, Note, Paper, Sheet, Tape } from './paper/kit';
 import { boil, tornRect } from './paper/torn';
@@ -101,7 +101,7 @@ export const ChapterBars = ({ scene, ctx }: { scene: BarsScene; ctx: ChapterCont
               ) : null}
               {fraction && i === fraction.bar ? (
                 <g transform={`translate(${TRACK_X + 14} ${barTop + L.barH + (aside ? 70 : 22)}) rotate(-6) scale(${lerp(2.2, 1, stamp)})`} opacity={Math.min(1, stamp * 3)}>
-                  <Note x={0} y={0} text={`약 ${fraction.denominator}분의 1`} size={Math.round(L.numSize * 0.62)} fill={pal.yellow} color={pal.ink} weight={900} anchor="start" seed={45 + v * 101} lift={1.2} />
+                  <Note x={0} y={0} text={fractionText(fraction)} size={Math.round(L.numSize * 0.62)} fill={pal.yellow} color={pal.ink} weight={900} anchor="start" seed={45 + v * 101} lift={1.2} />
                   <Tape x={20} y={6} angle={-30} pal={pal} w={80} />
                 </g>
               ) : null}

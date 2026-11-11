@@ -5,7 +5,7 @@ import { pop, prog, rand, useClock } from './anim';
 import { KineticTitle } from './KineticTitle';
 import { cardHeight, titleHeight, wrapText } from './layout';
 import { Card, Paper, Sheet, Tape } from './paper/kit';
-import { Anchovy, Milk, Mushroom, PaperShaker, PaperSpoon, RiceBowl, type PropProps } from './paper/props';
+import { Anchovy, Milk, Mushroom, PaperShaker, PaperSpoon, Paprika, RiceBowl, Tangerine, type PropProps } from './paper/props';
 import { boil, tornRect } from './paper/torn';
 import { PaperStage } from './Stage';
 import { HAND } from './theme';
@@ -22,11 +22,12 @@ const PALS: Readonly<Record<string, { left: (p: PropProps) => ReactNode; leftSca
   sodium: { left: (p) => <PaperShaker {...p} mood="happy" />, leftScale: 0.82, right: (p) => <PaperSpoon {...p} fill={1} mood="happy" seed={131} />, rightScale: 0.5 },
   fiber: { left: (p) => <RiceBowl {...p} face="happy" />, leftScale: 1.25, right: (p) => <Mushroom {...p} face="happy" />, rightScale: 1.2 },
   calcium: { left: (p) => <Milk {...p} face="happy" />, leftScale: 1.2, right: (p) => <Anchovy {...p} face="happy" />, rightScale: 1.25 },
+  vitaminC: { left: (p) => <Paprika {...p} face="happy" />, leftScale: 1.2, right: (p) => <Tangerine {...p} face="happy" />, rightScale: 1.05 },
 };
 
 /**
  * 마무리 — 화면 가득 색종이 부엌으로 돌아와 제목 카드가 붙고, 식탁 끝에서 그 주제의 짝(나트륨 = 소금통·숟가락, 식이섬유 =
- * 밥공기·버섯, 칼슘 = 우유곽·멸치)이 손(몸)을 흔든다. 종이 조각이
+ * 밥공기·버섯, 칼슘 = 우유곽·멸치, 비타민 C = 파프리카·귤)이 손(몸)을 흔든다. 종이 조각이
  * 천천히 흩날린다. 아래쪽 식탁 자리는 웹이 진짜 단추(기록·레시피·공유)를 얹는 곳이라 비워 둔다.
  */
 export const ChapterOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterContext }) => {

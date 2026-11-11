@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MealStoryIconType, MealStorySceneType, MealStoryType } from '@repo/api-contract';
 import { FONT_STYLESHEETS } from './fonts';
-import { BARS, STAGE_BOTTOM, barsLayout, cardHeight, clipLines, fitSize, headingBottom, headingSize, ownStandardText, textWidth } from './layout';
+import { BARS, STAGE_BOTTOM, barsLayout, cardHeight, clipLines, fitSize, fractionText, headingBottom, headingSize, ownStandardText, textWidth } from './layout';
 import { Icon } from './paper/Icon';
 import { PROP_FOR } from './paper/icons';
 import { paperPalette } from './paper/palette';
@@ -141,6 +141,12 @@ describe('장면 그림 — 변형 원고', () => {
     const two = scenes.filter((s) => s.type === 'bars')[0]!;
     expect(last(two, VIEWERS[0]!)).toContain('약 10분의 1');
     expect(last({ ...two, fraction: null } as MealStorySceneType, VIEWERS[0]!)).not.toContain('분의 1');
+    // 강조한 막대가 큰 쪽이면 서버가 '약 N배'로 준다 — 그 막대에 그 글자로.
+    const times = last({ ...two, fraction: { bar: 0, denominator: 2, multiple: true } } as MealStorySceneType, VIEWERS[0]!);
+    expect(times).toContain('약 2배');
+    expect(times).not.toContain('분의 1');
+    expect(fractionText({ denominator: 10, multiple: false })).toBe('약 10분의 1');
+    expect(fractionText({ denominator: 2, multiple: true })).toBe('약 2배');
   });
 
   it('내 기준이 원고의 성인 기준과 다르면(65세 이상) 숟가락·% ·도장이 내 기준을 따르고 어느 기준인지 밝힌다', () => {
@@ -194,7 +200,8 @@ describe('장면 그림 — 변형 원고', () => {
     expect(paperPalette('fiber', false).stage).not.toBe(paperPalette('sodium', false).stage);
     // 다크 모드의 짙은 줄무늬도 주제색(빠지면 undefined 가 그림에 박힌다), 모르는 주제는 기본(나트륨) 색.
     expect(paperPalette('fiber', true).stageDeep).not.toBe(paperPalette('sodium', true).stageDeep);
-    expect(new Set(['sodium', 'fiber', 'calcium'].map((t) => paperPalette(t, false).stage)).size).toBe(3);
+    expect(new Set(['sodium', 'fiber', 'calcium', 'vitaminC'].map((t) => paperPalette(t, false).stage)).size).toBe(4);
+    expect(new Set(['sodium', 'fiber', 'calcium', 'vitaminC'].map((t) => paperPalette(t, true).stageDeep)).size).toBe(4);
     expect(paperPalette('vitaminD', false).stage).toBe(paperPalette('sodium', false).stage);
     expect(paperPalette(null, true).stageDeep).toBe(paperPalette('sodium', true).stageDeep);
     const outro = scenes.find((s) => s.type === 'outro')!;
@@ -209,7 +216,12 @@ describe('장면 그림 — 변형 원고', () => {
     const calcium = draw(outro, VIEWERS[0]!, end, 'c0', calciumStory);
     expect(calcium).not.toContain('소금');
     expect(calcium).not.toBe(fiber);
-    for (const story of [fiberStory, calciumStory]) {
+    // 비타민 C 의 짝은 파프리카·귤.
+    const vitaminCStory: MealStoryType = { ...variantStory, topic: { nutrient: 'vitaminC', direction: 'increase' } };
+    const vitaminC = draw(outro, VIEWERS[0]!, end, 'c0', vitaminCStory);
+    expect(vitaminC).not.toContain('소금');
+    expect(new Set([fiber, calcium, vitaminC]).size).toBe(3);
+    for (const story of [fiberStory, calciumStory, vitaminCStory]) {
       for (const scene of scenes) {
         for (const dark of [false, true]) {
           const markup = draw(scene, { name: '주제 바꿈', mine: variantMineFiber, loggedIn: true, dark }, chapterFrames(story, scene) - 1, 'c0', story);

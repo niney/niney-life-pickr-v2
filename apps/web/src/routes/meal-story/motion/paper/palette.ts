@@ -1,4 +1,4 @@
-// 종이 오리기 색 — 크림 바탕에 색종이. 무대 색종이만 주제색(나트륨 = 파랑, 식이섬유 = 초록, 칼슘 = 보라), 빨강은 판정('많음')에만.
+// 종이 오리기 색 — 크림 바탕에 색종이. 무대 색종이만 주제색(나트륨 = 파랑, 식이섬유 = 초록, 칼슘 = 보라, 비타민 C = 귤색), 빨강은 판정('많음')에만.
 // 다크 모드는 어두운 판지 위에 같은 색종이(종이는 종이 — 쪽지 글은 그대로 먹색), 바탕 위 글만 밝게.
 // 다만 어두운 화면에서 눈부시지 않게 밝은 종이(쪽지·식탁보·노랑·분홍)를 한 톤 낮추고, 낮춘 종이 위에서도 읽히게 보조 글은
 // 더 짙게, 판지 위에서 종이가 떠 보이게 그림자는 더 진하게 한다(DARK).
@@ -88,6 +88,7 @@ const TOPIC_STAGE: Readonly<Record<string, { stage: string; stageDeep: string; d
   sodium: { stage: '#4c6fb5', stageDeep: '#3f5e9c', darkDeep: '#324d85' },
   fiber: { stage: '#35805d', stageDeep: '#2c6d4f', darkDeep: '#235a41' },
   calcium: { stage: '#6b5b9e', stageDeep: '#5a4b8a', darkDeep: '#493c73' },
+  vitaminC: { stage: '#b8551a', stageDeep: '#9f4614', darkDeep: '#853a10' },
 };
 const DEFAULT_STAGE = TOPIC_STAGE.sodium!;
 

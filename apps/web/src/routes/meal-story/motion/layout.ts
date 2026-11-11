@@ -117,6 +117,12 @@ export const cardHeight = (lines: number, size: number, lineHeight = 1.32, padY 
 export const ownStandardText = (percent: number, own: number | null, amount: string | null, standards: readonly number[]): string =>
   own === null || amount === null || (standards.length === 1 && standards[0] === own) ? `기준의 ${percent}%` : `내 기준 ${amount}의 ${percent}%`;
 
+/**
+ * 막대 둘의 어림 쪽지 글 — 서버가 준 값 그대로: 작은 쪽에 '약 10분의 1', 강조한 큰 쪽에 '약 2배'. 글로 보기와 영상이 같이 쓴다.
+ */
+export const fractionText = (fraction: { denominator: number; multiple: boolean }): string =>
+  fraction.multiple ? `약 ${fraction.denominator}배` : `약 ${fraction.denominator}분의 1`;
+
 /** 무대 안에서 글·쪽지를 놓을 수 있는 아래 끝(y) — 무대 바닥(1870)에서 조금 안쪽. */
 export const STAGE_BOTTOM = 1836;
 

@@ -60,7 +60,7 @@ export const variantStory: MealStoryType = {
         { label: '시판 토마토 소스 150g', figure: fig({ value: 953 }), aside: null, highlight: false },
         { label: '직접 만든 소스(1인분)', figure: fig({ value: 97 }), aside: { label: '열량', figure: fig({ value: 190, unit: 'kcal' }) }, highlight: true },
       ],
-      fraction: { bar: 1, denominator: 10 },
+      fraction: { bar: 1, denominator: 10, multiple: false },
       note: '시판 소스는 여러 제품의 중앙값이에요. 제품마다 차이가 커서 성분표를 보고 고르세요.',
     },
     {

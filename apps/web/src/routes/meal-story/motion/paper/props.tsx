@@ -601,6 +601,99 @@ export const FriedRice = ({ pal, v }: PropProps) => (
   </g>
 );
 
+// ── 비타민 C 편(2026-11-11) — 색색 채소와 과일 ──
+/** 파프리카 — 노란 몸통에 초록 꼭지. face 를 주면 얼굴(마무리 장면의 짝). */
+export const Paprika = ({ pal, f, v, face }: PropProps & { face?: Mood }) => (
+  <g>
+    <Paper d={tp('M -8 -96 C -8 -124, 24 -128, 22 -100 Z', 491, v, 1.6)} fill="#3f8f4f" lift={0.3} />
+    <Paper d={tp('M -92 -40 C -100 -92, -44 -104, -22 -84 C -8 -100, 12 -100, 26 -84 C 50 -104, 104 -90, 94 -38 C 106 30, 76 104, 40 104 C 24 104, 12 92, 2 92 C -10 92, -22 104, -40 104 C -76 104, -104 30, -92 -40 Z', 492, v)} fill="#f2b632" lift={0.9} />
+    <path d="M -22 -80 C -30 -20, -30 40, -20 92 M 26 -80 C 34 -20, 34 40, 22 92" stroke="#d99a1e" strokeWidth={5} fill="none" strokeLinecap="round" />
+    <path d="M -66 -40 C -70 -66, -54 -80, -40 -82" stroke="#fbdc7c" strokeWidth={11} fill="none" strokeLinecap="round" />
+    {face ? <Face x={2} y={14} s={0.9} mood={face} f={f} pal={pal} seed={35} /> : null}
+  </g>
+);
+
+export const Broccoli = ({ v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -22 10 L 22 10 L 30 112 L -30 112 Z', 501, v)} fill="#8fbf6a" lift={0.6} />
+    {[
+      { x: -52, y: -24, r: 50 },
+      { x: 50, y: -28, r: 52 },
+      { x: 0, y: -66, r: 56 },
+      { x: -4, y: -8, r: 46 },
+    ].map(({ x, y, r }, i) => (
+      <Paper key={i} d={te(x, y, r, Math.round(r * 0.9), 502 + i, v, 3)} fill={i === 3 ? '#3f8f4f' : '#2f7d4f'} lift={i === 2 ? 0.7 : 0.3} />
+    ))}
+    {[
+      [-60, -40],
+      [-20, -80],
+      [30, -70],
+      [60, -30],
+      [0, -30],
+      [-36, -10],
+    ].map(([x, y], i) => (
+      <circle key={i} cx={x} cy={y} r={6} fill="#5aa86a" />
+    ))}
+  </g>
+);
+
+/** 키위 반쪽 — 갈색 껍질, 초록 속, 검은 씨. */
+export const Kiwi = ({ v }: PropProps) => (
+  <g>
+    <Paper d={te(0, 0, 104, 92, 511, v)} fill="#8a6a3e" lift={0.9} />
+    <Paper d={te(0, 0, 92, 80, 512, v, 1.8)} fill="#9ccc55" lift={0} />
+    <Paper d={te(0, 0, 30, 24, 513, v, 1.4)} fill="#f3f0c9" lift={0} />
+    {Array.from({ length: 14 }, (_, i) => {
+      const a = (i / 14) * Math.PI * 2;
+      return <ellipse key={i} cx={Math.cos(a) * 50} cy={Math.sin(a) * 42} rx={4} ry={7} fill="#2a1d18" transform={`rotate(${(a * 180) / Math.PI + 90} ${Math.cos(a) * 50} ${Math.sin(a) * 42})`} />;
+    })}
+  </g>
+);
+
+/** 귤 — 주황 동그라미에 꼭지와 잎. face 를 주면 얼굴. */
+export const Tangerine = ({ pal, f, v, face }: PropProps & { face?: Mood }) => (
+  <g>
+    <Paper d={te(0, 10, 104, 94, 521, v)} fill="#f28a2c" lift={0.9} />
+    <path d="M -64 -18 C -58 -46, -38 -62, -16 -66" stroke="#f9b46c" strokeWidth={12} fill="none" strokeLinecap="round" />
+    {face ? null : [[-30, 30], [10, 54], [42, 16], [-6, -8]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r={4} fill="#d9741c" />)}
+    <Paper d={tp('M -10 -84 L 10 -84 L 6 -70 L -6 -70 Z', 522, v, 1.2)} fill="#3f8f4f" lift={0.2} />
+    <Paper d={tp('M 6 -82 C 30 -112, 72 -108, 76 -94 C 62 -74, 32 -70, 6 -82 Z', 523, v, 1.4)} fill={pal.leaf} lift={0.3} />
+    {face ? <Face x={0} y={18} s={0.9} mood={face} f={f} pal={pal} seed={37} /> : null}
+  </g>
+);
+
+/** 삶은 닭가슴살 — 결대로 찢기 전의 한 덩이. */
+export const Chicken = ({ v }: PropProps) => (
+  <g transform="rotate(-10)">
+    <Paper d={tp('M -108 10 C -112 -50, -40 -82, 20 -70 C 80 -60, 116 -20, 108 24 C 100 66, 30 84, -30 76 C -80 70, -104 50, -108 10 Z', 531, v)} fill="#f1dcc0" lift={0.9} />
+    <path d="M -70 -10 C -30 -34, 30 -34, 78 -8 M -74 22 C -30 4, 34 6, 82 26 M -50 50 C -14 38, 30 40, 60 54" stroke="#dcc09a" strokeWidth={5} fill="none" strokeLinecap="round" />
+  </g>
+);
+
+export const SweetPotato = ({ v }: PropProps) => (
+  <g transform="rotate(-16)">
+    <Paper d={tp('M -120 6 C -100 -40, -30 -62, 30 -54 C 80 -46, 116 -22, 124 2 C 110 34, 60 58, 0 58 C -56 58, -104 40, -120 6 Z', 541, v)} fill="#9a4a5a" lift={0.9} />
+    <path d="M -70 -14 L -52 -8 M -10 -30 L 8 -26 M 50 -18 L 68 -10 M -30 22 L -12 26 M 40 26 L 58 22" stroke="#7a3646" strokeWidth={5} strokeLinecap="round" />
+    <Paper d={tp('M 84 -30 C 112 -24, 124 -6, 124 2 C 116 20, 100 34, 84 40 Z', 542, v, 1.6)} fill="#f2c14e" lift={0} />
+  </g>
+);
+
+/** 샐러드 한 그릇 — 초록 잎 위에 노랑·빨강 파프리카와 방울토마토, 닭가슴살. */
+export const Salad = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -124 -6 L 124 -6 C 118 70, 68 106, 0 106 C -68 106, -118 70, -124 -6 Z', 551, v)} fill={pal.paper} lift={0.9} />
+    <path d="M -110 34 C -64 46, 64 46, 110 34" stroke={pal.navy} strokeWidth={8} fill="none" />
+    <Paper d={tr(-46, 100, 92, 18, 552, v, 1.6)} fill={pal.paper} lift={0.3} />
+    <Paper d={tp('M -118 -6 C -110 -52, -60 -70, -20 -56 C 10 -84, 70 -78, 92 -44 C 116 -40, 122 -18, 118 -6 Z', 553, v, 3)} fill="#5aa05a" lift={0} />
+    <Paper d={te(-60, -30, 30, 14, 554, v, 1.4)} fill="#f2b632" lift={0} />
+    <Paper d={te(54, -40, 30, 14, 555, v, 1.4)} fill="#d94b3c" lift={0} />
+    <Paper d={te(-4, -44, 34, 16, 556, v, 1.4)} fill="#f1dcc0" lift={0} />
+    <circle cx={22} cy={-16} r={13} fill="#e0533d" />
+    <circle cx={-30} cy={-10} r={12} fill="#e0533d" />
+    <Paper d={te(78, -14, 22, 12, 557, v, 1.2)} fill="#2f7d4f" lift={0} />
+  </g>
+);
+
 /** 목록·단계 아이콘 크기(약 240) 숟가락·소금통. */
 export const SpoonIcon = (p: PropProps) => (
   <g transform="scale(0.48) translate(0 -128)">

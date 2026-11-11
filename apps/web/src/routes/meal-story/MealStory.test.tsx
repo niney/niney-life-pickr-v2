@@ -155,7 +155,7 @@ const story: MealStoryType = {
         { label: '시판 소스 150g', figure: fig({ value: 953 }), aside: null, highlight: false },
         { label: '직접 만든 소스', figure: fig({ value: 97 }), aside: { label: '열량', figure: fig({ value: 190, unit: 'kcal' }) }, highlight: true },
       ],
-      fraction: { bar: 1, denominator: 10 },
+      fraction: { bar: 1, denominator: 10, multiple: false },
       note: null,
     },
     { type: 'outro', title: '오늘 한 끼로', text: null, actions: ['record', 'recipe', 'share'] },
@@ -246,6 +246,7 @@ describe('건강식단 스토리', () => {
     expect(screen.getByText('190kcal')).toBeInTheDocument();
     // 작은 쪽이 큰 쪽의 몇 분의 1 인지도 서버가 계산해 준다.
     expect(screen.getByText('약 10분의 1')).toBeInTheDocument();
+    expect(screen.queryByText(/약 \d+배/)).not.toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('region', { name: story.title }), { key: 'ArrowLeft' });
     expect(screen.getByRole('heading', { name: '하루 나트륨' })).toBeInTheDocument();
   });
