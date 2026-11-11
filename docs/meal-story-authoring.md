@@ -56,7 +56,7 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 | 쓰는 법 | 값 | 출처 |
 |---|---|---|
-| `{ "kdri": "sodium" }` | 2020 한국인 영양소 섭취기준 성인 값(나트륨 2,300mg = 만성질환위험감소섭취량, 칼륨 3,500mg, 식이섬유 `fiber`, 칼슘 `calcium` = 권장섭취량). 나이별로 다르면 서버가 덧말로 붙인다 | 자동 |
+| `{ "kdri": "sodium" }` | 2020 한국인 영양소 섭취기준 성인 값(나트륨 2,300mg = 만성질환위험감소섭취량, 칼륨 3,500mg, 식이섬유 `fiber`, 칼슘 `calcium`·비타민 C `vitaminC` = 권장섭취량). 나이별로 다르면 서버가 덧말로 붙인다 | 자동 |
 | `{ "kdri": "fiber", "sex": "female" }` | 남녀 값이 다른 기준(식이섬유 남자 30g·여자 20g, 칼슘 800mg·700mg)은 **성별을 골라 숫자 둘로 나란히** 보인다 — 한 숫자만 보이면 절반에게 틀린 기준이다. 성별을 안 고르면 남자 값이 나오고 여자 값은 덧말로 간다 | 자동 |
 | `{ "food": "spaghetti", "nutrient": "kcal", "grams": 80 }` | foods 의 100g당 값 × 그램 | 자동(식품의 출처) |
 | `{ "foods": [{ "food": "spaghetti", "grams": 40 }, { "food": "wholewheat-spaghetti", "grams": 40 }], "nutrient": "fiberG" }` | 섞은 값 — 식품마다 100g당 값 × 그램의 합(2~4가지). 하나라도 값을 모르면 합을 내지 않는다 | 자동 |
@@ -64,9 +64,9 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 | `{ "my": "sodium" }` | 보는 사람의 최근 2주 하루 평균 — 로그인했을 때만, 화면이 통계로 채운다 | — |
 | `{ "value": 3000, "unit": "mg", "source": "id" }` | 출처가 있는 고정값(예: 국민건강통계 평균). **sources 의 id 필수** | 그 출처 |
 
-영양 값 이름: `kcal` `carbG` `proteinG` `fatG` `sugarG` `fiberG` `sodiumMg` `potassiumMg` `calciumMg`(재료 값에 이름을 더하면
+영양 값 이름: `kcal` `carbG` `proteinG` `fatG` `sugarG` `fiberG` `sodiumMg` `potassiumMg` `calciumMg` `vitaminCMg`(재료 값에 이름을 더하면
 `build:meal-stories` 를 slug 없이 돌려 **모든 편**의 `foods.json` 을 다시 만든다 — 안 하면 점검이 ✗, 내용 테스트도 막는다). 레시피 전체 보기의 표는 앞의
-여덟 줄이 늘 나오고, 칼슘은 그 편의 영양정보 장면(`nutrition`)이 가리킬 때만 붙는다.
+여덟 줄이 늘 나오고, 칼슘·비타민 C 는 그 편의 영양정보 장면(`nutrition`)이 가리킬 때만 붙는다.
 기준값은 영양 탭과 같은 KDRI 를 쓴다 — WHO 2,000mg 같은 다른 기준을 글로 섞지 않는다.
 
 **서버가 스스로 붙이는 어림 두 가지** — 원고에 적지 않는다(적으면 점검이 글 속 숫자로 잡는다).
@@ -74,8 +74,9 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 - **소금으로 환산** — 큰 숫자(`stat`) 장면의 나트륨 숫자(`kdri sodium`·`my sodium`·`sodiumMg`)에는 '소금 약 5.8g' 이 함께
   나온다(나트륨 ÷ 400, 출처 `who-sodium-2012` 가 자동으로 붙는다 — 환산 비율의 근거일 뿐 기준값은 KDRI). 내 기록 숫자는
   화면이 같은 식으로 환산한다.
-- **약 N분의 1** — 막대(`bars`)가 둘이고 단위가 같으면 작은 쪽에 '약 10분의 1' 쪽지가 붙는다. N 이 정수로 잘 떨어질 때만
-  (실제 비와 15% 넘게 벗어나면 붙지 않는다 — 2.4배는 '2분의 1'도 '3분의 1'도 아니다).
+- **약 N분의 1 · 약 N배** — 막대(`bars`)가 둘이고 단위가 같으면 작은 쪽에 '약 10분의 1' 쪽지가 붙는다. N 이 정수로 잘 떨어질 때만
+  (실제 비와 15% 넘게 벗어나면 붙지 않는다 — 2.4배는 '2분의 1'도 '3분의 1'도 아니다). 강조한(`highlight`) 막대가 큰 쪽이면 그
+  막대에 '약 2배'가 붙는다(한 접시가 권장량의 두 배 — 기준 막대에 '2분의 1'을 붙이면 거꾸로 읽힌다).
 
 둘 다 점검 출력의 '사람이 확인할 값'에 찍힌다 — 환산 값과 말이 어색하지 않은지 본다.
 
@@ -139,7 +140,7 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 | 무엇 | 영상에서 온전한 길이 | 넘으면 |
 |---|---|---|
-| `stat`·`bars`·`list`·`nutrition` 제목 | 두 줄(한글 약 16자) | 세 줄이 되며 글씨가 작아진다 |
+| `stat`·`bars`·`list`·`nutrition` 제목 | 두 줄(한글 약 16자) | 세 줄이 되며 글씨가 작아진다. 줄은 낱말 사이에서만 바뀐다 — '비타민 C'처럼 붙어 읽히는 두 낱말이 줄 끝에 걸리면 제목을 바꿔 짠다('하루 비타민 / C, 이만큼' → '비타민 C, / 하루 이만큼') |
 | `bars` 막대 이름(label) | 한글 약 15자 | 값 쪽지와 겹칠 수 있다 |
 | `list` 설명(text) | 항목 2~4개(5개에 덧말 없음)는 두 줄(약 40자), 그보다 많으면 한 줄(약 20자) | 끝이 … 로 잘린다 |
 | 재료 수 | 9개 | 재료 이름 글씨가 작아진다 |
@@ -156,12 +157,13 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 `label`(성분표 — '나트륨' 줄이 칠해져 있다) `dip`(덜어 먹는 종지) `noodle`(면 다발) `tomato` `onion` `garlic` `oil`(올리브유) `leaf`(바질·나물)
 `cheese` `pot`(냄비) `pan`(토마토 소스 팬) `plate`(파스타 접시) `timer` `clock` `rice`(잡곡 밥공기) `mushroom` `carrot` `egg` `sprout`(콩나물)
 `bean` `apple` `water`(물컵) `sesame`(참기름) `soy`(간장) `stirfry`(버섯·당근 볶는 팬) `bibimbap`(비빔밥 그릇) `milk`(우유곽)
-`anchovy`(멸치) `kale` `tofu` `yogurt` `scallion`(대파) `sesameseed`(깨 종지) `friedrice`(볶음밥 접시)
+`anchovy`(멸치) `kale` `tofu` `yogurt` `scallion`(대파) `sesameseed`(깨 종지) `friedrice`(볶음밥 접시) `paprika` `broccoli` `kiwi`
+`tangerine`(귤) `chicken`(삶은 닭가슴살) `sweetpotato` `salad`(샐러드 그릇)
 
 **그 편의 그림은 원고가 정한다** — 표지 식탁에는 그 편 레시피의 재료 둘(첫째·둘째 재료의 소품)과 완성 그릇이, 영양정보 장면의
 식탁 끝에도 완성 그릇이 놓인다. 완성 그릇 = **마지막 만드는 법 단계의 `icon`** 이니 거기에 그 요리의 그림을 단다(첫 편 `plate`,
 식이섬유 편 `bibimbap`). 소품을 달지 않으면 그 자리는 빈다. 무대 색과 마무리 장면에서 손 흔드는 짝은 `topic.nutrient` 로 정해진다
-(나트륨 = 파랑·소금통과 숟가락, 식이섬유 = 초록·밥공기와 버섯, 칼슘 = 보라·우유곽과 멸치). **새 주제를 열 때**는 `paper/palette.ts` 의
+(나트륨 = 파랑·소금통과 숟가락, 식이섬유 = 초록·밥공기와 버섯, 칼슘 = 보라·우유곽과 멸치, 비타민 C = 귤색·파프리카와 귤). **새 주제를 열 때**는 `paper/palette.ts` 의
 `TOPIC_STAGE` 에 색을, `ChapterOutro.tsx` 의 `PALS` 에 짝을 더한다 — 안 하면 나트륨의 색과 소금통이 나온다.
 
 새 소품이 필요하면 `apps/web/src/routes/meal-story/motion/paper/props.tsx` 에 그리고(원점 가운데, 약 240 크기, 찢긴 가장자리는
