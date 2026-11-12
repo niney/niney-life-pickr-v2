@@ -59,6 +59,15 @@ const textFields = (s: LoadedMealStory): TextField[] => {
         add('덧말', sc.note);
         sc.bars.forEach((b, k) => add(`막대 ${k + 1} 이름`, b.label, true));
         break;
+      case 'lineup':
+        add('제목', sc.title);
+        add('잣대', sc.basis, true);
+        add('덧말', sc.note);
+        sc.rows.forEach((r, k) => {
+          add(`줄 ${k + 1} 이름`, r.label, true);
+          add(`줄 ${k + 1} 양`, r.sub, true);
+        });
+        break;
       case 'list':
         add('제목', sc.title);
         add('덧말', sc.note);
@@ -108,6 +117,8 @@ const MOTION_LIMIT = {
   listTextLineUnits: 20,
   /** 재료 줄 — 이보다 많으면 이름 글씨가 보조 글 하한(34px) 아래로 내려간다. */
   ingredients: 9,
+  /** 줄 세우기의 이름 + 옆 글 — 막대 위 한 줄에 값 쪽지 왼쪽까지(웹 motion/layout.ts 의 lineupLayout). */
+  lineupLabelUnits: 15,
 } as const;
 
 const textUnits = (text: string): number =>
@@ -119,13 +130,21 @@ export const motionLimitWarnings = (s: LoadedMealStory): string[] => {
   s.script.scenes.forEach((sc, i) => {
     const w = `장면 ${i + 1}`;
     // 표지·마무리는 큰 카드라 세 줄도 괜찮다 — 머리 제목 띠를 쓰는 장면만.
-    if ((sc.type === 'stat' || sc.type === 'bars' || sc.type === 'list' || sc.type === 'nutrition') && textUnits(sc.title) > MOTION_LIMIT.headingUnits) {
+    if ((sc.type === 'stat' || sc.type === 'bars' || sc.type === 'lineup' || sc.type === 'list' || sc.type === 'nutrition') && textUnits(sc.title) > MOTION_LIMIT.headingUnits) {
       out.push(`${w} 제목: '${sc.title}' — 영상에서 세 줄이 되어 글씨가 작아진다(두 줄은 한글 약 16자까지)`);
     }
     if (sc.type === 'bars') {
       sc.bars.forEach((b, k) => {
         if (textUnits(b.label) > MOTION_LIMIT.barLabelUnits) {
           out.push(`${w} 막대 ${k + 1} 이름: '${b.label}' — 영상에서 값 쪽지와 겹칠 수 있다(한글 약 15자까지)`);
+        }
+      });
+    }
+    if (sc.type === 'lineup') {
+      sc.rows.forEach((r, k) => {
+        const units = textUnits(r.label) + (r.sub ? textUnits(r.sub) + 0.6 : 0);
+        if (units > MOTION_LIMIT.lineupLabelUnits) {
+          out.push(`${w} 줄 ${k + 1} 이름: '${r.label}${r.sub ? ` ${r.sub}` : ''}' — 영상에서 이름 글씨가 작아지고 옆 글이 빠질 수 있다(이름과 옆 글을 합쳐 한글 약 ${MOTION_LIMIT.lineupLabelUnits}자까지)`);
         }
       });
     }
@@ -143,6 +162,20 @@ export const motionLimitWarnings = (s: LoadedMealStory): string[] => {
     }
   });
   return out;
+};
+
+/**
+ * 머리말(표지 kicker)이 다른 편과 같으면 경고 — 목록 카드는 머리말로 구분한다. 한 주제에 편이 여럿 나올 수 있으면(열량 줄이기)
+ * 머리말에 대상을 넣는다('국수 열량 줄이기'). 다른 편과 견줘야 알 수 있어 편 하나의 점검(checkMealStory)과 따로 둔다.
+ * kickers = 모든 편의 slug → 머리말.
+ */
+export const kickerClashWarnings = (slug: string, kickers: ReadonlyMap<string, string | null>): string[] => {
+  const mine = kickers.get(slug);
+  if (!mine) return [];
+  const same = [...kickers].filter(([other, k]) => other !== slug && k === mine).map(([other]) => other);
+  return same.length > 0
+    ? [`머리말 '${mine}' 이 다른 편(${same.join(', ')})과 같다 — 목록 카드가 구분되지 않는다. 머리말에 대상을 넣는다(예: '국수 열량 줄이기')`]
+    : [];
 };
 
 /** 사진 크기 — 바이트·가로세로. 사진 검사는 부르는 쪽이 sharp 로 잰 값을 넘긴다(테스트는 생략 가능). */
@@ -225,6 +258,19 @@ export const checkMealStory = (
       const words = sc.fraction.multiple ? `약 ${sc.fraction.denominator}배` : `약 ${sc.fraction.denominator}분의 1`;
       review.push(`장면 ${i + 1}: ${tagged?.label} ${tagged?.figure.value}${tagged?.figure.unit} 은 ${other?.label} ${other?.figure.value}${other?.figure.unit} 의 '${words}'`);
     }
+  }
+
+  // 사람 확인 목록 — 줄 세우기는 '비슷하다'·'크게 다르다'를 글(제목·덧말)로 말하니, 가장 작은 값과 큰 값을 찍어 글과 맞춰 보게 한다.
+  for (const [i, sc] of s.story.scenes.entries()) {
+    if (sc.type !== 'lineup') continue;
+    const known = sc.rows.filter((r) => r.figure.value !== null);
+    if (known.length < 2) continue;
+    const low = known.reduce((a, b) => ((b.figure.value ?? 0) < (a.figure.value ?? 0) ? b : a));
+    const high = known.reduce((a, b) => ((b.figure.value ?? 0) > (a.figure.value ?? 0) ? b : a));
+    const ratio = (low.figure.value ?? 0) > 0 ? (high.figure.value ?? 0) / (low.figure.value ?? 1) : null;
+    review.push(
+      `장면 ${i + 1} '${sc.title}': 가장 작은 값 ${low.label} ${low.figure.value}${low.figure.unit} · 가장 큰 값 ${high.label} ${high.figure.value}${high.figure.unit}${ratio === null ? '' : ` (약 ${ratio >= 10 ? Math.round(ratio) : Math.round(ratio * 10) / 10}배)`} — 제목·덧말의 말과 맞는지 본다`,
+    );
   }
 
   // 사람 확인 목록 — 값마다 어디서 왔는지.

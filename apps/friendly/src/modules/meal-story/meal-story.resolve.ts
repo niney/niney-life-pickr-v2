@@ -308,6 +308,20 @@ export const resolveMealStory = (
         }
         return { type: 'bars', title: s.title, bars, fraction, note: s.note ?? null };
       }
+      case 'lineup':
+        return {
+          type: 'lineup',
+          title: s.title,
+          basis: s.basis ?? null,
+          rows: s.rows.map((r, k) => ({
+            label: r.label,
+            sub: r.sub ?? null,
+            figure: valueFigure(r.value, `${where} 줄 ${k + 1}`),
+            icon: r.icon ?? null,
+            highlight: r.highlight ?? false,
+          })),
+          note: s.note ?? null,
+        };
       case 'list':
         return {
           type: 'list',
@@ -393,6 +407,8 @@ export const resolveMealStory = (
     title: story.title,
     summary: story.summary,
     topic: story.topic,
+    // 목록 카드의 이름 — 표지 장면의 머리말.
+    kicker: scenes.find((s): s is Extract<MealStorySceneType, { type: 'cover' }> => s.type === 'cover')?.kicker ?? null,
     publishedAt: story.publishedAt,
     coverUrl,
     sceneCount: scenes.length,

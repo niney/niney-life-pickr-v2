@@ -85,15 +85,35 @@ export const MealStoryIcon = z.enum([
   'chicken',
   'sweetpotato',
   'salad',
+  // 면 편(2026-11-12) — 삶은 면 타래 여섯(소면·메밀국수·우동·쌀국수·당면·스파게티)·곤약면·두부면·국수호박·오이·고추장·비빔국수 그릇
+  'somen',
+  'soba',
+  'udon',
+  'ricenoodle',
+  'glassnoodle',
+  'spaghetti',
+  'konjac',
+  'tofunoodle',
+  'squash',
+  'cucumber',
+  'gochujang',
+  'bibimnoodle',
 ]);
 export type MealStoryIconType = z.infer<typeof MealStoryIcon>;
 
 export const MealStoryStatus = z.enum(['draft', 'published']);
 export type MealStoryStatusType = z.infer<typeof MealStoryStatus>;
 
+/**
+ * 스토리 주제 — 영양 탭 영양소 + 열량(kcal, 2026-11-12 면 편). 열량은 '많음'·'부족' 판정이 없어(영양 탭에 줄이 없고 통계의
+ * 열량 줄도 판정을 주지 않는다) 내 기록에 맞춰 잇지 않는다 — 목록, 홈의 가장 새 이야기, 기록 상세의 레시피 링크로 들어온다.
+ */
+export const MealStoryTopicNutrient = z.enum([...MealNutrientKey.options, 'kcal']);
+export type MealStoryTopicNutrientType = z.infer<typeof MealStoryTopicNutrient>;
+
 export const MealStoryTopic = z.object({
-  // 영양 탭 영양소 — 그 줄이 '많음'(reduce)·'부족'(increase)일 때 이 스토리를 잇는다.
-  nutrient: MealNutrientKey,
+  // 영양 탭 영양소(또는 열량) — 그 줄이 '많음'(reduce)·'부족'(increase)일 때 이 스토리를 잇는다.
+  nutrient: MealStoryTopicNutrient,
   direction: z.enum(['reduce', 'increase']),
 });
 export type MealStoryTopicType = z.infer<typeof MealStoryTopic>;
@@ -184,6 +204,24 @@ export const MealStoryScene = z.discriminatedUnion('type', [
     fraction: z.object({ bar: z.number().int(), denominator: z.number().int(), multiple: z.boolean() }).nullable(),
     note: z.string().nullable(),
   }),
+  // 줄 세우기(2026-11-12) — 여러 가지(4~7)를 같은 잣대로 한 줄씩 견준다. 막대(bars)는 둘~넷을 크게, 이것은 여럿을 가늘게.
+  z.object({
+    type: z.literal('lineup'),
+    title: z.string(),
+    // 무엇을 같은 잣대로 쟀는지(예: '삶은 면 100g', '한 번 먹는 양') — 제목 아래 한 줄. 없으면 null.
+    basis: z.string().nullable(),
+    rows: z.array(
+      z.object({
+        label: z.string(),
+        // 이름 옆 작은 글(예: '마른 면 100g', '한 봉 200g') — 줄마다 양이 다를 때.
+        sub: z.string().nullable(),
+        figure: MealStoryFigure,
+        icon: MealStoryIcon.nullable(),
+        highlight: z.boolean(),
+      }),
+    ),
+    note: z.string().nullable(),
+  }),
   z.object({
     type: z.literal('list'),
     title: z.string(),
@@ -260,6 +298,9 @@ export const MealStoryListItem = z.object({
   title: z.string(),
   summary: z.string(),
   topic: MealStoryTopic.nullable(),
+  // 그 편의 머리말(표지 장면의 kicker — '국수 열량 줄이기'). 목록 카드가 주제 이름 대신 쓴다 — 한 주제(열량 줄이기)에 편이 여럿이면
+  // 주제 이름만으로는 카드가 구분되지 않는다. 표지 장면이 없는 원고는 null(화면이 주제 이름으로 대신한다).
+  kicker: z.string().nullable(),
   publishedAt: DateString,
   coverUrl: z.string().nullable(),
   sceneCount: z.number().int(),

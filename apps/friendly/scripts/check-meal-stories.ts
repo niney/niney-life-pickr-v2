@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import type { MealStoryFigureType, MealStoryType } from '@repo/api-contract';
-import { checkMealStory, type ImageInfo } from '../src/modules/meal-story/meal-story.check.js';
+import { checkMealStory, kickerClashWarnings, type ImageInfo } from '../src/modules/meal-story/meal-story.check.js';
 import { formatAmount } from '../src/modules/meal-story/meal-story.defs.js';
 import { buildMealStoryFoods, loadFoodTables } from '../src/modules/meal-story/meal-story.foods.js';
 import { MealStoryFoodsFile, type MealStoryFoodsFileType } from '../src/modules/meal-story/meal-story.script.js';
@@ -42,6 +42,7 @@ const figureLines = (story: MealStoryType): string[] => {
         if (b.aside) out.push(`${w} · ${b.label} 옆 ${b.aside.label}: ${fig(b.aside.figure)}`);
       });
     }
+    if (s.type === 'lineup') s.rows.forEach((r) => out.push(`${w} · ${r.label}${r.sub ? `(${r.sub})` : ''}: ${fig(r.figure)}`));
     if (s.type === 'nutrition') s.rows.forEach((r) => out.push(`${w} · ${r.label}: ${fig(r.figure)}`));
   });
   return out;
@@ -65,10 +66,19 @@ const imagesOf = async (dir: string): Promise<ImageInfo[]> => {
 
 const main = async (): Promise<void> => {
   const root = mealStoryDir();
-  const slugs = (await readdir(root, { withFileTypes: true }))
+  const allSlugs = (await readdir(root, { withFileTypes: true }))
     .filter((d) => d.isDirectory() && !d.name.startsWith('.') && !d.name.startsWith('_'))
-    .map((d) => d.name)
-    .filter((s) => !ONLY || s === ONLY);
+    .map((d) => d.name);
+  // 머리말 겹침은 다른 편과 견줘야 안다 — --slug 로 한 편만 볼 때도 모든 편의 머리말을 읽는다(형식이 틀린 편은 아래에서 ✗).
+  const kickers = new Map<string, string | null>();
+  for (const s of allSlugs) {
+    try {
+      kickers.set(s, (await loadMealStoryDir(join(root, s))).listItem.kicker);
+    } catch {
+      // 못 읽은 편은 견주지 않는다.
+    }
+  }
+  const slugs = allSlugs.filter((s) => !ONLY || s === ONLY);
   const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT]);
   const haveTables = !!paths.raw || !!paths.processed;
   let failed = false;
@@ -91,6 +101,7 @@ const main = async (): Promise<void> => {
       foodsFile = null;
     }
     const result = checkMealStory(loaded, { images: await imagesOf(dir), foodsFile });
+    result.warnings.push(...kickerClashWarnings(slug, kickers));
     if (haveTables) {
       const rebuilt = buildMealStoryFoods(loaded.script, tables);
       const same = JSON.stringify(rebuilt.file) === JSON.stringify(foodsFile);

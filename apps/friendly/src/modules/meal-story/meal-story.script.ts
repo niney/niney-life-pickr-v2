@@ -97,6 +97,29 @@ export const MealStoryScriptScene = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
+      type: z.literal('lineup'),
+      title: text(32),
+      basis: text(24).optional(),
+      rows: z
+        .array(
+          z
+            .object({
+              label: text(14),
+              sub: text(16).optional(),
+              value: MealStoryValueRef,
+              icon: MealStoryIcon.optional(),
+              highlight: z.boolean().optional(),
+            })
+            .strict(),
+        )
+        .min(4)
+        .max(7),
+      // 일곱 줄 아래에 놓여 자리가 좁다 — 영상에서 세 줄(약 60자)까지.
+      note: text(60).optional(),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('list'),
       title: text(32),
       items: z

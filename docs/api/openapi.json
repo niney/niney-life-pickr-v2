@@ -12371,7 +12371,8 @@
                                   "sodium",
                                   "magnesium",
                                   "zinc",
-                                  "folate"
+                                  "folate",
+                                  "kcal"
                                 ]
                               },
                               "direction": {
@@ -12387,6 +12388,10 @@
                               "direction"
                             ],
                             "additionalProperties": false,
+                            "nullable": true
+                          },
+                          "kicker": {
+                            "type": "string",
                             "nullable": true
                           },
                           "publishedAt": {
@@ -12411,6 +12416,7 @@
                           "title",
                           "summary",
                           "topic",
+                          "kicker",
                           "publishedAt",
                           "coverUrl",
                           "sceneCount",
@@ -12505,7 +12511,8 @@
                             "sodium",
                             "magnesium",
                             "zinc",
-                            "folate"
+                            "folate",
+                            "kcal"
                           ]
                         },
                         "direction": {
@@ -12975,6 +12982,221 @@
                               "type": {
                                 "type": "string",
                                 "enum": [
+                                  "lineup"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "basis": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "rows": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "sub": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "figure": {
+                                      "type": "object",
+                                      "properties": {
+                                        "value": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "unit": {
+                                          "type": "string"
+                                        },
+                                        "basis": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "detail": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "sources": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "my": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kcal",
+                                            "carb",
+                                            "sugar",
+                                            "fat",
+                                            "saturatedFat",
+                                            "cholesterol",
+                                            "protein",
+                                            "fiber",
+                                            "calcium",
+                                            "iron",
+                                            "potassium",
+                                            "vitaminA",
+                                            "vitaminD",
+                                            "thiamin",
+                                            "riboflavin",
+                                            "niacin",
+                                            "vitaminC",
+                                            "sodium",
+                                            "magnesium",
+                                            "zinc",
+                                            "folate"
+                                          ],
+                                          "nullable": true
+                                        },
+                                        "equivalent": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "number",
+                                              "nullable": true
+                                            },
+                                            "unit": {
+                                              "type": "string"
+                                            },
+                                            "per": {
+                                              "type": "number",
+                                              "exclusiveMinimum": true,
+                                              "minimum": 0
+                                            }
+                                          },
+                                          "required": [
+                                            "label",
+                                            "value",
+                                            "unit",
+                                            "per"
+                                          ],
+                                          "additionalProperties": false,
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "value",
+                                        "unit",
+                                        "basis",
+                                        "detail",
+                                        "sources",
+                                        "my",
+                                        "equivalent"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "icon": {
+                                      "type": "string",
+                                      "enum": [
+                                        "bowl",
+                                        "kimchi",
+                                        "sauce",
+                                        "can",
+                                        "ramen",
+                                        "shaker",
+                                        "spoon",
+                                        "lemon",
+                                        "magnifier",
+                                        "label",
+                                        "dip",
+                                        "noodle",
+                                        "tomato",
+                                        "onion",
+                                        "garlic",
+                                        "oil",
+                                        "leaf",
+                                        "cheese",
+                                        "pot",
+                                        "pan",
+                                        "plate",
+                                        "timer",
+                                        "clock",
+                                        "rice",
+                                        "mushroom",
+                                        "carrot",
+                                        "egg",
+                                        "sprout",
+                                        "bean",
+                                        "apple",
+                                        "water",
+                                        "sesame",
+                                        "soy",
+                                        "stirfry",
+                                        "bibimbap",
+                                        "milk",
+                                        "anchovy",
+                                        "kale",
+                                        "tofu",
+                                        "yogurt",
+                                        "scallion",
+                                        "sesameseed",
+                                        "friedrice",
+                                        "paprika",
+                                        "broccoli",
+                                        "kiwi",
+                                        "tangerine",
+                                        "chicken",
+                                        "sweetpotato",
+                                        "salad",
+                                        "somen",
+                                        "soba",
+                                        "udon",
+                                        "ricenoodle",
+                                        "glassnoodle",
+                                        "spaghetti",
+                                        "konjac",
+                                        "tofunoodle",
+                                        "squash",
+                                        "cucumber",
+                                        "gochujang",
+                                        "bibimnoodle"
+                                      ],
+                                      "nullable": true
+                                    },
+                                    "highlight": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "label",
+                                    "sub",
+                                    "figure",
+                                    "icon",
+                                    "highlight"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "title",
+                              "basis",
+                              "rows",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
                                   "list"
                                 ]
                               },
@@ -13045,7 +13267,19 @@
                                         "tangerine",
                                         "chicken",
                                         "sweetpotato",
-                                        "salad"
+                                        "salad",
+                                        "somen",
+                                        "soba",
+                                        "udon",
+                                        "ricenoodle",
+                                        "glassnoodle",
+                                        "spaghetti",
+                                        "konjac",
+                                        "tofunoodle",
+                                        "squash",
+                                        "cucumber",
+                                        "gochujang",
+                                        "bibimnoodle"
                                       ],
                                       "nullable": true
                                     }
@@ -13156,7 +13390,19 @@
                                         "tangerine",
                                         "chicken",
                                         "sweetpotato",
-                                        "salad"
+                                        "salad",
+                                        "somen",
+                                        "soba",
+                                        "udon",
+                                        "ricenoodle",
+                                        "glassnoodle",
+                                        "spaghetti",
+                                        "konjac",
+                                        "tofunoodle",
+                                        "squash",
+                                        "cucumber",
+                                        "gochujang",
+                                        "bibimnoodle"
                                       ],
                                       "nullable": true
                                     }
@@ -13258,7 +13504,19 @@
                                   "tangerine",
                                   "chicken",
                                   "sweetpotato",
-                                  "salad"
+                                  "salad",
+                                  "somen",
+                                  "soba",
+                                  "udon",
+                                  "ricenoodle",
+                                  "glassnoodle",
+                                  "spaghetti",
+                                  "konjac",
+                                  "tofunoodle",
+                                  "squash",
+                                  "cucumber",
+                                  "gochujang",
+                                  "bibimnoodle"
                                 ],
                                 "nullable": true
                               }
@@ -13576,7 +13834,19 @@
                                   "tangerine",
                                   "chicken",
                                   "sweetpotato",
-                                  "salad"
+                                  "salad",
+                                  "somen",
+                                  "soba",
+                                  "udon",
+                                  "ricenoodle",
+                                  "glassnoodle",
+                                  "spaghetti",
+                                  "konjac",
+                                  "tofunoodle",
+                                  "squash",
+                                  "cucumber",
+                                  "gochujang",
+                                  "bibimnoodle"
                                 ],
                                 "nullable": true
                               }

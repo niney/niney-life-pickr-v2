@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MealStorySceneType } from '@repo/api-contract';
-import { checkMealStory } from './meal-story.check.js';
+import { checkMealStory, kickerClashWarnings } from './meal-story.check.js';
 import { buildMealStoryFoods, type FoodRow } from './meal-story.foods.js';
 import { fractionOf, kdriFigure } from './meal-story.defs.js';
 import { resolveMealStory } from './meal-story.resolve.js';
@@ -268,6 +268,56 @@ describe('resolveMealStory', () => {
     expect(fractionOf(0, 100)).toBeNull();
   });
 
+  it('줄 세우기 — 줄마다 값을 계산하고 잣대·옆 글·소품·강조를 그대로 싣는다(못 푼 줄은 값 없이 issues). 주제는 열량도 된다', () => {
+    const script = base({
+      topic: { nutrient: 'kcal', direction: 'reduce' },
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        {
+          type: 'lineup',
+          title: '면끼리',
+          basis: '삶은 면 100g',
+          rows: [
+            { label: '국수', value: { food: 'noodle', nutrient: 'kcal', grams: 100 }, icon: 'somen', highlight: true },
+            { label: '소스', sub: '한 병 150g', value: { food: 'sauce', nutrient: 'kcal', grams: 150 } },
+            { label: '허브', value: { food: 'herb', nutrient: 'kcal', grams: 10 } },
+            { label: '없는 것', value: { food: 'ghost', nutrient: 'kcal', grams: 10 } },
+          ],
+          note: '덧말',
+        },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+    const { story, listItem, issues } = resolveMealStory(script, foods, imageUrl);
+    expect(story.topic).toEqual({ nutrient: 'kcal', direction: 'reduce' });
+    expect(listItem.topic).toEqual({ nutrient: 'kcal', direction: 'reduce' });
+    // 목록 카드의 이름은 표지의 머리말 — 주제 이름(열량 줄이기)이 같은 편끼리도 구분된다.
+    expect(listItem.kicker).toBe('시험');
+    const noCover = base({ scenes: [{ type: 'list', title: '방법', items: [{ title: '하나' }, { title: '둘' }] }, { type: 'step', step: 1 }, { type: 'outro', title: '끝', actions: ['share'] }] });
+    expect(resolveMealStory(noCover, foods, imageUrl).listItem.kicker).toBeNull();
+    const lineup = sceneOf(story.scenes, 'lineup');
+    expect(lineup.basis).toBe('삶은 면 100g');
+    expect(lineup.note).toBe('덧말');
+    expect(lineup.rows.map((r) => [r.label, r.sub, r.figure.value, r.figure.unit, r.icon, r.highlight])).toEqual([
+      ['국수', null, 350, 'kcal', 'somen', true],
+      ['소스', '한 병 150g', 105, 'kcal', null, false],
+      ['허브', null, 3, 'kcal', null, false],
+      ['없는 것', null, null, 'kcal', null, false],
+    ]);
+    expect(lineup.rows[0]!.figure).toMatchObject({ basis: '국수 100g', sources: ['mfds-raw'] });
+    expect(issues).toEqual(["장면 2(lineup) 줄 4: 식품 'ghost' 가 foods 에 없다"]);
+    // 줄은 넷에서 일곱 — 셋 이하는 막대(bars)로 쓴다.
+    expect(() =>
+      base({
+        scenes: [
+          { type: 'cover', kicker: '시험', title: '시험 표지' },
+          { type: 'lineup', title: '면', rows: [{ label: '국수', value: { food: 'noodle', nutrient: 'kcal', grams: 100 } }] },
+          { type: 'outro', title: '끝', actions: ['share'] },
+        ],
+      }),
+    ).toThrow();
+  });
+
   it('식품 값은 100g당 × 그램, 레시피 값은 인분으로 나눈 합계(묶음만 따로) — 값을 모르는 재료는 빼고 덧말로 밝힌다', () => {
     const { story, issues } = resolveMealStory(base(), foods, imageUrl);
     const bars = sceneOf(story.scenes, 'bars');
@@ -450,6 +500,61 @@ describe('checkMealStory', () => {
     expect(r.warnings.some((w) => w.includes('1인분만'))).toBe(false);
     // 손으로 적은 값은 사람 확인 목록에.
     expect(r.review.some((x) => x.includes('허브') && x.includes('손으로 적은 값'))).toBe(true);
+  });
+
+  it('줄 세우기 — 이름과 옆 글이 길면 영상 경고, 가장 작은 값·큰 값을 사람 확인 목록에 찍는다(제목의 말과 맞춰 보게)', () => {
+    const script = base({
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        {
+          type: 'lineup',
+          title: '면끼리',
+          rows: [
+            { label: '국수', value: { food: 'noodle', nutrient: 'kcal', grams: 100 } },
+            { label: '이름이 꽤 긴 소스 이름', sub: '한 병에 150g 들어 있음', value: { food: 'sauce', nutrient: 'kcal', grams: 150 } },
+            { label: '허브', value: { food: 'herb', nutrient: 'kcal', grams: 10 } },
+            { label: '국수 반', sub: '50g', value: { food: 'noodle', nutrient: 'kcal', grams: 50 } },
+          ],
+        },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+    const r = checkMealStory(loaded(script));
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.filter((w) => w.includes('영상에서'))).toEqual([expect.stringContaining('장면 2 줄 2 이름')]);
+    expect(r.review).toEqual(expect.arrayContaining([expect.stringContaining("장면 2 '면끼리': 가장 작은 값 허브 3kcal · 가장 큰 값 국수 350kcal (약 117배)")]));
+    // 글에 박힌 영양 값은 줄 이름에서도 막는다(양 — 그램 — 은 괜찮다).
+    const bad = base({
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        {
+          type: 'lineup',
+          title: '면끼리',
+          rows: [
+            { label: '국수 350kcal', value: { food: 'noodle', nutrient: 'kcal', grams: 100 } },
+            { label: '소스', value: { food: 'sauce', nutrient: 'kcal', grams: 150 } },
+            { label: '허브', value: { food: 'herb', nutrient: 'kcal', grams: 10 } },
+            { label: '국수 반', value: { food: 'noodle', nutrient: 'kcal', grams: 50 } },
+          ],
+        },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+    expect(checkMealStory(loaded(bad)).errors).toEqual([expect.stringContaining('장면 2 줄 1 이름')]);
+  });
+
+  it('머리말이 다른 편과 같으면 경고 — 목록 카드는 머리말로 구분한다(머리말이 없는 편·혼자인 머리말은 조용히)', () => {
+    const kickers = new Map<string, string | null>([
+      ['noodles', '열량 줄이기'],
+      ['rice', '열량 줄이기'],
+      ['pasta', '나트륨 줄이기'],
+      ['bare', null],
+    ]);
+    expect(kickerClashWarnings('noodles', kickers)).toEqual([expect.stringContaining("머리말 '열량 줄이기' 이 다른 편(rice)과 같다")]);
+    expect(kickerClashWarnings('rice', kickers)).toEqual([expect.stringContaining('다른 편(noodles)')]);
+    expect(kickerClashWarnings('pasta', kickers)).toEqual([]);
+    expect(kickerClashWarnings('bare', kickers)).toEqual([]);
+    expect(kickerClashWarnings('unknown', kickers)).toEqual([]);
   });
 
   it('영상 틀의 한도 — 형식은 통과해도 영상에서 글씨가 작아지거나 잘리는 원고는 경고로 알린다', () => {
