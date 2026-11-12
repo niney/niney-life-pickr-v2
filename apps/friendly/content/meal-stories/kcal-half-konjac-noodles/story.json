@@ -1,0 +1,217 @@
+{
+  "slug": "kcal-half-konjac-noodles",
+  "status": "draft",
+  "title": "곤약면·두부면으로 국수 열량 줄이기",
+  "summary": "소면·메밀국수·곤약면·두부면을 같은 저울에 올려 봤어요. 비슷한 면과 크게 다른 면, 반반 섞는 비빔국수까지.",
+  "topic": { "nutrient": "kcal", "direction": "reduce" },
+  "publishedAt": "2026-11-12",
+  "reviewedAt": null,
+  "sources": [
+    {
+      "id": "rda-fct-10",
+      "label": "농촌진흥청 국가표준식품성분표 제10개정판(국가표준식품성분 DB 10.4)",
+      "url": "https://www.nics.go.kr/food/kfi/fct/fctIntro/list?menuId=PS03562"
+    },
+    {
+      "id": "mfds-processed-full",
+      "label": "식약처 식품영양성분 데이터베이스 가공식품 전체판(2026-10-29, 329,378건) — 두부로 만든 두부면 22개 제품의 중앙값",
+      "url": "https://various.foodsafetykorea.go.kr/nutrient/general/down/list.do"
+    }
+  ],
+  "foods": [
+    { "id": "somen-dry", "label": "소면(마른 것)", "ref": { "db": "raw", "code": "R101-018010002-0000" } },
+    { "id": "somen", "label": "소면(삶은 것)", "ref": { "db": "raw", "code": "R101-018010083-0000" } },
+    { "id": "soba", "label": "메밀국수(삶은 것)", "ref": { "db": "raw", "code": "R101-005000083-0000" } },
+    { "id": "udon", "label": "우동면(삶은 것)", "ref": { "db": "raw", "code": "R101-018020046-0000" } },
+    { "id": "spaghetti", "label": "스파게티(삶은 것)", "ref": { "db": "raw", "code": "R101-024020083-0000" } },
+    { "id": "rice-noodle", "label": "쌀국수(삶은 것)", "ref": { "db": "raw", "code": "R101-010000083-0000" } },
+    { "id": "glass-noodle", "label": "당면(삶은 것)", "ref": { "db": "raw", "code": "R102-007010046-0000" } },
+    { "id": "konjac-noodle", "label": "곤약면", "ref": { "db": "raw", "code": "R102-009010047-0000" } },
+    { "id": "noodle-squash", "label": "국수호박(데친 것)", "ref": { "db": "raw", "code": "R106-198020047-0000" } },
+    {
+      "id": "tofu-noodle",
+      "label": "두부면",
+      "manual": {
+        "per100": { "kcal": 169.5, "carbG": 3.9, "proteinG": 16, "fatG": 10, "sugarG": 0 },
+        "source": "mfds-processed-full",
+        "note": "식품분류 두부·가공두부, 이름에 두부면·면두부, 요리 제품 빼고 제조사·값이 같은 것은 한 번만"
+      }
+    },
+    { "id": "rice", "label": "흰쌀밥", "ref": { "db": "raw", "code": "R101-013000300-0000" } },
+    { "id": "boiled-egg", "label": "삶은 달걀", "ref": { "db": "raw", "code": "R210-003000046-0000" } },
+    { "id": "cucumber", "label": "오이", "ref": { "db": "raw", "code": "R106-148050001-0000" } },
+    { "id": "lettuce", "label": "상추", "ref": { "db": "raw", "code": "R106-101173701-0000" } },
+    {
+      "id": "gochujang",
+      "label": "고추장",
+      "manual": {
+        "per100": { "kcal": 205, "carbG": 51.76, "proteinG": 3.66, "fatG": 1.38, "sugarG": 21.84, "fiberG": 5.2, "sodiumMg": 2486, "potassiumMg": 422, "calciumMg": 25 },
+        "source": "rda-fct-10",
+        "note": "DB 10.4 '고추장, 개량'(색인 3020). 식약처 원재료 표준데이터에 고추장이 없다"
+      }
+    },
+    {
+      "id": "vinegar",
+      "label": "양조식초",
+      "manual": {
+        "per100": { "kcal": 1, "carbG": 0.34, "proteinG": 0.02, "fatG": 0, "sugarG": 0, "fiberG": 0, "sodiumMg": 1, "potassiumMg": 2, "calciumMg": 3 },
+        "source": "rda-fct-10",
+        "note": "DB 10.4 '식초, 양조'(색인 3072). 식약처 원재료 표준데이터에 식초가 없다"
+      }
+    },
+    { "id": "sesame-oil", "label": "참기름", "ref": { "db": "raw", "code": "R114-020000000-0000" } },
+    { "id": "sesame-seed", "label": "볶은 참깨", "ref": { "db": "raw", "code": "R105-026020058-0000" } }
+  ],
+  "recipe": {
+    "name": "반반 비빔국수",
+    "servings": 1,
+    "dishType": "noodle",
+    "cuisine": "korean",
+    "ingredients": [
+      { "food": "somen", "grams": 145, "label": "삶은 소면", "note": "마른 면 50g을 삶은 것", "icon": "somen" },
+      { "food": "konjac-noodle", "grams": 150, "label": "곤약면", "note": "물기 뺀 무게", "icon": "konjac" },
+      { "food": "boiled-egg", "grams": 50, "label": "삶은 달걀 1개", "icon": "egg" },
+      { "food": "cucumber", "grams": 50, "label": "오이 1/4개", "icon": "cucumber" },
+      { "food": "lettuce", "grams": 30, "label": "상추 4장", "icon": "leaf" },
+      { "food": "gochujang", "grams": 15, "label": "고추장 1큰술 조금 못 되게", "part": "sauce", "icon": "gochujang" },
+      { "food": "vinegar", "grams": 10, "label": "식초 2작은술", "part": "sauce" },
+      { "food": "sesame-oil", "grams": 4, "label": "참기름 1작은술", "part": "sauce", "icon": "sesame" },
+      { "food": "sesame-seed", "grams": 2, "label": "깨 조금", "icon": "sesameseed" }
+    ],
+    "steps": [
+      {
+        "text": "곤약면은 체에 밭쳐 찬물에 헹군 뒤 끓는 물에 1분 데쳐 건져요. 같은 물에 소면 50g을 넣어 3~4분 삶아요.",
+        "tip": "곤약면 특유의 냄새는 헹구고 데치면 줄어요.",
+        "icon": "pot"
+      },
+      {
+        "text": "삶은 소면은 찬물에 비벼 씻어 물기를 꼭 짜요. 오이는 채 썰고 상추는 한입 크기로 뜯어요.",
+        "tip": "전분기를 씻어 내야 면이 붇지 않아요.",
+        "icon": "cucumber"
+      },
+      {
+        "text": "고추장·식초·참기름을 섞은 양념에 두 가지 면과 채소를 넣어 비비고, 삶은 달걀과 깨를 올려요.",
+        "tip": "양념은 조금 남겼다가 싱거우면 더해요.",
+        "icon": "bibimnoodle"
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "국수 열량 줄이기",
+      "title": "곤약면·두부면으로 국수 열량 줄이기",
+      "subtitle": "소면·메밀국수·곤약면·두부면을 같은 저울에 올려 봤어요"
+    },
+    {
+      "type": "bars",
+      "title": "국수 한 그릇, 밥 한 공기",
+      "bars": [
+        {
+          "label": "소면 한 그릇(마른 면 100g)",
+          "value": { "food": "somen-dry", "nutrient": "kcal", "grams": 100 },
+          "highlight": true
+        },
+        {
+          "label": "밥 한 공기(210g)",
+          "value": { "food": "rice", "nutrient": "kcal", "grams": 210 }
+        }
+      ],
+      "note": "면만 센 값이에요. 국물과 양념은 여기에 더해져요."
+    },
+    {
+      "type": "lineup",
+      "title": "면끼리는 비슷해요",
+      "basis": "삶은 면 100g",
+      "rows": [
+        { "label": "쌀국수", "value": { "food": "rice-noodle", "nutrient": "kcal", "grams": 100 }, "icon": "ricenoodle" },
+        { "label": "우동", "value": { "food": "udon", "nutrient": "kcal", "grams": 100 }, "icon": "udon" },
+        { "label": "스파게티", "value": { "food": "spaghetti", "nutrient": "kcal", "grams": 100 }, "icon": "spaghetti" },
+        { "label": "소면", "value": { "food": "somen", "nutrient": "kcal", "grams": 100 }, "icon": "somen", "highlight": true },
+        { "label": "당면", "value": { "food": "glass-noodle", "nutrient": "kcal", "grams": 100 }, "icon": "glassnoodle" },
+        { "label": "메밀국수", "value": { "food": "soba", "nutrient": "kcal", "grams": 100 }, "icon": "soba" }
+      ],
+      "note": "메밀이나 쌀로 만든 면으로 바꿔도 열량은 크게 달라지지 않아요."
+    },
+    {
+      "type": "lineup",
+      "title": "크게 다른 면은 따로 있어요",
+      "basis": "한 번 먹는 양",
+      "rows": [
+        { "label": "소면", "sub": "마른 면 100g", "value": { "food": "somen-dry", "nutrient": "kcal", "grams": 100 }, "icon": "somen" },
+        { "label": "두부면", "sub": "한 팩 100g", "value": { "food": "tofu-noodle", "nutrient": "kcal", "grams": 100 }, "icon": "tofunoodle", "highlight": true },
+        { "label": "국수호박", "sub": "한 접시 200g", "value": { "food": "noodle-squash", "nutrient": "kcal", "grams": 200 }, "icon": "squash", "highlight": true },
+        { "label": "곤약면", "sub": "한 봉 200g", "value": { "food": "konjac-noodle", "nutrient": "kcal", "grams": 200 }, "icon": "konjac", "highlight": true }
+      ],
+      "note": "두부면은 한 팩이 작아요. 같은 무게로 견주면 삶은 소면보다 열량이 높아요."
+    },
+    {
+      "type": "bars",
+      "title": "대신 단백질이 달라요",
+      "bars": [
+        {
+          "label": "두부면 한 팩(100g)",
+          "value": { "food": "tofu-noodle", "nutrient": "proteinG", "grams": 100 },
+          "highlight": true
+        },
+        {
+          "label": "소면 한 그릇(마른 면 100g)",
+          "value": { "food": "somen-dry", "nutrient": "proteinG", "grams": 100 }
+        },
+        {
+          "label": "곤약면 한 봉(200g)",
+          "value": { "food": "konjac-noodle", "nutrient": "proteinG", "grams": 200 }
+        }
+      ],
+      "note": "곤약면은 열량도 단백질도 거의 없어요. 곤약면만으로 끼니를 대신하지는 않아요."
+    },
+    {
+      "type": "list",
+      "title": "그래서 이렇게 먹어요",
+      "items": [
+        { "title": "반반 섞기", "text": "소면 반에 곤약면 반. 씹는 맛은 남고 양은 그대로예요", "icon": "konjac" },
+        { "title": "단백질 얹기", "text": "곤약면에는 달걀·닭가슴살·두부를 올려요", "icon": "egg" },
+        { "title": "두부면은 성분표 보기", "text": "두부로 만든 것과 곤약·밀가루로 만든 것이 이름이 같아요", "icon": "label" },
+        { "title": "양념과 국물은 덜", "text": "비빔 양념은 한 숟갈 덜고 국물은 남겨요", "icon": "spoon" }
+      ]
+    },
+    {
+      "type": "bars",
+      "title": "반반 섞으면 이만큼",
+      "bars": [
+        {
+          "label": "소면만 100g",
+          "value": { "food": "somen-dry", "nutrient": "kcal", "grams": 100 }
+        },
+        {
+          "label": "소면 50g + 곤약면 150g",
+          "value": {
+            "foods": [
+              { "food": "somen-dry", "grams": 50 },
+              { "food": "konjac-noodle", "grams": 150 }
+            ],
+            "nutrient": "kcal"
+          },
+          "highlight": true
+        }
+      ],
+      "note": "소면은 마른 면 무게예요. 삶으면 세 배쯤으로 불어, 곤약면을 더하면 그릇이 그대로 차요."
+    },
+    { "type": "ingredients", "title": "재료" },
+    { "type": "step", "step": 1 },
+    { "type": "step", "step": 2 },
+    { "type": "step", "step": 3 },
+    {
+      "type": "nutrition",
+      "title": "영양정보",
+      "nutrients": ["kcal", "carbG", "proteinG", "fiberG", "sodiumMg"],
+      "note": "달걀을 하나 더 올리거나 닭가슴살을 곁들이면 단백질이 더해져요."
+    },
+    {
+      "type": "outro",
+      "title": "오늘 국수는 반반으로",
+      "text": "기록해 두면 통계에서 하루 열량이 어떻게 달라지는지 보여요.",
+      "actions": ["record", "recipe", "share"]
+    }
+  ]
+}

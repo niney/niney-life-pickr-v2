@@ -1,0 +1,260 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "somen-dry": {
+      "per100": {
+        "kcal": 370,
+        "carbG": 74.88,
+        "proteinG": 10.36,
+        "fatG": 1.27,
+        "sugarG": 1.93,
+        "fiberG": 1.9,
+        "sodiumMg": 1274,
+        "potassiumMg": 125,
+        "calciumMg": 19,
+        "vitaminCMg": 0.34
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-018010002-0000 '국수_소면_말린것'",
+      "source": "mfds-raw"
+    },
+    "somen": {
+      "per100": {
+        "kcal": 126,
+        "carbG": 25.36,
+        "proteinG": 3.55,
+        "fatG": 0.48,
+        "sugarG": 0,
+        "fiberG": 1.5,
+        "sodiumMg": 68,
+        "potassiumMg": 5,
+        "calciumMg": 7,
+        "vitaminCMg": 0.08
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-018010083-0000 '국수_소면_말린것을 삶은것'",
+      "source": "mfds-raw"
+    },
+    "soba": {
+      "per100": {
+        "kcal": 114,
+        "carbG": 22.65,
+        "proteinG": 4.28,
+        "fatG": 0.4,
+        "sugarG": 0,
+        "fiberG": 1.5,
+        "sodiumMg": 35,
+        "potassiumMg": 9,
+        "calciumMg": 12,
+        "vitaminCMg": 0.18
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-005000083-0000 '메밀 국수_말린것을 삶은것'",
+      "source": "mfds-raw"
+    },
+    "udon": {
+      "per100": {
+        "kcal": 131,
+        "carbG": 27.3,
+        "proteinG": 2.85,
+        "fatG": 0.46,
+        "sugarG": 0.27,
+        "fiberG": 1.6,
+        "sodiumMg": 78,
+        "potassiumMg": 8,
+        "calciumMg": 8,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-018020046-0000 '국수_우동_삶은것'",
+      "source": "mfds-raw"
+    },
+    "spaghetti": {
+      "per100": {
+        "kcal": 129,
+        "carbG": 26.9,
+        "proteinG": 3.8,
+        "fatG": 0,
+        "sugarG": null,
+        "fiberG": null,
+        "sodiumMg": 7,
+        "potassiumMg": 29,
+        "calciumMg": 5,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-024020083-0000 '파스타_스파게티_말린것을 삶은것'",
+      "source": "mfds-raw"
+    },
+    "rice-noodle": {
+      "per100": {
+        "kcal": 132,
+        "carbG": 28.37,
+        "proteinG": 2.59,
+        "fatG": 0.29,
+        "sugarG": 0,
+        "fiberG": 0.5,
+        "sodiumMg": 23,
+        "potassiumMg": 5,
+        "calciumMg": 5,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-010000083-0000 '멥쌀 국수_말린것을 삶은것'",
+      "source": "mfds-raw"
+    },
+    "glass-noodle": {
+      "per100": {
+        "kcal": 123,
+        "carbG": 30.38,
+        "proteinG": 0.03,
+        "fatG": 0.04,
+        "sugarG": 0,
+        "fiberG": 1.4,
+        "sodiumMg": 3,
+        "potassiumMg": 2,
+        "calciumMg": 35,
+        "vitaminCMg": 0.06
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R102-007010046-0000 '당면_고구마_삶은것'",
+      "source": "mfds-raw"
+    },
+    "konjac-noodle": {
+      "per100": {
+        "kcal": 7,
+        "carbG": 3.58,
+        "proteinG": 0.01,
+        "fatG": 0.01,
+        "sugarG": 0,
+        "fiberG": 2.6,
+        "sodiumMg": 2,
+        "potassiumMg": 14,
+        "calciumMg": 36,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R102-009010047-0000 '곤약(구약나물)_국수형_데친것'",
+      "source": "mfds-raw"
+    },
+    "noodle-squash": {
+      "per100": {
+        "kcal": 16,
+        "carbG": 3.8,
+        "proteinG": 0.5,
+        "fatG": 0.1,
+        "sugarG": null,
+        "fiberG": 2.1,
+        "sodiumMg": 1,
+        "potassiumMg": 256,
+        "calciumMg": 18,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-198020047-0000 '호박_국수호박_데친것'",
+      "source": "mfds-raw"
+    },
+    "rice": {
+      "per100": {
+        "kcal": 146,
+        "carbG": 31.71,
+        "proteinG": 2.65,
+        "fatG": 0.33,
+        "sugarG": 0.01,
+        "fiberG": 0.9,
+        "sodiumMg": 0,
+        "potassiumMg": 20,
+        "calciumMg": 2,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R101-013000300-0000 '멥쌀밥_백미'",
+      "source": "mfds-raw"
+    },
+    "boiled-egg": {
+      "per100": {
+        "kcal": 145,
+        "carbG": 1.37,
+        "proteinG": 13.49,
+        "fatG": 8.69,
+        "sugarG": 0.13,
+        "fiberG": 0,
+        "sodiumMg": 128,
+        "potassiumMg": 115,
+        "calciumMg": 52,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R210-003000046-0000 '달걀_삶은것'",
+      "source": "mfds-raw"
+    },
+    "cucumber": {
+      "per100": {
+        "kcal": 13,
+        "carbG": 2.81,
+        "proteinG": 1.15,
+        "fatG": 0.03,
+        "sugarG": 1.47,
+        "fiberG": 0.5,
+        "sodiumMg": 2,
+        "potassiumMg": 161,
+        "calciumMg": 34,
+        "vitaminCMg": 1.52
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-148050001-0000 '오이_취청_생것'",
+      "source": "mfds-raw"
+    },
+    "lettuce": {
+      "per100": {
+        "kcal": 19,
+        "carbG": 3.69,
+        "proteinG": 1.42,
+        "fatG": 0.28,
+        "sugarG": 1.17,
+        "fiberG": 2.7,
+        "sodiumMg": 6,
+        "potassiumMg": 488,
+        "calciumMg": 77,
+        "vitaminCMg": 0.17
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R106-101173701-0000 '상추_잎상추_적상추_생것'",
+      "source": "mfds-raw"
+    },
+    "sesame-oil": {
+      "per100": {
+        "kcal": 920,
+        "carbG": 0.13,
+        "proteinG": 0,
+        "fatG": 99.84,
+        "sugarG": 0,
+        "fiberG": 0,
+        "sodiumMg": 0,
+        "potassiumMg": 0,
+        "calciumMg": 0,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R114-020000000-0000 '참기름'",
+      "source": "mfds-raw"
+    },
+    "sesame-seed": {
+      "per100": {
+        "kcal": 557,
+        "carbG": 21.83,
+        "proteinG": 25.96,
+        "fatG": 45.11,
+        "sugarG": 0,
+        "fiberG": 14.1,
+        "sodiumMg": 2,
+        "potassiumMg": 459,
+        "calciumMg": 854,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 원재료성식품 표준데이터 R105-026020058-0000 '참깨_흰깨_볶은것'",
+      "source": "mfds-raw"
+    }
+  }
+}
