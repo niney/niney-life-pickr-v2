@@ -23,7 +23,7 @@ apps/friendly/content/meal-stories/<slug>/
   images/*.jpg    화면에 쓰는 사진 — build:meal-stories 가 originals/ 에서 만든다
   originals/      찍은 원본 사진 — git 밖(.gitignore), 위치 정보가 있을 수 있다
 
-apps/web/src/routes/meal-story/motion/   장면 틀 8종의 영상 그림(Remotion) — 편마다 고치지 않는다
+apps/web/src/routes/meal-story/motion/   장면 틀 9종의 영상 그림(Remotion) — 편마다 고치지 않는다
 tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검수용, npm(워크스페이스 밖)
 ```
 
@@ -41,7 +41,7 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
   "status": "draft",                 // draft = 관리자만 본다, published = 누구나
   "title": "…",                      // 32자
   "summary": "…",                    // 90자 — 목록·카톡 미리보기
-  "topic": { "nutrient": "sodium", "direction": "reduce" },  // 영양 탭 '많음'(reduce)·'부족'(increase) 줄에 링크
+  "topic": { "nutrient": "sodium", "direction": "reduce" },  // 영양 탭 '많음'(reduce)·'부족'(increase) 줄에 링크. 열량은 "kcal"(판정이 없어 링크는 안 붙는다)
   "publishedAt": "2026-11-09",
   "reviewedAt": null,                // 사람이 출처·숫자를 확인한 날 — 게시하려면 필수
   "cover": "cover.jpg",              // 게시하려면 필수
@@ -108,6 +108,12 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
   값은 공공 자료에서 가져온다 — 식약처 표준데이터에 없는 원재료(양조간장 등)는 **국가표준식품성분 DB**(농촌진흥청,
   `data/open/food/식품성분표(N개정판).xlsx` — [data-sources.md](data-sources.md))에 있는 경우가 많다. `sources` 에 그 자료를 적고
   `note` 에 식품명·색인을 남긴다(둘째 편의 양조간장이 예시).
+  시판 제품인데 5만 행에서 잘린 가공식품 CSV 에 없으면(두부면) **가공식품 전체판 엑셀**(`data/open/food/YYYYMMDD_가공식품DB_*.xlsx`,
+  시트가 2GB 를 넘어 `src/lib/xlsx.ts` 로는 못 읽는다 — `unzip -p <파일> xl/worksheets/sheet1.xml` 을 `</row>` 로 끊어 흘려 읽고
+  `xl/sharedStrings.xml` 로 이름을 푼다)에서 뽑아 중앙값을 낸다. **이름이 같아도 식품분류로 가른다** — '두부면'은 두부로 만든 것
+  (100g 약 170kcal), 곤약 바탕(약 15kcal), 밀가루 숙면(약 245kcal)이 한 이름을 쓴다. 굵기만 다른 같은 제조사·같은 값은 한 번만 세고,
+  제품마다 크게 갈리는 값(나트륨 0~260mg)과 적은 제품이 적은 값은 비운다. `note` 에 고른 규칙을, `sources` 에 판(날짜·행 수)과 제품
+  수를 적는다(다섯째 편이 예시).
 
 ### 레시피(recipe)
 
@@ -116,15 +122,18 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 [이 레시피로 기록]을 누르면 서버가 이 레시피를 카탈로그 음식(`source manual`, `sourceId meal-story:<slug>`)으로 맞춰,
 기록에도 스토리와 같은 1인분 값이 들어간다. 그렇게 적은 기록의 상세에는 '건강식단 레시피 — 이야기 보기'가 붙는다(목록 API 가
 레시피 음식 id 를 실어 보낸다 — 원고에서 할 일은 없다). 밥처럼 지은 것을 재료로 쓸 때는 지은 무게로 적고 식품도 지은 것
-(`멥쌀밥_현미`)을 고른다.
+(`멥쌀밥_현미`)을 고른다. **소금이 든 마른 면**(소면·중면·칼국수 — 마른 소면 100g 에 나트륨 1,274mg)도 삶은 것으로 적는다
+(`국수_소면_말린것을 삶은것` 145g, 메모에 '마른 면 50g 을 삶은 것') — 삶으면 소금이 물로 빠져 100g 에 68mg 이 되는데, 마른 무게로 세면
+레시피 나트륨이 두 배로 나온다. 열량은 어느 쪽으로 세도 같다. 스파게티(마른 면 2mg)는 마른 무게 그대로.
 
-### 장면(scenes) — 틀 8종
+### 장면(scenes) — 틀 9종
 
 | type | 쓰는 곳 | 필드(글자 수) |
 |---|---|---|
-| `cover` | 표지 | kicker 16 · title 32 · subtitle 70 · image(없으면 cover) |
+| `cover` | 표지 | kicker 16(머리말 — 영상의 모든 장면 위 쪽지 + 목록 카드의 이름) · title 32 · subtitle 70 · image(없으면 cover) |
 | `stat` | 큰 숫자 1~3개 | title 32 · figures[{label 24, value}] · note 90 |
 | `bars` | 막대 비교 2~4개(바꿔 먹기 포함) | title · bars[{label 24, value, aside?, highlight?}] · note |
+| `lineup` | 줄 세우기 4~7개 — 여러 가지를 같은 잣대로 한 줄씩 | title · basis 24(잣대 — '삶은 면 100g') · rows[{label 14, sub 16?, value, icon?, highlight?}] · note **60** |
 | `list` | 방법·원인 목록 2~6개 | title · items[{title 22, text 70}] · note |
 | `ingredients` | 재료(레시피에서) | title |
 | `step` | 만드는 법 한 단계(레시피에서) | step(1부터) |
@@ -134,14 +143,23 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 `bars` 의 `aside` 는 막대 옆 작은 값(예: 열량 막대 옆 단백질) — food·foods·recipe 값만. `highlight` 막대만 강조(글로 보기는 먹색,
 영상은 노란 색종이)이고 나머지는 회색·옅은 하늘색이다.
 
+`lineup` 은 **견줄 것이 넷 이상일 때** 쓴다(셋까지는 `bars` 가 크고 힘 있다). 줄 차례는 원고가 정한다(서버가 정렬하지 않는다 —
+큰 값부터 놓으면 읽기 쉽다, 값은 점검 출력에서 본다). `basis` 는 모든 줄에 같은 잣대(화면이 뒤에 '기준'을 붙인다), 줄마다 양이
+다르면 `sub`('마른 면 100g', '한 봉 200g')에 적는다. 강조(`highlight`)한 줄은 영상에서 노란 종이 띠, 글로 보기에서 먹색 막대.
+값이 서로 비슷하면(셋 이상이고 가장 큰 값이 가장 작은 값의 1.3배 안) 영상이 가장 짧은·긴 막대 끝에 점선 둘을 내린다 — '비슷하다'·
+'크게 다르다'는 말은 제목·덧말로 원고가 하고, 점검이 가장 작은 값·큰 값과 그 배수를 '사람이 확인할 값'에 찍으니 말과 맞춰 본다
+(16% 차이를 '거의 같다'고 하지 않는다 — 다섯째 편은 '비슷해요'). 같은 무게로 견줄지 한 번 먹는 양으로 견줄지에 따라 결론이
+뒤집힐 수 있다(두부면은 100g 으로는 삶은 소면보다 높고 한 팩으로는 절반) — 고른 잣대를 밝히고 반대쪽 사실도 덧말에 적는다.
+
 **영상에서 잘 보이는 길이** — 위 글자 수는 형식 한도다. 영상(세로 한 화면)은 넘치는 글을 보여 줄 자리가 없어 틀이 글씨를
 줄이거나 말줄임표로 자른다. 아래를 넘으면 점검(`check:meal-stories`)이 경고(△)로 알린다 — 글로 보기에는 다 보이므로 오류는
 아니다.
 
 | 무엇 | 영상에서 온전한 길이 | 넘으면 |
 |---|---|---|
-| `stat`·`bars`·`list`·`nutrition` 제목 | 두 줄(한글 약 16자) | 세 줄이 되며 글씨가 작아진다. 줄은 낱말 사이에서만 바뀐다 — '비타민 C'처럼 붙어 읽히는 두 낱말이 줄 끝에 걸리면 제목을 바꿔 짠다('하루 비타민 / C, 이만큼' → '비타민 C, / 하루 이만큼') |
+| `stat`·`bars`·`lineup`·`list`·`nutrition` 제목 | 두 줄(한글 약 16자) | 세 줄이 되며 글씨가 작아진다. 줄은 낱말 사이에서만 바뀐다 — '비타민 C'처럼 붙어 읽히는 두 낱말이 줄 끝에 걸리면 제목을 바꿔 짠다('하루 비타민 / C, 이만큼' → '비타민 C, / 하루 이만큼') |
 | `bars` 막대 이름(label) | 한글 약 15자 | 값 쪽지와 겹칠 수 있다 |
+| `lineup` 줄 이름 + 옆 글 | 합쳐 한글 약 15자 | 이름 글씨가 작아지고, 그래도 안 들면 옆 글이 빠진다 |
 | `list` 설명(text) | 항목 2~4개(5개에 덧말 없음)는 두 줄(약 40자), 그보다 많으면 한 줄(약 20자) | 끝이 … 로 잘린다 |
 | 재료 수 | 9개 | 재료 이름 글씨가 작아진다 |
 
@@ -158,16 +176,19 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 `cheese` `pot`(냄비) `pan`(토마토 소스 팬) `plate`(파스타 접시) `timer` `clock` `rice`(잡곡 밥공기) `mushroom` `carrot` `egg` `sprout`(콩나물)
 `bean` `apple` `water`(물컵) `sesame`(참기름) `soy`(간장) `stirfry`(버섯·당근 볶는 팬) `bibimbap`(비빔밥 그릇) `milk`(우유곽)
 `anchovy`(멸치) `kale` `tofu` `yogurt` `scallion`(대파) `sesameseed`(깨 종지) `friedrice`(볶음밥 접시) `paprika` `broccoli` `kiwi`
-`tangerine`(귤) `chicken`(삶은 닭가슴살) `sweetpotato` `salad`(샐러드 그릇)
+`tangerine`(귤) `chicken`(삶은 닭가슴살) `sweetpotato` `salad`(샐러드 그릇) `somen`(삶은 소면 타래) `soba`(메밀국수) `udon` `ricenoodle`(쌀국수)
+`glassnoodle`(당면) `spaghetti`(삶은 스파게티 — 마른 면 다발은 `noodle`) `konjac`(곤약면) `tofunoodle`(두부면) `squash`(국수호박) `cucumber`
+`gochujang` `bibimnoodle`(비빔국수 그릇)
 
 **그 편의 그림은 원고가 정한다** — 표지 식탁에는 그 편 레시피의 재료 둘(첫째·둘째 재료의 소품)과 완성 그릇이, 영양정보 장면의
 식탁 끝에도 완성 그릇이 놓인다. 완성 그릇 = **마지막 만드는 법 단계의 `icon`** 이니 거기에 그 요리의 그림을 단다(첫 편 `plate`,
 식이섬유 편 `bibimbap`). 소품을 달지 않으면 그 자리는 빈다. 무대 색과 마무리 장면에서 손 흔드는 짝은 `topic.nutrient` 로 정해진다
-(나트륨 = 파랑·소금통과 숟가락, 식이섬유 = 초록·밥공기와 버섯, 칼슘 = 보라·우유곽과 멸치, 비타민 C = 귤색·파프리카와 귤). **새 주제를 열 때**는 `paper/palette.ts` 의
+(나트륨 = 파랑·소금통과 숟가락, 식이섬유 = 초록·밥공기와 버섯, 칼슘 = 보라·우유곽과 멸치, 비타민 C = 귤색·파프리카와 귤, 열량 = 청록·소면과 곤약면 타래). **새 주제를 열 때**는 `paper/palette.ts` 의
 `TOPIC_STAGE` 에 색을, `ChapterOutro.tsx` 의 `PALS` 에 짝을 더한다 — 안 하면 나트륨의 색과 소금통이 나온다.
 
 새 소품이 필요하면 `apps/web/src/routes/meal-story/motion/paper/props.tsx` 에 그리고(원점 가운데, 약 240 크기, 찢긴 가장자리는
-`tornRect`·`tornEllipse`·`tornPath`), 계약 enum 과 `paper/icons.ts` 에 이름을 더한다. 한 장으로 보기:
+`tornRect`·`tornEllipse`·`tornPath`), 계약 enum 과 `paper/icons.ts` 에 이름을 더한다. 흰 것(면·두부)은 흰 종이 띠 위에 놓일 때도
+보이게 받침(채반·짙은 접시)을 깐다 — 목록·줄 세우기의 소품은 종이 띠 위에 놓인다. 한 장으로 보기:
 `cd tools/meal-motion && npx remotion still src/index.ts Props out/props.png --scale=0.6`. 숫자·작은 글은 앱 글꼴, 손글씨(개구)는
 제목·짧은 덧말에만 쓴다.
 
@@ -175,7 +196,7 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 - 읽으라고 놓는 글은 `motion/theme.ts` 의 `TYPE` 아래로 줄이지 않는다(본문 40·보조 34·각주 30 — 1080 폭 기준. 실제 휴대폰
   브라우저에서는 영상이 폭 320~340px 로 줄어 0.3배가 된다). 소품 안의 꾸밈 글자만 예외(`data-deco`).
-- 첫 편에 없는 모양도 함께 본다 — `motion/storyFixture.ts`(사진 있는 표지·단계, 일반 숫자, 소품 없는 항목, 값 없는 막대, 한도까지
+- 첫 편에 없는 모양도 함께 본다 — `motion/storyFixture.ts`(사진 있는 표지·단계, 일반 숫자, 소품 없는 항목, 값 없는 막대, 일곱 줄이 꽉 찬 줄 세우기, 한도까지
   찬 줄 수)를 `pnpm --filter web exec vitest run src/routes/meal-story/motion` 이 모든 프레임으로 그려 예외·NaN·글씨 하한을 보고,
   눈으로는 `cd tools/meal-motion && npx remotion render src/index.ts Variants out/frames-variants --sequence --every-nth-frame=6
   --image-format=jpeg --scale=0.5` → `npm run sheet -- out/frames-variants out/variants.png --cols=4 --every=4`.
@@ -191,7 +212,11 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 ## 절차
 
-1. **주제·slug** — 영양 탭 영양소 하나와 방향(줄이기·채우기). 폴더 `content/meal-stories/<slug>/` 를 만든다.
+1. **주제·slug** — 영양 탭 영양소 하나와 방향(줄이기·채우기). 폴더 `content/meal-stories/<slug>/` 를 만든다. 제목은 '무엇으로 + 무엇을'
+   ('토마토 스파게티로 나트륨 줄이기'). 편이 여럿 나올 수 있는 주제(열량)는 머리말(`kicker`)에 대상을, 제목에 수단을 넣어 겹치지 않게
+   한다('국수 열량 줄이기' · '곤약면·두부면으로 국수 열량 줄이기') — 머리말은 영상의 모든 장면 위에 붙고, **목록 카드와 이야기 옆
+   칸의 이름**이기도 하다(주제 이름이 아니라 머리말을 보인다). 머리말이 다른 편과 같으면 점검이 경고한다 — 목록에서 두 카드가 구분되지
+   않는다.
 2. **출처** — 공공기관 자료를 먼저(식약처·질병관리청·보건복지부). 고정값을 쓸 때만 `sources` 에 넣는다(섭취기준·식품 표준데이터는
    자동).
 3. **재료 코드** — `build:meal-stories --find=…` 로 코드를 고른다. 시판 제품은 `group`.
