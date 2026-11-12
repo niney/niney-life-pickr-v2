@@ -694,6 +694,159 @@ export const Salad = ({ pal, v }: PropProps) => (
   </g>
 );
 
+// ── 면 편(2026-11-12) — 삶은 면 타래·곤약면·두부면·국수호박·오이·고추장·비빔국수 ──
+/**
+ * 삶은 면 한 타래 — 색·굵기만 바꿔 여러 면을 그린다(소면·메밀국수·우동·쌀국수·당면·스파게티·곤약면). 모양이 같은 것이 곧
+ * 이야기다(면끼리는 비슷하다). face 를 주면 가운데 감긴 줄 대신 얼굴(마무리 장면의 짝).
+ */
+const Nest = ({ pal, f, v, seed, fill, line, w, specks, face }: PropProps & { seed: number; fill: string; line: string; w: number; specks?: string; face?: Mood }) => (
+  <g>
+    {/* 채반 — 흰 면이 흰 종이 띠 위에서도 보이게 나무색 받침을 깐다. */}
+    <Paper d={te(0, 22, 128, 100, seed + 1, v, 2.6)} fill={pal.wood} lift={0.9} />
+    <ellipse cx={0} cy={22} rx={114} ry={87} fill="none" stroke="rgba(42,29,24,0.16)" strokeWidth={5} strokeDasharray="6 12" />
+    <Paper d={te(0, 18, 100, 74, seed, v, 3)} fill={fill} lift={0.4} />
+    <path d="M -76 14 C -66 -38, 54 -52, 76 2 C 86 46, -24 78, -54 40" stroke={line} strokeWidth={w} fill="none" strokeLinecap="round" />
+    {face ? null : <path d="M -54 40 C -68 12, 8 -24, 36 8 C 48 28, 0 48, -16 30" stroke={line} strokeWidth={w} fill="none" strokeLinecap="round" />}
+    <path d="M -60 -12 C -34 -34, 8 -42, 38 -32" stroke="rgba(255,255,255,0.55)" strokeWidth={Math.max(4, w - 2)} fill="none" strokeLinecap="round" />
+    {specks
+      ? [
+          [-46, 32],
+          [-18, -20],
+          [24, 46],
+          [54, 10],
+          [4, 62],
+          [-62, 2],
+          [36, -28],
+        ].map(([x, y], i) => <circle key={i} cx={x} cy={y} r={3.5} fill={specks} />)
+      : null}
+    {face ? <Face x={0} y={22} s={0.82} mood={face} f={f} pal={pal} seed={seed} /> : null}
+  </g>
+);
+
+/** 소면 — 가늘고 흰 타래. face 를 주면 얼굴. */
+export const Somen = (p: PropProps & { face?: Mood }) => <Nest {...p} seed={561} fill="#fbf6e8" line="#d6cbac" w={5} />;
+/** 메밀국수 — 회갈색에 메밀 껍질 점. */
+export const Soba = (p: PropProps) => <Nest {...p} seed={563} fill="#b9a48c" line="#8f7a62" w={6} specks="#6b5a48" />;
+/** 우동 — 굵고 흰 면. */
+export const Udon = (p: PropProps) => <Nest {...p} seed={565} fill="#fffaf0" line="#dccfae" w={12} />;
+/** 쌀국수 — 납작하고 뽀얀 면. */
+export const RiceNoodle = (p: PropProps) => <Nest {...p} seed={567} fill="#f1f0e6" line="#c4c9bf" w={9} />;
+/** 당면 — 비치는 회갈색. */
+export const GlassNoodle = (p: PropProps) => <Nest {...p} seed={569} fill="#cdc2ae" line="#9c8f79" w={7} />;
+/** 삶은 스파게티 — 노란 타래(마른 면 다발은 noodle). */
+export const Spaghetti = (p: PropProps) => <Nest {...p} seed={571} fill="#f2c46d" line="#d39a34" w={8} />;
+
+/** 곤약면 — 비치는 회백색 타래에 물방울(대부분이 물이다). face 를 주면 얼굴. */
+export const Konjac = ({ face, ...p }: PropProps & { face?: Mood }) => (
+  <g>
+    <Nest {...p} seed={573} fill="#e6edf0" line="#aebcc4" w={6} face={face} />
+    {[
+      [-104, -52, 1],
+      [96, 78, 0.8],
+      [-88, 92, 0.7],
+    ].map(([x, y, s], i) => (
+      <path key={i} d="M 0 -20 C 12 -4, 14 4, 14 10 C 14 20, 6 24, 0 24 C -6 24, -14 20, -14 10 C -14 4, -12 -4, 0 -20 Z" fill="#8fc7ea" transform={`translate(${x} ${y}) scale(${s})`} />
+    ))}
+  </g>
+);
+
+/** 두부면 — 두부를 눌러 얇게 썬 납작한 띠 몇 가닥과 두부 한 조각. */
+export const TofuNoodle = ({ v }: PropProps) => (
+  <g>
+    {/* 짙은 접시 — 크림색 띠가 흰 종이 띠 위에서도 보이게. */}
+    <Paper d={te(4, 22, 132, 100, 580, v, 2.6)} fill="#4b4540" lift={0.9} />
+    {[
+      'M -108 -30 C -60 -70, -20 10, 30 -34 C 60 -58, 90 -40, 108 -52',
+      'M -110 10 C -70 -26, -24 48, 24 6 C 56 -20, 84 4, 110 -10',
+      'M -104 52 C -60 18, -26 84, 20 48 C 52 24, 80 50, 106 34',
+    ].map((d, i) => (
+      <g key={i}>
+        <path d={d} stroke="#d2c39c" strokeWidth={30} fill="none" strokeLinecap="round" />
+        <path d={d} stroke="#f4ead2" strokeWidth={23} fill="none" strokeLinecap="round" />
+      </g>
+    ))}
+    <Paper d={tp('M 34 44 L 104 44 L 104 104 L 34 104 Z', 581, v, 1.8)} fill="#f1e7d0" lift={0.6} />
+    <Paper d={tp('M 34 44 L 52 24 L 122 24 L 104 44 Z', 582, v, 1.4)} fill="#fbf7ec" lift={0} />
+    <Paper d={tp('M 104 44 L 122 24 L 122 84 L 104 104 Z', 583, v, 1.4)} fill="#e2d6ba" lift={0} />
+  </g>
+);
+
+/** 국수호박 반쪽 — 노란 껍질 안에 실처럼 풀리는 속. */
+export const Squash = ({ v }: PropProps) => (
+  <g transform="rotate(-8)">
+    <Paper d={tp('M 96 -62 C 112 -92, 136 -84, 130 -60 Z', 591, v, 1.4)} fill="#6f8f3f" lift={0.3} />
+    <Paper d={te(0, 6, 116, 86, 592, v)} fill="#e9b93a" lift={0.9} />
+    <Paper d={te(0, 6, 96, 68, 593, v, 2)} fill="#fbe7a0" lift={0} />
+    <path d="M -72 6 C -50 -36, 40 -44, 72 -4 C 84 26, 10 56, -40 40 C -64 30, -20 -8, 20 0 C 40 6, 30 26, 6 26" stroke="#e0b030" strokeWidth={6} fill="none" strokeLinecap="round" />
+    <path d="M -60 -20 C -30 -44, 20 -48, 50 -34" stroke="#fff6cf" strokeWidth={7} fill="none" strokeLinecap="round" />
+  </g>
+);
+
+/** 오이 — 통 오이 하나와 썬 조각 둘. */
+export const Cucumber = ({ v }: PropProps) => (
+  <g>
+    <g transform="rotate(-28)">
+      <Paper d={tp('M -116 -8 C -116 -40, -84 -44, -50 -42 L 70 -36 C 104 -34, 124 -22, 124 -4 C 124 14, 104 26, 70 28 L -50 34 C -84 36, -116 24, -116 -8 Z', 601, v)} fill="#4f9a5a" lift={0.9} />
+      <path d="M -90 -22 C -40 -30, 40 -28, 96 -16" stroke="#8fcf8a" strokeWidth={8} fill="none" strokeLinecap="round" />
+      {[-70, -30, 10, 50, 86].map((x, i) => (
+        <circle key={i} cx={x} cy={i % 2 ? 10 : 2} r={4} fill="#3a7a46" />
+      ))}
+    </g>
+    {[
+      [52, 62],
+      [-6, 86],
+    ].map(([x, y], i) => (
+      <g key={i}>
+        <Paper d={te(x!, y!, 36, 30, 603 + i, v, 1.6)} fill="#4f9a5a" lift={0.5} />
+        <ellipse cx={x} cy={y} rx={28} ry={23} fill="#dff0cf" />
+        {[0, 1, 2, 3, 4].map((k) => (
+          <ellipse key={k} cx={x! + Math.cos((k / 5) * Math.PI * 2) * 12} cy={y! + Math.sin((k / 5) * Math.PI * 2) * 10} rx={3} ry={5} fill="#b9d9a0" />
+        ))}
+      </g>
+    ))}
+  </g>
+);
+
+/** 고추장 통 — 빨간 통에 이름표. */
+export const Gochujang = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -84 -60 L 84 -60 L 76 112 L -76 112 Z', 611, v)} fill="#c8362b" lift={1} />
+    <Paper d={tr(-92, -100, 184, 46, 612, v, 1.6)} fill="#8f1f1a" lift={0.4} />
+    <Paper d={tr(-62, -14, 124, 70, 613, v, 1.8)} fill={pal.paper} lift={0.2} />
+    <text data-deco="" x={0} y={34} textAnchor="middle" fontFamily={FONT} fontWeight={900} fontSize={34} fill={pal.ink}>
+      고추장
+    </text>
+  </g>
+);
+
+/** 비빔국수 한 그릇 — 붉은 양념 면 위에 오이채, 반으로 가른 달걀, 깨. */
+export const BibimNoodle = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={tp('M -124 -6 L 124 -6 C 118 70, 68 106, 0 106 C -68 106, -118 70, -124 -6 Z', 621, v)} fill={pal.paper} lift={0.9} />
+    <path d="M -110 34 C -64 46, 64 46, 110 34" stroke={pal.navy} strokeWidth={8} fill="none" />
+    <Paper d={tr(-46, 100, 92, 18, 622, v, 1.6)} fill={pal.paper} lift={0.3} />
+    <Paper d={tp('M -112 -6 C -104 -56, -50 -78, 0 -78 C 50 -78, 104 -56, 112 -6 Z', 623, v, 2.6)} fill="#e9a07a" lift={0} />
+    <path d="M -84 -14 C -60 -52, 30 -64, 70 -30 C 84 -14, 20 -4, -30 -18 C -52 -24, -20 -44, 14 -40" stroke="#d2643c" strokeWidth={6} fill="none" strokeLinecap="round" />
+    {[
+      { x: -58, y: -40, rot: -30 },
+      { x: -40, y: -52, rot: -18 },
+      { x: -70, y: -24, rot: -40 },
+    ].map(({ x, y, rot }, i) => (
+      <rect key={i} x={x - 18} y={y - 4} width={36} height={8} rx={3} fill="#4f9a5a" transform={`rotate(${rot} ${x} ${y})`} />
+    ))}
+    <Paper d={te(34, -38, 34, 22, 624, v, 1.4)} fill="#fffdf6" lift={0.2} />
+    <circle cx={34} cy={-38} r={12} fill="#f2b632" />
+    {[
+      [-10, -58],
+      [4, -22],
+      [78, -18],
+      [-26, -28],
+    ].map(([x, y], i) => (
+      <ellipse key={i} cx={x} cy={y} rx={5} ry={3} fill="#f6efe2" transform={`rotate(${i * 50} ${x} ${y})`} />
+    ))}
+  </g>
+);
+
 /** 목록·단계 아이콘 크기(약 240) 숟가락·소금통. */
 export const SpoonIcon = (p: PropProps) => (
   <g transform="scale(0.48) translate(0 -128)">

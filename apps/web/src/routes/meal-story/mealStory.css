@@ -246,6 +246,15 @@
   .mss-bar-frac { margin-top: 0.3rem; font-size: 0.9rem; font-weight: 800; }
   .mss-bar-foot { font-size: 0.75rem; line-height: 1.5; color: var(--muted-foreground); }
 
+  /* 줄 세우기 — 막대 비교보다 촘촘하게(여러 가지를 한 줄씩). 강조 줄만 먹색 */
+  .mss-linelist { display: flex; flex-direction: column; gap: 0.7rem; }
+  .mss-line-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+  .mss-line-label { font-size: 0.92rem; font-weight: 700; }
+  .mss-line-sub { margin-left: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--muted-foreground); }
+  .mss-line-track { margin-top: 0.3rem; height: 0.6rem; }
+  .mss-line.is-highlight .mss-bar-fill { background: var(--foreground); }
+  .mss-line.is-highlight .mss-line-label { font-weight: 800; }
+
   /* 목록 */
   .mss-list { display: flex; flex-direction: column; border-top: var(--meal-line-heavy) solid var(--foreground); }
   .mss-list-item { display: flex; gap: 0.9rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }

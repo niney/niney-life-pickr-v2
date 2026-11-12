@@ -89,6 +89,8 @@ const TOPIC_STAGE: Readonly<Record<string, { stage: string; stageDeep: string; d
   fiber: { stage: '#35805d', stageDeep: '#2c6d4f', darkDeep: '#235a41' },
   calcium: { stage: '#6b5b9e', stageDeep: '#5a4b8a', darkDeep: '#493c73' },
   vitaminC: { stage: '#b8551a', stageDeep: '#9f4614', darkDeep: '#853a10' },
+  // 열량(면 편) — 청록. 흰 손글씨 머리말과의 대비 4.9:1.
+  kcal: { stage: '#1b7c8c', stageDeep: '#166978', darkDeep: '#115562' },
 };
 const DEFAULT_STAGE = TOPIC_STAGE.sodium!;
 

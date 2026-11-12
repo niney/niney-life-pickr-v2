@@ -389,10 +389,34 @@ describe('건강식단 스토리', () => {
     renderAt('/meal/stories');
     const card = await screen.findByRole('link', { name: /시험 나트륨 이야기/ });
     expect(card).toHaveAttribute('href', `/meal/stories/${story.slug}`);
+    // 머리말이 없는 응답(표지 없는 원고)은 주제 이름으로.
     expect(card).toHaveTextContent('나트륨 줄이기 · 4장면');
     expect(screen.getByRole('link', { name: /초안 이야기/ })).toHaveTextContent('초안');
     expect(screen.getByRole('link', { name: '로그인하고 식단 기록하기' })).toHaveAttribute('href', `/login?next=${encodeURIComponent('/meal')}`);
     expect(screen.queryByRole('navigation', { name: '식단' })).not.toBeInTheDocument();
+  });
+
+  it('목록 카드의 이름은 그 편의 머리말 — 주제(열량 줄이기)가 같은 두 편도 카드가 구분된다', async () => {
+    const kcal = { nutrient: 'kcal', direction: 'reduce' };
+    server.use(
+      http.get(LIST_URL, () =>
+        HttpResponse.json({
+          items: [
+            listItem({ slug: 'noodles', title: '곤약면·두부면으로 국수 열량 줄이기', topic: kcal, kicker: '국수 열량 줄이기' }),
+            listItem({ slug: 'rice', title: '곤약밥으로 밥 열량 줄이기', topic: kcal, kicker: '밥 열량 줄이기' }),
+          ],
+        }),
+      ),
+    );
+    renderAt('/meal/stories');
+    const noodles = await screen.findByRole('link', { name: /곤약면·두부면으로/ });
+    expect(noodles).toHaveTextContent('국수 열량 줄이기 · 4장면');
+    const rice = screen.getByRole('link', { name: /곤약밥으로/ });
+    expect(rice).toHaveTextContent('밥 열량 줄이기 · 4장면');
+    // 사진 없는 편의 큰 글 상자도 머리말 — 두 카드 어디에도 주제 이름만 덩그러니 있지 않다.
+    expect(screen.getAllByText('국수 열량 줄이기')).toHaveLength(1);
+    expect(screen.getAllByText('밥 열량 줄이기')).toHaveLength(1);
+    expect(screen.queryByText('열량 줄이기')).not.toBeInTheDocument();
   });
 
   it('로그인 전 — 건강식단 말고 다른 식단 주소는 로그인으로', async () => {
@@ -465,6 +489,44 @@ describe('건강식단 스토리 — 주소', () => {
     renderAt(`/meal/stories/${story.slug}?s=99`);
     expect(await screen.findByRole('heading', { name: '오늘 한 끼로' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: '다음 장면' })).toHaveAttribute('aria-disabled', 'true'));
+  });
+
+  it('줄 세우기 장면 — 잣대, 줄마다 이름·옆 글·값(못 구한 값은 값 없음), 덧말. 주제가 열량이면 열량 줄이기', async () => {
+    const withLineup: MealStoryType = {
+      ...story,
+      topic: { nutrient: 'kcal', direction: 'reduce' },
+      scenes: [
+        story.scenes[0]!,
+        {
+          type: 'lineup',
+          title: '면끼리는 비슷해요',
+          basis: '삶은 면 100g',
+          rows: [
+            { label: '쌀국수', sub: null, figure: fig({ value: 132, unit: 'kcal' }), icon: 'ricenoodle', highlight: false },
+            { label: '소면', sub: '마른 면 100g', figure: fig({ value: 126, unit: 'kcal', detail: '소면 값은 표시한 제품 4개의 중앙값이에요' }), icon: 'somen', highlight: true },
+            { label: '값을 모르는 면', sub: null, figure: fig({ unit: 'kcal' }), icon: null, highlight: false },
+            { label: '메밀국수', sub: null, figure: fig({ value: 114, unit: 'kcal', detail: '소면 값은 표시한 제품 4개의 중앙값이에요' }), icon: 'soba', highlight: false },
+          ],
+          note: '면을 바꿔도 크게 달라지지 않아요.',
+        },
+        story.scenes[3]!,
+      ],
+    };
+    server.use(http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(withLineup)));
+    renderAt(`/meal/stories/${story.slug}?s=2`);
+    expect(await screen.findByRole('heading', { name: '면끼리는 비슷해요' })).toBeInTheDocument();
+    expect(screen.getByText('삶은 면 100g 기준')).toBeInTheDocument();
+    expect(screen.getByText('132kcal')).toBeInTheDocument();
+    expect(screen.getByText('126kcal')).toBeInTheDocument();
+    expect(screen.getByText('114kcal')).toBeInTheDocument();
+    expect(screen.getByText('마른 면 100g')).toBeInTheDocument();
+    expect(screen.getAllByText('값 없음')).toHaveLength(1);
+    expect(screen.getByText('면을 바꿔도 크게 달라지지 않아요.')).toBeInTheDocument();
+    // 같은 덧말은 줄 목록 아래에 한 번만.
+    expect(screen.getAllByText('※ 소면 값은 표시한 제품 4개의 중앙값이에요')).toHaveLength(1);
+    // 강조한 줄만 표시가 붙는다.
+    expect(screen.getByText('소면').closest('li')).toHaveClass('is-highlight');
+    expect(screen.getByText('쌀국수').closest('li')).not.toHaveClass('is-highlight');
   });
 
   it('막대 장면 — 값마다 서버가 단 덧말(표시한 제품 수)은 막대 아래에 한 번만', async () => {

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import type { MealStorySceneType, MealStoryType } from '@repo/api-contract';
 import { MEAL_STORY_PATH } from '../meal/mealPaths';
 import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
-import { mealStoryTopicLabel } from './mealStoryTopic';
+import { mealStoryKicker } from './mealStoryTopic';
 
 // 이야기 옆 칸(2026-11-10) — 식단 셸 안의 넓은 화면에서 재생기 카드 오른쪽에 놓는다(세로 영상 옆이 비어 있었다).
 // 무슨 이야기인지(주제·제목·요약), 장면 차례(누르면 그 장면으로 — 지금 장면 표시), 끝까지 보지 않아도 쓸 수 있는
@@ -48,7 +48,7 @@ export const MealStoryAside = ({
     <aside className="msa" aria-label="이야기 차례">
       <div>
         <p className="msa-kicker">
-          건강식단 · {mealStoryTopicLabel(story.topic)}
+          건강식단 · {mealStoryKicker(story)}
           {story.status === 'draft' ? ' · 초안' : ''}
         </p>
         <h1 className="msa-title">{story.title}</h1>

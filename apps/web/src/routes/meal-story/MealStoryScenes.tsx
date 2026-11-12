@@ -8,7 +8,7 @@ import { AmountText, EquivalentText, FigureValue } from './MealStoryFigure';
 import { fractionText } from './motion/layout';
 import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
 
-// 장면 틀 8종 — 표지 · 큰 숫자 · 막대 비교 · 목록 · 재료 · 만드는 법 · 영양정보 · 마무리. 글·숫자는 서버가 준 그대로
+// 장면 틀 9종 — 표지 · 큰 숫자 · 막대 비교 · 줄 세우기 · 목록 · 재료 · 만드는 법 · 영양정보 · 마무리. 글·숫자는 서버가 준 그대로
 // 그린다(숫자는 서버 계산). 떠오르는 차례는 --i(.msp-rise), 막대·숫자는 mealStory.css 의 애니메이션.
 
 type Scene<T extends MealStorySceneType['type']> = Extract<MealStorySceneType, { type: T }>;
@@ -107,6 +107,50 @@ const Bars = ({ scene }: { scene: Scene<'bars'> }) => {
       ) : null}
       {scene.note ? (
         <p className="mss-note msp-rise" style={order(scene.bars.length + 1)}>
+          {scene.note}
+        </p>
+      ) : null}
+    </div>
+  );
+};
+
+// 줄 세우기 — 여러 가지를 같은 잣대로 한 줄씩(이름 · 값 · 가는 막대). 막대 비교보다 촘촘하다.
+const Lineup = ({ scene }: { scene: Scene<'lineup'> }) => {
+  const max = Math.max(1, ...scene.rows.map((r) => r.figure.value ?? 0));
+  const footnotes = [...new Set(scene.rows.map((r) => r.figure.detail).filter((d): d is string => !!d))];
+  return (
+    <div className="mss mss-lineup">
+      <h2 className="mss-title msp-rise">{scene.title}</h2>
+      {scene.basis ? (
+        <p className="mss-sub msp-rise" style={order(1)}>
+          {scene.basis} 기준
+        </p>
+      ) : null}
+      <ul className="mss-linelist">
+        {scene.rows.map((r, i) => (
+          <li key={i} className={cn('mss-line msp-rise', r.highlight && 'is-highlight')} style={order(i + 2)}>
+            <div className="mss-line-head">
+              <span className="mss-line-label">
+                {r.label}
+                {r.sub ? <span className="mss-line-sub">{r.sub}</span> : null}
+              </span>
+              <FigureValue figure={r.figure} size="sm" />
+            </div>
+            <div className="mss-bar-track mss-line-track" aria-hidden>
+              <span className="mss-bar-fill" style={{ width: `${((r.figure.value ?? 0) / max) * 100}%`, '--i': i } as CSSProperties} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      {footnotes.length > 0 ? (
+        <ul className="mss-bar-foot msp-rise" style={order(scene.rows.length + 2)}>
+          {footnotes.map((d) => (
+            <li key={d}>※ {d}</li>
+          ))}
+        </ul>
+      ) : null}
+      {scene.note ? (
+        <p className="mss-note msp-rise" style={order(scene.rows.length + 2)}>
           {scene.note}
         </p>
       ) : null}
@@ -259,6 +303,8 @@ export const MealStorySceneView = ({ scene, story }: { scene: MealStorySceneType
       return <Stat scene={scene} />;
     case 'bars':
       return <Bars scene={scene} />;
+    case 'lineup':
+      return <Lineup scene={scene} />;
     case 'list':
       return <List scene={scene} />;
     case 'ingredients':

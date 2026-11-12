@@ -6,6 +6,7 @@ import { slide } from '@remotion/transitions/slide';
 import { ChapterBars } from './ChapterBars';
 import { ChapterCover } from './ChapterCover';
 import { ChapterIngredients } from './ChapterIngredients';
+import { ChapterLineup } from './ChapterLineup';
 import { ChapterList } from './ChapterList';
 import { ChapterNutrition } from './ChapterNutrition';
 import { ChapterOutro } from './ChapterOutro';
@@ -52,6 +53,8 @@ const ChapterBody = ({ scene, ctx, saltSpoon }: { scene: MealStorySceneType; ctx
       return <ChapterStat scene={scene} ctx={ctx} saltSpoon={saltSpoon} />;
     case 'bars':
       return <ChapterBars scene={scene} ctx={ctx} />;
+    case 'lineup':
+      return <ChapterLineup scene={scene} ctx={ctx} />;
     case 'list':
       return <ChapterList scene={scene} ctx={ctx} />;
     case 'ingredients':

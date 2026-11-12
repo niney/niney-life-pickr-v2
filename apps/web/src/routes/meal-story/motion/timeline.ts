@@ -63,6 +63,13 @@ export const barsTiming = (bars: number) => {
   return { growStart, grow: 44, last, stampAt: last + 8, noteAt: growStart(bars - 1) + 10, end: last + 28 };
 };
 
+/** 줄 세우기 — 줄마다 차례로 들어와 막대가 자라고, 다 자라면 비슷한 값의 점선, 마지막 줄이 자랄 때 덧말. */
+export const lineupTiming = (rows: number) => {
+  const growStart = (i: number) => 34 + i * 20;
+  const last = growStart(rows - 1) + 30;
+  return { growStart, grow: 30, last, bandAt: last + 4, noteAt: growStart(rows - 1) + 10, end: last + 26 };
+};
+
 /** 목록 — 항목마다 크게 들어와(beat) 작아지며 쌓이고(move), 다 쌓이면 덧말. */
 export const LIST = { first: 50, beat: 60, move: 18 } as const;
 // 다 쌓인 목록을 한 번 훑어보는 시간(실제 프레임).
@@ -106,6 +113,11 @@ export const barsFootnotes = (scene: Extract<MealStorySceneType, { type: 'bars' 
   ...new Set(scene.bars.map((b) => b.figure.detail).filter((d): d is string => !!d)),
 ];
 
+/** 줄 세우기 아래 작은 덧말(값마다 서버가 단 detail, 같은 것은 한 번). */
+export const lineupFootnotes = (scene: Extract<MealStorySceneType, { type: 'lineup' }>): string[] => [
+  ...new Set(scene.rows.map((r) => r.figure.detail).filter((d): d is string => !!d)),
+];
+
 /** 장면 길이(실제 프레임, 30fps). */
 export const chapterFrames = (story: Pick<MealStoryType, 'topic'>, scene: MealStorySceneType): number => {
   switch (scene.type) {
@@ -120,6 +132,13 @@ export const chapterFrames = (story: Pick<MealStoryType, 'topic'>, scene: MealSt
       const t = barsTiming(scene.bars.length);
       const foot = barsFootnotes(scene).reduce((n, d) => n + readFrames(d), 0);
       return chapterLength(t.end, t.noteAt + 18, readFrames(scene.note) + Math.round(foot * 0.5));
+    }
+    case 'lineup': {
+      const t = lineupTiming(scene.rows.length);
+      const foot = lineupFootnotes(scene).reduce((n, d) => n + readFrames(d), 0);
+      // 줄 이름은 훑어 읽는다(절반) — 덧말·잣대는 다 읽는다.
+      const labels = readFrames(...scene.rows.map((r) => `${r.label}${r.sub ?? ''}`));
+      return chapterLength(t.end, t.noteAt + 18, readFrames(scene.note, scene.basis) + Math.round((labels + foot) * 0.5));
     }
     case 'list': {
       const end = LIST.first + scene.items.length * LIST.beat;

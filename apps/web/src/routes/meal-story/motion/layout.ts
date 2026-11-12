@@ -164,6 +164,64 @@ export const barsLayout = (bars: number, noteLines: number, footLines: number) =
   };
 };
 
+/** 줄 세우기 장면의 자리 — 종이 띠 왼쪽 끝·너비, 글·막대 왼쪽 끝, 값의 오른쪽 끝, 첫 줄 위 끝, 덧말 글씨. */
+export const LINEUP = { X: 70, W: 940, TEXT_X: 226, RIGHT: 984, TOP: 690, NOTE_SIZE: 36 } as const;
+
+/**
+ * 줄 세우기 줄의 자리 — 줄 수(4~7)와 아래 쪽지(덧말·각주) 높이에 맞춰 줄 높이를 정한다. 줄 하나 = 이름 한 줄 + 가는 막대.
+ * 잣대 쪽지(basis)가 있으면 첫 줄을 그만큼 내린다. 이름은 보조 글 하한(TYPE.sub), 값은 본문 하한 아래로 내리지 않는다 —
+ * 가장 빽빽한 경우(일곱 줄 + 잣대 + 덧말 세 줄)에도 줄 높이 100 이 나온다.
+ */
+export const lineupLayout = (rows: number, hasBasis: boolean, noteLines: number, footLines: number) => {
+  const noteH = noteLines ? cardHeight(noteLines, LINEUP.NOTE_SIZE) : 0;
+  const footH = footLines ? cardHeight(footLines, TYPE.foot) : 0;
+  const blockH = noteH + footH + (noteH && footH ? 18 : 0);
+  const noteTop = STAGE_BOTTOM - blockH;
+  const top = LINEUP.TOP + (hasBasis ? 84 : 0);
+  const rowH = clamp(((blockH ? noteTop - 26 : 1806) - top) / Math.max(1, rows), 100, 232);
+  const cardH = rowH - 16;
+  const labelSize = clamp(Math.round(cardH * 0.3), TYPE.sub, 48);
+  const barH = clamp(Math.round(cardH * 0.22), 20, 44);
+  const gap = clamp(Math.round(cardH * 0.06), 2, 14);
+  return {
+    top,
+    rowH,
+    cardH,
+    labelSize,
+    barH,
+    gap,
+    /** 종이 띠 위 끝에서 이름 글줄 위 끝까지 — 이름 + 틈 + 막대 묶음을 띠 가운데에 둔다. */
+    padY: Math.max(4, (cardH - (labelSize * 1.2 + gap + barH)) / 2),
+    numSize: clamp(Math.round(cardH * 0.42), 44, 84),
+    noteTop,
+    footTop: noteTop + noteH + (noteH ? 18 : 0),
+  };
+};
+
+/** 줄 세우기 값의 단위 글씨(숫자 크기의 배수) — 숫자의 절반, 숫자가 작아도 각주 하한(TYPE.foot) 아래로는 안 내린다. */
+export const lineupUnitScale = (numSize: number): number => Math.max(0.5, TYPE.foot / numSize);
+
+/** 줄 세우기 값 글의 폭 — 가장 긴 값(숫자 + 단위, 또는 값 없음). 막대는 그 왼쪽까지만 자란다. */
+export const lineupValueWidth = (texts: { number: string | null; unit: string }[], numSize: number): number =>
+  Math.round(
+    Math.max(
+      numSize * 1.6,
+      ...texts.map((t) =>
+        t.number === null
+          ? textWidth('값 없음', Math.max(TYPE.sub, numSize * 0.6))
+          : textWidth(t.number, numSize) * 1.06 + textWidth(t.unit, numSize * lineupUnitScale(numSize)) + 8,
+      ),
+    ),
+  );
+
+/** 서로 비슷한 값들인가 — 셋 이상이고 가장 큰 값이 가장 작은 값의 1.3배 안이면 그 둘(점선을 내릴 자리). 아니면 null. */
+export const lineupBand = (values: readonly number[]): { min: number; max: number } | null => {
+  if (values.length < 3) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return min > 0 && max / min <= 1.3 ? { min, max } : null;
+};
+
 /** 글을 너비에 맞춰 줄로 — 낱말(빈칸) 단위로 앞에서부터 채운다(쪽지 크기 맞추기). */
 export const wrapText = (text: string, size: number, maxWidth: number): string[] => {
   const lines: string[] = [];

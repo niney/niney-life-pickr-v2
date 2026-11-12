@@ -14,6 +14,8 @@ import {
   chapterProgress,
   chapterSeekFrame,
   isSaltSpoonScene,
+  lineupFootnotes,
+  lineupTiming,
   readFrames,
   statTiming,
   stepTiming,
@@ -85,6 +87,28 @@ describe('장면 길이', () => {
     const noTip = stepTiming({ text: step.text, tip: null });
     expect(noTip.tipAt).toBeNull();
     expect(noTip.frames).toBeGreaterThanOrEqual(Math.round(toReal(noTip.textReady) + readFrames(step.text)));
+  });
+
+  it('줄 세우기 — 줄이 많을수록, 덧말이 길수록 길고, 아래 덧말은 값마다 서버가 단 detail 을 한 번씩', () => {
+    const lineup = (rows: number, note: string | null): Extract<MealStorySceneType, { type: 'lineup' }> => ({
+      type: 'lineup',
+      title: '면끼리',
+      basis: '삶은 면 100g',
+      rows: Array.from({ length: rows }, (_, i) => ({
+        label: `면 ${i}`,
+        sub: null,
+        figure: fig({ value: 100 + i, unit: 'kcal', detail: i < 2 ? '표시한 제품 4개의 중앙값이에요' : null }),
+        icon: null,
+        highlight: i === 0,
+      })),
+      note,
+    });
+    expect(chapterFrames(sodium, lineup(7, null))).toBeGreaterThanOrEqual(Math.round(toReal(lineupTiming(7).end)));
+    expect(chapterFrames(sodium, lineup(7, null))).toBeGreaterThan(chapterFrames(sodium, lineup(4, null)));
+    const long = '가'.repeat(60);
+    expect(chapterFrames(sodium, lineup(4, long))).toBeGreaterThanOrEqual(Math.round(toReal(lineupTiming(4).noteAt + 18) + readFrames(long)));
+    expect(chapterFrames(sodium, lineup(4, long))).toBeGreaterThan(chapterFrames(sodium, lineup(4, null)));
+    expect(lineupFootnotes(lineup(4, null))).toEqual(['표시한 제품 4개의 중앙값이에요']);
   });
 
   it('막대 아래 덧말은 값마다 서버가 단 detail 을 한 번씩', () => {

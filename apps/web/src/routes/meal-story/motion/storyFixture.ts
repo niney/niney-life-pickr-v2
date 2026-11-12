@@ -2,7 +2,7 @@ import type { MealStoryFigureType, MealStoryType } from '@repo/api-contract';
 import type { MotionMine } from './types';
 
 // 변형 점검용 가짜 원고 — 첫 편에 없는 모양을 한 편에 모았다(사진 있는 표지·단계, 일반 숫자 장면, 소품 이름 없는 항목,
-// 값 없는 막대, 계약 한도까지 찬 줄 수·글 길이). 장면 그림 테스트(chapters.test)가 예외·넘침 없이 그려지는지 보고,
+// 값 없는 막대, 줄 세우기의 가장 빽빽한 경우와 성긴 경우, 계약 한도까지 찬 줄 수·글 길이). 장면 그림 테스트(chapters.test)가 예외·넘침 없이 그려지는지 보고,
 // MP4 도구의 Variants 컴포지션이 눈으로 볼 프레임을 뽑는다. 숫자는 모두 지어낸 값이다 — 서비스 화면에 쓰지 않는다.
 
 const fig = (over: Partial<MealStoryFigureType> = {}): MealStoryFigureType => ({
@@ -74,6 +74,35 @@ export const variantStory: MealStoryType = {
       ],
       fraction: null,
       note: LONG_NOTE,
+    },
+    {
+      // 가장 빽빽한 줄 세우기 — 일곱 줄 + 잣대 + 덧말 세 줄 + 각주. 값이 서로 비슷해 점선이 내려온다.
+      type: 'lineup',
+      title: '줄 세우기 일곱 줄에 잣대와 덧말',
+      basis: '잣대가 한도까지 긴 글 삶은 면 100g',
+      rows: [
+        { label: '쌀국수', sub: null, figure: fig({ value: 132, unit: 'kcal' }), icon: 'ricenoodle', highlight: false },
+        { label: '이름이 한도까지 긴 면이름', sub: '옆 글도 한도까지 길다 50g', figure: fig({ value: 131, unit: 'kcal' }), icon: 'udon', highlight: false },
+        { label: '소면', sub: '마른 면 100g', figure: fig({ value: 126, unit: 'kcal', detail: '소면 값은 표시한 제품 4개의 중앙값이에요' }), icon: 'somen', highlight: true },
+        { label: '소품 없는 줄', sub: null, figure: fig({ value: 123, unit: 'kcal' }), icon: null, highlight: false },
+        { label: '값 없는 줄', sub: null, figure: fig({ unit: 'kcal' }), icon: 'soba', highlight: false },
+        { label: '당면', sub: null, figure: fig({ value: 120, unit: 'kcal' }), icon: 'glassnoodle', highlight: false },
+        { label: '메밀국수', sub: null, figure: fig({ value: 114, unit: 'kcal' }), icon: 'soba', highlight: false },
+      ],
+      note: '덧말이 한도(예순 자)까지 길어 세 줄이 되어도 일곱 줄과 겹치지 않고 무대 바닥을 넘지 않아야 해요.',
+    },
+    {
+      // 성긴 줄 세우기 — 넷, 잣대·덧말 없음, 값 차이가 크고(점선 없음) 천 단위 쉼표가 든 값.
+      type: 'lineup',
+      title: '줄 넷 — 차이가 큰 값',
+      basis: null,
+      rows: [
+        { label: '마른 소면', sub: '100g', figure: fig({ value: 1274 }), icon: 'somen', highlight: false },
+        { label: '잔멸치', sub: null, figure: fig({ value: 620 }), icon: 'anchovy', highlight: true },
+        { label: '삶은 소면', sub: '290g', figure: fig({ value: 197 }), icon: 'somen', highlight: true },
+        { label: '곤약면', sub: '한 봉 200g', figure: fig({ value: 4 }), icon: 'konjac', highlight: true },
+      ],
+      note: null,
     },
     {
       type: 'list',

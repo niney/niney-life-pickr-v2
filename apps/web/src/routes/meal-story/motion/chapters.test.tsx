@@ -2,7 +2,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MealStoryIconType, MealStorySceneType, MealStoryType } from '@repo/api-contract';
 import { FONT_STYLESHEETS } from './fonts';
-import { BARS, STAGE_BOTTOM, barsLayout, cardHeight, clipLines, fitSize, fractionText, headingBottom, headingSize, ownStandardText, textWidth } from './layout';
+import {
+  BARS,
+  LINEUP,
+  STAGE_BOTTOM,
+  barsLayout,
+  cardHeight,
+  clipLines,
+  fitSize,
+  fractionText,
+  headingBottom,
+  headingSize,
+  lineupBand,
+  lineupLayout,
+  lineupUnitScale,
+  ownStandardText,
+  textWidth,
+} from './layout';
 import { Icon } from './paper/Icon';
 import { PROP_FOR } from './paper/icons';
 import { paperPalette } from './paper/palette';
@@ -126,6 +142,29 @@ describe('장면 그림 — 변형 원고', () => {
     expect(stat.match(/로그인하면 내 값도 보여요/g)).toHaveLength(1);
   });
 
+  it('줄 세우기 — 잣대 쪽지, 값 없는 줄은 값 없음, 값이 서로 비슷할 때만 가장 짧은·긴 막대 끝에 점선 둘', () => {
+    const [close, far] = scenes.filter((s) => s.type === 'lineup') as [MealStorySceneType, MealStorySceneType];
+    const last = (scene: MealStorySceneType) => draw(scene, VIEWERS[0]!, chapterFrames(variantStory, scene) - 1);
+    const a = last(close);
+    expect(a).toContain('잣대가 한도까지 긴 글 삶은 면 100g 기준');
+    // 이름과 옆 글이 한 줄에 들면 옆 글을 보이고, 한도까지 길어 값 자리로 넘어가면 옆 글을 뺀다(겹치지 않게).
+    expect(a).toContain('마른 면 100g');
+    expect(a).not.toContain('옆 글도 한도까지 길다 50g');
+    expect(a.match(/값 없음/g)).toHaveLength(1);
+    expect(a).toContain('※ 소면 값은 표시한 제품 4개의 중앙값이에요');
+    // 114~132kcal — 가장 큰 값이 가장 작은 값의 1.3배 안이라 점선 둘.
+    expect(a.match(/stroke-dasharray="12 10"/g)).toHaveLength(2);
+    // 4~1,274mg — 크게 다르면 점선이 없고, 잣대가 없으면 '기준' 쪽지도 없다.
+    const b = last(far);
+    expect(b).not.toContain('stroke-dasharray="12 10"');
+    expect(b).not.toContain('기준');
+    expect(lineupBand([132, 131, 114])).toEqual({ min: 114, max: 132 });
+    expect(lineupBand([370, 170, 14])).toBeNull();
+    // 둘뿐이면 '비슷한 무리'라고 하지 않는다. 0 이 끼어도(배수를 못 낸다) 하지 않는다.
+    expect(lineupBand([126, 114])).toBeNull();
+    expect(lineupBand([0, 0, 0])).toBeNull();
+  });
+
   it('소금 환산·약 N분의 1 은 서버가 준 값만 — 화면이 비율을 지어내지 않는다', () => {
     const spoon = scenes.find((s) => s.type === 'stat')!;
     const last = (scene: MealStorySceneType, viewer: Viewer) => draw(scene, viewer, chapterFrames(variantStory, scene) - 1);
@@ -200,8 +239,8 @@ describe('장면 그림 — 변형 원고', () => {
     expect(paperPalette('fiber', false).stage).not.toBe(paperPalette('sodium', false).stage);
     // 다크 모드의 짙은 줄무늬도 주제색(빠지면 undefined 가 그림에 박힌다), 모르는 주제는 기본(나트륨) 색.
     expect(paperPalette('fiber', true).stageDeep).not.toBe(paperPalette('sodium', true).stageDeep);
-    expect(new Set(['sodium', 'fiber', 'calcium', 'vitaminC'].map((t) => paperPalette(t, false).stage)).size).toBe(4);
-    expect(new Set(['sodium', 'fiber', 'calcium', 'vitaminC'].map((t) => paperPalette(t, true).stageDeep)).size).toBe(4);
+    expect(new Set(['sodium', 'fiber', 'calcium', 'vitaminC', 'kcal'].map((t) => paperPalette(t, false).stage)).size).toBe(5);
+    expect(new Set(['sodium', 'fiber', 'calcium', 'vitaminC', 'kcal'].map((t) => paperPalette(t, true).stageDeep)).size).toBe(5);
     expect(paperPalette('vitaminD', false).stage).toBe(paperPalette('sodium', false).stage);
     expect(paperPalette(null, true).stageDeep).toBe(paperPalette('sodium', true).stageDeep);
     const outro = scenes.find((s) => s.type === 'outro')!;
@@ -220,8 +259,12 @@ describe('장면 그림 — 변형 원고', () => {
     const vitaminCStory: MealStoryType = { ...variantStory, topic: { nutrient: 'vitaminC', direction: 'increase' } };
     const vitaminC = draw(outro, VIEWERS[0]!, end, 'c0', vitaminCStory);
     expect(vitaminC).not.toContain('소금');
-    expect(new Set([fiber, calcium, vitaminC]).size).toBe(3);
-    for (const story of [fiberStory, calciumStory, vitaminCStory]) {
+    // 열량(면 편)의 짝은 소면·곤약면 타래.
+    const kcalStory: MealStoryType = { ...variantStory, topic: { nutrient: 'kcal', direction: 'reduce' } };
+    const kcal = draw(outro, VIEWERS[0]!, end, 'c0', kcalStory);
+    expect(kcal).not.toContain('소금');
+    expect(new Set([fiber, calcium, vitaminC, kcal]).size).toBe(4);
+    for (const story of [fiberStory, calciumStory, vitaminCStory, kcalStory]) {
       for (const scene of scenes) {
         for (const dark of [false, true]) {
           const markup = draw(scene, { name: '주제 바꿈', mine: variantMineFiber, loggedIn: true, dark }, chapterFrames(story, scene) - 1, 'c0', story);
@@ -281,6 +324,28 @@ describe('자리 계산', () => {
     }
     // 막대가 둘이면 띠·숫자를 키운다.
     expect(barsLayout(2, 2, 0).numSize).toBeGreaterThan(barsLayout(3, 2, 0).numSize);
+  });
+
+  it('줄 세우기 — 일곱 줄에 잣대·덧말·각주가 다 있어도 마지막 줄이 아래 쪽지 위에서 끝나고, 이름·값·단위 글씨가 하한을 지킨다', () => {
+    for (const rows of [4, 5, 6, 7]) {
+      for (const basis of [false, true]) {
+        for (const [noteLines, footLines] of [[0, 0], [2, 0], [3, 0], [2, 2], [4, 2]] as const) {
+          const L = lineupLayout(rows, basis, noteLines, footLines);
+          const where = `줄 ${rows} · 잣대 ${basis} · 덧말 ${noteLines} · 각주 ${footLines}`;
+          const lastEnd = L.top + (rows - 1) * L.rowH + L.cardH;
+          expect(lastEnd, where).toBeLessThanOrEqual(noteLines || footLines ? L.noteTop : STAGE_BOTTOM);
+          const end = footLines ? L.footTop + cardHeight(footLines, TYPE.foot) : L.noteTop + (noteLines ? cardHeight(noteLines, LINEUP.NOTE_SIZE) : 0);
+          expect(end, where).toBeLessThanOrEqual(STAGE_BOTTOM + 0.5);
+          expect(L.labelSize, where).toBeGreaterThanOrEqual(TYPE.sub);
+          expect(L.numSize, where).toBeGreaterThanOrEqual(TYPE.body);
+          expect(L.numSize * lineupUnitScale(L.numSize), where).toBeGreaterThanOrEqual(TYPE.foot - 0.01);
+          // 이름 한 줄 + 틈 + 막대가 종이 띠 안에 든다.
+          expect(L.padY * 2 + L.labelSize * 1.2 + L.gap + L.barH, where).toBeLessThanOrEqual(L.cardH + 0.5);
+        }
+      }
+    }
+    // 줄이 적으면 띠와 숫자를 키운다.
+    expect(lineupLayout(4, true, 2, 0).numSize).toBeGreaterThan(lineupLayout(7, true, 2, 0).numSize);
   });
 
   it('제목 — 두 줄까지는 기본 크기, 한도(32자)까지 길어도 제목 띠가 무대(600) 위에서 끝난다', () => {
