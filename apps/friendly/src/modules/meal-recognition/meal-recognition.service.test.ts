@@ -14,7 +14,12 @@ import type {
 } from '../ai/adapters/llm-provider.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
 import { MealPhotoService } from '../meal/meal-photo.service.js';
-import { MEAL_RECOGNITION_VERSION } from './meal-recognition.prompts.js';
+import {
+  MEAL_RECOGNITION_MENU_HINT_MAX,
+  MEAL_RECOGNITION_VERSION,
+  buildMealRecognitionUserPrompt,
+  recognitionMenuHints,
+} from './meal-recognition.prompts.js';
 import {
   MealRecognitionError,
   MealRecognitionService,
@@ -53,6 +58,41 @@ const envBlock = (visionModel: string): LlmProviderEnv => ({
     'meal-photo': visionModel,
     'meal-recommend': 'text-model',
   },
+});
+
+describe('buildMealRecognitionUserPrompt', () => {
+  it('식당이 없으면 예전(v2) 프롬프트와 글자까지 같다 — 식당 메뉴 규칙은 메뉴를 줄 때만 붙는다', () => {
+    expect(buildMealRecognitionUserPrompt({ photoCount: 2, slotLabel: '점심' })).toBe(
+      ['사진 2장을 분석하라.', '끼니: 점심', '위 스키마에 맞는 JSON 객체로만 답하라.'].join('\n'),
+    );
+    // 식당 이름만 알고 메뉴가 없으면 규칙도 없다.
+    expect(buildMealRecognitionUserPrompt({ photoCount: 1, restaurantName: '숯토리', menuNames: [] })).toBe(
+      ['사진 1장을 분석하라.', '식당: 숯토리', '위 스키마에 맞는 JSON 객체로만 답하라.'].join('\n'),
+    );
+  });
+
+  it('식당 메뉴는 참고 목록으로 준다 — 같은 이름은 한 번만, 빈 이름은 뺀다(문구는 실측으로 고른 것이라 고정한다)', () => {
+    expect(
+      buildMealRecognitionUserPrompt({
+        photoCount: 1,
+        restaurantName: '숯토리',
+        menuNames: ['묵은지 김치찌개', ' 특곰탕 ', '묵은지 김치찌개', ''],
+      }),
+    ).toBe(
+      [
+        '사진 1장을 분석하라.',
+        '식당: 숯토리',
+        '이 식당의 등록 메뉴(참고 — 사진에 없는 메뉴를 지어내지 말 것): 묵은지 김치찌개, 특곰탕',
+        '위 스키마에 맞는 JSON 객체로만 답하라.',
+      ].join('\n'),
+    );
+  });
+
+  it('메뉴가 많은 집은 상한까지만 준다', () => {
+    const many = Array.from({ length: MEAL_RECOGNITION_MENU_HINT_MAX + 30 }, (_, i) => `메뉴${i}`);
+    expect(recognitionMenuHints(many)).toHaveLength(MEAL_RECOGNITION_MENU_HINT_MAX);
+    expect(recognitionMenuHints(undefined)).toEqual([]);
+  });
 });
 
 describe('parseRecognitionOutput / buildWarning', () => {
@@ -228,6 +268,7 @@ describe('MealRecognitionService (격리 DB + FakeProvider)', () => {
     expect(call.prompt).toContain('숯토리 신촌점');
     expect(call.prompt).toContain('김치찌개');
     expect(call.prompt).toContain('저녁');
+    expect(call.prompt).toContain('이 식당의 등록 메뉴');
     expect(call.systemPrompt).toContain('한국어 정식 명칭');
 
     expect(res.model).toBe('gemma4:31b');
@@ -242,7 +283,10 @@ describe('MealRecognitionService (격리 DB + FakeProvider)', () => {
       selectedCandidateRank: 0,
       catalogMatchedBy: 'normalized_name',
       catalogMatchScore: 1,
+      // 인식한 이름("김치 찌개")이 그 집 메뉴와 같으면(띄어쓰기 차이는 봐준다) 목록의 표기로 함께 돌려준다.
+      menuName: '김치찌개',
     });
+    expect(res.dishes[1]).not.toHaveProperty('menuName');
     expect(res.dishes[0]?.recognitionDishId).toMatch(/^[0-9a-f-]{36}$/);
     expect(res.dishes[0]?.foodId).not.toBeNull();
     // photoIndex 는 사진 수 안으로 클램프.

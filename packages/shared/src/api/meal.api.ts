@@ -12,6 +12,7 @@ import {
   type FrequentMealItemsResultType,
   type LatestMealNutritionAdviceResultType,
   type ListMealRecommendationsResultType,
+  type MealPlaceMenusResultType,
   type MealRecommendationContextType,
   type MealRecommendationFeedbackInputType,
   type MealRecommendationEventInputType,
@@ -180,6 +181,12 @@ export const mealApi = {
     const qs = params.toString();
     return apiFetch<FrequentMealItemsResultType>(`${Routes.Meal.frequentItems}${qs ? `?${qs}` : ''}`);
   },
+
+  // 식당 메뉴에서 넣기 — 기록에 정한 식당의 등록 메뉴를 넣을 음식(표준명·분류·1인분 열량)으로 받는다.
+  placeMenus: (placeId: string) =>
+    apiFetch<MealPlaceMenusResultType>(
+      `${Routes.Meal.placeMenus}?${new URLSearchParams({ placeId }).toString()}`,
+    ),
 
   // 사진은 JWT 가 필요해 <img src> 로 직접 못 쓴다 — blob 으로 받아 화면에서 URL 로 바꾼다
   // (웹은 objectURL, RN 은 data URL — useMealPhotoUrl 훅이 처리).

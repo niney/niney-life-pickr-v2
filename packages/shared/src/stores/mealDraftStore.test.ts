@@ -3,6 +3,7 @@ import type { StateStorage } from 'zustand/middleware';
 import type {
   FrequentMealItemType,
   MealEntryType,
+  MealPlaceMenuType,
   MealRecommendationType,
   RecognizedDishType,
 } from '@repo/api-contract';
@@ -586,6 +587,220 @@ describe('빠른 추가 칩(toggleQuickItem)', () => {
   });
 });
 
+describe('meal draft 식당·식당 메뉴', () => {
+  const menu = (over: Partial<MealPlaceMenuType> = {}): MealPlaceMenuType => ({
+    menuName: '묵은지 김치찌개',
+    price: 9000,
+    recommend: false,
+    foods: [
+      { name: '김치찌개', foodId: 'food-1', dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean', isMain: true, kcal: 240 },
+    ],
+    ...over,
+  });
+  const setMenu = menu({
+    menuName: '수제돈까스 + 우동',
+    price: 12000,
+    foods: [
+      { name: '돈가스', foodId: 'food-2', dishType: 'fried', mainIngredient: 'pork', cuisine: 'japanese', isMain: true, kcal: 650 },
+      { name: '우동', foodId: 'food-3', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'japanese', isMain: true, kcal: 420 },
+    ],
+  });
+  const names = () => useMealDraftStore.getState().items.map((it) => it.name);
+
+  beforeEach(() => {
+    setMealDraftLocalFileAdapter(null);
+    useMealDraftStore.getState().clear();
+    useMealDraftStore.getState().start({ eatenDate: '2026-11-13', slot: 'lunch' });
+  });
+
+  it('식당을 정하면 식사 방식이 비어 있을 때만 외식으로 두고, 이름만 적은 식당은 id 없이 남는다', () => {
+    const st = useMealDraftStore.getState();
+    st.setPlace({ placeId: 'place-1', placeName: '숯토리' });
+    expect(useMealDraftStore.getState()).toMatchObject({ placeId: 'place-1', placeName: '숯토리', mealType: 'dining_out' });
+
+    st.setField('mealType', 'delivery');
+    st.setPlace({ placeId: null, placeName: '  회사 앞 백반집 ' });
+    expect(useMealDraftStore.getState()).toMatchObject({ placeId: null, placeName: '회사 앞 백반집', mealType: 'delivery' });
+
+    st.setPlace(null);
+    expect(useMealDraftStore.getState()).toMatchObject({ placeId: null, placeName: null, mealType: 'delivery' });
+  });
+
+  it('메뉴를 누르면 표준명 항목에 그 집 메뉴명·가격이 붙어 들어가고(빈 줄 자리에), 다시 누르면 빠진다', () => {
+    const st = useMealDraftStore.getState();
+    st.addItem({ name: '', foodId: null, dishType: null, mainIngredient: null, cuisine: null, portion: null, isMain: true, confidence: null, source: 'manual', candidates: [] });
+    st.toggleMenuItem(menu());
+    const [item] = useMealDraftStore.getState().items;
+    expect(useMealDraftStore.getState().items).toHaveLength(1);
+    expect(item).toMatchObject({
+      name: '김치찌개',
+      foodId: 'food-1',
+      dishType: 'stew',
+      source: 'catalog',
+      catalogMatchedBy: 'food_id',
+      menuName: '묵은지 김치찌개',
+      menuPrice: 9000,
+    });
+    expect(draftItemToInput(item!)).toMatchObject({ name: '김치찌개', menuName: '묵은지 김치찌개', menuPrice: 9000 });
+
+    useMealDraftStore.getState().toggleMenuItem(menu());
+    expect(useMealDraftStore.getState().items).toEqual([]);
+  });
+
+  it('카탈로그로 못 이은 메뉴는 메뉴명 그대로 수동 항목으로, 세트는 구성요소마다 같은 메뉴명에 가격은 첫 줄에만', () => {
+    const st = useMealDraftStore.getState();
+    st.toggleMenuItem(
+      menu({
+        menuName: '주모의 한상',
+        price: null,
+        foods: [{ name: '주모의 한상', foodId: null, dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: null }],
+      }),
+    );
+    st.toggleMenuItem(setMenu);
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '주모의 한상', source: 'manual', catalogMatchedBy: 'none', menuName: '주모의 한상', menuPrice: null },
+      { name: '돈가스', menuName: '수제돈까스 + 우동', menuPrice: 12000 },
+      { name: '우동', menuName: '수제돈까스 + 우동', menuPrice: null },
+    ]);
+    // 세트는 한 번에 빠진다.
+    useMealDraftStore.getState().toggleMenuItem(setMenu);
+    expect(names()).toEqual(['주모의 한상']);
+  });
+
+  it('같은 음식이 이미 있으면 새 줄을 만들지 않고 그 줄에 메뉴를 잇는다 — 사진 인식 줄은 다시 누르면 연결만 풀린다', () => {
+    const st = useMealDraftStore.getState();
+    st.applyRecognition([dish({ recognitionDishId: 'dish-1' })], { model: 'm', version: 2 });
+    st.toggleMenuItem(menu());
+    expect(useMealDraftStore.getState().items).toHaveLength(1);
+    expect(useMealDraftStore.getState().items[0]).toMatchObject({
+      name: '김치찌개',
+      source: 'recognized',
+      recognitionDishId: 'dish-1',
+      menuName: '묵은지 김치찌개',
+      menuPrice: 9000,
+      // 메뉴를 이은 것은 사용자가 확인한 것이다 — 다시 인식해도 지워지지 않는다.
+      userEdited: true,
+    });
+
+    useMealDraftStore.getState().toggleMenuItem(menu());
+    expect(useMealDraftStore.getState().items).toMatchObject([{ name: '김치찌개', source: 'recognized', menuName: null, menuPrice: null }]);
+  });
+
+  it('이름을 바꾸면 메뉴 연결이 풀리고, 양만 바꾸면 그대로', () => {
+    const st = useMealDraftStore.getState();
+    st.toggleMenuItem(menu());
+    const id = useMealDraftStore.getState().items[0]!.clientId;
+    st.updateItem(id, { portion: 'large' });
+    expect(useMealDraftStore.getState().items[0]).toMatchObject({ portion: 'large', menuName: '묵은지 김치찌개' });
+
+    st.updateItem(id, { name: '된장찌개', foodId: null });
+    expect(useMealDraftStore.getState().items[0]).toMatchObject({ name: '된장찌개', menuName: null, menuPrice: null });
+    // 가격만 온 항목은 메뉴명이 없으니 가격도 보내지 않는다.
+    expect(draftItemToInput({ ...useMealDraftStore.getState().items[0]!, menuPrice: 5000 })).toMatchObject({
+      menuName: null,
+      menuPrice: null,
+    });
+  });
+
+  it('식당을 바꾸거나 지우면 앞 식당의 메뉴 연결은 풀리고 음식은 남는다', () => {
+    const st = useMealDraftStore.getState();
+    st.setPlace({ placeId: 'place-1', placeName: '숯토리' });
+    st.toggleMenuItem(menu());
+    st.setPlace({ placeId: 'place-1', placeName: '숯토리' });
+    expect(useMealDraftStore.getState().items[0]).toMatchObject({ menuName: '묵은지 김치찌개' });
+
+    st.setPlace({ placeId: 'place-2', placeName: '다른 집' });
+    expect(useMealDraftStore.getState().items).toMatchObject([{ name: '김치찌개', menuName: null, menuPrice: null }]);
+  });
+
+  it('사진에서 인식한 줄을 식당 메뉴에 잇는다 — 같은 음식이면 메뉴만 붙이고, 아니면 다른 후보 가운데 메뉴에 있는 것으로 바꾼다', () => {
+    const st = useMealDraftStore.getState();
+    st.applyRecognition(
+      [
+        // 1순위가 이 집 메뉴(김치찌개)와 같은 음식.
+        dish({ recognitionDishId: 'd1' }),
+        // 1순위(부대찌개)는 메뉴에 없고 둘째 후보(곰탕)가 메뉴에 있다.
+        dish({
+          recognitionDishId: 'd2',
+          name: '부대찌개',
+          matchedName: '부대찌개',
+          foodId: 'food-budae',
+          candidates: [
+            { name: '부대찌개', confidence: 0.5 },
+            { name: '곰탕', confidence: 0.3 },
+          ],
+        }),
+        // 메뉴 어디에도 없는 주식과 반찬.
+        dish({ recognitionDishId: 'd3', name: '라면', matchedName: '라면', foodId: 'food-ramen', candidates: [] }),
+        dish({ recognitionDishId: 'd4', name: '단무지', matchedName: '단무지', foodId: null, isMain: false, candidates: [] }),
+      ],
+      { model: 'm', version: 2 },
+    );
+    const gomtang = menu({
+      menuName: '특곰탕',
+      price: 15000,
+      foods: [{ name: '곰탕', foodId: 'food-gom', dishType: 'soup', mainIngredient: 'beef', cuisine: 'korean', isMain: true, kcal: 330 }],
+    });
+
+    // 주식인데 못 찾은 줄만 센다(반찬은 메뉴에 없는 것이 보통). 세트 메뉴에는 잇지 않는다.
+    expect(useMealDraftStore.getState().linkRecognizedToMenus([menu(), gomtang, setMenu])).toEqual({ linked: 2, unmatched: 1 });
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '김치찌개', recognitionDishId: 'd1', menuName: '묵은지 김치찌개', menuPrice: 9000 },
+      {
+        name: '곰탕',
+        foodId: 'food-gom',
+        dishType: 'soup',
+        recognitionDishId: 'd2',
+        source: 'recognized',
+        selectedCandidateRank: 1,
+        menuName: '특곰탕',
+        menuPrice: 15000,
+      },
+      { name: '라면' },
+      { name: '단무지' },
+    ]);
+    expect(useMealDraftStore.getState().items.slice(2).every((it) => !it.menuName)).toBe(true);
+
+    // 다시 불러도 이미 이은 줄은 그대로다.
+    expect(useMealDraftStore.getState().linkRecognizedToMenus([menu(), gomtang])).toEqual({ linked: 0, unmatched: 1 });
+  });
+
+  it('식당을 알고 인식해 모델이 그 집 메뉴에서 고른 것이 있으면 그 메뉴가 먼저다 — 이름을 그 메뉴의 음식으로 맞춘다', () => {
+    const st = useMealDraftStore.getState();
+    // 인식 1순위는 부대찌개인데 모델이 고른 메뉴는 묵은지 김치찌개.
+    st.applyRecognition(
+      [
+        dish({
+          recognitionDishId: 'd1',
+          name: '부대찌개',
+          matchedName: '부대찌개',
+          foodId: 'food-budae',
+          candidates: [{ name: '부대찌개', confidence: 0.5 }],
+          menuName: '묵은지 김치찌개',
+        }),
+        // 모델이 고른 메뉴가 세트(풀리는 메뉴)면 잇지 않는다.
+        dish({ recognitionDishId: 'd2', name: '돈가스', matchedName: '돈가스', foodId: 'food-x', candidates: [], menuName: '수제돈까스 + 우동' }),
+      ],
+      { model: 'm', version: 3 },
+    );
+    expect(useMealDraftStore.getState().linkRecognizedToMenus([menu(), setMenu])).toEqual({ linked: 1, unmatched: 1 });
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '김치찌개', foodId: 'food-1', dishType: 'stew', recognitionDishId: 'd1', menuName: '묵은지 김치찌개', menuPrice: 9000 },
+      { name: '돈가스' },
+    ]);
+    expect(useMealDraftStore.getState().items[1]!.menuName ?? null).toBeNull();
+  });
+
+  it('사용자가 손본 인식 줄과 직접 넣은 줄은 메뉴에 잇지 않는다', () => {
+    const st = useMealDraftStore.getState();
+    st.applyRecognition([dish({ recognitionDishId: 'd1' })], { model: 'm', version: 2 });
+    st.updateItem(useMealDraftStore.getState().items[0]!.clientId, { portion: 'large' });
+    st.addItem({ name: '김치찌개', foodId: 'food-1', dishType: null, mainIngredient: null, cuisine: null, portion: null, isMain: true, confidence: null, source: 'catalog', candidates: [] });
+    expect(useMealDraftStore.getState().linkRecognizedToMenus([menu()])).toEqual({ linked: 0, unmatched: 0 });
+    expect(useMealDraftStore.getState().items.every((it) => !it.menuName)).toBe(true);
+  });
+});
+
 describe('meal draft 시작 도우미', () => {
   const savedEntry = (): MealEntryType => ({
     id: 'entry-1',
@@ -622,6 +837,8 @@ describe('meal draft 시작 도우미', () => {
         sodiumMg: 1500,
         nutritionFrom: null,
         nutritionBasis: 'direct',
+        menuName: '묵은지 김치찌개',
+        menuPrice: 9000,
       },
     ],
     photos: [{ token: 'photo-token-1', width: 10, height: 10, byteSize: 100, sortOrder: 0 }],
@@ -654,6 +871,9 @@ describe('meal draft 시작 도우미', () => {
       recognitionDishId: 'dish-1',
       catalogMatchedBy: 'food_id',
       confidence: 0.82,
+      // 그 집 메뉴명·가격도 그대로 — 앱에서 고쳐 저장해도(항목 전량 교체) 지워지지 않는다.
+      menuName: '묵은지 김치찌개',
+      menuPrice: 9000,
     });
   });
 
@@ -673,6 +893,9 @@ describe('meal draft 시작 도우미', () => {
       portion: 'large',
       confidence: null,
       source: 'catalog',
+      // 장소를 그대로 가져가니 그 집 메뉴 연결도 함께 간다.
+      menuName: '묵은지 김치찌개',
+      menuPrice: 9000,
     });
     expect(s.items[0]!.recognitionDishId).toBeUndefined();
   });

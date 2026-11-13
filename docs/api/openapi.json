@@ -14626,6 +14626,14 @@
                                     "typical_portion",
                                     "missing"
                                   ]
+                                },
+                                "menuName": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "menuPrice": {
+                                  "type": "integer",
+                                  "nullable": true
                                 }
                               },
                               "required": [
@@ -14650,7 +14658,9 @@
                                 "proteinG",
                                 "sodiumMg",
                                 "nutritionFrom",
-                                "nutritionBasis"
+                                "nutritionBasis",
+                                "menuName",
+                                "menuPrice"
                               ],
                               "additionalProperties": false
                             }
@@ -14858,6 +14868,12 @@
                                       "type": "number",
                                       "minimum": 0,
                                       "maximum": 1,
+                                      "nullable": true
+                                    },
+                                    "menuName": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 120,
                                       "nullable": true
                                     }
                                   },
@@ -15152,6 +15168,18 @@
                             "recommendation"
                           ],
                           "default": "manual"
+                        },
+                        "menuName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120,
+                          "nullable": true
+                        },
+                        "menuPrice": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100000000,
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -15338,6 +15366,12 @@
                               "type": "number",
                               "minimum": 0,
                               "maximum": 1,
+                              "nullable": true
+                            },
+                            "menuName": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120,
                               "nullable": true
                             }
                           },
@@ -15610,6 +15644,14 @@
                               "typical_portion",
                               "missing"
                             ]
+                          },
+                          "menuName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "menuPrice": {
+                            "type": "integer",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -15634,7 +15676,9 @@
                           "proteinG",
                           "sodiumMg",
                           "nutritionFrom",
-                          "nutritionBasis"
+                          "nutritionBasis",
+                          "menuName",
+                          "menuPrice"
                         ],
                         "additionalProperties": false
                       }
@@ -15842,6 +15886,12 @@
                                 "type": "number",
                                 "minimum": 0,
                                 "maximum": 1,
+                                "nullable": true
+                              },
+                              "menuName": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120,
                                 "nullable": true
                               }
                             },
@@ -16425,6 +16475,12 @@
                                       "minimum": 0,
                                       "maximum": 1,
                                       "nullable": true
+                                    },
+                                    "menuName": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 120,
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
@@ -16645,6 +16701,18 @@
                                     "typical_portion",
                                     "missing"
                                   ]
+                                },
+                                "menuName": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 120,
+                                  "nullable": true
+                                },
+                                "menuPrice": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 100000000,
+                                  "nullable": true
                                 }
                               },
                               "required": [
@@ -17673,6 +17741,12 @@
                                     "minimum": 0,
                                     "maximum": 1,
                                     "nullable": true
+                                  },
+                                  "menuName": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120,
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
@@ -17893,6 +17967,18 @@
                                   "typical_portion",
                                   "missing"
                                 ]
+                              },
+                              "menuName": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120,
+                                "nullable": true
+                              },
+                              "menuPrice": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100000000,
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -18985,6 +19071,14 @@
                                     "typical_portion",
                                     "missing"
                                   ]
+                                },
+                                "menuName": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "menuPrice": {
+                                  "type": "integer",
+                                  "nullable": true
                                 }
                               },
                               "required": [
@@ -19009,7 +19103,9 @@
                                 "proteinG",
                                 "sodiumMg",
                                 "nutritionFrom",
-                                "nutritionBasis"
+                                "nutritionBasis",
+                                "menuName",
+                                "menuPrice"
                               ],
                               "additionalProperties": false
                             }
@@ -19222,6 +19318,12 @@
                                       "type": "number",
                                       "minimum": 0,
                                       "maximum": 1,
+                                      "nullable": true
+                                    },
+                                    "menuName": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 120,
                                       "nullable": true
                                     }
                                   },
@@ -21795,6 +21897,175 @@
         }
       }
     },
+    "/api/v1/meals/place-menus": {
+      "get": {
+        "summary": "식당 메뉴에서 넣기 — 그 식당 등록 메뉴를 식단에 넣을 음식(표준명·분류·1인분 열량)으로",
+        "tags": [
+          "meal"
+        ],
+        "description": "placeId 는 등록 식당(공개 맛집 목록·상세의 placeId). 메뉴마다 그 집 표기(menuName)·가격(원, 한 값이 아니면 null)과 기록에 넣을 음식(foods)을 준다 — 보통 하나이고, 구성이 이름에 드러난 세트는 구성요소 수만큼. foods 의 name 은 음식 카탈로그의 표준명이고(못 이으면 다듬은 메뉴명, foodId null) kcal 은 저장하면 붙을 1인분 열량이다(모르면 null). 식단 기록을 저장할 때 항목의 menuName·menuPrice 에 그 집 표기와 가격을 실으면 스냅샷으로 남는다. 식당이 없으면 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "in": "query",
+            "name": "placeId",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "placeId": {
+                      "type": "string"
+                    },
+                    "placeName": {
+                      "type": "string"
+                    },
+                    "menus": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "menuName": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "nullable": true
+                          },
+                          "recommend": {
+                            "type": "boolean"
+                          },
+                          "foods": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "foodId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "dishType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "rice",
+                                    "noodle",
+                                    "soup",
+                                    "stew",
+                                    "grill",
+                                    "stir_fry",
+                                    "braise",
+                                    "steam",
+                                    "pancake",
+                                    "fried",
+                                    "namul",
+                                    "salad",
+                                    "kimchi",
+                                    "raw_fish",
+                                    "bakery",
+                                    "dairy",
+                                    "beverage",
+                                    "alcohol",
+                                    "other"
+                                  ],
+                                  "nullable": true
+                                },
+                                "mainIngredient": {
+                                  "type": "string",
+                                  "enum": [
+                                    "beef",
+                                    "pork",
+                                    "chicken",
+                                    "other_meat",
+                                    "fish",
+                                    "seafood",
+                                    "vegetable",
+                                    "tofu_bean",
+                                    "egg",
+                                    "dairy",
+                                    "grain",
+                                    "fruit",
+                                    "other"
+                                  ],
+                                  "nullable": true
+                                },
+                                "cuisine": {
+                                  "type": "string",
+                                  "enum": [
+                                    "korean",
+                                    "chinese",
+                                    "japanese",
+                                    "western",
+                                    "asian",
+                                    "fast_food",
+                                    "other"
+                                  ],
+                                  "nullable": true
+                                },
+                                "isMain": {
+                                  "type": "boolean"
+                                },
+                                "kcal": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "foodId",
+                                "dishType",
+                                "mainIngredient",
+                                "cuisine",
+                                "isMain",
+                                "kcal"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "minItems": 1
+                          }
+                        },
+                        "required": [
+                          "menuName",
+                          "price",
+                          "recommend",
+                          "foods"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "placeId",
+                    "placeName",
+                    "menus"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meals/preference": {
       "get": {
         "summary": "식단 선호 설정 조회 — 추천 가중치·제외·알레르기·선호 음식, 미저장 시 기본값",
@@ -22535,6 +22806,12 @@
                             "type": "number",
                             "minimum": 0,
                             "maximum": 1,
+                            "nullable": true
+                          },
+                          "menuName": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
                             "nullable": true
                           }
                         },
@@ -26554,6 +26831,14 @@
                               "typical_portion",
                               "missing"
                             ]
+                          },
+                          "menuName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "menuPrice": {
+                            "type": "integer",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -26578,7 +26863,9 @@
                           "proteinG",
                           "sodiumMg",
                           "nutritionFrom",
-                          "nutritionBasis"
+                          "nutritionBasis",
+                          "menuName",
+                          "menuPrice"
                         ],
                         "additionalProperties": false
                       }
@@ -26786,6 +27073,12 @@
                                 "type": "number",
                                 "minimum": 0,
                                 "maximum": 1,
+                                "nullable": true
+                              },
+                              "menuName": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120,
                                 "nullable": true
                               }
                             },
@@ -27052,6 +27345,18 @@
                             "recommendation"
                           ],
                           "default": "manual"
+                        },
+                        "menuName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120,
+                          "nullable": true
+                        },
+                        "menuPrice": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100000000,
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -27319,6 +27624,14 @@
                               "typical_portion",
                               "missing"
                             ]
+                          },
+                          "menuName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "menuPrice": {
+                            "type": "integer",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -27343,7 +27656,9 @@
                           "proteinG",
                           "sodiumMg",
                           "nutritionFrom",
-                          "nutritionBasis"
+                          "nutritionBasis",
+                          "menuName",
+                          "menuPrice"
                         ],
                         "additionalProperties": false
                       }
@@ -27551,6 +27866,12 @@
                                 "type": "number",
                                 "minimum": 0,
                                 "maximum": 1,
+                                "nullable": true
+                              },
+                              "menuName": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120,
                                 "nullable": true
                               }
                             },

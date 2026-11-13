@@ -299,6 +299,25 @@ export const useFrequentMealItems = (slot: MealSlotType | null | undefined, enab
     placeholderData: keepPreviousData,
   });
 
+/**
+ * 식당 메뉴에서 넣기 — 기록에 정한 식당(placeId)의 등록 메뉴. 식당 메뉴는 재크롤 때만 바뀌어 넉넉히 묵혀 둔다.
+ * 식당이 지워졌으면(404) 다시 묻지 않는다.
+ */
+export const useMealPlaceMenus = (placeId: string | null | undefined) =>
+  useQuery({
+    ...mealPlaceMenusQuery(placeId ?? ''),
+    queryKey: [...KEY, 'place-menus', placeId ?? null],
+    enabled: !!placeId,
+  });
+
+/** 식당 메뉴 조회 설정 — 화면(useMealPlaceMenus)과 이벤트 안의 조회(queryClient.fetchQuery)가 같은 캐시를 쓴다. */
+export const mealPlaceMenusQuery = (placeId: string) => ({
+  queryKey: [...KEY, 'place-menus', placeId] as const,
+  queryFn: () => mealApi.placeMenus(placeId),
+  staleTime: 10 * 60_000,
+  retry: false as const,
+});
+
 export const useCopyMealPhoto = () =>
   useMutation({ mutationFn: (token: string) => mealApi.copyPhoto(token) });
 

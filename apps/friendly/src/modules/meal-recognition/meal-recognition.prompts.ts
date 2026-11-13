@@ -7,6 +7,13 @@
 //     없었다(실측 8장: 후보 포함율이 top-1 과 같았다). 국물·절임처럼 겉모습이 겹치는 군은
 //     "재료가 안 보이면 후보를 더 내라"고 못박는다.
 //
+// 식당 힌트(2026-11-13 실측, gemma4:31b, 크롤해 둔 식당의 공개 메뉴 사진): 그 집 메뉴 목록을 "참고"로 주는 지금 문구
+// 만으로 모델이 name 에 그 집 메뉴 표기를 그대로 적는다("차돌 된장찌개"·"얼큰바지락짬뽕"). 메뉴를 따로 고르게 하는
+// 규칙(`menu` 칸 + "name 은 일반 이름으로")을 덧붙인 시안은 6장 중 2장에서 다른 메뉴를 골라 오히려 나빴다 — 그래서
+// 문구는 그대로 두고, 서버가 name 을 준 목록과 대조해 그 집 메뉴(menuName)를 붙인다(meal-recognition.service).
+// 다른 사진 14장에서는 정답 메뉴 그대로 8장, 다른 메뉴로 잘못 고른 것이 3장이었다(수치·한계는 docs/PLAN-meal.md
+// 2026-11-13) — 문구를 바꾸려면 먼저 등록 식당에서 찍은 사진으로 잰다.
+//
 // 설계 근거(리서치 2026-08-22):
 //  - Ollama Cloud 는 아직 structured outputs(format 스키마)를 강제하지 않는다 → 스키마를
 //    프롬프트에 그대로 박고, 서버가 zod 로 다시 검증한다(+수리 재시도 1회).
@@ -93,13 +100,23 @@ export interface MealRecognitionPromptInput {
   slotLabel?: string | null;
 }
 
+// 힌트로 주는 메뉴 수 상한 — 식당당 중앙값은 13개지만 100개가 넘는 집도 있다(메뉴명 하나가 10토큰 안팎).
+export const MEAL_RECOGNITION_MENU_HINT_MAX = 100;
+
+/** 힌트로 줄 메뉴 목록 — 앞뒤 공백을 떼고 같은 이름은 한 번만, 상한까지. 서버가 인식한 이름을 이 목록과 대조한다. */
+export const recognitionMenuHints = (menuNames: readonly string[] | undefined): string[] =>
+  [...new Set((menuNames ?? []).map((name) => name.trim()).filter((name) => name.length > 0))].slice(
+    0,
+    MEAL_RECOGNITION_MENU_HINT_MAX,
+  );
+
 export const buildMealRecognitionUserPrompt = (input: MealRecognitionPromptInput): string => {
   const lines: string[] = [];
   lines.push(`사진 ${input.photoCount}장을 분석하라.`);
   if (input.slotLabel) lines.push(`끼니: ${input.slotLabel}`);
   if (input.restaurantName) {
     lines.push(`식당: ${input.restaurantName}`);
-    const menus = (input.menuNames ?? []).slice(0, 60);
+    const menus = recognitionMenuHints(input.menuNames);
     if (menus.length > 0) {
       lines.push(`이 식당의 등록 메뉴(참고 — 사진에 없는 메뉴를 지어내지 말 것): ${menus.join(', ')}`);
     }

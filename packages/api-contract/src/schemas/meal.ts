@@ -3,6 +3,8 @@ import {
   MEAL_DATA_DELETE_CONFIRMATION,
   MEAL_MAX_ITEMS_PER_ENTRY,
   MEAL_MAX_PHOTOS_PER_ENTRY,
+  MEAL_MENU_NAME_MAX,
+  MEAL_MENU_PRICE_MAX,
   MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
   MEAL_RECOMMENDATIONS_DELETE_CONFIRMATION,
   MEAL_SKIPPABLE_SLOTS,
@@ -98,6 +100,9 @@ export const RecognizedDish = z
       .nullable()
       .optional(),
     catalogMatchScore: z.number().finite().min(0).max(1).nullable().optional(),
+    // 식당을 알고 인식했을 때, 인식한 이름이 그 집 메뉴 목록의 메뉴와 같으면 그 메뉴(목록 표기 그대로). 화면은 이
+    // 메뉴의 음식(표준명)으로 줄을 맞추고 메뉴명·가격을 잇는다.
+    menuName: z.string().trim().min(1).max(MEAL_MENU_NAME_MAX).nullable().optional(),
   })
   .strict();
 export type RecognizedDishType = z.infer<typeof RecognizedDish>;
@@ -173,6 +178,10 @@ export const MealItem = z.object({
   // 영양을 같은 계열 음식에서 빌려왔으면 그 출처("버섯콩불고기 외 8종 중앙값"). 직접 값이면 null.
   nutritionFrom: z.string().nullable(),
   nutritionBasis: MealNutritionBasis,
+  // 식당 메뉴에서 넣은 항목이면 그 집 메뉴명·가격(원) 스냅샷. name 은 통계가 묶는 표준명("김치찌개")이고 이 값이
+  // 그 집에서 부르는 이름("묵은지김치찌개")이다 — 화면은 이 이름을 앞에 보여 준다. 식당 메뉴가 아니면 둘 다 null.
+  menuName: z.string().nullable(),
+  menuPrice: z.number().int().nullable(),
 });
 export type MealItemType = z.infer<typeof MealItem>;
 
@@ -273,8 +282,53 @@ export const MealItemInput = z.object({
     .optional(),
   catalogMatchScore: z.number().finite().min(0).max(1).nullable().optional(),
   source: MealItemSource.default('manual'),
+  // 식당 메뉴에서 넣은 항목의 그 집 메뉴명·가격(원). 서버는 받은 값을 그대로 스냅샷으로 남긴다(식당과 대조하지 않는다).
+  menuName: z.string().trim().min(1).max(MEAL_MENU_NAME_MAX).nullable().optional(),
+  menuPrice: z.number().int().min(0).max(MEAL_MENU_PRICE_MAX).nullable().optional(),
 });
 export type MealItemInputType = z.infer<typeof MealItemInput>;
+
+// ── 식당 메뉴에서 넣기 ──────────────────────────────────────────────────────
+// 기록에 식당(placeId)이 정해지면 그 집 등록 메뉴를 "넣을 음식"으로 바꿔 준다. 메뉴명은 그 집 표기 그대로,
+// foods 는 기록에 들어갈 항목 — 메뉴 칼로리 규칙 엔진이 카탈로그 음식으로 이은 표준명·분류·1인분 열량이다.
+// 보통 하나이고, 구성이 이름에 드러난 세트("돈가스 + 우동")는 구성요소 수만큼 온다. 카탈로그로 못 이은 메뉴는
+// 다듬은 메뉴명 그대로(foodId null) — 자유 입력과 같이 저장할 때 서버가 다시 맞춰 본다.
+
+export const MealPlaceMenusQuery = z.object({
+  placeId: z.string().trim().min(1).max(64),
+});
+export type MealPlaceMenusQueryType = z.infer<typeof MealPlaceMenusQuery>;
+
+export const MealPlaceMenuFood = z.object({
+  name: z.string(),
+  foodId: z.string().nullable(),
+  dishType: FoodDishType.nullable(),
+  mainIngredient: FoodMainIngredient.nullable(),
+  cuisine: FoodCuisine.nullable(),
+  // 김치·나물·음료는 곁들임으로 들어간다(빠른 추가·음식 찾기와 같은 기준).
+  isMain: z.boolean(),
+  // 넣으면 붙을 1인분 열량(저장 때와 같은 계산). 모르면 null.
+  kcal: z.number().nullable(),
+});
+export type MealPlaceMenuFoodType = z.infer<typeof MealPlaceMenuFood>;
+
+export const MealPlaceMenu = z.object({
+  menuName: z.string(),
+  // 원 단위. "가격 변동"·범위 표기처럼 한 값이 아니면 null.
+  price: z.number().int().nonnegative().nullable(),
+  // 그 집 대표 메뉴 표시.
+  recommend: z.boolean(),
+  foods: z.array(MealPlaceMenuFood).min(1),
+});
+export type MealPlaceMenuType = z.infer<typeof MealPlaceMenu>;
+
+export const MealPlaceMenusResult = z.object({
+  placeId: z.string(),
+  placeName: z.string(),
+  // 식당이 올린 순서 그대로(같은 이름은 한 번만).
+  menus: z.array(MealPlaceMenu),
+});
+export type MealPlaceMenusResultType = z.infer<typeof MealPlaceMenusResult>;
 
 export const MealEntry = z.object({
   id: z.string(),
@@ -1302,6 +1356,9 @@ export const MealDataBackupItem = MealItem.omit({ id: true })
     selectedCandidateRank: z.number().int().min(0).max(2).nullable(),
     catalogMatchScore: z.number().min(0).max(1).nullable(),
     nutritionFrom: z.string().max(240).nullable(),
+    // 식당 메뉴 스냅샷(2026-11 추가) — 그 전에 만든 백업 파일에는 없다(없으면 null 로 복원).
+    menuName: z.string().trim().min(1).max(MEAL_MENU_NAME_MAX).nullable().optional(),
+    menuPrice: z.number().int().min(0).max(MEAL_MENU_PRICE_MAX).nullable().optional(),
   })
   .strict();
 export type MealDataBackupItemType = z.infer<typeof MealDataBackupItem>;

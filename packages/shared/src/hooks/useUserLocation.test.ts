@@ -9,11 +9,11 @@ import { acquirePosition } from './useUserLocation.js';
 // 버스/지하철 페이지(직접 호출 10초)와 달리 공용 훅이 5초에 끊어 간헐적으로 실패하던
 // 문제(2026-08-21)를 재발 방지한다.
 
-type Success = (pos: { coords: { latitude: number; longitude: number } }) => void;
+type Success = (pos: { coords: { latitude: number; longitude: number; accuracy?: number } }) => void;
 type Failure = (err: { code: number; message: string }) => void;
 
 const installGeolocation = (
-  script: Array<{ ok: true; lat: number; lng: number } | { ok: false; code: number }>,
+  script: Array<{ ok: true; lat: number; lng: number; accuracy?: number } | { ok: false; code: number }>,
 ) => {
   const calls: PositionOptions[] = [];
   let i = 0;
@@ -23,7 +23,15 @@ const installGeolocation = (
       const step = script[Math.min(i, script.length - 1)]!;
       i += 1;
       queueMicrotask(() => {
-        if (step.ok) ok({ coords: { latitude: step.lat, longitude: step.lng } });
+        if (step.ok) {
+          ok({
+            coords: {
+              latitude: step.lat,
+              longitude: step.lng,
+              ...(step.accuracy !== undefined ? { accuracy: step.accuracy } : {}),
+            },
+          });
+        }
         else fail({ code: step.code, message: `code ${step.code}` });
       });
     },
@@ -38,6 +46,13 @@ afterEach(() => {
 });
 
 describe('acquirePosition', () => {
+  it('정밀 옵션을 주면 GPS 를 깨우고 캐시 나이를 줄여 묻고, 브라우저가 알려 준 오차 반경을 함께 돌려준다', async () => {
+    const calls = installGeolocation([{ ok: true, lat: 37.5543, lng: 126.9368, accuracy: 18 }]);
+    const result = await acquirePosition({ timeout: 10_000, maxTries: 1, highAccuracy: true, maxAgeMs: 60_000 });
+    expect(result).toEqual({ status: 'granted', coords: { lat: 37.5543, lng: 126.9368 }, accuracyM: 18 });
+    expect(calls[0]).toEqual({ enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 });
+  });
+
   it('첫 시도 TIMEOUT → 명시 요청은 같은 옵션으로 1회 더 시도해 성공하면 granted', async () => {
     const calls = installGeolocation([{ ok: false, code: 3 }, { ok: true, lat: 37.57, lng: 127.0 }]);
     const result = await acquirePosition({ timeout: 10_000, maxTries: 2 });

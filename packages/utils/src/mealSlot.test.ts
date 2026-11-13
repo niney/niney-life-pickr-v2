@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatMenuPrice,
   formatTimeOfDay,
   isCountedMealDay,
+  mealItemLabels,
   mealDateLabel,
   mealDateTitle,
   mealPortionFactor,
@@ -89,5 +91,31 @@ describe('isCountedMealDay', () => {
   it('기록이 없는 날은 안 먹음만으로는 넣지 않는다', () => {
     expect(isCountedMealDay(0, 3)).toBe(false);
     expect(isCountedMealDay(0, 0)).toBe(false);
+  });
+});
+
+describe('mealItemLabels', () => {
+  it('식당 메뉴에서 넣은 항목은 그 집 메뉴명으로, 아니면 이름으로 부른다', () => {
+    expect(
+      mealItemLabels([
+        { name: '김치찌개', menuName: '묵은지 김치찌개' },
+        { name: '공기밥', menuName: null },
+        { name: '달걀말이' },
+      ]),
+    ).toEqual(['묵은지 김치찌개', '공기밥', '달걀말이']);
+  });
+
+  it('세트를 풀어 넣어 같은 메뉴명이 여러 줄이면 구성요소 이름을 쓴다', () => {
+    expect(
+      mealItemLabels([
+        { name: '돈가스', menuName: '수제돈까스 + 우동' },
+        { name: '우동', menuName: '수제돈까스 + 우동' },
+        { name: '곰탕', menuName: '특곰탕' },
+      ]),
+    ).toEqual(['돈가스', '우동', '특곰탕']);
+  });
+
+  it('가격은 천 단위 쉼표와 원', () => {
+    expect(formatMenuPrice(9000)).toBe('9,000원');
   });
 });

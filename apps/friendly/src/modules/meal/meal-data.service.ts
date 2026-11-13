@@ -1174,6 +1174,8 @@ export class MealDataService {
                 sodiumMg: item.sodiumMg,
                 nutritionFrom: item.nutritionFrom,
                 nutritionBasis: item.nutritionBasis,
+                menuName: item.menuName ?? null,
+                menuPrice: item.menuPrice ?? null,
               })),
             ),
           });

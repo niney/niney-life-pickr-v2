@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 218개 — 공개 92 · 선택 인증 18 · 로그인 108. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 219개 — 공개 92 · 선택 인증 18 · 로그인 109. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -131,6 +131,7 @@
 | DELETE | `/api/v1/meals/photos/:token` | 로그인 |  |  | 기록에 연결되지 않은 업로드 사진 삭제 — 연결된 사진은 409 |
 | POST | `/api/v1/meals/photos/:token/copy` | 로그인 | 30/분 |  | 지난 식단 사진을 새 사진 토큰으로 복제 — 원본과 독립된 파일 |
 | GET | `/api/v1/meals/photos/:token/thumb` | 로그인 |  |  | 식단 사진 썸네일(image/jpeg, 긴 변 최대 320px) — 본인 사진만, JWT 필요 |
+| GET | `/api/v1/meals/place-menus` | 로그인 |  | `placeId`* | 식당 메뉴에서 넣기 — 그 식당 등록 메뉴를 식단에 넣을 음식(표준명·분류·1인분 열량)으로 |
 | GET | `/api/v1/meals/preference` | 로그인 |  |  | 식단 선호 설정 조회 — 추천 가중치·제외·알레르기·선호 음식, 미저장 시 기본값 |
 | PUT | `/api/v1/meals/preference` | 로그인 |  | body | 식단 선호 설정 저장 — 보낸 필드만 갱신 |
 | POST | `/api/v1/meals/recognize` | 로그인 | 10/분 | body | 식단 사진 음식 인식 — 비전 LLM 1콜, 사용자별 일일 한도, 식단 기록은 만들지 않음 |

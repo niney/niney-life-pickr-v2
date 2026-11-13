@@ -12,6 +12,8 @@ import { MenuNutritionResolver } from '../modules/food/menu-nutrition.js';
 import { sweepMealRecognitionDebugDumps } from '../modules/meal/meal-recognition-debug.store.js';
 import { MealNutritionEstimator } from '../modules/meal/meal-nutrition-estimate.js';
 import { MealPhotoService } from '../modules/meal/meal-photo.service.js';
+import { MealPlaceMenuService } from '../modules/meal/meal-place-menu.service.js';
+import { RestaurantService } from '../modules/restaurant/restaurant.service.js';
 import { scheduleRegistry } from '../modules/schedule/schedule-registry.js';
 
 // 식단 사진 저장 서비스를 app 전역 singleton 으로 decorate — 라우트(업로드·조회·삭제)와
@@ -34,12 +36,15 @@ export default fp(
     // 카탈로그에 없는 음식 이름의 열량 추정 — 저장 경로(식단 라우트)와 어드민 재시도가 같은 인스턴스(백그라운드 자리)를
     // 쓴다. LLM·웹은 맛집 메뉴 칼로리와 같은 서비스·캐시. 테스트는 외부 호출 없이 규칙 단계만.
     // aiConfig 는 autoload 순서에 기대지 않게 직접 만든다(plugins/food-import 관례).
+    // 규칙 엔진(카탈로그 인덱스)과 음식 서비스(어휘 캐시)는 이름 추정과 식당 메뉴 조회가 한 벌을 같이 쓴다.
+    const food = new FoodService(app.prisma);
+    const resolver = new MenuNutritionResolver(app.prisma);
     app.decorate(
       'mealNutritionEstimator',
       new MealNutritionEstimator({
         prisma: app.prisma,
-        food: new FoodService(app.prisma),
-        resolver: new MenuNutritionResolver(app.prisma),
+        food,
+        resolver,
         ...(isTest
           ? {}
           : {
@@ -50,6 +55,23 @@ export default fp(
               web: new FoodWebEstimateService(app.prisma, { logger: app.log }),
             }),
         logger: app.log,
+      }),
+    );
+
+    // 식당 메뉴에서 넣기 — 기록에 식당이 정해지면 그 집 메뉴를 넣을 음식(표준명·분류·1인분 열량)으로 바꿔 준다.
+    // DB 만 읽는다(LLM·웹 호출 없음). 메뉴 목록은 공개 상세와 같은 스냅샷 병합(네이버 → 테이블링 → 다이닝코드).
+    const restaurants = new RestaurantService(app.prisma);
+    app.decorate(
+      'mealPlaceMenus',
+      new MealPlaceMenuService({
+        prisma: app.prisma,
+        food,
+        resolver,
+        estimator: app.mealNutritionEstimator,
+        loadPlace: async (placeId) => {
+          const meta = await restaurants.getPublicSeoMeta(placeId);
+          return meta ? { name: meta.name, menus: meta.menus } : null;
+        },
       }),
     );
 
@@ -96,6 +118,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     mealPhotos: MealPhotoService;
     mealNutritionEstimator: MealNutritionEstimator;
+    mealPlaceMenus: MealPlaceMenuService;
     foodNutrientRefs: FoodNutrientRefService;
   }
 }

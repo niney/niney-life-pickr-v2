@@ -193,6 +193,8 @@ const toItem = (r: PrismaMealItem): MealItemType => ({
   sodiumMg: r.sodiumMg,
   nutritionFrom: r.nutritionFrom,
   nutritionBasis: enumOrNull(MealNutritionBasis, r.nutritionBasis) ?? 'missing',
+  menuName: r.menuName,
+  menuPrice: r.menuPrice,
 });
 
 const toPhoto = (r: PrismaMealPhoto): MealPhotoType => ({
@@ -587,6 +589,9 @@ export class MealService {
         sodiumMg: scale(nutrition.sodiumMg, 0),
         nutritionFrom: nutrition.nutritionFrom,
         nutritionBasis: nutrition.basis,
+        // 식당 메뉴 스냅샷 — 받은 그대로 남긴다. 가격은 메뉴명이 있을 때만 뜻이 있다.
+        menuName: item.menuName ?? null,
+        menuPrice: item.menuName ? (item.menuPrice ?? null) : null,
       });
     }
     return out;
@@ -860,7 +865,12 @@ export class MealService {
         OR: [
           { placeName: { contains: query.q } },
           { memo: { contains: query.q } },
-          { items: { some: { name: { contains: query.q } } } },
+          // 그 집 메뉴명("묵은지김치찌개")으로도 찾는다 — 항목 이름은 표준명("김치찌개")이라 메뉴명만 기억하면 안 잡힌다.
+          {
+            items: {
+              some: { OR: [{ name: { contains: query.q } }, { menuName: { contains: query.q } }] },
+            },
+          },
         ],
       });
     }

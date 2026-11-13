@@ -10,6 +10,7 @@ import {
 } from '@repo/api-contract';
 import { MEAL_SLOT_LABEL, thinkOptionForModel } from '@repo/utils';
 import { extractFirstJsonObject } from '../../lib/json.js';
+import { normalizeTerm } from '../../lib/text.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
@@ -23,6 +24,7 @@ import {
   MEAL_RECOGNITION_VERSION,
   buildMealRecognitionRepairPrompt,
   buildMealRecognitionUserPrompt,
+  recognitionMenuHints,
 } from './meal-recognition.prompts.js';
 
 // 사진 → 음식 인식. 정산 영수증 추출과 같은 구조(동기 HTTP + 비전 1콜 + zod 검증)에 식단에서
@@ -258,13 +260,16 @@ export class MealRecognitionService {
         );
       }
 
-      const dishes = await this.attachCatalog(parsed.dishes.slice(0, MAX_DISHES), images.length);
+      const menuHints = recognitionMenuHints(hint?.menuNames);
+      const dishes = await this.attachCatalog(parsed.dishes.slice(0, MAX_DISHES), images.length, menuHints);
       const warning = buildWarning(dishes, parsed.notes ?? null);
 
       step('info', 'done', `음식 ${dishes.length}개 인식`, {
         model: resolved.model,
         dishCount: dishes.length,
         matched: dishes.filter((d) => d.foodId !== null).length,
+        menuHints: menuHints.length,
+        menuMatched: dishes.filter((d) => d.menuName).length,
         durationMs: Date.now() - started,
       });
 
@@ -312,11 +317,17 @@ export class MealRecognitionService {
   private async attachCatalog(
     dishes: z.infer<typeof LlmOutput>['dishes'],
     photoCount: number,
+    menuHints: string[] = [],
   ): Promise<RecognizedDishType[]> {
     const out: RecognizedDishType[] = [];
+    // 식당 메뉴를 힌트로 주면 모델은 이름에 그 집 메뉴 표기를 그대로 적는다(프롬프트 파일의 실측 메모). 이름이 준
+    // 목록의 메뉴와 같으면(띄어쓰기·기호 차이는 봐준다) 그 메뉴를 목록의 표기로 함께 돌려준다 — 화면이 그 메뉴의 음식
+    // (표준명)으로 줄을 맞추고 메뉴명·가격을 잇는다. 카탈로그 매칭(matchedName)이 이름을 다른 음식으로 바꿔도 남는다.
+    const menuByNorm = new Map(menuHints.map((menu) => [normalizeTerm(menu), menu]));
     for (const d of dishes) {
       const name = d.name.trim();
       if (!name) continue;
+      const menuName = menuByNorm.get(normalizeTerm(name)) ?? null;
       const match = await this.food.matchFood(name);
       const portion = MealPortion.safeParse(d.portion);
       const candidates = (d.candidates ?? [])
@@ -351,6 +362,8 @@ export class MealRecognitionService {
               ? 'normalized_name'
               : match.matchedBy,
         catalogMatchScore: match?.score ?? null,
+        // 식당 메뉴를 준 요청에서만 싣는다 — 식당 없는 요청의 응답은 예전과 같다.
+        ...(menuName ? { menuName } : {}),
       });
     }
     return out;

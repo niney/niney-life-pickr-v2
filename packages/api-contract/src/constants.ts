@@ -38,6 +38,9 @@ export const MEAL_MAX_ITEMS_PER_ENTRY = 20;
 // 처음 넣을 때 반찬(곁들임)으로 넣는 조리 형태 — 김치·나물을 주식으로 넣으면 통상 1인분으로 커져 열량이 부푼다.
 // 음식 찾기(웹)가 넣는 기본값과 검색 결과의 1인분 열량(서버)이 같은 규칙을 쓴다.
 export const MEAL_SIDE_DEFAULT_DISH_TYPES: readonly string[] = ['kimchi', 'namul'];
+// 식단 항목에 남기는 식당 메뉴명·가격(원) 스냅샷의 한도 — 메뉴명은 식당 표기 그대로라 음식 이름(60자)보다 길 수 있다.
+export const MEAL_MENU_NAME_MAX = 120;
+export const MEAL_MENU_PRICE_MAX = 100_000_000;
 // 영양소 점검 — 그 영양소 값을 아는 기록의 열량 비율이 이보다 낮으면 판단을 미룬다. 서버 점검과 통계의 영양 표가
 // 같은 문턱을 쓴다(표는 이 아래면 양을 흐리게, 비율·판정 대신 '정보 N%').
 export const MEAL_NUTRIENT_MIN_COVERAGE = 0.6;

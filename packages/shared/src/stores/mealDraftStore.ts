@@ -6,6 +6,7 @@ import {
   type FrequentMealItemType,
   type MealEntryType,
   type MealItemInputType,
+  type MealPlaceMenuType,
   type MealPortionType,
   type MealRecommendationType,
   type MealSlotType,
@@ -251,6 +252,9 @@ export interface MealDraftItem {
   // 인식 항목이라도 사용자가 이름·양·주식 여부 등을 손봤으면 재인식 때 보존한다.
   // 구버전 persist 값에는 없을 수 있어 optional 이다.
   userEdited?: boolean;
+  // 식당 메뉴에서 넣은 항목의 그 집 메뉴명·가격(원) — name 은 통계가 묶는 표준명이다. 구버전 persist 값에는 없다.
+  menuName?: string | null;
+  menuPrice?: number | null;
 }
 
 export interface MealDraftPhoto {
@@ -314,6 +318,17 @@ interface MealDraftState {
   ) => void;
   // 빠른 추가 칩 — 같은 이름이 이미 있으면 빼고, 없으면 넣는다(이름이 빈 줄이 있으면 그 자리에).
   toggleQuickItem: (item: FrequentMealItemType) => void;
+  // 식당 정하기·바꾸기·지우기(null). 식당이 바뀌면 앞 식당의 메뉴 연결은 풀고(음식은 남긴다), 식사 방식이 비어
+  // 있으면 외식으로 둔다. placeId 없이 이름만 줄 수도 있다(등록되지 않은 식당).
+  setPlace: (place: { placeId: string | null; placeName: string } | null) => void;
+  // 식당 메뉴 — 넣은 메뉴면 빼고, 아니면 넣는다. 같은 음식이 이미 있으면(사진 인식·직접 입력) 새 줄을 만들지 않고
+  // 그 줄에 메뉴명·가격을 잇는다.
+  toggleMenuItem: (menu: MealPlaceMenuType) => void;
+  // 사진에서 인식한 줄을 식당 메뉴에 잇는다 — 식당을 알면 "무슨 음식인가"가 "이 집 메뉴 중 무엇인가"로 좁아진다.
+  // 이름·카탈로그 음식이 같은 메뉴를 찾아 잇고, 없으면 인식이 함께 낸 다른 후보 가운데 메뉴에 있는 것으로 바꾼다
+  // (후보 안에 정답이 든 비율이 1순위 적중보다 높다). 사용자가 손본 줄·이미 이은 줄은 건드리지 않고, 구성요소로
+  // 풀리는 세트 메뉴에는 잇지 않는다. 이은 줄 수와, 주식인데 메뉴에서 못 찾은 줄 수를 돌려준다.
+  linkRecognizedToMenus: (menus: MealPlaceMenuType[]) => { linked: number; unmatched: number };
   clear: (expectedSessionId?: string) => boolean;
 }
 
@@ -332,6 +347,9 @@ type MealDraftActions = Pick<
   | 'removeItem'
   | 'applyRecognition'
   | 'toggleQuickItem'
+  | 'setPlace'
+  | 'toggleMenuItem'
+  | 'linkRecognizedToMenus'
   | 'clear'
 >;
 
@@ -453,9 +471,14 @@ export const useMealDraftStore = create<MealDraftState>()(
 
       updateItem: (clientId, patch) =>
         set((s) => ({
-          items: s.items.map((it) =>
-            it.clientId === clientId ? { ...it, ...patch, userEdited: true } : it,
-          ),
+          items: s.items.map((it) => {
+            if (it.clientId !== clientId) return it;
+            // 이름을 바꾸면 다른 음식이 된 것이라 식당 메뉴 연결도 푼다 — 메뉴를 함께 바꾸는 호출은 patch 에 menuName 을 싣는다.
+            const renamed =
+              patch.name !== undefined && mealItemNameKey(patch.name) !== mealItemNameKey(it.name);
+            const unlink = renamed && !('menuName' in patch) ? { menuName: null, menuPrice: null } : {};
+            return { ...it, ...patch, ...unlink, userEdited: true };
+          }),
           updatedAt: Date.now(),
         })),
 
@@ -562,6 +585,156 @@ export const useMealDraftStore = create<MealDraftState>()(
               : [...s.items, added];
           return { items, updatedAt: Date.now() };
         }),
+
+      setPlace: (place) =>
+        set((s) => {
+          const placeName = place?.placeName.trim() || null;
+          const placeId = placeName ? (place?.placeId ?? null) : null;
+          if (placeId === s.placeId && placeName === s.placeName) return s;
+          return {
+            placeId,
+            placeName,
+            items: s.items.some((it) => it.menuName)
+              ? s.items.map((it) => (it.menuName ? { ...it, menuName: null, menuPrice: null } : it))
+              : s.items,
+            mealType: placeName && s.mealType === null ? 'dining_out' : s.mealType,
+            updatedAt: Date.now(),
+          };
+        }),
+
+      toggleMenuItem: (menu) =>
+        set((s) => {
+          const linked = s.items.filter((it) => it.menuName === menu.menuName);
+          if (linked.length > 0) {
+            // 사진에서 인식한 줄에 이어 둔 것이면 연결만 풀고(음식은 사진에 있다), 메뉴로 넣은 줄이면 뺀다.
+            return {
+              items: s.items.flatMap((it) =>
+                it.menuName !== menu.menuName
+                  ? [it]
+                  : it.source === 'recognized'
+                    ? [{ ...it, menuName: null, menuPrice: null }]
+                    : [],
+              ),
+              updatedAt: Date.now(),
+            };
+          }
+          const items = [...s.items];
+          for (const [index, food] of menu.foods.entries()) {
+            // 세트를 구성요소로 풀어 넣으면 가격은 첫 줄에만 둔다(합치면 한 번만 세어지게).
+            const link = { menuName: menu.menuName, menuPrice: index === 0 ? menu.price : null };
+            const key = mealItemNameKey(food.name);
+            const same = items.findIndex(
+              (it) =>
+                !it.menuName &&
+                (mealItemNameKey(it.name) === key || (food.foodId !== null && it.foodId === food.foodId)),
+            );
+            if (same >= 0) {
+              items[same] = { ...items[same]!, ...link, userEdited: true };
+              continue;
+            }
+            const added: MealDraftItem = {
+              clientId: nextClientId(),
+              name: food.name,
+              foodId: food.foodId,
+              dishType: food.dishType,
+              mainIngredient: food.mainIngredient,
+              cuisine: food.cuisine,
+              portion: null,
+              servings: null,
+              portionSource: null,
+              isMain: food.isMain,
+              confidence: null,
+              catalogMatchedBy: food.foodId ? 'food_id' : 'none',
+              catalogMatchScore: food.foodId ? 1 : null,
+              source: food.foodId ? 'catalog' : 'manual',
+              candidates: [],
+              ...link,
+            };
+            // 새 기록의 빈 첫 줄처럼 이름이 빈 줄이 있으면 그 자리를 채운다.
+            const blank = items.findIndex((it) => it.name.trim().length === 0);
+            if (blank >= 0) items[blank] = added;
+            else if (items.length < MEAL_MAX_ITEMS_PER_ENTRY) items.push(added);
+          }
+          return { items, updatedAt: Date.now() };
+        }),
+
+      linkRecognizedToMenus: (menus) => {
+        const singles = menus.filter((menu) => menu.foods.length === 1);
+        const byName = (name: string): MealPlaceMenuType | undefined => {
+          const key = mealItemNameKey(name);
+          return key
+            ? singles.find(
+                (menu) =>
+                  mealItemNameKey(menu.foods[0]!.name) === key || mealItemNameKey(menu.menuName) === key,
+              )
+            : undefined;
+        };
+        // 그 줄을 메뉴의 음식(표준명·분류)으로 맞추고 메뉴명·가격을 잇는다.
+        const asMenu = (it: MealDraftItem, menu: MealPlaceMenuType, rank: number | null): MealDraftItem => {
+          const food = menu.foods[0]!;
+          return {
+            ...it,
+            name: food.name,
+            foodId: food.foodId,
+            dishType: food.dishType,
+            mainIngredient: food.mainIngredient,
+            cuisine: food.cuisine,
+            // 품질 집계가 몇 번째 후보가 맞았는지 본다(후보 밖에서 왔으면 null).
+            selectedCandidateRank: rank,
+            catalogMatchedBy: food.foodId ? 'food_id' : 'none',
+            catalogMatchScore: food.foodId ? 1 : null,
+            menuName: menu.menuName,
+            menuPrice: menu.price,
+          };
+        };
+        const state = get();
+        // 식당을 알고 인식했으면 인식한 이름이 그 집 메뉴 그대로인 줄이 있다(dish.menuName) — 가장 믿을 만하다.
+        const pickedMenu = new Map(
+          (state.recognition?.dishes ?? []).flatMap((dish) =>
+            dish.recognitionDishId && dish.menuName ? [[dish.recognitionDishId, dish.menuName] as const] : [],
+          ),
+        );
+        let linked = 0;
+        let unmatched = 0;
+        const items = state.items.map((it): MealDraftItem => {
+          if (it.source !== 'recognized' || it.userEdited || it.menuName || !it.name.trim()) return it;
+          const picked = it.recognitionDishId ? pickedMenu.get(it.recognitionDishId) : undefined;
+          const pickedSingle = picked ? singles.find((menu) => menu.menuName === picked) : undefined;
+          if (pickedSingle) {
+            linked += 1;
+            const rank = it.candidates.findIndex(
+              (c) => mealItemNameKey(c.name) === mealItemNameKey(pickedSingle.foods[0]!.name),
+            );
+            return asMenu(it, pickedSingle, rank >= 0 ? rank : (it.selectedCandidateRank ?? null));
+          }
+          const same =
+            (it.foodId ? singles.find((menu) => menu.foods[0]!.foodId === it.foodId) : undefined) ??
+            byName(it.name);
+          if (same) {
+            linked += 1;
+            // 같은 음식이면 이름은 그대로 두고 메뉴만 잇는다. 인식한 이름이 메뉴 표기 그대로였으면 표준명으로 맞춘다.
+            const food = same.foods[0]!;
+            const sameFood =
+              (it.foodId !== null && it.foodId === food.foodId) ||
+              mealItemNameKey(it.name) === mealItemNameKey(food.name);
+            return sameFood
+              ? { ...it, menuName: same.menuName, menuPrice: same.price }
+              : asMenu(it, same, it.selectedCandidateRank ?? null);
+          }
+          for (const [rank, candidate] of it.candidates.entries()) {
+            const menu = byName(candidate.name);
+            if (menu) {
+              linked += 1;
+              return asMenu(it, menu, rank);
+            }
+          }
+          // 반찬·음료는 메뉴에 없는 것이 보통이라 못 찾은 것으로 세지 않는다.
+          if (it.isMain) unmatched += 1;
+          return it;
+        });
+        if (linked > 0) set({ items, updatedAt: Date.now() });
+        return { linked, unmatched };
+      },
 
       clear: (expectedSessionId) => {
         if (expectedSessionId && get().draftSessionId !== expectedSessionId) return false;
@@ -699,6 +872,8 @@ export const mealDraftInitFromEntry = (entry: MealEntryType): MealDraftInit => (
     candidates: [],
     // 저장된 기록은 이미 한 번 확인한 값이다. 장소 힌트로 재인식해도 자동 교체하지 않는다.
     userEdited: true,
+    menuName: it.menuName ?? null,
+    menuPrice: it.menuPrice ?? null,
   })),
   recognition: null,
 });
@@ -729,6 +904,9 @@ export const mealDraftInitForRepeat = (entry: MealEntryType, now: Date): MealDra
     source: item.foodId ? 'catalog' : 'manual',
     candidates: [],
     userEdited: true,
+    // 장소를 그대로 가져가니 그 집 메뉴 연결도 함께 간다.
+    menuName: item.menuName ?? null,
+    menuPrice: item.menuPrice ?? null,
   })),
 });
 
@@ -780,4 +958,6 @@ export const draftItemToInput = (item: MealDraftItem): MealItemInputType => ({
   catalogMatchedBy: item.catalogMatchedBy,
   catalogMatchScore: item.catalogMatchScore,
   source: item.source,
+  menuName: item.menuName ?? null,
+  menuPrice: item.menuName ? (item.menuPrice ?? null) : null,
 });

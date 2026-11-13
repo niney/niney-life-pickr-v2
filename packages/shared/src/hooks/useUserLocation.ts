@@ -42,7 +42,8 @@ const AUTO_TIMEOUT_MS = 5_000;
 const EXPLICIT_TIMEOUT_MS = 10_000;
 
 export type AcquirePositionResult =
-  | { status: 'granted'; coords: { lat: number; lng: number } }
+  // accuracyM — 브라우저가 알려 준 오차 반경(m). 어느 가게인지 가릴 만큼 정확한지 보는 호출자(식단의 근처 식당)가 쓴다.
+  | { status: 'granted'; coords: { lat: number; lng: number }; accuracyM?: number }
   | { status: 'denied' | 'timeout' | 'unavailable' };
 
 export interface AcquirePositionOptions {
@@ -51,6 +52,10 @@ export interface AcquirePositionOptions {
   maxTries: number;
   // 시도 사이/직후에 true 면 결과를 버린다(언마운트·새 요청으로 무효화).
   isCancelled?: () => boolean;
+  // GPS 까지 깨워 정확한 위치를 받는다 — 동네 단위면 되는 화면(날씨·대기)은 끄고, 가게 단위가 필요한 화면만 켠다.
+  highAccuracy?: boolean;
+  // 브라우저 측위 캐시 허용 나이(ms). 기본 POSITION_MAX_AGE_MS(5분).
+  maxAgeMs?: number;
 }
 
 // 브라우저 측위 캐시 허용 나이 — 5분. 실측(2026-08-21, Windows/Chrome WiFi 측위)에서
@@ -74,11 +79,16 @@ export const acquirePosition = async (
           resolve({
             status: 'granted',
             coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+            ...(typeof pos.coords.accuracy === 'number' ? { accuracyM: pos.coords.accuracy } : {}),
           }),
         (err) =>
           // PERMISSION_DENIED=1, POSITION_UNAVAILABLE=2, TIMEOUT=3
           resolve({ status: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable' }),
-        { enableHighAccuracy: false, timeout: opts.timeout, maximumAge: POSITION_MAX_AGE_MS },
+        {
+          enableHighAccuracy: opts.highAccuracy ?? false,
+          timeout: opts.timeout,
+          maximumAge: opts.maxAgeMs ?? POSITION_MAX_AGE_MS,
+        },
       );
     });
   let last: AcquirePositionResult = { status: 'timeout' };

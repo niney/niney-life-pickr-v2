@@ -2063,6 +2063,11 @@ model MealItem {
   nutritionFrom         String?
   // direct|donor_estimate|missing
   nutritionBasis        String  @default("missing")
+  // 식당 메뉴에서 넣은 항목이면 그 집 메뉴명·가격(원) 스냅샷(FK 아님 — 식당은 재크롤/삭제된다). name 은 통계가 묶는
+  // 표준명 그대로 두고("김치찌개"), 그 집에서 부르는 이름("묵은지김치찌개")은 여기에 남긴다. 세트를 구성요소로 풀어
+  // 넣으면 구성요소마다 같은 메뉴명이 붙고 가격은 첫 항목에만 둔다(합치면 한 번만 세어지게).
+  menuName              String?
+  menuPrice             Int?
 
   entry MealEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 

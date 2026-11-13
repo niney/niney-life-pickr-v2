@@ -358,6 +358,8 @@ export const Meal = {
   frequentItems: `${API_PREFIX}/meals/items/frequent`,
   // 끼니별 "내가 보통 먹는 시각" — 시간 입력 프리셋.
   timePresets: `${API_PREFIX}/meals/time-presets`,
+  // 식당 메뉴에서 넣기(?placeId=) — 그 집 등록 메뉴를 넣을 음식(표준명·분류·1인분 열량)으로.
+  placeMenus: `${API_PREFIX}/meals/place-menus`,
   // 사진 → 음식 인식(동기, purpose meal-photo).
   recognize: `${API_PREFIX}/meals/recognize`,
   // 선호 설정 조회/저장(사용자당 1행).

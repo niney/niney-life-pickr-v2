@@ -92,6 +92,22 @@ export const MEAL_PORTION_LABEL: Record<MealPortion, string> = {
   large: '많이',
 };
 
+/**
+ * 기록 항목을 화면에서 부르는 이름(항목 순서 그대로). 식당 메뉴에서 넣었으면 그 집 메뉴명("묵은지 김치찌개"), 아니면 이름.
+ * 이름(name)은 통계가 묶는 표준명이라 그대로 두고 화면만 그 집 표기를 앞세운다. 세트를 구성요소로 풀어 넣어 한 끼에 같은
+ * 메뉴명이 여러 줄이면 구성요소 이름을 쓴다(같은 말이 줄줄이 나오지 않게).
+ */
+export const mealItemLabels = (items: readonly { name: string; menuName?: string | null }[]): string[] => {
+  const count = new Map<string, number>();
+  for (const item of items) {
+    if (item.menuName) count.set(item.menuName, (count.get(item.menuName) ?? 0) + 1);
+  }
+  return items.map((item) => (item.menuName && count.get(item.menuName) === 1 ? item.menuName : item.name));
+};
+
+/** 식당 메뉴 가격 표기 — 9000 → "9,000원". */
+export const formatMenuPrice = (price: number): string => `${price.toLocaleString('ko-KR')}원`;
+
 export const MEAL_ITEM_SOURCES = ['recognized', 'manual', 'catalog', 'recommendation'] as const;
 export type MealItemSource = (typeof MEAL_ITEM_SOURCES)[number];
 
