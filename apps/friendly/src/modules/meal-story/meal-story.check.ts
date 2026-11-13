@@ -1,3 +1,4 @@
+import { MEAL_STORY_LOOK_SCENES } from './meal-story.defs.js';
 import type { LoadedMealStory } from './meal-story.store.js';
 import type { MealStoryFoodsFileType } from './meal-story.script.js';
 
@@ -208,6 +209,13 @@ export const checkMealStory = (
   }
 
   const scenes = s.script.scenes;
+  // 그림체가 못 그리는 장면 — 칠판 메뉴판에는 레시피 장면이 없다(웹은 그 장면만 종이 오리기로 그려 섞여 보인다).
+  const drawable = MEAL_STORY_LOOK_SCENES[s.script.look ?? 'paper'];
+  if (drawable) {
+    scenes.forEach((sc, i) => {
+      if (!drawable.includes(sc.type)) errors.push(`장면 ${i + 1}(${sc.type}): 그림체 '${s.script.look}' 는 이 장면을 그리지 못한다(${drawable.join('·')} 만)`);
+    });
+  }
   if (scenes[0]?.type !== 'cover') warnings.push('첫 장면은 표지(cover)가 좋다');
   if (scenes[scenes.length - 1]?.type !== 'outro') warnings.push('마지막 장면은 마무리(outro)가 좋다');
   if (scenes.length > 13) warnings.push(`장면이 ${scenes.length}장 — 13장 안쪽을 권한다(영상 약 80초)`);

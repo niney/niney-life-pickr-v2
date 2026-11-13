@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MealStorySceneType } from '@repo/api-contract';
 import { checkMealStory, kickerClashWarnings } from './meal-story.check.js';
-import { buildMealStoryFoods, type FoodRow } from './meal-story.foods.js';
+import { buildMealStoryFoods, dishProblem, foodRowsFromCsv, type FoodRow } from './meal-story.foods.js';
 import { fractionOf, kdriFigure } from './meal-story.defs.js';
 import { resolveMealStory } from './meal-story.resolve.js';
 import {
@@ -470,6 +470,108 @@ describe('buildMealStoryFoods', () => {
   });
 });
 
+describe('음식 한 그릇(dish)', () => {
+  // 같은 이름(우동)이 조사 종류마다 여러 행이다 — 분석한 한 그릇만 쓴다.
+  const dish = (over: Partial<FoodRow>): FoodRow => ({
+    code: 'D303-164430000-0001',
+    name: '우동_중식',
+    category: '면 및 만두류',
+    basis: '100g',
+    per100: { kcal: 65, sodiumMg: 340 },
+    servingG: 1000,
+    origin: '외식(분석함량)',
+    ...over,
+  });
+  const script = (code = 'D303-164430000-0001') =>
+    base({
+      foods: [
+        { id: 'udon', label: '우동(중식)', ref: { db: 'dish', code } },
+        { id: 'noodle', label: '국수', ref: { db: 'raw', code: 'R101-000000001-0000' } },
+      ],
+      recipe: undefined,
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        {
+          type: 'bars',
+          title: '한 그릇',
+          bars: [
+            { label: '성인 기준', value: { kdri: 'sodium' } },
+            { label: '우동 한 그릇', value: { dish: 'udon', nutrient: 'sodiumMg' }, aside: { dish: 'udon', nutrient: 'kcal' }, highlight: true },
+          ],
+        },
+        {
+          type: 'lineup',
+          title: '면 요리',
+          rows: [
+            { label: '우동', value: { dish: 'udon', nutrient: 'sodiumMg' } },
+            { label: '우동 반', sub: '국물 남김', value: { dish: 'udon', nutrient: 'kcal' } },
+            { label: '국수 한 그릇?', value: { dish: 'noodle', nutrient: 'kcal' } },
+            { label: '국수 100g', value: { food: 'noodle', nutrient: 'kcal', grams: 100 } },
+          ],
+        },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+
+  it('빌더 — 분석한 한 그릇만 받고(외식·가정식), 그 무게를 foods.json 에 싣는다. 급식·산출·간편조리세트·무게 없는 행은 막는다', () => {
+    const ok = buildMealStoryFoods(script(), { dish: [dish({})], raw: [{ code: 'R101-000000001-0000', name: '국수', category: '곡류', basis: '100g', per100: { kcal: 350 } }] });
+    expect(ok.problems).toEqual([]);
+    expect(ok.file.foods.udon).toEqual({
+      per100: { kcal: 65, sodiumMg: 340 },
+      basis: '100g',
+      provenance: "식약처 음식 표준데이터 D303-164430000-0001 '우동_중식' · 외식(분석함량) · 한 그릇 1,000g",
+      source: 'mfds-dish',
+      servingG: 1000,
+    });
+    // 원재료 식품에는 한 그릇 무게를 싣지 않는다.
+    expect(ok.file.foods.noodle).not.toHaveProperty('servingG');
+
+    expect(dishProblem(dish({}))).toBeNull();
+    expect(dishProblem(dish({ origin: '가정식(분석 함량)' }))).toBeNull();
+    expect(dishProblem(dish({ origin: '초등학교급식(재료량 기반 산출 함량)' }))).toContain('분석한 한 그릇이 아니다');
+    expect(dishProblem(dish({ origin: '외식(프랜차이즈 등 업체 제공 영양정보)' }))).toContain('분석한 한 그릇이 아니다');
+    expect(dishProblem(dish({ name: '우동_간편조리세트_쫄우동', servingG: 1138 }))).toContain('간편조리세트');
+    expect(dishProblem(dish({ servingG: 100 }))).toContain('한 그릇 무게가 없다');
+    expect(dishProblem(dish({ servingG: null }))).toContain('한 그릇 무게가 없다');
+    const bad = buildMealStoryFoods(script(), { dish: [dish({ origin: '산업체급식(재료량 기반 산출 함량)' })], raw: [] });
+    expect(bad.problems).toEqual(expect.arrayContaining([expect.stringContaining("udon: '우동_중식' — 분석한 한 그릇이 아니다")]));
+    expect(bad.file.foods.udon).toBeUndefined();
+  });
+
+  it('표준데이터 읽기 — 식품중량의 숫자와 식품기원명을 함께 읽는다(900g · 810ml · 빈 칸)', () => {
+    const csv = [
+      '식품코드,식품명,식품기원명,식품대분류명,영양성분함량기준량,에너지(kcal),나트륨(mg),식품중량',
+      'D303-172040000-0001,짬뽕_굴,외식(분석함량),면 및 만두류,100g,76,296,900g',
+      'D703-172000000-0001,짬뽕,산업체급식(재료량 기반 산출 함량),면 및 만두류,100ml,61,125,810ml',
+      'D303-172260000-0001,짬뽕_백짬뽕,외식(분석함량),면 및 만두류,100g,63,280,',
+    ].join('\n');
+    expect(foodRowsFromCsv(csv).map((r) => [r.name, r.origin, r.servingG, r.per100.sodiumMg])).toEqual([
+      ['짬뽕_굴', '외식(분석함량)', 900, 296],
+      ['짬뽕', '산업체급식(재료량 기반 산출 함량)', 810, 125],
+      ['짬뽕_백짬뽕', '외식(분석함량)', null, 280],
+    ]);
+  });
+
+  it('가리킴 — 한 그릇 값 = 100g당 × 표준데이터의 한 그릇 무게, 줄 세우기는 옆 글을 안 적어도 그 무게를 보인다. 무게 없는 식품은 issues', () => {
+    const built = buildMealStoryFoods(script(), { dish: [dish({})], raw: [{ code: 'R101-000000001-0000', name: '국수', category: '곡류', basis: '100g', per100: { kcal: 350 } }] });
+    const { story, issues } = resolveMealStory(script(), built.file, imageUrl);
+    const bars = sceneOf(story.scenes, 'bars');
+    expect(bars.bars[1]!.figure).toMatchObject({ value: 3400, unit: 'mg', basis: '우동(중식) 한 그릇 1,000g', sources: ['mfds-dish'] });
+    expect(bars.bars[1]!.aside).toMatchObject({ label: '열량', figure: { value: 650, unit: 'kcal' } });
+    const lineup = sceneOf(story.scenes, 'lineup');
+    expect(lineup.rows.map((r) => [r.label, r.sub, r.figure.value])).toEqual([
+      ['우동', '1,000g', 3400],
+      // 원고가 옆 글을 적었으면 그것을 쓴다.
+      ['우동 반', '국물 남김', 650],
+      // 원재료 식품을 한 그릇으로 가리키면 값을 내지 않는다.
+      ['국수 한 그릇?', null, null],
+      ['국수 100g', null, 350],
+    ]);
+    expect(issues).toEqual(['장면 3(lineup) 줄 3: 국수 의 한 그릇 무게가 없다 — 음식 표준데이터(ref.db dish)의 식품만 한 그릇으로 가리킨다']);
+    expect(story.sources.map((s) => s.id)).toEqual(expect.arrayContaining(['mfds-dish', 'kdri-2020']));
+  });
+});
+
 describe('checkMealStory', () => {
   const loaded = (script: MealStoryScriptType): LoadedMealStory => ({
     ...resolveMealStory(script, foods, imageUrl),
@@ -555,6 +657,31 @@ describe('checkMealStory', () => {
     expect(kickerClashWarnings('pasta', kickers)).toEqual([]);
     expect(kickerClashWarnings('bare', kickers)).toEqual([]);
     expect(kickerClashWarnings('unknown', kickers)).toEqual([]);
+  });
+
+  it('그림체 — 안 적으면 종이 오리기(paper), 칠판(chalk)은 레시피 장면을 못 그려 점검이 막는다', () => {
+    expect(resolveMealStory(base(), foods, imageUrl).story.look).toBe('paper');
+    const chalk = base({ look: 'chalk' });
+    expect(resolveMealStory(chalk, foods, imageUrl).story.look).toBe('chalk');
+    expect(checkMealStory(loaded(chalk)).errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("장면 4(step): 그림체 'chalk' 는 이 장면을 그리지 못한다"),
+        expect.stringContaining('장면 5(nutrition)'),
+      ]),
+    );
+    // 종이 오리기는 모든 장면을 그린다.
+    expect(checkMealStory(loaded(base())).errors.filter((e) => e.includes('그림체'))).toEqual([]);
+    // 레시피 없이 메뉴를 견주는 편은 칠판으로 쓸 수 있다.
+    const menus = base({
+      look: 'chalk',
+      recipe: undefined,
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        { type: 'list', title: '방법', items: [{ title: '하나' }, { title: '둘' }] },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+    expect(checkMealStory(loaded(menus)).errors).toEqual([]);
   });
 
   it('영상 틀의 한도 — 형식은 통과해도 영상에서 글씨가 작아지거나 잘리는 원고는 경고로 알린다', () => {

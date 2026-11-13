@@ -18,13 +18,16 @@ import type {
 export const MEAL_STORY_FOOD_FILES = {
   raw: 'mfds-nutrition-15100065.csv',
   processed: 'mfds-nutrition-15100066.csv',
+  // 음식(조리된 한 그릇, 15100070) — 식당 음식 한 그릇의 값과 무게. 분석한 행(외식·가정식)만 한 그릇으로 쓴다(아래 dishProblem).
+  dish: 'mfds-nutrition.csv',
 } as const;
 type Db = keyof typeof MEAL_STORY_FOOD_FILES;
 
-const DB_SOURCE: Readonly<Record<Db, string>> = { raw: 'mfds-raw', processed: 'mfds-processed' };
+const DB_SOURCE: Readonly<Record<Db, string>> = { raw: 'mfds-raw', processed: 'mfds-processed', dish: 'mfds-dish' };
 const DB_LABEL: Readonly<Record<Db, string>> = {
   raw: '식약처 원재료성식품 표준데이터',
   processed: '식약처 가공식품 표준데이터',
+  dish: '식약처 음식 표준데이터',
 };
 
 // 표준데이터 머리글 → 값 이름(배포본마다 열이 붙고 빠져 이름으로 찾는다 — food-import 의 CSV_FIELD_MAP 과 같은 머리글).
@@ -43,6 +46,9 @@ const HEADER: Readonly<Record<string, string>> = {
   '칼륨(mg)': 'potassiumMg',
   '칼슘(mg)': 'calciumMg',
   '비타민 C(mg)': 'vitaminCMg',
+  // 음식 표준데이터 — 분석한 한 그릇의 무게와, 어디서 온 값인지(외식 분석·가정식 분석·급식 산출·업체 제공).
+  식품중량: 'weight',
+  식품기원명: 'origin',
 };
 /**
  * 표준데이터에서 읽어 foods.json 에 적는 값 이름 — 표준데이터로 푼 식품(ref·group)은 이 이름을 모두 적는다(모르면 null).
@@ -58,6 +64,10 @@ export interface FoodRow {
   category: string;
   basis: '100g' | '100ml';
   per100: MealStoryPer100Type;
+  /** 식품중량(g·ml) — 음식 표준데이터에서는 분석한 한 그릇의 무게. 없거나 못 읽으면 null. */
+  servingG?: number | null;
+  /** 식품기원명 — 외식(분석함량)·가정식(분석 함량)·급식(산출)·외식(업체 제공) … */
+  origin?: string;
 }
 
 export type FoodTables = Partial<Record<Db, FoodRow[]>>;
@@ -86,7 +96,8 @@ export const foodRowsFromCsv = (text: string): FoodRow[] => {
       const raw = cell(r, k);
       per100[k] = raw === '' ? null : numOrNull(raw.replace(/,/g, ''));
     }
-    out.push({ code, name, category: cell(r, 'category'), basis, per100 });
+    const weight = numOrNull(cell(r, 'weight').replace(/[^\d.]/g, ''));
+    out.push({ code, name, category: cell(r, 'category'), basis, per100, servingG: weight !== null && weight > 0 ? weight : null, origin: cell(r, 'origin') });
   }
   return out;
 };
@@ -117,6 +128,19 @@ const median = (xs: number[]): number | null => {
 
 const DEFAULT_GROUP_MIN = 3;
 
+/**
+ * 음식 표준데이터의 행을 '식당 한 그릇'으로 쓸 수 있는가 — 쓸 수 없으면 까닭. 같은 이름(짬뽕)이 조사 종류마다 여러 행이고 무게와
+ * 값이 크게 다르다: 분석한 한 그릇(외식·가정식)만 쓴다. 급식·재료량으로 산출한 행은 급식 1회 제공량이고, 간편조리세트(밀키트)는
+ * 여러 사람 분량 한 팩이고, 식품중량이 100 이하인 행은 한 그릇 무게를 적지 않은 것이다.
+ */
+export const dishProblem = (row: FoodRow): string | null => {
+  const origin = row.origin ?? '';
+  if (!origin.includes('분석')) return `분석한 한 그릇이 아니다(식품기원 '${origin || '없음'}') — 외식(분석함량)·가정식(분석 함량) 행을 고른다`;
+  if (row.name.includes('간편조리세트')) return '간편조리세트(여러 사람 분량 한 팩)는 한 그릇이 아니다';
+  if (!(row.servingG && row.servingG > 100)) return `한 그릇 무게가 없다(식품중량 ${row.servingG ?? '—'})`;
+  return null;
+};
+
 /** 원고의 foods(manual 제외)를 표준데이터로 푼다. 풀지 못한 것은 problems 에. */
 export const buildMealStoryFoods = (
   script: MealStoryScriptType,
@@ -134,6 +158,22 @@ export const buildMealStoryFoods = (
       const row = rows.find((r) => r.code === spec.ref!.code);
       if (!row) {
         problems.push(`${spec.id}: ${DB_LABEL[spec.ref.db]}에 식품코드 ${spec.ref.code} 가 없다`);
+        continue;
+      }
+      if (spec.ref.db === 'dish') {
+        const why = dishProblem(row);
+        if (why) {
+          problems.push(`${spec.id}: '${row.name}' — ${why}`);
+          continue;
+        }
+        const servingG = row.servingG!;
+        foods[spec.id] = {
+          per100: row.per100,
+          basis: row.basis,
+          provenance: `${DB_LABEL.dish} ${row.code} '${row.name}' · ${row.origin} · 한 그릇 ${servingG.toLocaleString('ko-KR')}g`,
+          source: DB_SOURCE.dish,
+          servingG,
+        };
         continue;
       }
       foods[spec.id] = {

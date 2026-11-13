@@ -98,6 +98,24 @@ export const MealStoryIcon = z.enum([
   'cucumber',
   'gochujang',
   'bibimnoodle',
+  // 외식 편(2026-11-12) — 식당 음식 한 그릇: 국물 면 여섯·밥 다섯·찌개와 탕 여섯
+  'udonbowl',
+  'naengmyeon',
+  'jjamppong',
+  'jajangmyeon',
+  'kalguksu',
+  'pho',
+  'gukbap',
+  'deopbap',
+  'jajangbap',
+  'gimbap',
+  'hoedeopbap',
+  'haejangguk',
+  'chueotang',
+  'budaejjigae',
+  'kimchijjigae',
+  'sundaeguk',
+  'sundubu',
 ]);
 export type MealStoryIconType = z.infer<typeof MealStoryIcon>;
 
@@ -266,6 +284,13 @@ export const MealStorySourceRef = z.object({
   url: z.string().nullable(),
 });
 
+/**
+ * 영상의 그림체(2026-11-13) — paper = 종이 오리기(기본), chalk = 칠판 메뉴판(식당 칠판에 분필로 쓴 메뉴판 — 메뉴를 줄 세워
+ * 고르는 편). 영상으로 보기만 달라지고 글로 보기·목록은 같다. chalk 는 레시피 장면(재료·만드는 법·영양정보)을 그리지 않는다.
+ */
+export const MealStoryLook = z.enum(['paper', 'chalk']);
+export type MealStoryLookType = z.infer<typeof MealStoryLook>;
+
 export const MealStory = z.object({
   slug: z.string(),
   status: MealStoryStatus,
@@ -276,6 +301,8 @@ export const MealStory = z.object({
   // 검수일 — 사람이 출처·숫자를 확인한 날. 초안은 null 일 수 있다.
   reviewedAt: DateString.nullable(),
   coverUrl: z.string().nullable(),
+  // 영상의 그림체 — 원고가 안 고르면 paper.
+  look: MealStoryLook,
   scenes: z.array(MealStoryScene),
   recipe: z
     .object({

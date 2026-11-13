@@ -12543,6 +12543,13 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "look": {
+                      "type": "string",
+                      "enum": [
+                        "paper",
+                        "chalk"
+                      ]
+                    },
                     "scenes": {
                       "type": "array",
                       "items": {
@@ -13159,7 +13166,24 @@
                                         "squash",
                                         "cucumber",
                                         "gochujang",
-                                        "bibimnoodle"
+                                        "bibimnoodle",
+                                        "udonbowl",
+                                        "naengmyeon",
+                                        "jjamppong",
+                                        "jajangmyeon",
+                                        "kalguksu",
+                                        "pho",
+                                        "gukbap",
+                                        "deopbap",
+                                        "jajangbap",
+                                        "gimbap",
+                                        "hoedeopbap",
+                                        "haejangguk",
+                                        "chueotang",
+                                        "budaejjigae",
+                                        "kimchijjigae",
+                                        "sundaeguk",
+                                        "sundubu"
                                       ],
                                       "nullable": true
                                     },
@@ -13279,7 +13303,24 @@
                                         "squash",
                                         "cucumber",
                                         "gochujang",
-                                        "bibimnoodle"
+                                        "bibimnoodle",
+                                        "udonbowl",
+                                        "naengmyeon",
+                                        "jjamppong",
+                                        "jajangmyeon",
+                                        "kalguksu",
+                                        "pho",
+                                        "gukbap",
+                                        "deopbap",
+                                        "jajangbap",
+                                        "gimbap",
+                                        "hoedeopbap",
+                                        "haejangguk",
+                                        "chueotang",
+                                        "budaejjigae",
+                                        "kimchijjigae",
+                                        "sundaeguk",
+                                        "sundubu"
                                       ],
                                       "nullable": true
                                     }
@@ -13402,7 +13443,24 @@
                                         "squash",
                                         "cucumber",
                                         "gochujang",
-                                        "bibimnoodle"
+                                        "bibimnoodle",
+                                        "udonbowl",
+                                        "naengmyeon",
+                                        "jjamppong",
+                                        "jajangmyeon",
+                                        "kalguksu",
+                                        "pho",
+                                        "gukbap",
+                                        "deopbap",
+                                        "jajangbap",
+                                        "gimbap",
+                                        "hoedeopbap",
+                                        "haejangguk",
+                                        "chueotang",
+                                        "budaejjigae",
+                                        "kimchijjigae",
+                                        "sundaeguk",
+                                        "sundubu"
                                       ],
                                       "nullable": true
                                     }
@@ -13516,7 +13574,24 @@
                                   "squash",
                                   "cucumber",
                                   "gochujang",
-                                  "bibimnoodle"
+                                  "bibimnoodle",
+                                  "udonbowl",
+                                  "naengmyeon",
+                                  "jjamppong",
+                                  "jajangmyeon",
+                                  "kalguksu",
+                                  "pho",
+                                  "gukbap",
+                                  "deopbap",
+                                  "jajangbap",
+                                  "gimbap",
+                                  "hoedeopbap",
+                                  "haejangguk",
+                                  "chueotang",
+                                  "budaejjigae",
+                                  "kimchijjigae",
+                                  "sundaeguk",
+                                  "sundubu"
                                 ],
                                 "nullable": true
                               }
@@ -13846,7 +13921,24 @@
                                   "squash",
                                   "cucumber",
                                   "gochujang",
-                                  "bibimnoodle"
+                                  "bibimnoodle",
+                                  "udonbowl",
+                                  "naengmyeon",
+                                  "jjamppong",
+                                  "jajangmyeon",
+                                  "kalguksu",
+                                  "pho",
+                                  "gukbap",
+                                  "deopbap",
+                                  "jajangbap",
+                                  "gimbap",
+                                  "hoedeopbap",
+                                  "haejangguk",
+                                  "chueotang",
+                                  "budaejjigae",
+                                  "kimchijjigae",
+                                  "sundaeguk",
+                                  "sundubu"
                                 ],
                                 "nullable": true
                               }
@@ -14055,6 +14147,7 @@
                     "publishedAt",
                     "reviewedAt",
                     "coverUrl",
+                    "look",
                     "scenes",
                     "recipe",
                     "sources"

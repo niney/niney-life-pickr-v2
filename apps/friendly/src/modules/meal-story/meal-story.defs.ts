@@ -1,4 +1,4 @@
-import type { MealStoryNutrientType } from '@repo/api-contract';
+import type { MealStoryLookType, MealStoryNutrientType, MealStorySceneType } from '@repo/api-contract';
 import { KDRI_AGE_GROUPS, nutrientReference, type KdriAgeGroup, type KdriNutrient } from '../meal-nutrition/kdri.js';
 import { NUTRIENT_DEFS } from '../meal-nutrition/meal-nutrition.defs.js';
 import type { MealStoryCautionKey, MealStoryKdriKey } from './meal-story.script.js';
@@ -33,6 +33,15 @@ export const MEAL_STORY_RECIPE_NUTRIENTS: readonly MealStoryNutrientType[] = [
   'potassiumMg',
 ];
 
+/**
+ * 그림체마다 영상이 그릴 수 있는 장면 — null 이면 모두. 칠판 메뉴판은 레시피 장면(재료·만드는 법·영양정보)이 없다.
+ * 웹 motion/chalk/chalkLayout.ts 의 목록(chalkDraws)과 같아야 한다(웹은 못 그리는 장면을 종이 오리기로 대신 그린다 — 섞여 보인다).
+ */
+export const MEAL_STORY_LOOK_SCENES: Readonly<Record<MealStoryLookType, readonly MealStorySceneType['type'][] | null>> = {
+  paper: null,
+  chalk: ['cover', 'stat', 'bars', 'lineup', 'list', 'outro'],
+};
+
 /** 단위대로 반올림 — mg·kcal·% 는 정수, g 은 10 미만이면 소수 한 자리. */
 export const roundForUnit = (value: number, unit: string): number => {
   if (unit === 'g') return value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
@@ -47,6 +56,7 @@ export const MEAL_STORY_BUILTIN_SOURCES: Readonly<Record<string, string>> = {
   'kdri-2020': '2020 한국인 영양소 섭취기준(보건복지부·한국영양학회)',
   'mfds-raw': '식약처 전국통합식품영양성분정보(원재료성식품) 표준데이터 — 공공데이터포털 15100065',
   'mfds-processed': '식약처 전국통합식품영양성분정보(가공식품) 표준데이터 — 공공데이터포털 15100066',
+  'mfds-dish': '식약처 전국통합식품영양성분정보(음식) 표준데이터 — 식당 음식을 분석한 한 그릇, 공공데이터포털 15100070',
   // 환산 비율의 근거일 뿐 — 기준값은 섭취기준(kdri-2020)을 쓴다(WHO 의 권고량을 기준으로 섞지 않는다).
   'who-sodium-2012': '나트륨을 소금으로 환산(소금 5g = 나트륨 2g, 소금 1g = 나트륨 400mg) — WHO 나트륨 섭취 지침(2012)',
 };

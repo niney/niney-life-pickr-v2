@@ -7,6 +7,7 @@ import {
   MealStatsNutrientKey,
   MealStoryAction,
   MealStoryIcon,
+  MealStoryLook,
   MealStoryNutrient,
   MealStoryStatus,
   MealStoryTopic,
@@ -20,6 +21,7 @@ import {
 //   { kdri: 'fiber', sex: 'female' }           남녀 값이 다른 기준(식이섬유 30g·20g, 칼슘 800mg·700mg)은 성별을 골라 나란히 보인다
 //   { food: 'spaghetti', nutrient, grams }     foods 의 100g당 값 × 그램
 //   { foods: [{ food, grams }, …], nutrient }  섞은 값(예: 건면 40g + 통밀 40g) — 식품마다 100g당 값 × 그램의 합
+//   { dish: 'udon', nutrient }                 식당 음식 한 그릇(음식 표준데이터의 분석한 한 그릇 — 100g당 값 × 그 무게)
 //   { recipe: 'sodiumMg', part?: 'sauce' }     레시피 1인분 합계(part 를 주면 그 묶음 재료만)
 //   { my: 'sodium' }                           보는 사람의 최근 2주 하루 평균(로그인했을 때만, 화면이 채운다)
 //   { value, unit, source }                    출처가 있는 고정값 — sources 의 id 를 꼭 단다
@@ -49,6 +51,8 @@ export const MealStoryValueRef = z.union([
       nutrient: MealStoryNutrient,
     })
     .strict(),
+  // 한 그릇 무게는 원고가 적지 않는다 — 표준데이터의 식품중량을 그대로 쓴다(foods.json 의 servingG).
+  z.object({ dish: Id, nutrient: MealStoryNutrient }).strict(),
   z.object({ recipe: MealStoryNutrient, part: Id.optional() }).strict(),
   z.object({ my: MealStatsNutrientKey }).strict(),
   z.object({ value: z.number().finite(), unit: z.enum(['mg', 'g', 'kcal', '%']), source: Id }).strict(),
@@ -182,8 +186,9 @@ export const MealStoryFoodSpec = z
   .object({
     id: Id,
     label: text(30),
-    // 한 식품 — raw = 원재료성 식품 표준데이터(15100065), processed = 가공식품 표준데이터(15100066).
-    ref: z.object({ db: z.enum(['raw', 'processed']), code: FoodCode }).strict().optional(),
+    // 한 식품 — raw = 원재료성 식품 표준데이터(15100065), processed = 가공식품 표준데이터(15100066),
+    // dish = 음식 표준데이터(15100070)의 분석한 한 그릇(외식·가정식 — 급식·산출·간편조리세트는 빌더가 막는다).
+    ref: z.object({ db: z.enum(['raw', 'processed', 'dish']), code: FoodCode }).strict().optional(),
     // 여러 제품의 중앙값 — 식품명이 all 을 모두, any 중 하나를 품고 none 은 없는 행(category 는 식품대분류명).
     group: z
       .object({
@@ -248,6 +253,8 @@ export const MealStoryScript = z
     title: text(32),
     summary: text(90),
     topic: MealStoryTopic.strict().optional(),
+    // 영상의 그림체 — 안 적으면 종이 오리기(paper). chalk(칠판 메뉴판)는 레시피 장면을 못 그린다(점검이 막는다).
+    look: MealStoryLook.optional(),
     publishedAt: DateString,
     reviewedAt: DateString.nullable(),
     cover: ImageName.optional(),
@@ -272,6 +279,8 @@ export const MealStoryFoodsFile = z
           basis: z.enum(['100g', '100ml']),
           provenance: text(240),
           source: Id,
+          // 음식 표준데이터의 한 그릇 무게(g) — { dish } 가리킴이 100g당 값에 곱한다.
+          servingG: z.number().positive().optional(),
           // 묶음 중앙값이면 고른 제품 수와 이름 몇 개. counts — 값을 적은 제품이 묶음보다 적은 영양소만(식이섬유는 라벨에
           // 없는 제품이 많다). 화면이 'N개 제품의 중앙값'이라고 밝힌다.
           matched: z

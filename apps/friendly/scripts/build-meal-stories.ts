@@ -6,7 +6,8 @@
 //   2) 사진 — originals/ 의 사진(git 밖)을 긴 변 1440px JPEG 로 줄여 images/<같은 이름>.jpg 로 쓴다. 회전은 EXIF 대로
 //      바로잡고 위치·기기 정보(EXIF)는 지운다. 원본이 결과보다 새것일 때만 다시 만든다.
 // 식품코드 찾기: pnpm --filter friendly build:meal-stories --find=스파게티[,파마산] — 두 표준데이터에서 이름에 그 말이 든 식품의
-//   코드·이름·분류·100g당 열량·나트륨을 보여 주고 끝난다(원고 foods 의 ref.code 로 쓴다).
+//   코드·이름·분류·100g당 열량·나트륨을 보여 주고 끝난다(원고 foods 의 ref.code 로 쓴다). 음식 표준데이터(dish)는 한 그릇으로
+//   쓸 수 있는 행(분석한 한 그릇)만, 한 그릇 무게와 한 그릇 열량·나트륨을 함께 보인다.
 // 이어서 pnpm --filter friendly check:meal-stories 로 점검한다. 절차 전체는 docs/meal-story-authoring.md.
 
 /* eslint-disable no-console */
@@ -17,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { MEAL_STORY_IMAGE_PATTERN } from '@repo/api-contract';
 import { MEAL_STORY_NUTRIENTS } from '../src/modules/meal-story/meal-story.defs.js';
-import { buildMealStoryFoods, loadFoodTables } from '../src/modules/meal-story/meal-story.foods.js';
+import { buildMealStoryFoods, dishProblem, loadFoodTables } from '../src/modules/meal-story/meal-story.foods.js';
 import { MealStoryScript } from '../src/modules/meal-story/meal-story.script.js';
 import {
   MEAL_STORY_FILE,
@@ -94,6 +95,19 @@ const find = (words: string[]): void => {
       console.log(`  ${r.code} | ${r.category} | ${r.name} | ${r.basis}당 열량 ${r.per100.kcal ?? '—'} · 나트륨 ${r.per100.sodiumMg ?? '—'}`);
     }
   }
+  // 음식(한 그릇) — 같은 이름이 조사 종류마다 여러 행이라 한 그릇으로 쓸 수 있는 행만 보인다.
+  const dishes = tables.dish;
+  if (!dishes) {
+    console.log('[dish] 표준데이터 없음(data/open/food/mfds-nutrition.csv)');
+    return;
+  }
+  const named = dishes.filter((r) => words.some((w) => r.name.includes(w)));
+  const usable = named.filter((r) => dishProblem(r) === null);
+  const per = (r: (typeof usable)[number], v: number | null | undefined): string => (v === null || v === undefined ? '—' : String(Math.round((v * r.servingG!) / 100)));
+  console.log(`\n[dish] ${paths.dish} — 한 그릇으로 쓸 수 있는 행 ${usable.length}건(이름이 맞는 행 ${named.length}건 중 — 급식·산출·업체 제공·간편조리세트 제외)`);
+  for (const r of usable.slice(0, FIND_LIMIT)) {
+    console.log(`  ${r.code} | ${r.category} | ${r.name} | ${r.origin} | 한 그릇 ${r.servingG}g → 열량 ${per(r, r.per100.kcal)} · 나트륨 ${per(r, r.per100.sodiumMg)}`);
+  }
 };
 
 const main = async (): Promise<void> => {
@@ -111,7 +125,7 @@ const main = async (): Promise<void> => {
     return;
   }
   const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT]);
-  console.log(`표준데이터: 원재료 ${paths.raw ?? '없음'} · 가공식품 ${paths.processed ?? '없음'}`);
+  console.log(`표준데이터: 원재료 ${paths.raw ?? '없음'} · 가공식품 ${paths.processed ?? '없음'} · 음식 ${paths.dish ?? '없음'}`);
 
   for (const slug of slugs) {
     const dir = join(root, slug);

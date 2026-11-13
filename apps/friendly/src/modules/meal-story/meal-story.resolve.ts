@@ -42,6 +42,8 @@ interface FoodValues {
   source: string;
   /** 묶음 중앙값이면 — 제품 수와, 값을 적은 제품이 그보다 적은 영양소의 수. */
   group?: { count: number; counts: MealStoryPer100CountsType };
+  /** 음식 표준데이터의 한 그릇 무게(g). */
+  servingG?: number;
 }
 
 const MY_BASIS = '내 최근 2주 하루 평균';
@@ -73,6 +75,7 @@ export const resolveMealStory = (
       per100: built.per100,
       source: built.source,
       group: built.matched ? { count: built.matched.count, counts: built.matched.counts ?? {} } : undefined,
+      servingG: built.servingG,
     });
   }
 
@@ -163,6 +166,28 @@ export const resolveMealStory = (
         sources: v === null || v === undefined ? [] : [food.source],
       });
     }
+    if ('dish' in ref) {
+      // 식당 음식 한 그릇 — 100g당 값 × 표준데이터의 한 그릇 무게.
+      const unit = unitOf(ref.nutrient);
+      const food = foods.get(ref.dish);
+      if (!food) {
+        issues.push(`${where}: 식품 '${ref.dish}' 가 foods 에 없다`);
+        return figure({ unit });
+      }
+      if (!food.servingG) {
+        issues.push(`${where}: ${food.label} 의 한 그릇 무게가 없다 — 음식 표준데이터(ref.db dish)의 식품만 한 그릇으로 가리킨다`);
+        return figure({ unit, basis: food.label });
+      }
+      const v = food.per100[ref.nutrient];
+      if (v === null || v === undefined) issues.push(`${where}: ${food.label} 의 ${MEAL_STORY_NUTRIENTS[ref.nutrient].label} 값이 없다`);
+      else usedSources.add(food.source);
+      return figure({
+        value: v === null || v === undefined ? null : roundForUnit((v * food.servingG) / 100, unit),
+        unit,
+        basis: `${food.label} 한 그릇 ${food.servingG.toLocaleString('ko-KR')}g`,
+        sources: v === null || v === undefined ? [] : [food.source],
+      });
+    }
     if ('foods' in ref) {
       const unit = unitOf(ref.nutrient);
       let sum = 0;
@@ -212,7 +237,7 @@ export const resolveMealStory = (
   const isSodium = (ref: MealStoryValueRefType): boolean =>
     ('kdri' in ref && ref.kdri === 'sodium') ||
     ('my' in ref && ref.my === 'sodium') ||
-    (('food' in ref || 'foods' in ref) && ref.nutrient === 'sodiumMg') ||
+    (('food' in ref || 'foods' in ref || 'dish' in ref) && ref.nutrient === 'sodiumMg') ||
     ('recipe' in ref && ref.recipe === 'sodiumMg');
 
   /** 큰 숫자 장면의 숫자 — 나트륨이면 소금 환산을 붙인다(내 기록은 화면이 같은 per 로 나눈다). */
@@ -233,7 +258,7 @@ export const resolveMealStory = (
   };
 
   const asideLabel = (ref: MealStoryValueRefType, where: string): string => {
-    if ('food' in ref || 'foods' in ref) return MEAL_STORY_NUTRIENTS[ref.nutrient].label;
+    if ('food' in ref || 'foods' in ref || 'dish' in ref) return MEAL_STORY_NUTRIENTS[ref.nutrient].label;
     if ('recipe' in ref) return MEAL_STORY_NUTRIENTS[ref.recipe].label;
     issues.push(`${where}: aside 는 food·recipe 값만 쓴다`);
     return '';
@@ -315,7 +340,8 @@ export const resolveMealStory = (
           basis: s.basis ?? null,
           rows: s.rows.map((r, k) => ({
             label: r.label,
-            sub: r.sub ?? null,
+            // 한 그릇 값이면 옆 글을 안 적어도 그 무게를 보인다 — 한 그릇의 크기가 값의 절반이다(우동 1,000g · 김밥 250g).
+            sub: r.sub ?? ('dish' in r.value && foods.get(r.value.dish)?.servingG ? `${foods.get(r.value.dish)!.servingG!.toLocaleString('ko-KR')}g` : null),
             figure: valueFigure(r.value, `${where} 줄 ${k + 1}`),
             icon: r.icon ?? null,
             highlight: r.highlight ?? false,
@@ -397,6 +423,7 @@ export const resolveMealStory = (
     publishedAt: script.publishedAt,
     reviewedAt: script.reviewedAt,
     coverUrl,
+    look: script.look ?? 'paper',
     scenes,
     recipe: recipeOut,
     sources,
