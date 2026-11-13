@@ -1,6 +1,6 @@
 import { Composition } from 'remotion';
 import { StoryVideo, type StoryVideoProps } from '../../../apps/web/src/routes/meal-story/motion/StoryVideo';
-import { variantMine, variantStory } from '../../../apps/web/src/routes/meal-story/motion/storyFixture';
+import { variantChalkStory, variantMine, variantStory } from '../../../apps/web/src/routes/meal-story/motion/storyFixture';
 import { FPS, H, W } from '../../../apps/web/src/routes/meal-story/motion/theme';
 import { buildTimeline } from '../../../apps/web/src/routes/meal-story/motion/timeline';
 import { PropsSheet } from './PropsSheet';
@@ -14,6 +14,7 @@ const placeholder: StoryVideoProps = {
     title: '건강식단 스토리',
     summary: '',
     topic: { nutrient: 'sodium', direction: 'reduce' },
+    look: 'paper',
     publishedAt: null,
     reviewedAt: null,
     coverUrl: null,
@@ -51,6 +52,16 @@ export const Root = () => (
       fps={FPS}
       durationInFrames={buildTimeline(variantStory).total}
       defaultProps={{ story: variantStory, mine: variantMine, loggedIn: true, dark: false }}
+    />
+    {/* 칠판 메뉴판 그림체의 변형 점검 — 같은 가짜 원고에서 칠판이 그리는 장면만. */}
+    <Composition
+      id="VariantsChalk"
+      component={StoryVideo}
+      width={W}
+      height={H}
+      fps={FPS}
+      durationInFrames={buildTimeline(variantChalkStory).total}
+      defaultProps={{ story: variantChalkStory, mine: variantMine, loggedIn: true, dark: false }}
     />
     {/* 소품 점검(한 장) */}
     <Composition id="Props" component={PropsSheet} width={W} height={H} fps={FPS} durationInFrames={1} />

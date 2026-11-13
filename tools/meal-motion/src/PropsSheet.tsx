@@ -29,8 +29,10 @@ const ICONS: MealStoryIconType[] = [
   'milk', 'anchovy', 'kale', 'tofu', 'yogurt', 'scallion', 'sesameseed', 'friedrice',
   'paprika', 'broccoli', 'kiwi', 'tangerine', 'chicken', 'sweetpotato', 'salad',
   'somen', 'soba', 'udon', 'ricenoodle', 'glassnoodle', 'spaghetti', 'konjac', 'tofunoodle', 'squash', 'cucumber', 'gochujang', 'bibimnoodle',
+  'udonbowl', 'naengmyeon', 'jjamppong', 'jajangmyeon', 'kalguksu', 'pho', 'gukbap', 'deopbap', 'jajangbap', 'gimbap', 'hoedeopbap',
+  'haejangguk', 'chueotang', 'budaejjigae', 'kimchijjigae', 'sundaeguk', 'sundubu',
 ];
-const COLS = 8;
+const COLS = 9;
 const pal = paperPalette('sodium', false);
 const base: PropProps = { pal, f: 30, v: 0 };
 
@@ -56,14 +58,14 @@ export const PropsSheet = () => (
       {ICONS.map((icon, i) => {
         const col = i % COLS;
         const row = Math.floor(i / COLS);
-        const x = 76 + col * 132.5;
-        const y = 92 + row * 186;
+        const x = 68 + col * 118;
+        const y = 80 + row * 170;
         return (
           <g key={icon}>
-            <g transform={`translate(${x} ${y}) scale(0.46)`}>
+            <g transform={`translate(${x} ${y}) scale(0.41)`}>
               <Icon icon={icon} fallback={icon} pal={pal} f={30} v={0} />
             </g>
-            <text x={x} y={y + 84} textAnchor="middle" fontFamily={FONT} fontSize={19} fontWeight={700} fill={pal.ink}>
+            <text x={x} y={y + 76} textAnchor="middle" fontFamily={FONT} fontSize={17} fontWeight={700} fill={pal.ink}>
               {icon}
             </text>
           </g>
