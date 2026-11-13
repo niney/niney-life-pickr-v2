@@ -1,0 +1,347 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "udon": {
+      "per100": {
+        "kcal": 65,
+        "carbG": 8.54,
+        "proteinG": 2.95,
+        "fatG": 2.1,
+        "sugarG": 0.11,
+        "fiberG": 2.2,
+        "sodiumMg": 340,
+        "potassiumMg": 46,
+        "calciumMg": 19,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D303-164430000-0001 '우동_중식' · 외식(분석함량) · 한 그릇 1,000g",
+      "source": "mfds-dish",
+      "servingG": 1000
+    },
+    "naengmyeon": {
+      "per100": {
+        "kcal": 66,
+        "carbG": 12.19,
+        "proteinG": 2.61,
+        "fatG": 0.72,
+        "sugarG": 3.39,
+        "fiberG": 5.1,
+        "sodiumMg": 394,
+        "potassiumMg": 79,
+        "calciumMg": 22,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D303-144360000-0001 '냉면_열무냉면' · 외식(분석함량) · 한 그릇 800g",
+      "source": "mfds-dish",
+      "servingG": 800
+    },
+    "jjamppong": {
+      "per100": {
+        "kcal": 74,
+        "carbG": 11.3,
+        "proteinG": 4.4,
+        "fatG": 1.2,
+        "sugarG": 0.12,
+        "fiberG": 0.9,
+        "sodiumMg": 299,
+        "potassiumMg": 73,
+        "calciumMg": 45,
+        "vitaminCMg": 1.03
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D303-172310000-0001 '짬뽕_삼선' · 외식(분석함량) · 한 그릇 900g",
+      "source": "mfds-dish",
+      "servingG": 900
+    },
+    "jajangmyeon": {
+      "per100": {
+        "kcal": 123,
+        "carbG": 20.56,
+        "proteinG": 3.04,
+        "fatG": 3.13,
+        "sugarG": 1.2,
+        "fiberG": 3.3,
+        "sodiumMg": 368,
+        "potassiumMg": 71,
+        "calciumMg": 13,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D303-168000000-0001 '자장면' · 외식(분석함량) · 한 그릇 650g",
+      "source": "mfds-dish",
+      "servingG": 650
+    },
+    "kalguksu": {
+      "per100": {
+        "kcal": 70,
+        "carbG": 13.77,
+        "proteinG": 2.53,
+        "fatG": 0.51,
+        "sugarG": 0.42,
+        "fiberG": 5,
+        "sodiumMg": 262,
+        "potassiumMg": 60,
+        "calciumMg": 14,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D303-174500000-0001 '칼국수_해물' · 외식(분석함량) · 한 그릇 900g",
+      "source": "mfds-dish",
+      "servingG": 900
+    },
+    "pho": {
+      "per100": {
+        "kcal": 53,
+        "carbG": 9.18,
+        "proteinG": 2.6,
+        "fatG": 0.7,
+        "sugarG": 0.72,
+        "fiberG": 0.3,
+        "sodiumMg": 275,
+        "potassiumMg": 42,
+        "calciumMg": 7,
+        "vitaminCMg": 0.06
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D303-162000000-0001 '쌀국수' · 외식(분석함량) · 한 그릇 600g",
+      "source": "mfds-dish",
+      "servingG": 600
+    },
+    "spaghetti": {
+      "per100": {
+        "kcal": 129,
+        "carbG": 18.64,
+        "proteinG": 4.87,
+        "fatG": 3.83,
+        "sugarG": 3.12,
+        "fiberG": 1.5,
+        "sodiumMg": 302,
+        "potassiumMg": 219,
+        "calciumMg": 43,
+        "vitaminCMg": 0.03
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D303-161490000-0001 '스파게티_토마토소스' · 외식(분석함량) · 한 그릇 500g",
+      "source": "mfds-dish",
+      "servingG": 500
+    },
+    "gukbap": {
+      "per100": {
+        "kcal": 52,
+        "carbG": 7.33,
+        "proteinG": 3.45,
+        "fatG": 1.03,
+        "sugarG": 0.05,
+        "fiberG": 1.3,
+        "sodiumMg": 288,
+        "potassiumMg": 64,
+        "calciumMg": 25,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D301-004000000-0001 '국밥' · 외식(분석함량) · 한 그릇 800g",
+      "source": "mfds-dish",
+      "servingG": 800
+    },
+    "deopbap": {
+      "per100": {
+        "kcal": 110,
+        "carbG": 14.35,
+        "proteinG": 6.01,
+        "fatG": 3.21,
+        "sugarG": 0.17,
+        "fiberG": 1.6,
+        "sodiumMg": 258,
+        "potassiumMg": 72,
+        "calciumMg": 20,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D301-010550000-0001 '덮밥_해물' · 외식(분석함량) · 한 그릇 700g",
+      "source": "mfds-dish",
+      "servingG": 700
+    },
+    "jajangbap": {
+      "per100": {
+        "kcal": 148,
+        "carbG": 24.01,
+        "proteinG": 3.05,
+        "fatG": 4.46,
+        "sugarG": 1.07,
+        "fiberG": 2.4,
+        "sodiumMg": 312,
+        "potassiumMg": 75,
+        "calciumMg": 11,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D301-031000000-0001 '자장밥' · 외식(분석함량) · 한 그릇 500g",
+      "source": "mfds-dish",
+      "servingG": 500
+    },
+    "fried-rice": {
+      "per100": {
+        "kcal": 172,
+        "carbG": 21.44,
+        "proteinG": 6.56,
+        "fatG": 6.62,
+        "sugarG": 0.4,
+        "fiberG": 2.3,
+        "sodiumMg": 303,
+        "potassiumMg": 80,
+        "calciumMg": 23,
+        "vitaminCMg": 0.47
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D301-017250000-0001 '볶음밥_삼선' · 외식(분석함량) · 한 그릇 400g",
+      "source": "mfds-dish",
+      "servingG": 400
+    },
+    "gimbap": {
+      "per100": {
+        "kcal": 160,
+        "carbG": 25.01,
+        "proteinG": 6.39,
+        "fatG": 3.85,
+        "sugarG": 0.33,
+        "fiberG": 1.8,
+        "sodiumMg": 424,
+        "potassiumMg": 122,
+        "calciumMg": 28,
+        "vitaminCMg": 0.17
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D301-007280000-0001 '김밥_소고기' · 외식(분석함량) · 한 그릇 250g",
+      "source": "mfds-dish",
+      "servingG": 250
+    },
+    "hoedeopbap": {
+      "per100": {
+        "kcal": 137,
+        "carbG": 20.66,
+        "proteinG": 6.04,
+        "fatG": 3.31,
+        "sugarG": 2.19,
+        "fiberG": 1.6,
+        "sodiumMg": 149,
+        "potassiumMg": 163,
+        "calciumMg": 24,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D301-051000000-0001 '회덮밥' · 외식(분석함량) · 한 그릇 500g",
+      "source": "mfds-dish",
+      "servingG": 500
+    },
+    "haejangguk": {
+      "per100": {
+        "kcal": 71,
+        "carbG": 2.34,
+        "proteinG": 7.46,
+        "fatG": 3.57,
+        "sugarG": 0.57,
+        "fiberG": 1.7,
+        "sodiumMg": 309,
+        "potassiumMg": 120,
+        "calciumMg": 67,
+        "vitaminCMg": 1.99
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D305-256210000-0001 '해장국_뼈다귀' · 외식(분석함량) · 한 그릇 1,000g",
+      "source": "mfds-dish",
+      "servingG": 1000
+    },
+    "chueotang": {
+      "per100": {
+        "kcal": 32,
+        "carbG": 2.68,
+        "proteinG": 2.27,
+        "fatG": 1.32,
+        "sugarG": 0,
+        "fiberG": 1.9,
+        "sodiumMg": 264,
+        "potassiumMg": 87,
+        "calciumMg": 56,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D306-298000000-0001 '추어탕' · 외식(분석함량) · 한 그릇 1,000g",
+      "source": "mfds-dish",
+      "servingG": 1000
+    },
+    "budaejjigae": {
+      "per100": {
+        "kcal": 67,
+        "carbG": 6.62,
+        "proteinG": 3.07,
+        "fatG": 3.1,
+        "sugarG": 1.03,
+        "fiberG": 1.5,
+        "sodiumMg": 387,
+        "potassiumMg": 117,
+        "calciumMg": 15,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D306-284000000-0004 '부대찌개' · 외식(분석함량) · 한 그릇 600g",
+      "source": "mfds-dish",
+      "servingG": 600
+    },
+    "kimchijjigae": {
+      "per100": {
+        "kcal": 61,
+        "carbG": 2.98,
+        "proteinG": 3.77,
+        "fatG": 3.75,
+        "sugarG": 0.76,
+        "fiberG": 2.1,
+        "sodiumMg": 491,
+        "potassiumMg": 160,
+        "calciumMg": 38,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D306-266000000-0001 '김치찌개' · 외식(분석함량) · 한 그릇 400g",
+      "source": "mfds-dish",
+      "servingG": 400
+    },
+    "sundaeguk": {
+      "per100": {
+        "kcal": 68,
+        "carbG": 2.16,
+        "proteinG": 5.44,
+        "fatG": 4.13,
+        "sugarG": 0,
+        "fiberG": 3.3,
+        "sodiumMg": 188,
+        "potassiumMg": 57,
+        "calciumMg": 13,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D305-234000000-0001 '순대국' · 외식(분석함량) · 한 그릇 800g",
+      "source": "mfds-dish",
+      "servingG": 800
+    },
+    "sundubu": {
+      "per100": {
+        "kcal": 58,
+        "carbG": 1.76,
+        "proteinG": 5.46,
+        "fatG": 3.24,
+        "sugarG": 0.1,
+        "fiberG": 1.2,
+        "sodiumMg": 134,
+        "potassiumMg": 116,
+        "calciumMg": 37,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 음식 표준데이터 D305-252000000-0001 '초당순두부' · 외식(분석함량) · 한 그릇 900g",
+      "source": "mfds-dish",
+      "servingG": 900
+    }
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "slug": "sodium-eating-out-menus",
+  "status": "draft",
+  "title": "메뉴 고르기로 외식 나트륨 줄이기",
+  "summary": "식당 음식 한 그릇의 나트륨을 면·밥·찌개로 나눠 줄 세워 봤어요. 한 그릇이 하루 기준을 넘는 메뉴와 고르는 요령까지.",
+  "topic": { "nutrient": "sodium", "direction": "reduce" },
+  "look": "chalk",
+  "publishedAt": "2026-11-12",
+  "reviewedAt": null,
+  "sources": [],
+  "foods": [
+    { "id": "udon", "label": "우동(중식)", "ref": { "db": "dish", "code": "D303-164430000-0001" } },
+    { "id": "naengmyeon", "label": "열무냉면", "ref": { "db": "dish", "code": "D303-144360000-0001" } },
+    { "id": "jjamppong", "label": "삼선짬뽕", "ref": { "db": "dish", "code": "D303-172310000-0001" } },
+    { "id": "jajangmyeon", "label": "자장면", "ref": { "db": "dish", "code": "D303-168000000-0001" } },
+    { "id": "kalguksu", "label": "해물칼국수", "ref": { "db": "dish", "code": "D303-174500000-0001" } },
+    { "id": "pho", "label": "쌀국수", "ref": { "db": "dish", "code": "D303-162000000-0001" } },
+    { "id": "spaghetti", "label": "토마토 스파게티", "ref": { "db": "dish", "code": "D303-161490000-0001" } },
+    { "id": "gukbap", "label": "국밥", "ref": { "db": "dish", "code": "D301-004000000-0001" } },
+    { "id": "deopbap", "label": "해물덮밥", "ref": { "db": "dish", "code": "D301-010550000-0001" } },
+    { "id": "jajangbap", "label": "자장밥", "ref": { "db": "dish", "code": "D301-031000000-0001" } },
+    { "id": "fried-rice", "label": "삼선볶음밥", "ref": { "db": "dish", "code": "D301-017250000-0001" } },
+    { "id": "gimbap", "label": "소고기김밥", "ref": { "db": "dish", "code": "D301-007280000-0001" } },
+    { "id": "hoedeopbap", "label": "회덮밥", "ref": { "db": "dish", "code": "D301-051000000-0001" } },
+    { "id": "haejangguk", "label": "뼈다귀해장국", "ref": { "db": "dish", "code": "D305-256210000-0001" } },
+    { "id": "chueotang", "label": "추어탕", "ref": { "db": "dish", "code": "D306-298000000-0001" } },
+    { "id": "budaejjigae", "label": "부대찌개", "ref": { "db": "dish", "code": "D306-284000000-0004" } },
+    { "id": "kimchijjigae", "label": "김치찌개", "ref": { "db": "dish", "code": "D306-266000000-0001" } },
+    { "id": "sundaeguk", "label": "순대국", "ref": { "db": "dish", "code": "D305-234000000-0001" } },
+    { "id": "sundubu", "label": "초당순두부", "ref": { "db": "dish", "code": "D305-252000000-0001" } }
+  ],
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "외식 나트륨 줄이기",
+      "title": "메뉴 고르기로 외식 나트륨 줄이기",
+      "subtitle": "식당 음식 한 그릇의 나트륨을 줄 세워 봤어요"
+    },
+    {
+      "type": "stat",
+      "title": "하루 나트륨, 이보다 적게",
+      "figures": [
+        { "label": "성인 하루 기준", "value": { "kdri": "sodium" } },
+        { "label": "내 최근 2주 하루 평균", "value": { "my": "sodium" } }
+      ],
+      "note": "이보다 많이 먹는다면 줄이는 만큼 만성질환 위험을 낮출 수 있다는 기준이에요."
+    },
+    {
+      "type": "bars",
+      "title": "한 그릇이 하루치를 넘기도 해요",
+      "bars": [
+        { "label": "성인 하루 기준", "value": { "kdri": "sodium" } },
+        { "label": "중식 우동 한 그릇", "value": { "dish": "udon", "nutrient": "sodiumMg" }, "highlight": true }
+      ],
+      "note": "식약처가 식당 음식을 모아 분석한 값이에요. 가게와 양에 따라 달라요."
+    },
+    {
+      "type": "lineup",
+      "title": "면 요리 한 그릇",
+      "basis": "식당 한 그릇",
+      "rows": [
+        { "label": "우동(중식)", "value": { "dish": "udon", "nutrient": "sodiumMg" }, "icon": "udonbowl" },
+        { "label": "열무냉면", "value": { "dish": "naengmyeon", "nutrient": "sodiumMg" }, "icon": "naengmyeon" },
+        { "label": "삼선짬뽕", "value": { "dish": "jjamppong", "nutrient": "sodiumMg" }, "icon": "jjamppong" },
+        { "label": "자장면", "value": { "dish": "jajangmyeon", "nutrient": "sodiumMg" }, "icon": "jajangmyeon" },
+        { "label": "해물칼국수", "value": { "dish": "kalguksu", "nutrient": "sodiumMg" }, "icon": "kalguksu" },
+        { "label": "쌀국수", "value": { "dish": "pho", "nutrient": "sodiumMg" }, "icon": "pho", "highlight": true },
+        { "label": "토마토 스파게티", "value": { "dish": "spaghetti", "nutrient": "sodiumMg" }, "icon": "plate", "highlight": true }
+      ],
+      "note": "국물까지 다 먹었을 때의 값이에요. 그릇이 크고 국물이 많을수록 높은 편이에요."
+    },
+    {
+      "type": "lineup",
+      "title": "밥 요리 한 그릇",
+      "basis": "식당 한 그릇",
+      "rows": [
+        { "label": "국밥", "value": { "dish": "gukbap", "nutrient": "sodiumMg" }, "icon": "gukbap" },
+        { "label": "해물덮밥", "value": { "dish": "deopbap", "nutrient": "sodiumMg" }, "icon": "deopbap" },
+        { "label": "자장밥", "value": { "dish": "jajangbap", "nutrient": "sodiumMg" }, "icon": "jajangbap" },
+        { "label": "삼선볶음밥", "value": { "dish": "fried-rice", "nutrient": "sodiumMg" }, "icon": "friedrice" },
+        { "label": "소고기김밥", "value": { "dish": "gimbap", "nutrient": "sodiumMg" }, "icon": "gimbap", "highlight": true },
+        { "label": "회덮밥", "value": { "dish": "hoedeopbap", "nutrient": "sodiumMg" }, "icon": "hoedeopbap", "highlight": true }
+      ],
+      "note": "국에 말거나 소스를 얹은 밥이 높고, 볶음밥과 김밥은 낮은 편이에요."
+    },
+    {
+      "type": "lineup",
+      "title": "찌개와 탕 한 그릇",
+      "basis": "식당 한 그릇",
+      "rows": [
+        { "label": "뼈다귀해장국", "value": { "dish": "haejangguk", "nutrient": "sodiumMg" }, "icon": "haejangguk" },
+        { "label": "추어탕", "value": { "dish": "chueotang", "nutrient": "sodiumMg" }, "icon": "chueotang" },
+        { "label": "부대찌개", "value": { "dish": "budaejjigae", "nutrient": "sodiumMg" }, "icon": "budaejjigae" },
+        { "label": "김치찌개", "value": { "dish": "kimchijjigae", "nutrient": "sodiumMg" }, "icon": "kimchijjigae" },
+        { "label": "순대국", "value": { "dish": "sundaeguk", "nutrient": "sodiumMg" }, "icon": "sundaeguk", "highlight": true },
+        { "label": "초당순두부", "value": { "dish": "sundubu", "nutrient": "sodiumMg" }, "icon": "sundubu", "highlight": true }
+      ],
+      "note": "찌개와 탕은 밥·반찬과 함께 먹으니 여기에 더해져요."
+    },
+    {
+      "type": "list",
+      "title": "고르고 먹는 요령",
+      "items": [
+        { "title": "국물 많은 메뉴는 가끔", "text": "면과 탕은 날마다보다 가끔, 볶음밥·김밥과 번갈아", "icon": "udonbowl" },
+        { "title": "국물은 남기기", "text": "건더기 위주로 먹고 국물은 덜 먹어요", "icon": "bowl" },
+        { "title": "소스·양념장은 조금씩", "text": "덮밥 소스와 비빔 양념장은 덜어 내고 맛보며 더해요", "icon": "dip" },
+        { "title": "김치·장아찌는 조금만", "text": "짠 반찬이 더해지면 한 끼가 금세 넘어요", "icon": "kimchi" }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "오늘 점심 메뉴부터",
+      "text": "기록해 두면 통계에서 나트륨이 어떻게 달라지는지 보여요.",
+      "actions": ["share", "stats"]
+    }
+  ]
+}
