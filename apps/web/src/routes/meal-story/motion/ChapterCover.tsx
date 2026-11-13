@@ -1,4 +1,4 @@
-import type { MealStoryIconType, MealStorySceneType, MealStoryType } from '@repo/api-contract';
+import type { MealStorySceneType } from '@repo/api-contract';
 import { AbsoluteFill, Img, useVideoConfig } from 'remotion';
 import { pop, prog, useClock } from './anim';
 import { KineticTitle } from './KineticTitle';
@@ -10,7 +10,7 @@ import { PaperShaker } from './paper/props';
 import { boil, tornRect } from './paper/torn';
 import { shakerPose, type Span } from './saltPose';
 import { PaperStage } from './Stage';
-import { dishIcon, ingredientIcons } from './storyProps';
+import { coverIcons } from './storyProps';
 import { FONT, HAND } from './theme';
 import { COVER } from './timeline';
 import type { ChapterContext } from './types';
@@ -24,18 +24,14 @@ const CARD = { x: 60, w: 960, title: 118, sub: 42 };
 
 /**
  * 식탁 위 소품 셋 — 그 편의 레시피에서 고른다: 가운데는 완성 그릇(마지막 만드는 법 단계의 소품), 왼쪽·오른쪽은 재료의
- * 둘째·첫째 소품(같은 그림은 한 번만). 첫 편은 토마토·파스타 접시·면, 식이섬유 편은 버섯·비빔밥·밥공기. 소품이 없으면 비운다.
+ * 둘째·첫째 소품(같은 그림은 한 번만). 첫 편은 토마토·파스타 접시·면, 식이섬유 편은 버섯·비빔밥·밥공기. 레시피가 없는 편은
+ * 줄 세우기·목록에 나온 소품(storyProps 의 coverIcons). 소품이 없으면 비운다.
  */
 const TABLE = [
   { x: 200, y: 1620, s: 0.9 },
   { x: 560, y: 1700, s: 1 },
   { x: 900, y: 1630, s: 0.82 },
 ] as const;
-const tableIcons = (story: MealStoryType): (MealStoryIconType | null)[] => {
-  const [first = null, second = null] = ingredientIcons(story);
-  return [second, dishIcon(story), first];
-};
-
 /**
  * 표지 — 화면 가득 색종이 부엌(줄무늬 벽·깅엄 식탁, 식탁 위에는 그 편 레시피의 재료와 완성 그릇). 가운데 제목 카드가 떨어져 붙고(테이프),
  * 머리말 쪽지가 붙고, 손글씨 제목이 낱말마다 솟는다. 나트륨 이야기면 소금통이 떨어져 카드 위로 소금을 뿌린다.
@@ -59,7 +55,7 @@ export const ChapterCover = ({ scene, ctx }: { scene: CoverScene; ctx: ChapterCo
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <PaperStage ctx={ctx} table={1440} decor={scene.image ? [] : ['clock']} area={{ x: -30, y: -30, w: 1140, h: 1980 }}>
-        {tableIcons(ctx.story).map((icon, i) =>
+        {coverIcons(ctx.story).map((icon, i) =>
           icon ? (
             <g key={i} transform={`translate(${TABLE[i]!.x} ${TABLE[i]!.y}) scale(${TABLE[i]!.s})`}>
               <Icon icon={icon} fallback="" pal={pal} f={f} v={v} />

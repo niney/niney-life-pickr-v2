@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { FONT } from '../theme';
 import { Face, Paper, Steam, type Mood } from './kit';
 import type { PaperPalette } from './palette';
@@ -845,6 +846,282 @@ export const BibimNoodle = ({ pal, v }: PropProps) => (
       <ellipse key={i} cx={x} cy={y} rx={5} ry={3} fill="#f6efe2" transform={`rotate(${i * 50} ${x} ${y})`} />
     ))}
   </g>
+);
+
+// ── 외식 편(2026-11-12) — 식당 음식 한 그릇: 국물 면 · 밥 · 찌개와 탕 ──
+/** 사발 — 흰 그릇. 담긴 것의 바탕색(국물·밥)과 위에 올린 것(children)만 바꿔 여러 음식을 그린다. */
+const Sabal = ({ pal, f, v, seed, fill, steam = true, children }: PropProps & { seed: number; fill: string; steam?: boolean; children?: ReactNode }) => (
+  <g>
+    {steam ? <Steam x={0} y={-46} s={0.9} f={f} /> : null}
+    <Paper d={tp('M -124 -6 L 124 -6 C 118 70, 68 106, 0 106 C -68 106, -118 70, -124 -6 Z', seed, v)} fill={pal.paper} lift={0.9} />
+    <path d="M -110 34 C -64 46, 64 46, 110 34" stroke={pal.navy} strokeWidth={8} fill="none" />
+    <Paper d={tr(-46, 100, 92, 18, seed + 1, v, 1.6)} fill={pal.paper} lift={0.3} />
+    <Paper d={te(0, -8, 116, 30, seed + 2, v)} fill={fill} lift={0} />
+    {children}
+  </g>
+);
+
+/** 뚝배기 — 짙은 갈색 그릇에 귀 둘. 국물 색과 건더기(children)만 바꿔 찌개·탕을 그린다. */
+const Ttukbaegi = ({ f, v, seed, broth, children }: PropProps & { seed: number; broth: string; children?: ReactNode }) => (
+  <g>
+    <Steam x={0} y={-52} s={1} f={f} />
+    <Paper d={tr(-144, -20, 34, 22, seed + 3, v, 1.4)} fill="#2a211d" lift={0.3} />
+    <Paper d={tr(110, -20, 34, 22, seed + 4, v, 1.4)} fill="#2a211d" lift={0.3} />
+    <Paper d={tp('M -118 -14 L 118 -14 C 116 60, 76 104, 0 104 C -76 104, -116 60, -118 -14 Z', seed, v)} fill="#3b2f2a" lift={0.9} />
+    <path d="M -104 26 C -60 38, 60 38, 104 26" stroke="#5a4a42" strokeWidth={7} fill="none" />
+    <Paper d={te(0, -14, 112, 28, seed + 1, v)} fill={broth} lift={0} />
+    {children}
+  </g>
+);
+
+/** 국물 위로 보이는 면 가닥 — 물결 셋. */
+const Strands = ({ color, w, y = -10 }: { color: string; w: number; y?: number }) => (
+  <>
+    {[-40, 0, 40].map((dx, i) => (
+      <path key={i} d={`M ${dx - 36} ${y} C ${dx - 16} ${y - 20}, ${dx + 12} ${y + 20}, ${dx + 36} ${y - 2}`} stroke={color} strokeWidth={w} fill="none" strokeLinecap="round" />
+    ))}
+  </>
+);
+
+/** 송송 썬 파 — 초록 고리 몇 개. */
+const Scallions = ({ at }: { at: readonly (readonly [number, number])[] }) => (
+  <>
+    {at.map(([x, y], i) => (
+      <circle key={i} cx={x} cy={y} r={6} fill="none" stroke="#4f9a5a" strokeWidth={4} />
+    ))}
+  </>
+);
+
+/** 중식 우동 — 맑은 갈색 국물에 굵은 흰 면. */
+export const UdonBowl = (p: PropProps) => (
+  <Sabal {...p} seed={631} fill="#c99a5a">
+    <Strands color="#fffaf0" w={12} />
+    <Scallions at={[[-70, -18], [64, -20], [8, 6]]} />
+  </Sabal>
+);
+
+/** 열무냉면 — 김 없는 찬 국물, 회갈색 면, 달걀 반쪽·오이채·얼음. */
+export const Naengmyeon = (p: PropProps) => (
+  <Sabal {...p} seed={635} fill="#e6dfc8" steam={false}>
+    <Strands color="#a8927a" w={7} />
+    <ellipse cx={34} cy={-16} rx={22} ry={13} fill="#fffdf6" />
+    <circle cx={34} cy={-16} r={8} fill="#f2b632" />
+    {[-64, -50, -36].map((x, i) => (
+      <rect key={i} x={x - 3} y={-28} width={6} height={22} rx={2} fill="#4f9a5a" transform={`rotate(${-20 + i * 14} ${x} -17)`} />
+    ))}
+    <rect x={70} y={-12} width={16} height={14} rx={2} fill="#ffffff" opacity={0.9} transform="rotate(12 78 -5)" />
+    <rect x={-92} y={-10} width={14} height={12} rx={2} fill="#ffffff" opacity={0.9} transform="rotate(-14 -85 -4)" />
+  </Sabal>
+);
+
+/** 짬뽕 — 빨간 국물에 노란 면, 홍합. */
+export const Jjamppong = (p: PropProps) => (
+  <Sabal {...p} seed={639} fill="#d6452f">
+    <Strands color="#f2c46d" w={9} />
+    <ellipse cx={48} cy={-20} rx={20} ry={11} fill="#2f2a2a" transform="rotate(-18 48 -20)" />
+    <ellipse cx={48} cy={-20} rx={11} ry={6} fill="#f08a34" transform="rotate(-18 48 -20)" />
+    <Scallions at={[[-66, -16], [-8, 4]]} />
+  </Sabal>
+);
+
+/** 자장면 — 노란 면 위에 검은 소스, 오이채. */
+export const Jajangmyeon = (p: PropProps) => (
+  <Sabal {...p} seed={643} fill="#e9c377" steam={false}>
+    <Strands color="#d9a441" w={6} y={-2} />
+    <Paper d={te(-8, -16, 72, 20, 646, p.v, 1.8)} fill="#3b2a24" lift={0} />
+    {[-22, -8, 6].map((x, i) => (
+      <rect key={i} x={x - 3} y={-34} width={6} height={22} rx={2} fill="#4f9a5a" transform={`rotate(${-24 + i * 20} ${x} -23)`} />
+    ))}
+    <circle cx={34} cy={-12} r={5} fill="#8fbf6a" />
+    <circle cx={-44} cy={-10} r={5} fill="#8fbf6a" />
+  </Sabal>
+);
+
+/** 칼국수 — 뽀얀 국물에 흰 면, 바지락·애호박. */
+export const Kalguksu = (p: PropProps) => (
+  <Sabal {...p} seed={647} fill="#ece2c6">
+    <Strands color="#fffaf0" w={10} />
+    {[
+      [-62, -18],
+      [58, -18],
+    ].map(([x, y], i) => (
+      <g key={i}>
+        <ellipse cx={x} cy={y} rx={17} ry={11} fill="#c9b48c" />
+        <path d={`M ${x! - 10} ${y} L ${x! + 10} ${y} M ${x! - 6} ${y! - 6} L ${x! + 6} ${y! - 6}`} stroke="#a08c66" strokeWidth={3} />
+      </g>
+    ))}
+    <path d="M -4 -4 C 4 -16, 20 -16, 28 -4 Z" fill="#8fbf6a" />
+  </Sabal>
+);
+
+/** 쌀국수 — 맑은 국물에 가는 흰 면, 숙주·라임·고수. */
+export const Pho = (p: PropProps) => (
+  <Sabal {...p} seed={651} fill="#dcb574">
+    <Strands color="#f6f3e8" w={7} />
+    <path d="M 44 -30 C 62 -34, 76 -24, 80 -10 L 50 -8 Z" fill="#7fbf4f" />
+    <path d="M 50 -26 C 60 -28, 70 -22, 74 -14" stroke="#cfe6a8" strokeWidth={4} fill="none" />
+    <Paper d={tp('M -86 -8 C -76 -34, -44 -32, -40 -14 C -52 -2, -74 0, -86 -8 Z', 654, p.v, 1.4)} fill="#3f8f4f" lift={0} />
+    <circle cx={0} cy={2} r={5} fill="#d94b3c" />
+    <circle cx={16} cy={-22} r={5} fill="#d94b3c" />
+  </Sabal>
+);
+
+/** 국밥 — 뚝배기 국물에 밥이 말려 있다. */
+export const Gukbap = (p: PropProps) => (
+  <Ttukbaegi {...p} seed={661} broth="#d2b98a">
+    <Paper d={te(-18, -16, 54, 16, 666, p.v, 1.6)} fill="#fbf7ec" lift={0} />
+    <path d="M 36 -24 L 70 -14 M 44 -8 L 76 -4" stroke="#8a5a3c" strokeWidth={8} strokeLinecap="round" />
+    <Scallions at={[[-62, -4], [4, -30], [80, -22]]} />
+  </Ttukbaegi>
+);
+
+/** 덮밥 — 밥 위 한쪽에 갈색 소스와 새우. */
+export const Deopbap = (p: PropProps) => (
+  <Sabal {...p} seed={671} fill="#f6f1e3">
+    <Paper d={tp('M -10 -36 C 40 -40, 104 -30, 112 -8 C 90 14, 30 22, -6 16 C -22 0, -22 -22, -10 -36 Z', 674, p.v, 2)} fill="#b9783e" lift={0} />
+    <path d="M 22 -22 C 34 -34, 52 -30, 54 -16" stroke="#f6a58c" strokeWidth={9} fill="none" strokeLinecap="round" />
+    <path d="M 60 -6 C 72 -16, 88 -12, 88 0" stroke="#f6a58c" strokeWidth={9} fill="none" strokeLinecap="round" />
+    <circle cx={14} cy={0} r={6} fill="#8fbf6a" />
+    <circle cx={44} cy={6} r={6} fill="#f08a34" />
+  </Sabal>
+);
+
+/** 자장밥 — 접시에 밥과 검은 소스가 반반. */
+export const Jajangbap = ({ pal, v }: PropProps) => (
+  <g>
+    <Paper d={te(0, 44, 142, 48, 681, v)} fill={pal.paper} lift={1} />
+    <Paper d={tp('M -104 40 C -100 -18, -60 -42, -18 -38 C 0 -30, 6 14, 0 56 C -40 64, -90 60, -104 40 Z', 682, v)} fill="#f6f1e3" lift={0.3} />
+    <Paper d={tp('M 0 56 C 6 14, 0 -30, 30 -32 C 80 -30, 108 4, 104 40 C 80 62, 30 64, 0 56 Z', 683, v)} fill="#3b2a24" lift={0.2} />
+    {[
+      [40, 0],
+      [70, 24],
+      [28, 34],
+    ].map(([x, y], i) => (
+      <circle key={i} cx={x} cy={y} r={6} fill="#8fbf6a" />
+    ))}
+    <rect x={52} y={-12} width={16} height={12} rx={3} fill="#e9c9a3" transform="rotate(20 60 -6)" />
+  </g>
+);
+
+/** 김밥 — 썬 조각 셋(김·밥·색색 속). */
+export const Gimbap = ({ v }: PropProps) => (
+  <g>
+    {[
+      { x: -68, y: 26, s: 1 },
+      { x: 8, y: -36, s: 1 },
+      { x: 74, y: 40, s: 0.94 },
+    ].map(({ x, y, s }, i) => (
+      <g key={i} transform={`translate(${x} ${y}) scale(${s})`}>
+        <Paper d={te(0, 0, 60, 56, 691 + i, v, 1.6)} fill="#23302a" lift={0.7} />
+        <ellipse cx={0} cy={0} rx={49} ry={45} fill="#fbf7ec" />
+        <circle cx={-13} cy={-9} r={11} fill="#f2c94c" />
+        <circle cx={12} cy={-11} r={10} fill="#f08a34" />
+        <circle cx={-7} cy={14} r={10} fill="#5aa05a" />
+        <circle cx={16} cy={12} r={9} fill="#f0a3a0" />
+      </g>
+    ))}
+  </g>
+);
+
+/** 회덮밥 — 밥 위에 채소, 회 몇 점, 초장. */
+export const Hoedeopbap = (p: PropProps) => (
+  <Sabal {...p} seed={701} fill="#f6f1e3" steam={false}>
+    <Paper d={tp('M -104 -8 C -96 -36, -50 -44, -16 -30 C 10 -46, 64 -42, 100 -14 C 60 6, -60 8, -104 -8 Z', 704, p.v, 3)} fill="#5aa05a" lift={0} />
+    {[
+      { x: -46, y: -20, rot: -16 },
+      { x: -4, y: -8, rot: 8 },
+      { x: 44, y: -22, rot: -6 },
+    ].map(({ x, y, rot }, i) => (
+      <rect key={i} x={x - 20} y={y - 7} width={40} height={14} rx={6} fill="#f6b9a6" transform={`rotate(${rot} ${x} ${y})`} />
+    ))}
+    <Paper d={te(74, -6, 18, 10, 707, p.v, 1.2)} fill="#d94b3c" lift={0} />
+  </Sabal>
+);
+
+/** 뼈다귀해장국 — 붉은 갈색 국물에 뼈와 우거지. */
+export const Haejangguk = (p: PropProps) => (
+  <Ttukbaegi {...p} seed={711} broth="#b0522c">
+    <path d="M -50 -22 L 10 -10" stroke="#f3ead6" strokeWidth={15} strokeLinecap="round" />
+    <circle cx={-56} cy={-28} r={10} fill="#f3ead6" />
+    <circle cx={-58} cy={-14} r={9} fill="#f3ead6" />
+    <Paper d={tp('M 24 -30 C 50 -40, 86 -30, 90 -12 C 70 0, 36 -4, 24 -30 Z', 716, p.v, 2)} fill="#5a8a4a" lift={0} />
+  </Ttukbaegi>
+);
+
+/** 추어탕 — 누런 걸쭉한 국물에 부추와 들깨. */
+export const Chueotang = (p: PropProps) => (
+  <Ttukbaegi {...p} seed={721} broth="#a9834c">
+    {[
+      { x: -40, rot: -20 },
+      { x: -10, rot: 10 },
+      { x: 24, rot: -8 },
+      { x: 54, rot: 22 },
+    ].map(({ x, rot }, i) => (
+      <rect key={i} x={x - 3} y={-30} width={6} height={30} rx={2} fill="#3f8f4f" transform={`rotate(${rot} ${x} -15)`} />
+    ))}
+    {[
+      [-76, -10],
+      [-58, -26],
+      [78, -18],
+      [4, 4],
+      [40, 4],
+    ].map(([x, y], i) => (
+      <circle key={i} cx={x} cy={y} r={3.5} fill="#e9d9b0" />
+    ))}
+  </Ttukbaegi>
+);
+
+/** 부대찌개 — 빨간 국물에 햄·소시지·라면 사리·두부. */
+export const Budaejjigae = (p: PropProps) => (
+  <Ttukbaegi {...p} seed={731} broth="#d6452f">
+    <rect x={-84} y={-24} width={34} height={20} rx={4} fill="#f0a3a0" transform="rotate(-10 -67 -14)" />
+    <ellipse cx={-22} cy={-24} rx={18} ry={9} fill="#c8553d" transform="rotate(14 -22 -24)" />
+    <path d="M 4 -8 C 14 -22, 26 4, 38 -10 C 48 -22, 60 2, 72 -10" stroke="#f2c46d" strokeWidth={7} fill="none" strokeLinecap="round" />
+    <rect x={44} y={-34} width={26} height={18} rx={3} fill="#fbf7ec" transform="rotate(8 57 -25)" />
+    <Scallions at={[[-44, 2], [86, -22]]} />
+  </Ttukbaegi>
+);
+
+/** 김치찌개 — 빨간 국물에 두부와 김치. */
+export const Kimchijjigae = (p: PropProps) => (
+  <Ttukbaegi {...p} seed={741} broth="#cf3f2b">
+    <rect x={-70} y={-30} width={30} height={22} rx={3} fill="#fbf7ec" transform="rotate(-8 -55 -19)" />
+    <rect x={30} y={-28} width={30} height={22} rx={3} fill="#fbf7ec" transform="rotate(10 45 -17)" />
+    <Paper d={tp('M -26 -26 C -6 -36, 20 -30, 22 -14 C 6 -2, -18 -6, -26 -26 Z', 746, p.v, 2)} fill="#e8743b" lift={0} />
+    <path d="M -18 -22 C -6 -24, 6 -20, 14 -14" stroke="#f1d9a8" strokeWidth={4} fill="none" strokeLinecap="round" />
+    <Scallions at={[[78, -10], [-88, -8], [0, 4]]} />
+  </Ttukbaegi>
+);
+
+/** 순대국 — 뽀얀 국물에 순대 조각. */
+export const Sundaeguk = (p: PropProps) => (
+  <Ttukbaegi {...p} seed={751} broth="#ede3cb">
+    {[
+      [-50, -20],
+      [-6, -26],
+      [40, -18],
+    ].map(([x, y], i) => (
+      <g key={i}>
+        <ellipse cx={x} cy={y} rx={19} ry={12} fill="#3b2a24" />
+        <ellipse cx={x} cy={y} rx={12} ry={7} fill="#8a6a5a" />
+      </g>
+    ))}
+    <Scallions at={[[78, -12], [-84, -6], [14, 2]]} />
+  </Ttukbaegi>
+);
+
+/** 초당순두부 — 맑고 흰 국물에 몽글몽글한 순두부. */
+export const Sundubu = (p: PropProps) => (
+  <Ttukbaegi {...p} seed={761} broth="#efe9d8">
+    {[
+      { x: -52, y: -18, rx: 30, ry: 13 },
+      { x: 6, y: -24, rx: 34, ry: 13 },
+      { x: 56, y: -12, rx: 28, ry: 12 },
+      { x: -8, y: -2, rx: 30, ry: 10 },
+    ].map(({ x, y, rx, ry }, i) => (
+      <ellipse key={i} cx={x} cy={y} rx={rx} ry={ry} fill="#fffdf6" stroke="#d8cdb2" strokeWidth={3} />
+    ))}
+  </Ttukbaegi>
 );
 
 /** 목록·단계 아이콘 크기(약 240) 숟가락·소금통. */
