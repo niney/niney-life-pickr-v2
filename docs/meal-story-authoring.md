@@ -23,14 +23,14 @@ apps/friendly/content/meal-stories/<slug>/
   images/*.jpg    화면에 쓰는 사진 — build:meal-stories 가 originals/ 에서 만든다
   originals/      찍은 원본 사진 — git 밖(.gitignore), 위치 정보가 있을 수 있다
 
-apps/web/src/routes/meal-story/motion/   장면 틀 9종의 영상 그림(Remotion) — 편마다 고치지 않는다
+apps/web/src/routes/meal-story/motion/   장면 틀 9종의 영상 그림(Remotion) — 편마다 고치지 않는다(paper/ 종이 오리기 · chalk/ 칠판 메뉴판)
 tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검수용, npm(워크스페이스 밖)
 ```
 
 - `slug` 는 폴더 이름과 같다(소문자·숫자·하이픈, 예: `sodium-tomato-pasta`).
 - 형식(zod)은 `apps/friendly/src/modules/meal-story/meal-story.script.ts`, 화면이 받는 모양은 `@repo/api-contract` 의
   `MealStory`. 첫 편 `sodium-tomato-pasta` 가 예시다.
-- 원본 식품 데이터: `data/open/food/mfds-nutrition-15100065.csv`(원재료성식품)·`-15100066.csv`(가공식품) — git 밖,
+- 원본 식품 데이터: `data/open/food/mfds-nutrition-15100065.csv`(원재료성식품)·`-15100066.csv`(가공식품)·`mfds-nutrition.csv`(음식 — 식당 음식 한 그릇) — git 밖,
   받는 곳은 [data-sources.md](data-sources.md). 이 컴퓨터에 없으면 `foods.json` 을 새로 만들 수 없다(점검은 형식만 본다).
 
 ## 원고(story.json)
@@ -42,6 +42,7 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
   "title": "…",                      // 32자
   "summary": "…",                    // 90자 — 목록·카톡 미리보기
   "topic": { "nutrient": "sodium", "direction": "reduce" },  // 영양 탭 '많음'(reduce)·'부족'(increase) 줄에 링크. 열량은 "kcal"(판정이 없어 링크는 안 붙는다)
+  "look": "paper",                   // 영상의 그림체 — paper(종이 오리기, 기본) · chalk(칠판 메뉴판). 아래 '그림체'
   "publishedAt": "2026-11-09",
   "reviewedAt": null,                // 사람이 출처·숫자를 확인한 날 — 게시하려면 필수
   "cover": "cover.jpg",              // 게시하려면 필수
@@ -60,6 +61,7 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 | `{ "kdri": "fiber", "sex": "female" }` | 남녀 값이 다른 기준(식이섬유 남자 30g·여자 20g, 칼슘 800mg·700mg)은 **성별을 골라 숫자 둘로 나란히** 보인다 — 한 숫자만 보이면 절반에게 틀린 기준이다. 성별을 안 고르면 남자 값이 나오고 여자 값은 덧말로 간다 | 자동 |
 | `{ "food": "spaghetti", "nutrient": "kcal", "grams": 80 }` | foods 의 100g당 값 × 그램 | 자동(식품의 출처) |
 | `{ "foods": [{ "food": "spaghetti", "grams": 40 }, { "food": "wholewheat-spaghetti", "grams": 40 }], "nutrient": "fiberG" }` | 섞은 값 — 식품마다 100g당 값 × 그램의 합(2~4가지). 하나라도 값을 모르면 합을 내지 않는다 | 자동 |
+| `{ "dish": "udon", "nutrient": "sodiumMg" }` | **식당 음식 한 그릇** — foods 의 음식(`ref.db: "dish"`) 100g당 값 × 표준데이터의 한 그릇 무게. 무게는 원고가 적지 않는다(기준 글에 '한 그릇 1,000g'이 붙는다) | 자동(`mfds-dish`) |
 | `{ "recipe": "sodiumMg", "part": "sauce" }` | 레시피 1인분 합계(`part` 를 주면 그 묶음 재료만) | 자동 |
 | `{ "my": "sodium" }` | 보는 사람의 최근 2주 하루 평균 — 로그인했을 때만, 화면이 통계로 채운다 | — |
 | `{ "value": 3000, "unit": "mg", "source": "id" }` | 출처가 있는 고정값(예: 국민건강통계 평균). **sources 의 id 필수** | 그 출처 |
@@ -100,6 +102,12 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 - `"ref": { "db": "raw" | "processed", "code": "R101-024020002-0000" }` — 한 식품. 코드는
   `pnpm --filter friendly build:meal-stories --find=스파게티,파마산` 으로 찾는다(이름에 그 말이 든 식품의 코드·분류·100g당
   열량·나트륨). 생것·말린것·데친것을 구별해 고른다(스파게티 건면은 `_말린것`, 삶은 면은 `_말린것을 삶은것`).
+- `"ref": { "db": "dish", "code": "D303-164430000-0001" }` — **식당 음식 한 그릇**(음식 표준데이터 15100070). 같은 이름이 조사
+  종류마다 여러 행이고 값이 몇 배씩 다르다('짬뽕' 한 그릇 545~7,338mg) — **분석한 한 그릇만** 쓴다: 식품기원이 외식(분석함량)·
+  가정식(분석 함량)이고 식품중량이 100g 을 넘는 행. 급식·재료량 산출 행(식품중량 = 급식 1회 제공량), 업체 제공 행(프랜차이즈),
+  간편조리세트(밀키트 — 여러 사람 분량 한 팩), 식품중량이 100g 인 행은 빌더가 막는다. `--find=우동` 이 쓸 수 있는 행만 한 그릇 무게·
+  열량·나트륨과 함께 보인다. 식당 음식은 외식(분석함량)을 고른다(2012~2017 식약처 외식 영양성분 조사 — 오래된 값이고 가게마다 다르다고
+  덧말로 밝힌다). 묶음(`group`)은 음식 데이터에 쓰지 않는다.
 - `"group": { "db": "processed", "all": ["토마토","소스"], "any": ["스파게티","파스타"], "none": ["소스파스타"] }` — 시판
   제품 여러 개의 **중앙값**(영양소마다 값을 적은 제품만으로 — 그 수가 묶음보다 적으면 화면이 '표시한 제품 N개의 중앙값'이라고
   밝히고, 최소 수(`min`, 기본 3)보다 적으면 그 영양소는 비운다. 통밀 파스타 식이섬유는 17개 중 4개). 특정 제품을 고르지 않아 브랜드를 밝히지 않아도 된다. build 출력의 제품 이름을 보고 다른 것이 섞였으면
@@ -125,6 +133,10 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 (`멥쌀밥_현미`)을 고른다. **소금이 든 마른 면**(소면·중면·칼국수 — 마른 소면 100g 에 나트륨 1,274mg)도 삶은 것으로 적는다
 (`국수_소면_말린것을 삶은것` 145g, 메모에 '마른 면 50g 을 삶은 것') — 삶으면 소금이 물로 빠져 100g 에 68mg 이 되는데, 마른 무게로 세면
 레시피 나트륨이 두 배로 나온다. 열량은 어느 쪽으로 세도 같다. 스파게티(마른 면 2mg)는 마른 무게 그대로.
+
+**레시피가 없는 편** — `recipe` 를 빼면 된다(외식 메뉴를 줄 세우는 여섯째 편). 재료·만드는 법·영양정보 장면과 마무리의 `record`·
+`recipe` 단추는 쓸 수 없고(`share`·`stats` 만), 표지 식탁에는 줄 세우기·목록에 나온 소품 앞의 셋이 놓인다(가장 먼저 나온 것이
+가운데). 조리·사진이 없어 값 확인만으로 게시할 수 있다 — 단 게시하려면 표지 사진은 있어야 한다.
 
 ### 장면(scenes) — 틀 9종
 
@@ -165,6 +177,26 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 
 막대는 둘일 때 띠와 숫자가 가장 크다(가장 힘주어 보일 비교는 둘로).
 
+### 그림체(look) — 영상
+
+영상으로 보기의 그림체는 둘이다. 글로 보기·목록·레시피 화면은 어느 쪽이든 같다.
+
+| look | 그림 | 그리는 장면 |
+|---|---|---|
+| `paper`(기본) | 종이 오리기 — 찢긴 색종이·테이프·소품 그림, 주제색 무대 | 9종 모두 |
+| `chalk` | 칠판 메뉴판 — 식당 칠판에 분필 글씨, 점선 끝의 값, 분필 빗금 막대, 노란 동그라미 | `cover` `stat` `bars` `lineup` `list` `outro` |
+
+- **칠판은 메뉴를 견주어 고르는 편에** 쓴다(여섯째 편). 레시피 장면(`ingredients`·`step`·`nutrition`)은 그리지 못한다 — 쓰면 점검이
+  오류로 막는다. 레시피가 있는 편은 종이 오리기로 둔다.
+- 칠판에서는 소품 그림(`icon`)을 쓰지 않는다(목록은 번호 동그라미). 원고에 적어 둬도 된다 — 무시된다.
+- 강조(`highlight`): 줄 세우기는 초록 분필 + 노란 동그라미, 막대는 노란 분필. 주제색 무대·마무리의 짝은 없다(칠판 하나).
+- 나트륨 편이어도 소금 숟가락 장면이 아니라 큰 분필 숫자다(소금 환산·내 기준 대비 %·판정 도장은 같은 글자).
+- 표지는 사진이 없으면 김 나는 그릇 선 그림, 있으면 사진을 붙인다.
+- 틀을 고칠 때: `motion/chalk/`. 시각표는 `timeline.ts` 를 종이 오리기와 같이 쓰니 한쪽 때문에 시각표를 바꾸면 두 그림체를 다 본다.
+  변형 점검은 `VariantsChalk` 컴포지션(`npx remotion render src/index.ts VariantsChalk out/frames-vchalk --sequence
+  --every-nth-frame=6 --image-format=jpeg --scale=0.5`). 그리는 장면 목록은 웹 `motion/chalk/chalkLayout.ts` 와 서버
+  `meal-story.defs.ts` 의 `MEAL_STORY_LOOK_SCENES` 두 곳에 있다(같이 고친다).
+
 ### 소품 그림(icon) — 영상
 
 영상은 종이 오리기 그림체다(찢긴 색종이·테이프·손글씨 제목·얼굴 있는 소금통과 숟가락). 목록 항목(`items[].icon`)·레시피 재료
@@ -178,9 +210,11 @@ tools/meal-motion/                       영상(MP4)·프레임 렌더 — 검�
 `anchovy`(멸치) `kale` `tofu` `yogurt` `scallion`(대파) `sesameseed`(깨 종지) `friedrice`(볶음밥 접시) `paprika` `broccoli` `kiwi`
 `tangerine`(귤) `chicken`(삶은 닭가슴살) `sweetpotato` `salad`(샐러드 그릇) `somen`(삶은 소면 타래) `soba`(메밀국수) `udon` `ricenoodle`(쌀국수)
 `glassnoodle`(당면) `spaghetti`(삶은 스파게티 — 마른 면 다발은 `noodle`) `konjac`(곤약면) `tofunoodle`(두부면) `squash`(국수호박) `cucumber`
-`gochujang` `bibimnoodle`(비빔국수 그릇)
+`gochujang` `bibimnoodle`(비빔국수 그릇) · 식당 음식 한 그릇: `udonbowl`(우동) `naengmyeon`(냉면) `jjamppong` `jajangmyeon` `kalguksu` `pho`(쌀국수)
+`gukbap`(국밥 뚝배기) `deopbap`(덮밥) `jajangbap` `gimbap` `hoedeopbap`(회덮밥) `haejangguk` `chueotang` `budaejjigae` `kimchijjigae` `sundaeguk`
+`sundubu`(순두부)
 
-**그 편의 그림은 원고가 정한다** — 표지 식탁에는 그 편 레시피의 재료 둘(첫째·둘째 재료의 소품)과 완성 그릇이, 영양정보 장면의
+**그 편의 그림은 원고가 정한다** — 표지 식탁에는 그 편 레시피의 재료 둘(첫째·둘째 재료의 소품)과 완성 그릇이(레시피가 없으면 줄 세우기·목록의 소품 셋), 영양정보 장면의
 식탁 끝에도 완성 그릇이 놓인다. 완성 그릇 = **마지막 만드는 법 단계의 `icon`** 이니 거기에 그 요리의 그림을 단다(첫 편 `plate`,
 식이섬유 편 `bibimbap`). 소품을 달지 않으면 그 자리는 빈다. 무대 색과 마무리 장면에서 손 흔드는 짝은 `topic.nutrient` 로 정해진다
 (나트륨 = 파랑·소금통과 숟가락, 식이섬유 = 초록·밥공기와 버섯, 칼슘 = 보라·우유곽과 멸치, 비타민 C = 귤색·파프리카와 귤, 열량 = 청록·소면과 곤약면 타래). **새 주제를 열 때**는 `paper/palette.ts` 의
