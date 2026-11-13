@@ -57,6 +57,10 @@ niney@life.com 에 최근 14일 기록이 있어 아래 예시 값으로 맞춰 
 
 ## 2. 앱에만 남은 구현 후보
 
+- **식당에서 먹은 기록(그 집 메뉴에서 넣기 · 근처 식당 · 인식 결과를 메뉴에 잇기)**: 2026-11-13 웹에 들어갔고 서버·계약·공유
+  스토어는 끝났다. 앱은 식당 선택이 화면 맨 아래라 사진이 식당 없이 먼저 인식되고, 식당을 `setField` 로 직접 바꿔 메뉴 연결이
+  풀리지 않으며, 메뉴명·가격을 어디에도 그리지 않는다. 작업 순서·권한 규칙·확인 목록은
+  [PLAN-mobile-meal-place-menu.md](PLAN-mobile-meal-place-menu.md)(작업 지시서).
 - **추천 카드 곁들임 줄 → 분석 탭 이동**: 웹에는 '영양 보기' 링크가 있지만 앱에는 없다. 분석 탭은 같은 화면(`app/meal/index.tsx`)의
   탭 상태라 `router.push('/meal?tab=analysis')` 는 같은 화면을 한 겹 더 쌓을 수 있다 — 넣는다면 `MealRecommendView` 가
   `onOpenAnalysis` 콜백을 받고 `app/meal/index.tsx` 가 `setTab('analysis')` 로 넘겨 주는 방식.
