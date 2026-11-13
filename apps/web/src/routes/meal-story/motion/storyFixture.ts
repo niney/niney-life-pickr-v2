@@ -29,6 +29,7 @@ export const variantStory: MealStoryType = {
   title: '변형 점검',
   summary: '장면 틀의 모든 변형',
   topic: { nutrient: 'sodium', direction: 'reduce' },
+  look: 'paper',
   publishedAt: '2026-11-10',
   reviewedAt: null,
   coverUrl: null,
@@ -168,6 +169,14 @@ export const variantStory: MealStoryType = {
   ],
   recipe: null,
   sources: [],
+};
+
+/** 칠판 메뉴판 그림체 점검 — 같은 변형 원고에서 칠판이 그리는 장면만(레시피 장면은 칠판에 없다). */
+export const variantChalkStory: MealStoryType = {
+  ...variantStory,
+  slug: 'variants-chalk',
+  look: 'chalk',
+  scenes: variantStory.scenes.filter((s) => s.type !== 'ingredients' && s.type !== 'step' && s.type !== 'nutrition'),
 };
 
 /** 로그인한 사람의 값(예시) — 나트륨은 기준을 넘고, 식이섬유는 기록이 모자란 경우. */

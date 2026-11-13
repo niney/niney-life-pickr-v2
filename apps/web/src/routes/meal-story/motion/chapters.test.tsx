@@ -23,8 +23,8 @@ import { Icon } from './paper/Icon';
 import { PROP_FOR } from './paper/icons';
 import { paperPalette } from './paper/palette';
 import { Chapter } from './StoryVideo';
-import { variantMine, variantMineChanged, variantMineFiber, variantMineSenior, variantStory } from './storyFixture';
-import { dishIcon, ingredientIcons } from './storyProps';
+import { variantChalkStory, variantMine, variantMineChanged, variantMineFiber, variantMineSenior, variantStory } from './storyFixture';
+import { coverIcons, dishIcon, ingredientIcons } from './storyProps';
 import { TYPE } from './theme';
 import { buildTimeline, chapterFrames, isSaltSpoonScene } from './timeline';
 import type { MotionMine } from './types';
@@ -283,6 +283,12 @@ describe('장면 그림 — 변형 원고', () => {
     const bare: MealStoryType = { ...variantStory, scenes: variantStory.scenes.filter((s) => s.type !== 'ingredients' && s.type !== 'step') };
     expect(dishIcon(bare)).toBeNull();
     expect(ingredientIcons(bare)).toEqual([]);
+    // 표지 식탁 — 레시피가 있으면 [둘째 재료, 완성 그릇, 첫째 재료].
+    expect(coverIcons(variantStory)).toEqual(['tomato', 'pan', 'noodle']);
+    // 레시피가 없는 편(외식 메뉴를 줄 세우는 편)은 줄 세우기·목록에 나온 소품 앞의 셋 — 가장 먼저 나온 것이 가운데.
+    expect(coverIcons(bare)).toEqual(['udon', 'ricenoodle', 'somen']);
+    // 소품이 하나도 없으면 비운다.
+    expect(coverIcons({ scenes: bare.scenes.filter((s) => s.type !== 'lineup' && s.type !== 'list') })).toEqual([null, null, null]);
     const cover = scenes.find((s) => s.type === 'cover')!;
     expect(draw(cover, VIEWERS[0]!, 60, 'c0', bare)).not.toMatch(/NaN|undefined|Infinity/);
   });
@@ -305,6 +311,95 @@ describe('장면 그림 — 변형 원고', () => {
     expect(timeline.chapters).toHaveLength(scenes.length);
     for (const c of timeline.chapters) expect(c.duration).toBeGreaterThan(60);
     expect(Number.isFinite(timeline.total)).toBe(true);
+  });
+});
+
+describe('칠판 메뉴판 그림체(look: chalk)', () => {
+  const scenes = variantChalkStory.scenes;
+  const last = (scene: MealStorySceneType, viewer: Viewer = VIEWERS[0]!) => draw(scene, viewer, chapterFrames(variantChalkStory, scene) - 1, 'c0', variantChalkStory);
+
+  it('칠판이 그리는 여섯 장면은 모두 칠판으로 — 어느 프레임·어느 사람에게도 예외·NaN 없이', () => {
+    expect(scenes.map((s) => s.type)).toEqual(['cover', 'stat', 'stat', 'bars', 'bars', 'lineup', 'lineup', 'list', 'outro']);
+    for (const scene of scenes) {
+      const end = chapterFrames(variantChalkStory, scene);
+      for (const viewer of VIEWERS) {
+        for (const frame of [0, 9, 31, 78, 140, Math.round(end / 2), end - 13, end - 1]) {
+          const markup = draw(scene, viewer, frame, 'c0', variantChalkStory);
+          expect(markup, `${scene.type} · ${viewer.name} · ${frame}`).toContain('data-look="chalk"');
+          expect(markup, `${scene.type} · ${viewer.name} · ${frame}`).not.toMatch(/NaN|undefined|Infinity/);
+        }
+      }
+    }
+  });
+
+  it('읽는 글은 각주 하한(30px)보다 작지 않다 — 줄 수가 한도까지 차도, 내 값 쪽지가 다 붙어도', () => {
+    for (const viewer of [VIEWERS[0]!, VIEWERS[5]!]) {
+      for (const scene of scenes) {
+        const small = textSizes(last(scene, viewer)).filter((t) => t.size < TYPE.foot - 0.01);
+        expect(small, `${scene.type} · ${viewer.name}`).toEqual([]);
+      }
+    }
+  });
+
+  it('나트륨 주제여도 숟가락 장면이 아니다 — 서버가 준 소금 환산, 내 값에는 내 기준 대비 %·소금·판정 도장(종이 오리기와 같은 글자)', () => {
+    const stat = scenes.find((s) => s.type === 'stat')!;
+    expect(isSaltSpoonScene(variantChalkStory, stat)).toBe(false);
+    expect(isSaltSpoonScene(variantStory, stat)).toBe(true);
+    const mine = last(stat, VIEWERS[2]!);
+    expect(mine).toContain('소금 약 5.8g');
+    expect(mine).toContain('소금 약 7.8g');
+    expect(mine).toContain('기준의 136%');
+    expect(mine).toContain('많음');
+    expect(mine).toContain('65~74세 2,100mg · 75세 이상 1,700mg');
+    expect(last(stat, VIEWERS[0]!)).toContain('로그인하면 내 값도 보여요');
+    expect(last(stat, VIEWERS[0]!)).not.toContain('많음');
+    expect(last(stat, VIEWERS[3]!)).toContain('기록이 더 필요해요');
+    expect(last(stat, { name: '65세 이상', mine: variantMineSenior, loggedIn: true })).toContain('내 기준 2,100mg의 105%');
+    expect(last(stat, VIEWERS[5]!)).toContain('직전 2주보다 12% 줄었어요');
+    // 서버가 값을 못 구한 숫자는 로그인 안내가 아니라 값 없음.
+    const plain = scenes.filter((s) => s.type === 'stat')[1]!;
+    expect(last(plain).match(/값 없음/g)).toHaveLength(1);
+  });
+
+  it('줄 세우기 — 잣대, 값 없는 줄은 값 없음, 비슷한 값이면 점선 둘, 한 줄에 안 드는 옆 글은 뺀다, 강조한 줄에만 동그라미', () => {
+    const [close, far] = scenes.filter((s) => s.type === 'lineup') as [MealStorySceneType, MealStorySceneType];
+    const a = last(close);
+    expect(a).toContain('잣대가 한도까지 긴 글 삶은 면 100g 기준');
+    expect(a).toContain('마른 면 100g');
+    expect(a).not.toContain('옆 글도 한도까지 길다 50g');
+    expect(a.match(/값 없음/g)).toHaveLength(1);
+    expect(a).toContain('※ 소면 값은 표시한 제품 4개의 중앙값이에요');
+    expect(a.match(/stroke-dasharray="12 10"/g)).toHaveLength(2);
+    expect(a.match(/data-loop/g)).toHaveLength(1);
+    const b = last(far);
+    expect(b).not.toContain('stroke-dasharray="12 10"');
+    expect(b.match(/data-loop/g)).toHaveLength(3);
+  });
+
+  it('막대 — 서버가 준 어림만 노란 동그라미에, 값 없는 막대와 옆 값은 값 없음', () => {
+    const [two, four] = scenes.filter((s) => s.type === 'bars') as [MealStorySceneType, MealStorySceneType];
+    expect(last(two)).toContain('약 10분의 1');
+    expect(last({ ...two, fraction: null } as MealStorySceneType)).not.toContain('분의 1');
+    expect(last(four).match(/값 없음/g)).toHaveLength(2);
+  });
+
+  it('표지 — 사진이 있으면 그릇 그림 대신 사진을 붙인다', () => {
+    const cover = scenes[0]!;
+    expect(last(cover)).toContain('<img');
+    expect(last({ ...cover, image: null } as MealStorySceneType)).not.toContain('<img');
+  });
+
+  it('칠판이 못 그리는 장면(레시피)이 섞여 오면 그 장면만 종이 오리기로 그린다', () => {
+    const step = variantStory.scenes.find((s) => s.type === 'step')!;
+    const markup = draw(step, VIEWERS[0]!, 60, 'c0', variantChalkStory);
+    expect(markup).not.toContain('data-look="chalk"');
+    expect(markup).not.toMatch(/NaN|undefined|Infinity/);
+  });
+
+  it('시간표 — 장면마다 길이가 있고 전체가 이어진다', () => {
+    const timeline = buildTimeline(variantChalkStory);
+    expect(timeline.chapters).toHaveLength(scenes.length);
+    for (const c of timeline.chapters) expect(c.duration).toBeGreaterThan(60);
   });
 });
 

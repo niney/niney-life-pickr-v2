@@ -122,6 +122,7 @@ const story: MealStoryType = {
   title: '시험 나트륨 이야기',
   summary: '시험 요약',
   topic: { nutrient: 'sodium', direction: 'reduce' },
+  look: 'paper',
   publishedAt: '2026-11-09',
   reviewedAt: '2026-11-09',
   coverUrl: null,

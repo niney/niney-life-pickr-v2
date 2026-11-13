@@ -103,7 +103,11 @@ export const nutritionTiming = (rows: number) => ({
 export const OUTRO = { fill: [0, 16] as Span, title: 12, text: [30, 48] as Span, ring: 40, minReal: 120 } as const;
 
 /** 나트륨 이야기의 '하루 기준' 장면 — 숟가락에 소금이 쌓이는 장면으로 그린다. */
-export const isSaltSpoonScene = (story: Pick<MealStoryType, 'topic'>, scene: MealStorySceneType): boolean =>
+/** 장면 길이를 가르는 스토리 값 — 주제(나트륨의 숟가락 장면)와 그림체(칠판에는 숟가락 장면이 없다). */
+export type StoryShape = Pick<MealStoryType, 'topic'> & Partial<Pick<MealStoryType, 'look'>>;
+
+export const isSaltSpoonScene = (story: StoryShape, scene: MealStorySceneType): boolean =>
+  story.look !== 'chalk' &&
   story.topic?.nutrient === 'sodium' &&
   scene.type === 'stat' &&
   scene.figures.some((f) => !f.figure.my && f.figure.unit === 'mg' && f.figure.value !== null);
@@ -119,7 +123,7 @@ export const lineupFootnotes = (scene: Extract<MealStorySceneType, { type: 'line
 ];
 
 /** 장면 길이(실제 프레임, 30fps). */
-export const chapterFrames = (story: Pick<MealStoryType, 'topic'>, scene: MealStorySceneType): number => {
+export const chapterFrames = (story: StoryShape, scene: MealStorySceneType): number => {
   switch (scene.type) {
     case 'cover':
       return chapterLength(COVER.end, COVER.sub[1], readFrames(scene.subtitle) + Math.round(readFrames(scene.title) * 0.5));
@@ -176,7 +180,7 @@ export interface Timeline {
   total: number;
 }
 
-export const buildTimeline = (story: Pick<MealStoryType, 'topic' | 'scenes'>): Timeline => {
+export const buildTimeline = (story: StoryShape & Pick<MealStoryType, 'scenes'>): Timeline => {
   const chapters: TimelineChapter[] = [];
   let from = 0;
   story.scenes.forEach((scene, index) => {

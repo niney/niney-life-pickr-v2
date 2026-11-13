@@ -69,6 +69,15 @@ describe('장면 길이', () => {
     expect(chapterFrames(potassium, scenes[1]!)).toBeGreaterThanOrEqual(Math.round(toReal(statTiming(2).ready)));
   });
 
+  it('칠판 그림체 — 나트륨 주제여도 숟가락 장면이 없어 큰 숫자 장면은 숫자 수만큼', () => {
+    const chalk = { ...sodium, look: 'chalk' } as const;
+    expect(isSaltSpoonScene(chalk, scenes[1]!)).toBe(false);
+    expect(chapterFrames(chalk, scenes[1]!)).toBeGreaterThanOrEqual(Math.round(toReal(statTiming(2).ready)));
+    expect(chapterFrames(chalk, scenes[1]!)).not.toBe(chapterFrames(sodium, scenes[1]!));
+    // 다른 장면의 길이는 그림체와 무관하다.
+    expect(chapterFrames(chalk, scenes[2]!)).toBe(chapterFrames(sodium, scenes[2]!));
+  });
+
   it('글 읽는 시간은 빠르기와 따로 지킨다 — 공백 뺀 글자당 2.4프레임', () => {
     expect(readFrames('가나다 라마', null, '바')).toBe(Math.round(6 * READ_FRAMES_PER_CHAR));
     // 막대 덧말이 길면 장면이 길어진다(덧말이 보인 뒤 다 읽을 때까지).

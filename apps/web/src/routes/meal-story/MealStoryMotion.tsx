@@ -13,6 +13,7 @@ import { useStoryFontsReady } from './mealStoryFont';
 import { toMotionMine, useStoryMyStats } from './mealStoryMine';
 import { PREV_ZONE, STORY_ASIDE_QUERY, SWIPE_PX, TAP_PX, focusOnMount, isInteractive, useLeaveStory, useStoryParams } from './mealStoryNav';
 import { StoryVideo, type StoryVideoProps } from './motion/StoryVideo';
+import { CHALK } from './motion/chalk/chalkLayout';
 import { paperPalette } from './motion/paper/palette';
 import { FPS, H, W } from './motion/theme';
 import { buildTimeline, chapterAt, chapterProgress, chapterSeekFrame, type Timeline } from './motion/timeline';
@@ -137,7 +138,7 @@ const MealStoryMotion = ({ story, index, inShell = false }: { story: MealStoryTy
     [story, token, statsData, previousData, dark],
   );
   const chapter = usePlayerValue(player, FRAME_EVENTS, (p) => chapterAt(timeline, p.getCurrentFrame()), chapterAt(timeline, initialFrame));
-  const paper = paperPalette(story.topic?.nutrient ?? null, dark).bg;
+  const paper = story.look === 'chalk' ? CHALK.wood : paperPalette(story.topic?.nutrient ?? null, dark).bg;
   // 글꼴 조각을 다 받은 뒤(또는 잠깐 기다린 뒤) 재생기를 붙인다 — 도는 중에 제목 글꼴이 바뀌지 않게.
   const fontsReady = useStoryFontsReady(story);
   const narrow = useMediaQuery('(max-width: 39.99rem)', false);
