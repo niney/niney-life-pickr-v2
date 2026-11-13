@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useFoodSearch, type MealDraftItem } from '@repo/shared';
-import { FOOD_DISH_TYPE_LABEL, MEAL_PORTIONS, MEAL_PORTION_LABEL } from '@repo/utils';
+import { FOOD_DISH_TYPE_LABEL, MEAL_PORTIONS, MEAL_PORTION_LABEL, formatMenuPrice } from '@repo/utils';
 import { useDebounced } from '~/lib/useDebounced';
 
 // 식단 항목 한 줄(웹) — 이름(카탈로그 자동완성) + 사진 인식의 다른 후보 + 주식/반찬 + 양 + 인분 + 삭제.
@@ -164,6 +164,17 @@ export const MealItemInputRow = ({
           </ul>
         ) : null}
       </div>
+
+      {/* 식당 메뉴에서 넣은 줄 — 위 이름은 통계가 묶는 표준명이고, 그 집에서 부르는 이름·가격은 여기 남는다. 이름을 고치면 풀린다. */}
+      {item.menuName ? (
+        <p className="meal-item-menu">
+          <span className="meal-tag shrink-0">이 집 메뉴</span>
+          <span>
+            {item.menuName}
+            {item.menuPrice != null ? ` · ${formatMenuPrice(item.menuPrice)}` : ''}
+          </span>
+        </p>
+      ) : null}
 
       {altCandidates.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">

@@ -131,6 +131,25 @@ describe('MealDetailPage', () => {
     expect(screen.getByText(/직접 기록/)).toBeInTheDocument();
   });
 
+  it('식당 메뉴에서 넣은 음식은 그 집 메뉴명으로 부르고, 기록 이름·가격을 아랫줄에 둔다 — 풀어 넣은 세트는 구성요소 이름으로', async () => {
+    const withMenu = {
+      ...entry,
+      items: [
+        { ...entry.items[0]!, menuName: '묵은지 김치찌개', menuPrice: 9000 },
+        { ...entry.items[0]!, id: 'i3', name: '돈가스', menuName: '수제돈까스 + 우동', menuPrice: 12000 },
+        { ...entry.items[0]!, id: 'i4', name: '우동', menuName: '수제돈까스 + 우동', menuPrice: null },
+      ],
+    };
+    server.use(http.get(ENTRY_URL, () => HttpResponse.json(withMenu)));
+    renderDetail();
+
+    const row = (await screen.findByText('묵은지 김치찌개')).closest('li')!;
+    expect(within(row).getByText(/^김치찌개 · 9,000원 · /)).toBeInTheDocument();
+    const set = screen.getByText('돈가스').closest('li')!;
+    expect(within(set).getByText(/^수제돈까스 \+ 우동 · 12,000원 · /)).toBeInTheDocument();
+    expect(within(screen.getByText('우동').closest('li')!).getByText(/^수제돈까스 \+ 우동 · /)).toBeInTheDocument();
+  });
+
   it('건강식단 레시피로 적은 음식은 그 이야기로 잇는다 — 음식 id 가 같을 때만', async () => {
     const storyItem = (over: Record<string, unknown>) => ({
       slug: 'sodium-tomato-pasta',

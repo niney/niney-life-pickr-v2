@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ApiError,
   MEAL_DRAFT_MAX_PHOTOS,
@@ -12,7 +13,14 @@ import {
   type MealDraftIdentity,
 } from '@repo/shared';
 import { guessMealSlot, toLocalDateKey } from '@repo/utils';
-import { isImageFile, prepareMealPhoto, readPhotoTakenAt } from './mealPhotoFile';
+import { linkRecognizedToPlaceMenus } from './mealPlaceLink';
+import {
+  isImageFile,
+  prepareMealPhoto,
+  readPhotoLocation,
+  readPhotoTakenAt,
+  type PhotoLocation,
+} from './mealPhotoFile';
 
 // 식단 사진 넣기(웹) — 고르기·끌어다 놓기·붙여넣기 → 촬영 시각 반영 → 줄여서 올리기 → 음식 인식.
 // 앱 MealEntryEditor 의 Expo Web 경로와 같은 규칙이다: 바로 올리고(웹은 파일을 draft 에 붙들어 둘 수 없어 대기열이
@@ -35,6 +43,8 @@ export interface MealPhotoIntake {
   notice: string | null;
   /** 사진 촬영 시각으로 먹은 시각을 맞췄으면 그 시각. */
   takenAt: Date | null;
+  /** 사진을 찍은 곳(EXIF) — 근처 식당 후보에 쓴다. 위치가 없는 사진이면 null. 브라우저 안에서만 읽고 서버로 보내지 않는다. */
+  photoLocation: PhotoLocation | null;
 }
 
 const firstTakenAt = async (files: File[]): Promise<Date | null> => {
@@ -45,14 +55,24 @@ const firstTakenAt = async (files: File[]): Promise<Date | null> => {
   return null;
 };
 
+const firstLocation = async (files: File[]): Promise<PhotoLocation | null> => {
+  for (const file of files) {
+    const location = await readPhotoLocation(file);
+    if (location) return location;
+  }
+  return null;
+};
+
 export const useMealPhotoIntake = (): MealPhotoIntake => {
   const upload = useUploadMealPhoto();
   const deletePhoto = useDeleteMealPhoto();
   const recognize = useRecognizeMeal();
+  const queryClient = useQueryClient();
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [takenAt, setTakenAt] = useState<Date | null>(null);
+  const [photoLocation, setPhotoLocation] = useState<PhotoLocation | null>(null);
   const busy = uploading !== null || recognize.isPending;
 
   // 같은 계정이면 방금 올린 고아 사진을 바로 지운다. 계정이 바뀌었으면 지금 토큰으로 남의 사진을 지울 수 없어
@@ -80,7 +100,14 @@ export const useMealPhotoIntake = (): MealPhotoIntake => {
           if (item.name.trim().length === 0) draft.removeItem(item.clientId);
         }
       }
-      setNotice(res.warning ?? (res.dishes.length > 0 ? `${res.dishes.length}개 음식을 찾았어요. 확인해 주세요.` : null));
+      // 식당이 정해져 있으면 찾은 음식을 그 집 메뉴에 잇는다(이름은 표준명 그대로, 메뉴명·가격이 붙는다).
+      const link = res.dishes.length > 0 ? await linkRecognizedToPlaceMenus(queryClient) : null;
+      if (!isMealDraftIdentityCurrent(identity)) return;
+      const linkedText = link && link.linked > 0 ? ` ${link.linked}개는 ${link.placeName} 메뉴에 이었어요.` : '';
+      setNotice(
+        res.warning ??
+          (res.dishes.length > 0 ? `${res.dishes.length}개 음식을 찾았어요.${linkedText} 확인해 주세요.` : null),
+      );
     } catch (e) {
       if (isMealDraftIdentityCurrent(identity)) {
         setNotice(e instanceof ApiError ? `${e.message} 직접 입력해 주세요.` : '인식에 실패했어요. 직접 입력해 주세요.');
@@ -123,6 +150,9 @@ export const useMealPhotoIntake = (): MealPhotoIntake => {
         draft.setField('slot', guessMealSlot(shotAt));
         setTakenAt(shotAt);
       }
+      // 찍은 곳도 올리기 전에 읽는다(줄이면 EXIF 가 사라진다) — 처음 읽히는 사진 기준. 이미 읽어 둔 곳이 있으면 둔다.
+      const shotWhere = await firstLocation(list);
+      if (shotWhere && isMealDraftIdentityCurrent(identity)) setPhotoLocation((prev) => prev ?? shotWhere);
 
       const uploaded: string[] = [];
       const failures: string[] = [];
@@ -184,12 +214,17 @@ export const useMealPhotoIntake = (): MealPhotoIntake => {
   return {
     addFiles,
     recognizeAgain,
-    removePhoto: (token) => useMealDraftStore.getState().removePhoto(token),
+    removePhoto: (token) => {
+      useMealDraftStore.getState().removePhoto(token);
+      // 사진을 다 빼면 그 사진으로 짐작한 곳도 버린다.
+      if (useMealDraftStore.getState().photos.length === 0) setPhotoLocation(null);
+    },
     busy,
     uploading,
     recognizing: recognize.isPending,
     error,
     notice,
     takenAt,
+    photoLocation,
   };
 };

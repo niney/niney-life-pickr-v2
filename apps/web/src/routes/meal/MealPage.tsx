@@ -29,6 +29,7 @@ import {
   mealDateLabel,
   mealNutritionLabel,
   monthRange,
+  mealItemLabels,
   summarizeMealNutrition,
   toLocalDateKey,
   toLocalMonthKey,
@@ -411,8 +412,10 @@ const FilterChip = ({
 // 한 끼 줄 — 누르면 상세(수정·삭제). 줄 전체가 링크라 식당 링크는 상세에서 연다(링크 중첩 금지).
 // 넓으면 한 줄(끼니·시각 | 음식·장소 | 사진 | 열량), 좁으면 두 줄(끼니·시각 + 열량 / 음식 + 사진).
 const MealEntryRow = ({ entry, siblings }: { entry: MealEntryType; siblings?: string[] }) => {
-  const mains = entry.items.filter((i) => i.isMain);
-  const sides = entry.items.filter((i) => !i.isMain);
+  // 식당 메뉴에서 넣은 음식은 그 집 메뉴명으로 부른다(이름은 통계용 표준명).
+  const labels = mealItemLabels(entry.items);
+  const mains = labels.filter((_, i) => entry.items[i]!.isMain);
+  const sides = labels.filter((_, i) => !entry.items[i]!.isMain);
   // 카탈로그에 영양이 없는 음식이 흔해서(외식 브랜드 메뉴 등) 값이 하나도 없으면 줄을 그리지 않는다.
   const kcalText = mealNutritionLabel(summarizeMealNutrition(entry.items));
   return (
@@ -431,10 +434,10 @@ const MealEntryRow = ({ entry, siblings }: { entry: MealEntryType; siblings?: st
       </span>
       <span className="meal-entry-foods">
         <span className="meal-entry-mains">
-          {mains.map((i) => i.name).join(', ') || '(음식 없음)'}
+          {mains.join(', ') || '(음식 없음)'}
         </span>
         {sides.length > 0 ? (
-          <span className="meal-entry-sub">곁들임 {sides.map((i) => i.name).join(', ')}</span>
+          <span className="meal-entry-sub">곁들임 {sides.join(', ')}</span>
         ) : null}
         {entry.placeName ? <span className="meal-entry-sub">{entry.placeName}</span> : null}
       </span>

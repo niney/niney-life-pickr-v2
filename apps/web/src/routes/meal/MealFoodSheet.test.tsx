@@ -281,4 +281,81 @@ describe('음식 찾기 시트 — 휴대폰', () => {
       source: 'catalog',
     });
   });
+
+  it('식당이 정해져 있으면 그 집 메뉴가 맨 위에 — 누르면 표준명 줄에 메뉴명·가격이 붙고, 줄을 바꿀 때도 따라간다', async () => {
+    server.use(
+      http.get('/api/v1/meals/place-menus', () =>
+        HttpResponse.json({
+          placeId: 'place-9',
+          placeName: '숯토리',
+          menus: [
+            {
+              menuName: '묵은지 김치찌개',
+              price: 9000,
+              recommend: true,
+              foods: [
+                { name: '김치찌개', foodId: 'f1', dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean', isMain: true, kcal: 240 },
+              ],
+            },
+            {
+              menuName: '특곰탕',
+              price: 15000,
+              recommend: false,
+              foods: [
+                { name: '곰탕', foodId: 'f2', dishType: 'soup', mainIngredient: 'beef', cuisine: 'korean', isMain: true, kcal: 330 },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    useMealDraftStore.getState().start({
+      eatenAt: new Date().toISOString(),
+      eatenDate: '2026-11-13',
+      slot: 'lunch',
+      placeId: 'place-9',
+      placeName: '숯토리',
+    });
+    useMealDraftStore.getState().addItem({
+      name: '',
+      foodId: null,
+      dishType: null,
+      mainIngredient: null,
+      cuisine: null,
+      portion: null,
+      isMain: true,
+      confidence: null,
+      source: 'manual',
+      candidates: [],
+    });
+    renderNew();
+
+    fireEvent.click(await screen.findByRole('button', { name: '음식 찾기' }));
+    const group = await within(sheet()).findByRole('heading', { name: '숯토리 메뉴' });
+    // 자주 먹은 음식보다 위에 온다.
+    expect(
+      group.compareDocumentPosition(within(sheet()).getByRole('heading', { name: /자주 먹은 음식/ })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const kimchi = within(sheet()).getByRole('button', { name: /묵은지 김치찌개/ });
+    expect(kimchi).toHaveTextContent('9,000원 · 대표 · 김치찌개로 기록');
+    expect(kimchi).toHaveTextContent('240kcal');
+    fireEvent.click(kimchi);
+    expect(kimchi).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(sheet()).getByRole('button', { name: /1개 · 완료/ }));
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '김치찌개', foodId: 'f1', menuName: '묵은지 김치찌개', menuPrice: 9000 },
+    ]);
+
+    // 그 줄을 다른 메뉴로 바꾸면 메뉴명·가격도 그 메뉴 것으로 — 치는 중엔 그 말이 든 메뉴만 보인다.
+    fireEvent.click(screen.getByRole('button', { name: '김치찌개 바꾸기' }));
+    fireEvent.change(within(sheet()).getByLabelText('음식 찾기'), { target: { value: '곰탕' } });
+    const gomtang = await within(sheet()).findByRole('button', { name: /특곰탕/ });
+    expect(within(sheet()).queryByRole('button', { name: /묵은지 김치찌개/ })).not.toBeInTheDocument();
+    fireEvent.click(gomtang);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '곰탕', foodId: 'f2', source: 'catalog', menuName: '특곰탕', menuPrice: 15000 },
+    ]);
+  });
 });

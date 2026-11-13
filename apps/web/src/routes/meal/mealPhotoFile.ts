@@ -1,4 +1,4 @@
-// 식단 사진 파일 손질(웹) — 올리기 전에 촬영 시각(EXIF)을 읽고, 큰 사진은 브라우저에서 줄인다.
+// 식단 사진 파일 손질(웹) — 올리기 전에 촬영 시각·위치(EXIF)를 읽고, 큰 사진은 브라우저에서 줄인다.
 //
 // 앱은 픽커가 EXIF 를 주고 품질 0.8 로 다시 저장해 크기를 줄여 주지만, 웹 <input type="file"> 은 원본을 그대로
 // 준다. 요즘 휴대전화 원본은 서버 multipart 한도(5MB, apps/friendly/src/plugins/multipart.ts)를 자주 넘고, 서버도
@@ -38,14 +38,39 @@ const parseExifDateTime = (raw: string): Date | null => {
 
 const TAG_DATE_TIME = 0x0132;
 const TAG_EXIF_IFD = 0x8769;
+const TAG_GPS_IFD = 0x8825;
 const TAG_DATE_TIME_ORIGINAL = 0x9003;
+// GPS IFD 안의 태그.
+const TAG_GPS_LAT_REF = 1;
+const TAG_GPS_LAT = 2;
+const TAG_GPS_LNG_REF = 3;
+const TAG_GPS_LNG = 4;
 const TYPE_ASCII = 2;
+const TYPE_RATIONAL = 5;
+
+export interface PhotoLocation {
+  lat: number;
+  lng: number;
+}
+
+interface ExifInfo {
+  takenAt: Date | null;
+  location: PhotoLocation | null;
+}
 
 /**
  * JPEG 앞부분에서 촬영 시각을 읽는다 — Exif IFD 의 DateTimeOriginal, 없으면 IFD0 의 DateTime(앱과 같은 순서).
  * EXIF 가 없거나 깨졌거나 JPEG 가 아니면 null. 범위를 벗어난 읽기는 모두 null 로 끝낸다.
  */
-export const parseExifTakenAt = (buffer: ArrayBuffer): Date | null => {
+export const parseExifTakenAt = (buffer: ArrayBuffer): Date | null => parseExif(buffer)?.takenAt ?? null;
+
+/**
+ * JPEG 앞부분에서 찍은 곳(GPS IFD 의 위도·경도, 도·분·초 유리수)을 읽는다. 없거나 깨졌으면 null — 위치를 지운 사진
+ * (메신저로 받은 사진, 위치를 빼고 고른 사진)이 흔하다. (0, 0)은 값을 못 얻은 카메라가 남기는 자리표시라 버린다.
+ */
+export const parseExifLocation = (buffer: ArrayBuffer): PhotoLocation | null => parseExif(buffer)?.location ?? null;
+
+const parseExif = (buffer: ArrayBuffer): ExifInfo | null => {
   const view = new DataView(buffer);
   const len = view.byteLength;
   if (len < 4 || view.getUint16(0) !== 0xffd8) return null;
@@ -69,7 +94,7 @@ const readAscii = (view: DataView, start: number, length: number): string => {
   return out;
 };
 
-const parseTiff = (view: DataView, tiff: number, end: number): Date | null => {
+const parseTiff = (view: DataView, tiff: number, end: number): ExifInfo | null => {
   if (tiff + 8 > end) return null;
   const order = view.getUint16(tiff);
   if (order !== 0x4949 && order !== 0x4d4d) return null;
@@ -99,10 +124,43 @@ const parseTiff = (view: DataView, tiff: number, end: number): Date | null => {
     return parseExifDateTime(readAscii(view, at, 19));
   };
 
+  type Entry = { type: number; count: number; field: number };
+  // 도·분·초(유리수 3개) → 도. 분모 0·범위 밖은 null.
+  const readDegrees = (entry: Entry | undefined): number | null => {
+    if (!entry || entry.type !== TYPE_RATIONAL || entry.count < 3) return null;
+    const at = tiff + u32(entry.field);
+    if (at + 24 > end) return null;
+    let degrees = 0;
+    for (let i = 0; i < 3; i += 1) {
+      const den = u32(at + i * 8 + 4);
+      if (den === 0) return null;
+      degrees += u32(at + i * 8) / den / 60 ** i;
+    }
+    return Number.isFinite(degrees) ? degrees : null;
+  };
+  const readRef = (entry: Entry | undefined): string | null => {
+    if (!entry || entry.type !== TYPE_ASCII || entry.count < 1) return null;
+    const at = entry.count > 4 ? tiff + u32(entry.field) : entry.field;
+    return at + 1 > end ? null : String.fromCharCode(view.getUint8(at)).toUpperCase();
+  };
+  const readLocation = (gps: Map<number, Entry>): PhotoLocation | null => {
+    const lat = readDegrees(gps.get(TAG_GPS_LAT));
+    const lng = readDegrees(gps.get(TAG_GPS_LNG));
+    const latRef = readRef(gps.get(TAG_GPS_LAT_REF));
+    const lngRef = readRef(gps.get(TAG_GPS_LNG_REF));
+    if (lat === null || lng === null || !latRef || !lngRef) return null;
+    if (lat > 90 || lng > 180 || (lat === 0 && lng === 0)) return null;
+    return { lat: latRef === 'S' ? -lat : lat, lng: lngRef === 'W' ? -lng : lng };
+  };
+
   const ifd0 = readIfd(u32(tiff + 4));
   const exifPointer = ifd0.get(TAG_EXIF_IFD);
+  const gpsPointer = ifd0.get(TAG_GPS_IFD);
   const original = exifPointer ? readDate(readIfd(u32(exifPointer.field)).get(TAG_DATE_TIME_ORIGINAL)) : null;
-  return original ?? readDate(ifd0.get(TAG_DATE_TIME));
+  return {
+    takenAt: original ?? readDate(ifd0.get(TAG_DATE_TIME)),
+    location: gpsPointer ? readLocation(readIfd(u32(gpsPointer.field))) : null,
+  };
 };
 
 /** 사진의 촬영 시각. 못 읽거나 미래 시각이면 null — 그때는 먹은 시각을 건드리지 않는다. */
@@ -111,6 +169,15 @@ export const readPhotoTakenAt = async (file: Blob, now: Date = new Date()): Prom
     const takenAt = parseExifTakenAt(await file.slice(0, EXIF_SCAN_BYTES).arrayBuffer());
     if (!takenAt || takenAt.getTime() > now.getTime() + FUTURE_TOLERANCE_MS) return null;
     return takenAt;
+  } catch {
+    return null;
+  }
+};
+
+/** 사진을 찍은 곳. 위치 정보가 없거나 못 읽으면 null — 그때는 근처 식당을 사진으로 고르지 않는다. */
+export const readPhotoLocation = async (file: Blob): Promise<PhotoLocation | null> => {
+  try {
+    return parseExifLocation(await file.slice(0, EXIF_SCAN_BYTES).arrayBuffer());
   } catch {
     return null;
   }

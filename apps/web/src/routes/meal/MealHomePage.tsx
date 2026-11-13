@@ -26,6 +26,7 @@ import {
   formatNutrientAmount,
   guessMealSlot,
   mealNutrientDisplayStatus,
+  mealItemLabels,
   summarizeMealNutrition,
   toLocalDateKey,
   type MealNutrientDisplayKey,
@@ -242,7 +243,8 @@ const SlotTile = ({
     );
   }
   const sum = summarizeMealNutrition(items);
-  const names = items.map((i) => i.name);
+  // 끼니마다 따로 부른다 — 세트를 풀어 넣은 줄은 그 끼니 안에서만 구성요소 이름을 쓴다.
+  const names = entries.flatMap((e) => mealItemLabels(e.items));
   return (
     <MealLink
       to={MEAL_PATH.entry(first.id)}

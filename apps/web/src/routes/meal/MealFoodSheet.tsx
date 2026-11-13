@@ -6,6 +6,8 @@ import {
   type FoodSearchItemType,
   type FrequentMealItemType,
   type MealEntryType,
+  type MealPlaceMenuFoodType,
+  type MealPlaceMenuType,
   type MealSlotType,
 } from '@repo/api-contract';
 import {
@@ -14,6 +16,7 @@ import {
   useFrequentMealItems,
   useMealDraftStore,
   useMealEntries,
+  useMealPlaceMenus,
   type MealDraftItem,
 } from '@repo/shared';
 import {
@@ -24,6 +27,8 @@ import {
   toLocalDateKey,
 } from '@repo/utils';
 import { useDebounced } from '~/lib/useDebounced';
+import { emptyMealItem } from './mealDraftStart';
+import { placeMenuKcal, placeMenuMatches, placeMenuSub } from './mealPlaceMenu';
 
 // 음식 찾기(휴대폰, 2026-11-08 리뉴얼 3단계) — 입력칸 아래 자동완성(키보드에 가리고 2자부터·칩이 작다) 대신 화면 전체를
 // 쓰는 시트. 검색칸은 위에 붙고, 치기 전엔 이 끼니에 자주 먹은 음식·최근 끼니 통째로, 치는 중엔 '그대로 넣기' →
@@ -36,6 +41,8 @@ export type MealFoodSheetMode = { kind: 'add' } | { kind: 'replace'; clientId: s
 const SEARCH_DEBOUNCE_MS = 200;
 const TRAILING_JAMO = /[ㄱ-ㆎ]+$/;
 const RECENT_MEALS = 5;
+// 치기 전에 보여 주는 식당 메뉴 수 — 메뉴가 100개 넘는 집도 있어 자주 먹은 음식이 화면 밖으로 밀리지 않게 한다.
+const MENUS_BEFORE_SEARCH = 15;
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('ko-KR');
 
@@ -88,6 +95,22 @@ const fromEntryItem = (it: MealEntryType['items'][number]): FrequentMealItemType
   kcal: it.kcal,
 });
 
+// 식당 메뉴의 음식 하나 → 항목 값(이름은 표준명, 양은 비워 1인분). 메뉴명·가격은 호출부가 붙인다.
+const menuFoodPatch = (food: MealPlaceMenuFoodType) => ({
+  name: food.name,
+  foodId: food.foodId,
+  dishType: food.dishType,
+  mainIngredient: food.mainIngredient,
+  cuisine: food.cuisine,
+  portion: null,
+  servings: null,
+  portionSource: null,
+  isMain: food.isMain,
+  catalogMatchedBy: food.foodId ? ('food_id' as const) : ('none' as const),
+  catalogMatchScore: food.foodId ? 1 : null,
+  source: food.foodId ? ('catalog' as const) : ('manual' as const),
+});
+
 // 줄 하나를 바꿀 때 — 사진 인식 계보(recognitionDishId)는 남기고 이름·연결·분류·양만 바꾼다(자동완성에서 고를 때와 같다).
 const replacePatch = (q: FrequentMealItemType): Partial<MealDraftItem> => ({
   name: q.name,
@@ -132,6 +155,16 @@ export const MealFoodSheet = ({
   const mine = useFrequentMealItems(slot, searching, searching ? term : undefined);
   const catalog = useFoodSearch(term, { limit: 12, enabled: searching && term.length >= 2 });
   const recent = useMealEntries({ limit: 12 }, !searching);
+  // 기록에 등록 식당이 정해져 있으면 그 집 메뉴를 맨 위에 — 치는 중엔 그 말이 든 메뉴만.
+  const placeId = useMealDraftStore((s) => s.placeId);
+  const placeName = useMealDraftStore((s) => s.placeName);
+  const toggleMenuItem = useMealDraftStore((s) => s.toggleMenuItem);
+  const addItem = useMealDraftStore((s) => s.addItem);
+  const placeMenus = useMealPlaceMenus(placeId);
+  const allMenus = placeMenus.data?.menus ?? [];
+  const matchedMenus = searching ? allMenus.filter((menu) => placeMenuMatches(menu, term)) : allMenus;
+  const shownMenus = searching ? matchedMenus : matchedMenus.slice(0, MENUS_BEFORE_SEARCH);
+  const chosenMenus = new Set(items.flatMap((it) => (it.menuName ? [it.menuName] : [])));
 
   const chosen = new Set(
     items.filter((it) => it.name.trim()).map((it) => mealItemNameKey(it.name)),
@@ -190,6 +223,29 @@ export const MealFoodSheet = ({
     setAdded((n) => Math.max(0, n + (wasIn ? -1 : 1)));
   };
 
+  const pickMenu = (menu: MealPlaceMenuType) => {
+    if (mode.kind === 'replace') {
+      // 그 줄을 메뉴의 첫 음식으로 바꾸고, 세트의 나머지 구성요소는 새 줄로 잇는다(가격은 첫 줄에만).
+      const [first, ...rest] = menu.foods;
+      if (first) {
+        updateItem(mode.clientId, {
+          ...menuFoodPatch(first),
+          selectedCandidateRank: null,
+          menuName: menu.menuName,
+          menuPrice: menu.price,
+        });
+      }
+      for (const food of rest) {
+        addItem({ ...emptyMealItem(), ...menuFoodPatch(food), menuName: menu.menuName, menuPrice: null });
+      }
+      onClose();
+      return;
+    }
+    const wasIn = chosenMenus.has(menu.menuName);
+    toggleMenuItem(menu);
+    setAdded((n) => Math.max(0, n + (wasIn ? -1 : 1)));
+  };
+
   const addMeal = (entry: MealEntryType) => {
     let n = 0;
     for (const it of entry.items) {
@@ -206,9 +262,31 @@ export const MealFoodSheet = ({
   const catalogItems = (catalog.data?.items ?? []).filter(
     (f) => !mineFoods.has(f.id) && !mineKeys.has(mealItemNameKey(f.name)),
   );
-  const exactKnown = [...mineItems.map((m) => m.name), ...catalogItems.map((f) => f.name)].some(
-    (name) => mealItemNameKey(name) === mealItemNameKey(typed),
-  );
+  const exactKnown = [
+    ...mineItems.map((m) => m.name),
+    ...catalogItems.map((f) => f.name),
+    ...matchedMenus.map((menu) => menu.menuName),
+  ].some((name) => mealItemNameKey(name) === mealItemNameKey(typed));
+  const menuGroup =
+    shownMenus.length > 0 ? (
+      <SheetGroup title={`${placeMenus.data?.placeName ?? placeName ?? '식당'} 메뉴`}>
+        {shownMenus.map((menu) => (
+          <SheetRow
+            key={`p-${menu.menuName}`}
+            title={menu.menuName}
+            sub={placeMenuSub(menu)}
+            kcal={placeMenuKcal(menu)}
+            on={chosenMenus.has(menu.menuName)}
+            onClick={() => pickMenu(menu)}
+          />
+        ))}
+        {matchedMenus.length > shownMenus.length ? (
+          <li className="meal-sheet-empty">
+            메뉴가 {matchedMenus.length - shownMenus.length}개 더 있어요 — 이름을 치면 찾아요.
+          </li>
+        ) : null}
+      </SheetGroup>
+    ) : null;
 
   return createPortal(
     <div
@@ -265,6 +343,7 @@ export const MealFoodSheet = ({
       <div className="meal-sheet-body">
         {searching ? (
           <>
+            {menuGroup}
             {typed && !exactKnown ? (
               <SheetGroup>
                 <SheetRow
@@ -320,6 +399,7 @@ export const MealFoodSheet = ({
           </>
         ) : (
           <>
+            {menuGroup}
             {(frequent.data?.items.length ?? 0) > 0 ? (
               <SheetGroup title={`${MEAL_SLOT_LABEL[slot]}에 자주 먹은 음식`}>
                 {frequent.data!.items.map((m) => (

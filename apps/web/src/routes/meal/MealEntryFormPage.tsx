@@ -34,8 +34,11 @@ import { cn } from '~/lib/utils';
 import { MealFoodSheet, type MealFoodSheetMode } from './MealFoodSheet';
 import { MealItemInputRow } from './MealItemInputRow';
 import { MealPhotoSection } from './MealPhotoSection';
+import { MealPlaceMenus } from './MealPlaceMenus';
+import { MealPlaceSection } from './MealPlaceSection';
 import { MealSurface } from './MealSurface';
 import { useMealDraftReady } from './useMealDraftReady';
+import { useMealNearbyPlaces } from './useMealNearbyPlaces';
 import { useMealPhotoIntake } from './useMealPhotoIntake';
 import {
   emptyMealItem,
@@ -65,6 +68,8 @@ const timeValue = (iso: string): string => {
 };
 
 const NEW_FALLBACK = { to: MEAL_PATH.home, label: '식단 홈' };
+// 먹은 시각이 지금에서 이만큼 안쪽이면 '지금 먹은 기록'으로 보고 열자마자 근처 식당을 찾아본다.
+const NEARBY_AUTO_WINDOW_MS = 2 * 60 * 60 * 1000;
 
 export const MealNewPage = () => (
   <MealDraftGate fallback={NEW_FALLBACK}>
@@ -195,6 +200,15 @@ const MealEntryForm = ({ entryId, notice }: { entryId: string | null; notice?: R
   const create = useCreateMealEntry();
   const update = useUpdateMealEntry();
   const photoIntake = useMealPhotoIntake();
+  // 근처 식당 후보 — 사진 찍은 곳이 먼저, 없으면 지금 위치. 지금 먹은 새 기록(식당 없음)만 열자마자 찾아본다 —
+  // 지난 끼니를 적거나 고치는 중이면 지금 위치는 먹은 곳이 아니다.
+  const [nearbyOnOpen] = useState(
+    () =>
+      entryId === null &&
+      useMealDraftStore.getState().placeName === null &&
+      Math.abs(Date.now() - new Date(useMealDraftStore.getState().eatenAt).getTime()) <= NEARBY_AUTO_WINDOW_MS,
+  );
+  const nearby = useMealNearbyPlaces({ photoLocation: photoIntake.photoLocation, auto: nearbyOnOpen });
   const [error, setError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
   // "음식 추가"로 막 만든 줄에만 포커스를 준다(처음 열 때는 자동 포커스하지 않는다).
@@ -384,6 +398,15 @@ const MealEntryForm = ({ entryId, notice }: { entryId: string | null; notice?: R
             </p>
           ) : null}
 
+          {/* 식당을 먼저 — 등록 식당이면 아래 '먹은 음식'에 그 집 메뉴가 뜬다. */}
+          <MealPlaceSection
+            heading={Heading}
+            nearby={nearby}
+            recognizeAgain={
+              draft.photos.length > 0 && !photoIntake.busy ? () => void photoIntake.recognizeAgain() : undefined
+            }
+          />
+
           <MealPhotoSection intake={photoIntake} heading={Heading} />
 
           <section className="meal-sec" aria-labelledby="meal-form-foods">
@@ -398,6 +421,7 @@ const MealEntryForm = ({ entryId, notice }: { entryId: string | null; notice?: R
                 : '이름을 치면 음식 목록에서 골라 분류·영양을 붙일 수 있어요. 목록에 없으면 그대로 적어도 돼요.'}
             </p>
             <div className="space-y-2.5">
+              <MealPlaceMenus />
               <QuickAddChips slot={draft.slot} />
               {draft.items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">음식을 추가해 주세요.</p>
@@ -516,24 +540,6 @@ const MealEntryForm = ({ entryId, notice }: { entryId: string | null; notice?: R
                   />
                 ))}
               </Field>
-              {draft.placeName ? (
-                <div className="space-y-1.5">
-                  <p className="meal-field-label">식당 / 장소</p>
-                  <div className="flex items-center gap-2">
-                    <span className="meal-input min-w-0 flex-1 truncate">{draft.placeName}</span>
-                    <button
-                      type="button"
-                      className="meal-btn-quiet"
-                      onClick={() => {
-                        draft.setField('placeId', null);
-                        draft.setField('placeName', null);
-                      }}
-                    >
-                      지우기
-                    </button>
-                  </div>
-                </div>
-              ) : null}
               <div className="space-y-1.5">
                 <label htmlFor="meal-memo" className="meal-field-label">
                   메모

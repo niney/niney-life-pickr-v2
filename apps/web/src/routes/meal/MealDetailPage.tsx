@@ -17,7 +17,9 @@ import {
   MEAL_PORTION_LABEL,
   MEAL_SLOT_LABEL,
   MEAL_TYPE_LABEL,
+  formatMenuPrice,
   mealDateLabel,
+  mealItemLabels,
   summarizeMealNutrition,
   toLocalDateKey,
 } from '@repo/utils';
@@ -101,6 +103,7 @@ export const MealDetailPage = () => {
 
   const data = entry.data;
   const today = toLocalDateKey(new Date());
+  const itemLabels = mealItemLabels(data.items);
   const Heading = frame.type === 'panel' ? 'h3' : 'h2';
 
   const startEdit = () => {
@@ -215,8 +218,8 @@ export const MealDetailPage = () => {
               </span>
             </div>
             <ul>
-              {data.items.map((item) => (
-                <FoodRow key={item.id} item={item} />
+              {data.items.map((item, i) => (
+                <FoodRow key={item.id} item={item} label={itemLabels[i] ?? item.name} />
               ))}
             </ul>
           </section>
@@ -258,8 +261,16 @@ export const MealDetailPage = () => {
 
 type MealItem = MealEntryType['items'][number];
 
-const FoodRow = ({ item }: { item: MealItem }) => {
+// label 은 화면에서 부르는 이름 — 식당 메뉴에서 넣었으면 그 집 메뉴명이고, 그때 기록 이름(통계가 묶는 표준명)과 가격을
+// 아랫줄 앞에 둔다. 세트를 풀어 넣은 줄은 구성요소 이름으로 부르고 어느 메뉴였는지를 아랫줄에 둔다.
+const FoodRow = ({ item, label }: { item: MealItem; label: string }) => {
   const sub = [
+    item.menuName && label !== item.name && label.replace(/s+/g, '') !== item.name.replace(/s+/g, '')
+      ? item.name
+      : null,
+    item.menuName && label === item.name && item.menuName !== item.name ? item.menuName : null,
+    // 새 칸이 없는 응답(웹이 API 보다 먼저 배포된 사이)에서도 터지지 않게 느슨하게 본다.
+    item.menuPrice != null ? formatMenuPrice(item.menuPrice) : null,
     item.dishType ? FOOD_DISH_TYPE_LABEL[item.dishType] : null,
     item.mainIngredient ? FOOD_MAIN_INGREDIENT_LABEL[item.mainIngredient] : null,
     item.cuisine ? FOOD_CUISINE_LABEL[item.cuisine] : null,
@@ -271,7 +282,7 @@ const FoodRow = ({ item }: { item: MealItem }) => {
       <div className="min-w-0">
         <p className="meal-food-name">
           {item.isMain ? null : <span className="meal-food-tag">곁들임</span>}
-          {item.name}
+          {label}
         </p>
         {sub.length > 0 ? <p className="meal-food-sub">{sub.join(' · ')}</p> : null}
         {item.nutritionBasis === 'donor_estimate' || item.nutritionBasis === 'typical_portion' ? (

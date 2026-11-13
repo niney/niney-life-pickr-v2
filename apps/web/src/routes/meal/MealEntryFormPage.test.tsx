@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -32,6 +32,18 @@ const FOOD_SEARCH_URL = '/api/v1/food/search';
 const FREQUENT_URL = '/api/v1/meals/items/frequent';
 const PHOTOS_URL = '/api/v1/meals/photos';
 const RECOGNIZE_URL = '/api/v1/meals/recognize';
+const PLACE_MENUS_URL = '/api/v1/meals/place-menus';
+const RESTAURANTS_URL = '/api/v1/restaurants/public';
+
+const placeMenu = (over: Partial<Record<string, unknown>> = {}) => ({
+  menuName: '묵은지 김치찌개',
+  price: 9000,
+  recommend: true,
+  foods: [
+    { name: '김치찌개', foodId: 'f1', dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean', isMain: true, kcal: 240 },
+  ],
+  ...over,
+});
 
 const recognizeResult = {
   dishes: [
@@ -200,6 +212,14 @@ describe('MealEntryFormPage', () => {
         }),
       ),
       http.get(FREQUENT_URL, () => HttpResponse.json({ items: [] })),
+      // 식당이 정해진 기록(수정 화면의 숯토리)은 그 집 메뉴를 묻는다 — 기본은 메뉴 없는 식당.
+      http.get(PLACE_MENUS_URL, ({ request }) =>
+        HttpResponse.json({
+          placeId: new URL(request.url).searchParams.get('placeId'),
+          placeName: '숯토리',
+          menus: [],
+        }),
+      ),
     );
   });
 
@@ -700,5 +720,422 @@ describe('MealEntryFormPage', () => {
       '된장찌개',
       '공기밥',
     ]);
+  });
+
+  it('식당을 찾아 고르면 그 집 메뉴가 뜨고, 누른 메뉴는 표준명 항목으로 들어가 메뉴명·가격과 함께 저장된다', async () => {
+    const searched: (string | null)[] = [];
+    let body: Record<string, unknown> | null = null;
+    server.use(
+      http.get(RESTAURANTS_URL, ({ request }) => {
+        searched.push(new URL(request.url).searchParams.get('q'));
+        return HttpResponse.json({
+          items: [{ placeId: 'place-9', name: '숯토리', category: '한식', address: null, roadAddress: '서울 마포구 신촌로 1' }],
+          total: 1,
+        });
+      }),
+      http.get(PLACE_MENUS_URL, () =>
+        HttpResponse.json({
+          placeId: 'place-9',
+          placeName: '숯토리',
+          menus: [
+            placeMenu(),
+            placeMenu({
+              menuName: '수제돈까스 + 우동',
+              price: 12000,
+              recommend: false,
+              foods: [
+                { name: '돈가스', foodId: 'f2', dishType: 'fried', mainIngredient: 'pork', cuisine: 'japanese', isMain: true, kcal: 650 },
+                { name: '우동', foodId: 'f3', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'japanese', isMain: true, kcal: 420 },
+              ],
+            }),
+            placeMenu({
+              menuName: '주모의 한상',
+              price: null,
+              recommend: false,
+              foods: [{ name: '주모의 한상', foodId: null, dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: null }],
+            }),
+          ],
+        }),
+      ),
+      http.post(ENTRIES_URL, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(savedEntry({ id: 'new-9', source: 'manual', photos: [] }), { status: 201 });
+      }),
+    );
+    renderAt('/meal/new');
+
+    const search = await screen.findByRole('combobox', { name: '식당 찾기' });
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: '숯토' } });
+    fireEvent.click(await screen.findByRole('option', { name: /숯토리/ }));
+    expect(searched).toEqual(['숯토']);
+    // 식사 방식이 비어 있었으니 외식으로.
+    expect(screen.getByRole('button', { name: '외식' })).toHaveAttribute('aria-pressed', 'true');
+
+    const menus = within(await screen.findByRole('list', { name: '숯토리 메뉴' }));
+    const kimchi = menus.getByRole('button', { name: /묵은지 김치찌개/ });
+    // 가격·대표·무엇으로 기록되는지·1인분 열량을 한 줄에.
+    expect(kimchi).toHaveTextContent('9,000원 · 대표 · 김치찌개로 기록');
+    expect(kimchi).toHaveTextContent('240kcal');
+    expect(menus.getByRole('button', { name: /수제돈까스 \+ 우동/ })).toHaveTextContent('돈가스 + 우동으로 나눠 기록');
+    expect(menus.getByRole('button', { name: /주모의 한상/ })).not.toHaveTextContent('기록');
+
+    fireEvent.click(kimchi);
+    // 빈 첫 줄 자리에 표준명으로 들어가고, 그 집 메뉴명·가격은 줄 아래에 남는다.
+    expect(screen.getAllByLabelText('음식 이름')).toHaveLength(1);
+    expect(screen.getByLabelText('음식 이름')).toHaveValue('김치찌개');
+    expect(screen.getByText('묵은지 김치찌개 · 9,000원')).toBeInTheDocument();
+    expect(kimchi).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(menus.getByRole('button', { name: /수제돈까스 \+ 우동/ }));
+    expect(screen.getAllByLabelText('음식 이름').map((el) => (el as HTMLInputElement).value)).toEqual([
+      '김치찌개',
+      '돈가스',
+      '우동',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(body).not.toBeNull());
+    expect(body).toMatchObject({ placeId: 'place-9', placeName: '숯토리', mealType: 'dining_out', source: 'manual' });
+    expect((body as unknown as { items: unknown[] }).items).toEqual([
+      expect.objectContaining({ name: '김치찌개', foodId: 'f1', source: 'catalog', menuName: '묵은지 김치찌개', menuPrice: 9000 }),
+      expect.objectContaining({ name: '돈가스', foodId: 'f2', menuName: '수제돈까스 + 우동', menuPrice: 12000 }),
+      // 세트의 가격은 첫 줄에만.
+      expect.objectContaining({ name: '우동', foodId: 'f3', menuName: '수제돈까스 + 우동', menuPrice: null }),
+    ]);
+  });
+
+  it('이름을 고치면 그 집 메뉴 연결이 풀리고, 메뉴를 다시 누르면 줄이 빠진다', async () => {
+    server.use(
+      http.get(PLACE_MENUS_URL, () =>
+        HttpResponse.json({ placeId: 'place-9', placeName: '숯토리', menus: [placeMenu()] }),
+      ),
+    );
+    useMealDraftStore.getState().start({
+      eatenAt: new Date().toISOString(),
+      eatenDate: '2026-11-13',
+      slot: 'lunch',
+      placeId: 'place-9',
+      placeName: '숯토리',
+    });
+    renderAt('/meal/new');
+
+    const menu = await screen.findByRole('button', { name: /묵은지 김치찌개/ });
+    fireEvent.click(menu);
+    expect(screen.getByText('묵은지 김치찌개 · 9,000원')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('음식 이름'), { target: { value: '김치찌개 곱빼기' } });
+    expect(screen.queryByText('묵은지 김치찌개 · 9,000원')).not.toBeInTheDocument();
+    expect(menu).toHaveAttribute('aria-pressed', 'false');
+
+    // 다시 누르면 새 줄로 들어가고, 한 번 더 누르면 그 줄만 빠진다.
+    fireEvent.click(menu);
+    expect(screen.getAllByLabelText('음식 이름')).toHaveLength(2);
+    fireEvent.click(menu);
+    expect(screen.getAllByLabelText('음식 이름').map((el) => (el as HTMLInputElement).value)).toEqual([
+      '김치찌개 곱빼기',
+    ]);
+  });
+
+  it('목록에 없는 식당은 이름만 적는다 — 찾으려고 누른 엔터로는 굳지 않고, 그 줄을 골라야 id 없이 저장된다', async () => {
+    let body: Record<string, unknown> | null = null;
+    server.use(
+      http.get(RESTAURANTS_URL, () => HttpResponse.json({ items: [], total: 0 })),
+      http.post(ENTRIES_URL, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(savedEntry({ id: 'new-8', source: 'manual', photos: [], placeId: null }), {
+          status: 201,
+        });
+      }),
+    );
+    renderAt('/meal/new');
+
+    const search = await screen.findByRole('combobox', { name: '식당 찾기' });
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: '회사 앞 백반집' } });
+    const nameOnly = await screen.findByRole('option', { name: /‘회사 앞 백반집’ 이름만 적기/ });
+    await waitFor(() => expect(nameOnly).toHaveTextContent('등록된 식당에서 찾지 못했어요'));
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(useMealDraftStore.getState().placeName).toBeNull();
+
+    fireEvent.click(nameOnly);
+    expect(useMealDraftStore.getState()).toMatchObject({
+      placeId: null,
+      placeName: '회사 앞 백반집',
+      mealType: 'dining_out',
+    });
+    // 이름만 적은 식당은 메뉴를 묻지 않는다.
+    expect(screen.queryByRole('list', { name: /메뉴/ })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('음식 이름'), { target: { value: '백반' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(body).not.toBeNull());
+    expect(body).toMatchObject({ placeId: null, placeName: '회사 앞 백반집' });
+  });
+
+  describe('근처 식당', () => {
+    // 신촌 미스터유 자리. 가까운 집(약 45m)과 범위 밖 집(약 330m — 조회 사각형에는 들지만 반경 150m 밖).
+    const HERE = { lat: 37.554342, lng: 126.936812 };
+    const nearbyList = [
+      { placeId: 'far', name: '먼 식당', category: '한식', address: null, roadAddress: null, latitude: HERE.lat + 0.003, longitude: HERE.lng },
+      { placeId: 'near', name: '미스터유', category: '맥주,호프', address: null, roadAddress: null, latitude: HERE.lat + 0.0004, longitude: HERE.lng },
+      { placeId: 'nowhere', name: '좌표 없는 집', category: null, address: null, roadAddress: null, latitude: null, longitude: null },
+    ];
+    const original = Object.getOwnPropertyDescriptor(navigator, 'geolocation');
+    const stubGeolocation = (answer: { ok: true; accuracy: number } | { ok: false; code: number }) => {
+      const options: PositionOptions[] = [];
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: {
+          getCurrentPosition: (
+            ok: (pos: { coords: { latitude: number; longitude: number; accuracy: number } }) => void,
+            fail: (err: { code: number }) => void,
+            opts: PositionOptions,
+          ) => {
+            options.push(opts);
+            queueMicrotask(() =>
+              answer.ok
+                ? ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, accuracy: answer.accuracy } })
+                : fail({ code: answer.code }),
+            );
+          },
+        },
+      });
+      return options;
+    };
+    afterEach(() => {
+      if (original) Object.defineProperty(navigator, 'geolocation', original);
+      else Reflect.deleteProperty(navigator, 'geolocation');
+    });
+
+    it('누르면 정밀 측위로 가까운 등록 식당만 거리순 칩으로 내놓고, 칩을 누르면 그 식당이 된다', async () => {
+      const options = stubGeolocation({ ok: true, accuracy: 20 });
+      const boxes: (string | null)[] = [];
+      server.use(
+        http.get(RESTAURANTS_URL, ({ request }) => {
+          boxes.push(new URL(request.url).searchParams.get('bbox'));
+          return HttpResponse.json({ items: nearbyList, total: nearbyList.length });
+        }),
+      );
+      renderAt('/meal/new');
+
+      // 열었다고 위치를 묻지 않는다(권한을 이미 준 브라우저가 아니면).
+      const button = await screen.findByRole('button', { name: '근처 식당' });
+      expect(options).toHaveLength(0);
+      fireEvent.click(button);
+
+      const chip = await screen.findByRole('button', { name: /미스터유/ });
+      expect(chip).toHaveTextContent(/4\dm/);
+      expect(screen.getByText('지금 위치 근처')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /먼 식당/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /좌표 없는 집/ })).not.toBeInTheDocument();
+      expect(options[0]).toMatchObject({ enableHighAccuracy: true });
+      // 조회는 그 자리를 감싼 지도 범위(minLng,minLat,maxLng,maxLat)로.
+      const [minLng, minLat, maxLng, maxLat] = boxes[0]!.split(',').map(Number) as [number, number, number, number];
+      expect(minLng).toBeLessThan(HERE.lng);
+      expect(maxLng).toBeGreaterThan(HERE.lng);
+      expect(maxLat - minLat).toBeLessThan(0.01);
+
+      fireEvent.click(chip);
+      expect(useMealDraftStore.getState()).toMatchObject({ placeId: 'near', placeName: '미스터유', mealType: 'dining_out' });
+      expect(screen.queryByRole('button', { name: '근처 식당' })).not.toBeInTheDocument();
+    });
+
+    it('위치가 가게를 가릴 만큼 정확하지 않으면 후보를 내지 않고 알리고, 권한이 꺼져 있으면 그렇다고 알린다', async () => {
+      stubGeolocation({ ok: true, accuracy: 1500 });
+      let asked = 0;
+      server.use(
+        http.get(RESTAURANTS_URL, () => {
+          asked += 1;
+          return HttpResponse.json({ items: nearbyList, total: nearbyList.length });
+        }),
+      );
+      renderAt('/meal/new');
+      fireEvent.click(await screen.findByRole('button', { name: '근처 식당' }));
+      expect(await screen.findByText(/지금 위치가 정확하지 않아\(오차 약 1\.5km\)/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /미스터유/ })).not.toBeInTheDocument();
+      expect(asked).toBe(0);
+
+      stubGeolocation({ ok: false, code: 1 });
+      fireEvent.click(screen.getByRole('button', { name: '근처 식당' }));
+      expect(await screen.findByText(/위치 권한이 꺼져 있어요/)).toBeInTheDocument();
+    });
+
+    it('사진에 찍은 곳이 있으면 지금 위치를 묻지 않고 그 근처 식당을 내놓는다', async () => {
+      const options = stubGeolocation({ ok: true, accuracy: 20 });
+      photoHandlers();
+      server.use(
+        http.get(RESTAURANTS_URL, () => HttpResponse.json({ items: nearbyList, total: nearbyList.length })),
+      );
+      renderAt('/meal/new');
+      await screen.findByRole('button', { name: '근처 식당' });
+
+      fireEvent.change(fileInput(), {
+        target: { files: [photoFile('lunch.jpg', exifJpeg({ original: '2026:09:20 12:30:00', gps: HERE }))] },
+      });
+      expect(await screen.findByText('사진 찍은 곳 근처')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /미스터유/ })).toBeInTheDocument();
+      // 사진이 먹은 곳을 알려 주니 지금 위치 단추는 치운다.
+      expect(screen.queryByRole('button', { name: '근처 식당' })).not.toBeInTheDocument();
+      expect(options).toHaveLength(0);
+    });
+
+    it('위치를 이미 허용해 둔 브라우저면 지금 먹은 새 기록을 열 때 바로 찾아보고, 지난 기록을 고칠 때는 찾지 않는다', async () => {
+      const options = stubGeolocation({ ok: true, accuracy: 20 });
+      const permissions = Object.getOwnPropertyDescriptor(navigator, 'permissions');
+      Object.defineProperty(navigator, 'permissions', {
+        configurable: true,
+        value: { query: async () => ({ state: 'granted' }) },
+      });
+      try {
+        server.use(
+          http.get(RESTAURANTS_URL, () => HttpResponse.json({ items: nearbyList, total: nearbyList.length })),
+          http.get(`${ENTRIES_URL}/e1`, () => HttpResponse.json(savedEntry({ photos: [], placeId: null, placeName: null }))),
+        );
+        const view = renderAt('/meal/new');
+        expect(await screen.findByRole('button', { name: /미스터유/ })).toBeInTheDocument();
+        expect(options).toHaveLength(1);
+        view.unmount();
+
+        // 지난 끼니(9월 27일 기록)를 고치는 중 — 지금 위치는 먹은 곳이 아니다.
+        useMealDraftStore.getState().clear();
+        renderAt('/meal/e1/edit');
+        expect(await screen.findByDisplayValue('김치찌개')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '근처 식당' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /미스터유/ })).not.toBeInTheDocument();
+        expect(options).toHaveLength(1);
+      } finally {
+        if (permissions) Object.defineProperty(navigator, 'permissions', permissions);
+        else Reflect.deleteProperty(navigator, 'permissions');
+      }
+    });
+  });
+
+  describe('사진에서 찾은 음식을 식당 메뉴에 잇기', () => {
+    const doenjang = placeMenu({
+      menuName: '차돌된장찌개',
+      price: 10000,
+      recommend: false,
+      foods: [{ name: '된장찌개', foodId: 'f-doenjang', dishType: 'stew', mainIngredient: null, cuisine: 'korean', isMain: true, kcal: 180 }],
+    });
+    const cheonggukjang = placeMenu({
+      menuName: '옛날 청국장',
+      price: 9000,
+      recommend: false,
+      foods: [{ name: '청국장', foodId: 'f-cheong', dishType: 'stew', mainIngredient: null, cuisine: 'korean', isMain: true, kcal: 210 }],
+    });
+    const useMenus = (menus: unknown[]) =>
+      server.use(
+        http.get(RESTAURANTS_URL, () =>
+          HttpResponse.json({ items: [{ placeId: 'place-9', name: '숯토리', category: '한식', address: null, roadAddress: null }], total: 1 }),
+        ),
+        http.get(PLACE_MENUS_URL, () => HttpResponse.json({ placeId: 'place-9', placeName: '숯토리', menus })),
+      );
+    const pickPlace = async () => {
+      const search = screen.getByRole('combobox', { name: '식당 찾기' });
+      fireEvent.focus(search);
+      fireEvent.change(search, { target: { value: '숯토' } });
+      fireEvent.click(await screen.findByRole('option', { name: /숯토리/ }));
+    };
+
+    it('사진을 먼저 넣고 식당을 고르면 — 같은 음식인 줄에 메뉴명·가격을 붙이고 다시 인식하지 않는다', async () => {
+      const photos = photoHandlers();
+      useMenus([doenjang, placeMenu({ menuName: '공기밥', price: 1000, recommend: false, foods: [{ name: '공기밥', foodId: 'f-rice', dishType: 'rice', mainIngredient: 'grain', cuisine: 'korean', isMain: false, kcal: 300 }] })]);
+      renderAt('/meal/new');
+      await screen.findByRole('combobox', { name: '식당 찾기' });
+      fireEvent.change(fileInput(), { target: { files: [photoFile()] } });
+      expect(await screen.findByDisplayValue('된장찌개')).toBeInTheDocument();
+
+      await pickPlace();
+      expect(await screen.findByText('사진에서 찾은 음식 2개를 이 집 메뉴에 이었어요.')).toBeInTheDocument();
+      expect(screen.getByText('차돌된장찌개 · 10,000원')).toBeInTheDocument();
+      expect(screen.getByText('공기밥 · 1,000원')).toBeInTheDocument();
+      // 이름은 표준명 그대로, 인식 계보도 그대로 — 인식은 처음 한 번뿐이다.
+      expect(useMealDraftStore.getState().items).toMatchObject([
+        { name: '된장찌개', source: 'recognized', recognitionDishId: 'd1', menuName: '차돌된장찌개', menuPrice: 10000 },
+        { name: '공기밥', source: 'recognized', recognitionDishId: 'd2', menuName: '공기밥', menuPrice: 1000 },
+      ]);
+      expect(photos.recognizeBodies).toHaveLength(1);
+    });
+
+    it('식당을 먼저 고르고 사진을 넣으면 — 1순위가 메뉴에 없을 때 다른 후보 가운데 메뉴에 있는 것으로 바꾼다', async () => {
+      const photos = photoHandlers();
+      useMenus([cheonggukjang]);
+      useMealDraftStore.getState().start({
+        eatenAt: new Date().toISOString(),
+        eatenDate: '2026-11-13',
+        slot: 'lunch',
+        placeId: 'place-9',
+        placeName: '숯토리',
+      });
+      renderAt('/meal/new');
+      await screen.findByRole('button', { name: /옛날 청국장/ });
+      fireEvent.change(fileInput(), { target: { files: [photoFile()] } });
+
+      expect(await screen.findByText('2개 음식을 찾았어요. 1개는 숯토리 메뉴에 이었어요. 확인해 주세요.')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('청국장')).toBeInTheDocument();
+      expect(screen.queryByDisplayValue('된장찌개')).not.toBeInTheDocument();
+      expect(useMealDraftStore.getState().items[0]).toMatchObject({
+        name: '청국장',
+        foodId: 'f-cheong',
+        recognitionDishId: 'd1',
+        selectedCandidateRank: 1,
+        menuName: '옛날 청국장',
+        menuPrice: 9000,
+      });
+      // 인식 요청에는 식당이 실려 그 집 메뉴가 힌트로 간다.
+      expect(photos.recognizeBodies[0]).toMatchObject({ placeId: 'place-9' });
+    });
+
+    it('찾은 음식이 그 집 메뉴와 하나도 안 맞으면 알리고, [이 집 메뉴로 다시 인식]을 눌러야 다시 인식한다', async () => {
+      const photos = photoHandlers();
+      useMenus([placeMenu()]);
+      renderAt('/meal/new');
+      await screen.findByRole('combobox', { name: '식당 찾기' });
+      fireEvent.change(fileInput(), { target: { files: [photoFile()] } });
+      expect(await screen.findByDisplayValue('된장찌개')).toBeInTheDocument();
+
+      await pickPlace();
+      const again = await screen.findByRole('button', { name: '이 집 메뉴로 다시 인식' });
+      expect(photos.recognizeBodies).toHaveLength(1);
+      expect(photos.recognizeBodies[0]).toMatchObject({ placeId: null });
+
+      fireEvent.click(again);
+      await waitFor(() => expect(photos.recognizeBodies).toHaveLength(2));
+      expect(photos.recognizeBodies[1]).toMatchObject({ placeId: 'place-9' });
+      await waitFor(() => expect(screen.queryByRole('button', { name: '이 집 메뉴로 다시 인식' })).not.toBeInTheDocument());
+    });
+  });
+
+  it('수정 — 식당을 바꾸려다 그대로 두거나 지울 수 있고, 지우면 그 집 메뉴 연결도 풀려 저장된다', async () => {
+    let patch: Record<string, unknown> | null = null;
+    const entry = savedEntry({ photos: [] });
+    Object.assign(entry.items[0]!, { menuName: '묵은지 김치찌개', menuPrice: 9000 });
+    server.use(
+      http.get(`${ENTRIES_URL}/e1`, () => HttpResponse.json(entry)),
+      http.patch(`${ENTRIES_URL}/e1`, async ({ request }) => {
+        patch = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(entry);
+      }),
+    );
+    renderAt('/meal/e1/edit');
+
+    expect(await screen.findByText('묵은지 김치찌개 · 9,000원')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '바꾸기' }));
+    expect(screen.getByRole('combobox', { name: '식당 찾기' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '그대로 두기' }));
+    expect(screen.getByText('숯토리')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '지우기' }));
+    expect(screen.queryByText('묵은지 김치찌개 · 9,000원')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '식당 찾기' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(patch).not.toBeNull());
+    expect(patch).toMatchObject({ placeId: null, placeName: null });
+    expect((patch as unknown as { items: unknown[] }).items[0]).toMatchObject({
+      name: '김치찌개',
+      menuName: null,
+      menuPrice: null,
+    });
   });
 });

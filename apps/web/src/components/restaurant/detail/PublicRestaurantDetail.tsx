@@ -11,6 +11,7 @@ import {
 import { Button } from '~/components/ui/button';
 import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { cn } from '~/lib/utils';
+import { MealHereButton } from '~/routes/meal/MealHereButton';
 import { AskTab } from './AskTab';
 import { HomeTab } from './HomeTab';
 import { InfoTab } from './InfoTab';
@@ -140,6 +141,7 @@ export const PublicRestaurantDetail = ({
               }}
             />
           )}
+          {detail.data && <MealHereButton placeId={placeId} placeName={detail.data.name} />}
           {detail.data && (
             <Button
               type="button"
