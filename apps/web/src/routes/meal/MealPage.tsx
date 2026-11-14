@@ -203,13 +203,13 @@ const MealList = () => {
             </button>
           </div>
           <div id={moreId} className="meal-filter-more">
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <div className="meal-filter-range text-sm text-muted-foreground">
               <input
                 type="date"
                 value={from}
                 onChange={(event) => setFrom(event.target.value)}
                 aria-label="시작 날짜"
-                className="meal-input meal-input-sm min-w-0 flex-1"
+                className="meal-input meal-input-sm"
               />
               <span aria-hidden>~</span>
               <input
@@ -217,7 +217,7 @@ const MealList = () => {
                 value={to}
                 onChange={(event) => setTo(event.target.value)}
                 aria-label="끝 날짜"
-                className="meal-input meal-input-sm min-w-0 flex-1"
+                className="meal-input meal-input-sm"
               />
             </div>
             <div className="flex flex-wrap gap-1.5">

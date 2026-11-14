@@ -399,6 +399,17 @@ html.dark:has(.meal-app) {
   }
   .meal-input:focus { outline: none; border-color: var(--foreground); }
   .meal-input-sm { min-height: 2rem; padding: 0.25rem 0.5rem; font-size: 0.8125rem; }
+  /* iOS Safari 는 포커스된 입력 칸의 글자가 16px 미만이면 화면을 확대한다(공용 Input 의 text-base sm:text-sm 과
+     같은 대비). 휴대폰 배치(48rem 미만)와 터치 기기(가로로 눕힌 휴대폰·태블릿)에서는 16px 로 올린다 — 마우스로
+     쓰는 데스크톱 크기는 그대로. 식단 화면에 글자 입력 칸을 새로 만들면 같은 조건으로 16px 을 줄 것
+     (.meal-place-search input 은 제 규칙 바로 아래에 있다 — 뒤에 온 규칙이 이기므로). */
+  @media (max-width: 47.99rem), (pointer: coarse) {
+    .meal-input,
+    .meal-input-sm { font-size: 1rem; }
+    /* 날짜·시각 칸은 글자가 커진 만큼 옆 여백을 줄인다 — 360px 폭에서 [날짜][시각][지금]이 전처럼 한 줄에 들어가게. */
+    .meal-input[type='date'],
+    .meal-input[type='time'] { padding-left: 0.5rem; padding-right: 0.5rem; }
+  }
   .meal-field-label { font-size: 0.8125rem; font-weight: 700; color: var(--muted-foreground); }
   .meal-opt {
     display: inline-flex;
@@ -792,6 +803,8 @@ html.dark:has(.meal-app) {
   }
   .meal-place-search:focus-within { border-color: var(--foreground); }
   .meal-place-search input { min-width: 0; flex: 1; font-size: 0.9375rem; color: var(--foreground); background: transparent; outline: none; }
+  /* 휴대폰·터치 기기에서는 16px — iOS 의 포커스 확대를 막는다(.meal-input 과 같은 조건). */
+  @media (max-width: 47.99rem), (pointer: coarse) { .meal-place-search input { font-size: 1rem; } }
   /* 포커스는 바깥 칸의 테두리로 보인다 — 셸 공통 포커스 테두리(.meal-app :focus-visible)가 안쪽 입력에 겹쳐 그려지지 않게 한다. */
   .meal-place-search input:focus-visible { outline: none; }
   .meal-place-list { max-height: 19rem; overflow-y: auto; }
@@ -831,6 +844,14 @@ html.dark:has(.meal-app) {
   .meal-filter-toggle { flex-shrink: 0; min-height: 2.5rem; }
   .meal-filter-toggle[aria-expanded='true'] { background: var(--foreground); color: var(--card); }
   @media (max-width: 63.99rem) { .meal-filter:not([data-open='true']) .meal-filter-more { display: none; } }
+  /* 기간(날짜 두 칸) — 휴대폰·터치에서는 날짜 글자가 16px 이라(.meal-input 참고) 칸이 132px 보다 좁아지면 끝자리가
+     잘린다. 그 폭을 지키고, 한 줄에 못 들어가면(약 345px 미만) 두 줄로 내린다. */
+  .meal-filter-range { display: flex; align-items: center; gap: 0.375rem; }
+  .meal-filter-range > input { min-width: 0; flex: 1; }
+  @media (max-width: 47.99rem), (pointer: coarse) {
+    .meal-filter-range { flex-wrap: wrap; }
+    .meal-filter-range > input { min-width: 8.25rem; }
+  }
 
   /* 사진을 끌고 있는 동안 — 화면 전체 안내(아래 요소가 놓기를 받게 포인터는 통과) */
   .meal-drop { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: rgb(0 0 0 / 0.45); pointer-events: none; }
