@@ -532,8 +532,9 @@ describe('음식 찾기 시트 — 휴대폰', () => {
       within(within(sheet()).getByRole('group', { name: '식사 고르기' })).getByRole('button', { name: /짜장면/ }),
     );
     fireEvent.click(add);
+    // 코스는 두 줄로 풀려 들어가니 넣은 개수도 줄 수(2)로 센다.
     expect(course).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(sheet()).getByRole('button', { name: /1개 · 완료/ }));
+    fireEvent.click(within(sheet()).getByRole('button', { name: /2개 · 완료/ }));
     expect(useMealDraftStore.getState().items).toMatchObject([
       { name: '유산슬', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: 35000 },
       { name: '짜장면', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: null },

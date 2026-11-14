@@ -42,8 +42,6 @@ const MENUS_BEFORE_SEARCH = 15;
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('ko-KR');
 
-});
-
 export const MealFoodSheet = ({
   mode,
   slot,
