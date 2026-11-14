@@ -589,30 +589,33 @@ const RecommendationCard = ({
                   먹은 메뉴 기록
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label={`${item.name} 좋아요`}
-                onClick={() => onCandidateRating(item.name, rank, 1)}
-                className={cn(
-                  rec.candidateRatings?.find((candidate) => candidate.name === item.name)
-                    ?.rating === 1 && 'meal-ok meal-picked',
-                )}
-              >
-                <ThumbsUp className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label={`${item.name} 별로예요`}
-                onClick={() => onCandidateRating(item.name, rank, -1)}
-                className={cn(
-                  rec.candidateRatings?.find((candidate) => candidate.name === item.name)
-                    ?.rating === -1 && 'text-destructive',
-                )}
-              >
-                <ThumbsDown className="size-3.5" />
-              </Button>
+              {/* 좋아요·별로예요는 한 덩어리 — 좁은 화면에서 줄이 바뀔 때 둘이 갈라지지 않게 */}
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${item.name} 좋아요`}
+                  onClick={() => onCandidateRating(item.name, rank, 1)}
+                  className={cn(
+                    rec.candidateRatings?.find((candidate) => candidate.name === item.name)
+                      ?.rating === 1 && 'meal-ok meal-picked',
+                  )}
+                >
+                  <ThumbsUp className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${item.name} 별로예요`}
+                  onClick={() => onCandidateRating(item.name, rank, -1)}
+                  className={cn(
+                    rec.candidateRatings?.find((candidate) => candidate.name === item.name)
+                      ?.rating === -1 && 'text-destructive',
+                  )}
+                >
+                  <ThumbsDown className="size-3.5" />
+                </Button>
+              </div>
               <FoodRestaurantMatches
                 foodId={item.foodId}
                 foodName={item.name}
@@ -683,8 +686,11 @@ const FoodRestaurantMatches = ({
     );
   }
 
+  // 단추와 펼친 목록을 버튼 줄(flex-wrap)의 항목으로 따로 낸다. 둘을 flex-1 상자 하나에 넣으면 남은 폭이
+  // 단추보다 좁은 화면(휴대폰 390~480px)에서 단추가 카드 밖으로 넘치고 목록은 그 좁은 폭에 갇힌다.
+  // 목록은 w-full 이라 늘 버튼 줄 아래에서 카드 폭을 다 쓴다.
   return (
-    <div className="min-w-0 flex-1">
+    <>
       <Button
         variant="ghost"
         size="sm"
@@ -698,7 +704,7 @@ const FoodRestaurantMatches = ({
         {open ? '파는 곳 접기' : '파는 곳 보기'}
       </Button>
       {open ? (
-        <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-2">
+        <div className="mt-1 w-full min-w-0 space-y-2 rounded-md bg-muted/40 p-2">
           {matches.isLoading ? (
             <p className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin" /> 식당을 찾는 중…
@@ -747,7 +753,7 @@ const FoodRestaurantMatches = ({
           )}
         </div>
       ) : null}
-    </div>
+    </>
   );
 };
 
