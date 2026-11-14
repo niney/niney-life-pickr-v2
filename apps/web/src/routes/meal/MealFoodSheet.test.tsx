@@ -358,4 +358,103 @@ describe('음식 찾기 시트 — 휴대폰', () => {
       { name: '곰탕', foodId: 'f2', source: 'catalog', menuName: '특곰탕', menuPrice: 15000 },
     ]);
   });
+
+  it('고르는 묶음이 있는 메뉴는 줄 아래에서 고른 뒤 넣는다 — 줄을 바꿀 때도 고른 것으로 바뀐다', async () => {
+    server.use(
+      http.get('/api/v1/meals/place-menus', () =>
+        HttpResponse.json({
+          placeId: 'place-9',
+          placeName: '도원반점',
+          menus: [
+            {
+              menuName: '이 코스(2인이상)',
+              price: 35000,
+              recommend: false,
+              foods: [
+                { name: '유산슬', foodId: 'f4', dishType: 'stir_fry', mainIngredient: 'seafood', cuisine: 'chinese', isMain: true, kcal: 114, portion: 'small' },
+              ],
+              choices: [
+                {
+                  label: '식사',
+                  options: [
+                    { name: '짜장면', foodId: 'f5', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'chinese', isMain: true, kcal: 551, portion: 'small' },
+                    { name: '짬뽕', foodId: 'f6', dishType: 'noodle', mainIngredient: 'seafood', cuisine: 'chinese', isMain: true, kcal: 278, portion: 'small' },
+                  ],
+                },
+              ],
+            },
+            {
+              menuName: '후식 냉면(물/비빔)',
+              price: 6000,
+              recommend: false,
+              foods: [],
+              choices: [
+                {
+                  label: null,
+                  options: [
+                    { name: '물냉면', foodId: 'f7', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'korean', isMain: true, kcal: 480 },
+                    { name: '비빔냉면', foodId: 'f8', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'korean', isMain: true, kcal: 560 },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    useMealDraftStore.getState().start({
+      eatenAt: new Date().toISOString(),
+      eatenDate: '2026-11-14',
+      slot: 'dinner',
+      placeId: 'place-9',
+      placeName: '도원반점',
+    });
+    useMealDraftStore.getState().addItem({
+      name: '',
+      foodId: null,
+      dishType: null,
+      mainIngredient: null,
+      cuisine: null,
+      portion: null,
+      isMain: true,
+      confidence: null,
+      source: 'manual',
+      candidates: [],
+    });
+    renderNew();
+
+    fireEvent.click(await screen.findByRole('button', { name: '음식 찾기' }));
+    const course = await within(sheet()).findByRole('button', { name: /이 코스/ });
+    expect(course).toHaveTextContent('392~665kcal');
+    fireEvent.click(course);
+    expect(course).toHaveAttribute('aria-expanded', 'true');
+    expect(useMealDraftStore.getState().items.filter((it) => it.name)).toEqual([]);
+    const add = within(sheet()).getByRole('button', { name: '넣기' });
+    expect(add).toBeDisabled();
+    // 메뉴 줄 이름에도 선택지가 적혀 있으니 고르는 칸 안에서 찾는다.
+    fireEvent.click(
+      within(within(sheet()).getByRole('group', { name: '식사 고르기' })).getByRole('button', { name: /짜장면/ }),
+    );
+    fireEvent.click(add);
+    expect(course).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(sheet()).getByRole('button', { name: /1개 · 완료/ }));
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '유산슬', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: 35000 },
+      { name: '짜장면', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: null },
+    ]);
+
+    // 짜장면 줄을 냉면 메뉴로 바꾼다 — 고르는 것만 있는 메뉴라 고른 하나로 바뀐다.
+    fireEvent.click(screen.getByRole('button', { name: '짜장면 바꾸기' }));
+    fireEvent.change(within(sheet()).getByLabelText('음식 찾기'), { target: { value: '냉면' } });
+    fireEvent.click(await within(sheet()).findByRole('button', { name: /후식 냉면/ }));
+    fireEvent.click(
+      within(within(sheet()).getByRole('group', { name: '하나 고르기' })).getByRole('button', { name: /비빔냉면/ }),
+    );
+    fireEvent.click(within(sheet()).getByRole('button', { name: '넣기' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '유산슬', menuName: '이 코스(2인이상)' },
+      { name: '비빔냉면', foodId: 'f8', portion: null, menuName: '후식 냉면(물/비빔)', menuPrice: 6000 },
+    ]);
+  });
 });

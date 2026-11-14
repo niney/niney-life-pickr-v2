@@ -1,8 +1,15 @@
 import { useId, useState } from 'react';
 import { Search, X } from 'lucide-react';
-import { useFoodSearch, type MealDraftItem } from '@repo/shared';
+import {
+  mealMenuFoodPatch,
+  useFoodSearch,
+  useMealDraftStore,
+  useMealPlaceMenus,
+  type MealDraftItem,
+} from '@repo/shared';
 import { FOOD_DISH_TYPE_LABEL, MEAL_PORTIONS, MEAL_PORTION_LABEL, formatMenuPrice } from '@repo/utils';
 import { useDebounced } from '~/lib/useDebounced';
+import { placeMenuSwapOptions } from './mealPlaceMenu';
 
 // 식단 항목 한 줄(웹) — 이름(카탈로그 자동완성) + 사진 인식의 다른 후보 + 주식/반찬 + 양 + 인분 + 삭제.
 // 앱 MealItemRow 와 같은 규칙이다: 카탈로그 항목을 고르면 foodId·분류를 함께 채워 통계가 바로
@@ -45,6 +52,10 @@ export const MealItemInputRow = ({
   const search = useFoodSearch(searchTerm, { limit: 6, enabled: !compact && open && searchable });
   const suggestions = open && searchable ? (search.data?.items ?? []) : [];
   const lowConfidence = item.confidence !== null && item.confidence < 0.4;
+  // 식당 메뉴의 고르는 묶음에서 온 줄이면 고르지 않은 선택지 — 메뉴 목록과 같은 조회(캐시)를 본다.
+  const placeId = useMealDraftStore((s) => s.placeId);
+  const placeMenus = useMealPlaceMenus(item.menuName ? placeId : null);
+  const swapOptions = placeMenuSwapOptions(placeMenus.data?.menus ?? [], item);
   // 인식이 준 대안 — 첫 후보가 지금 이름과 같으면 다시 보여 주지 않는다(앱과 같이 둘까지).
   const altCandidates = item.candidates.filter((c) => c.name !== item.name).slice(0, 2);
 
@@ -174,6 +185,34 @@ export const MealItemInputRow = ({
             {item.menuPrice != null ? ` · ${formatMenuPrice(item.menuPrice)}` : ''}
           </span>
         </p>
+      ) : null}
+
+      {/* 메뉴에서 하나를 골라 넣은 줄("짜장면 / 짬뽕 택1") — 잘못 골랐으면 여기서 바꾼다. 메뉴 연결과 양은 그대로 둔다. */}
+      {swapOptions.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">이걸로 바꾸기</span>
+          {swapOptions.map((option) => (
+            <button
+              key={option.name}
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...mealMenuFoodPatch(option),
+                  // 양은 이 줄에 정해 둔 그대로(손봤을 수 있다).
+                  portion: item.portion,
+                  servings: item.servings ?? null,
+                  portionSource: item.portionSource ?? null,
+                  selectedCandidateRank: null,
+                  menuName: item.menuName,
+                  menuPrice: item.menuPrice ?? null,
+                })
+              }
+              className="meal-opt meal-opt-sm meal-opt-dashed"
+            >
+              {option.name}
+            </button>
+          ))}
+        </div>
       ) : null}
 
       {altCandidates.length > 0 ? (

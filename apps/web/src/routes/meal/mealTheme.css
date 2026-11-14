@@ -806,6 +806,15 @@ html.dark:has(.meal-app) {
   .meal-menu-kcal { flex-shrink: 0; font-size: 0.8125rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .meal-menu-mark { display: grid; width: 1.75rem; height: 1.75rem; flex-shrink: 0; place-items: center; border: 1.5px solid var(--foreground); border-radius: var(--radius); }
   .meal-menu-row[aria-pressed='true'] .meal-menu-mark { background: var(--foreground); color: var(--card); }
+  /* 고르는 묶음이 있는 메뉴 — 줄 아래에 열리는 칸(정해진 구성 한 줄 + 묶음마다 선택지 + 넣기) */
+  .meal-menu-row[aria-expanded='true'] { background: var(--muted); }
+  /* 고르는 칸이 열려 있는 동안은 목록을 키운다 — 묶음이 둘 이상이면 [넣기]까지 한 화면에 들어오게 */
+  .meal-menu-list:has(.meal-menu-chooser) { max-height: 26rem; }
+  .meal-menu-chooser { display: grid; gap: 0.65rem; padding: 0.7rem 0.75rem 0.8rem; background: var(--muted); border-top: 1px dashed var(--border); }
+  .meal-menu-chooser-fixed { font-size: 0.8125rem; line-height: 1.5; color: var(--muted-foreground); }
+  .meal-opt-kcal { margin-left: 0.35rem; font-size: 0.75rem; font-weight: 400; font-variant-numeric: tabular-nums; opacity: 0.7; }
+  .meal-sheet-row[aria-expanded='true'] { border-bottom-color: transparent; }
+  .meal-sheet .meal-menu-chooser { margin: 0 -1rem; padding: 0.8rem 1rem 0.9rem; border-top: 0; border-bottom: 1px solid var(--border); }
   .meal-item-menu { display: flex; min-width: 0; align-items: center; gap: 0.4rem; font-size: 0.8125rem; color: var(--muted-foreground); }
   .meal-item-menu > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

@@ -805,6 +805,120 @@ describe('MealEntryFormPage', () => {
     ]);
   });
 
+  describe('구성으로 풀리는 메뉴', () => {
+    // 설명에 구성이 적힌 코스 — 정해진 구성 둘(조금씩)과 식사 택1.
+    const course = placeMenu({
+      menuName: '이 코스(2인이상)',
+      price: 35000,
+      recommend: false,
+      foods: [
+        { name: '유산슬', foodId: 'f4', dishType: 'stir_fry', mainIngredient: 'seafood', cuisine: 'chinese', isMain: true, kcal: 114, portion: 'small' },
+        { name: '꽃빵', foodId: null, dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: null, portion: 'small' },
+      ],
+      choices: [
+        {
+          label: '식사',
+          options: [
+            { name: '짜장면', foodId: 'f5', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'chinese', isMain: true, kcal: 551, portion: 'small' },
+            { name: '짬뽕', foodId: 'f6', dishType: 'noodle', mainIngredient: 'seafood', cuisine: 'chinese', isMain: true, kcal: 278, portion: 'small' },
+          ],
+        },
+      ],
+    });
+
+    const openCourse = async () => {
+      server.use(
+        http.get(PLACE_MENUS_URL, () =>
+          HttpResponse.json({ placeId: 'place-9', placeName: '도원반점', menus: [course, placeMenu()] }),
+        ),
+      );
+      useMealDraftStore.getState().start({
+        eatenAt: new Date().toISOString(),
+        eatenDate: '2026-11-14',
+        slot: 'dinner',
+        placeId: 'place-9',
+        placeName: '도원반점',
+      });
+      renderAt('/meal/new');
+      return screen.findByRole('button', { name: /이 코스/ });
+    };
+    const itemNames = () => screen.queryAllByLabelText('음식 이름').map((el) => (el as HTMLInputElement).value);
+
+    it('고르는 묶음이 있는 메뉴는 누르면 고르는 칸이 열리고, 골라야 넣을 수 있다 — 구성은 조금씩 들어간다', async () => {
+      let body: Record<string, unknown> | null = null;
+      server.use(
+        http.post(ENTRIES_URL, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json(savedEntry({ id: 'new-7', source: 'manual', photos: [] }), { status: 201 });
+        }),
+      );
+      const row = await openCourse();
+      // 구성과 고르는 것, 고르기에 따라 달라지는 열량 범위, 열량을 모르는 구성이 있다는 것을 한 줄에.
+      expect(row).toHaveTextContent('유산슬 + 꽃빵 + (짜장면·짬뽕 중 하나) · 조금씩');
+      expect(row).toHaveTextContent('열량은 3가지 중 2가지만');
+      expect(row).toHaveTextContent('392~665kcal');
+
+      fireEvent.click(row);
+      expect(row).toHaveAttribute('aria-expanded', 'true');
+      // 아직 아무것도 들어가지 않았다.
+      expect(itemNames()).toEqual([]);
+      const group = within(screen.getByRole('group', { name: '식사 고르기' }));
+      const add = screen.getByRole('button', { name: '넣기' });
+      expect(add).toBeDisabled();
+      // 미리 골라 두지 않는다.
+      expect(group.getByRole('button', { name: /짜장면/ })).toHaveAttribute('aria-pressed', 'false');
+      expect(group.getByRole('button', { name: /짬뽕/ })).toHaveTextContent('278kcal');
+
+      fireEvent.click(group.getByRole('button', { name: /짬뽕/ }));
+      expect(add).toBeEnabled();
+      expect(screen.getByText('3가지 · 약 392kcal (1가지는 열량 모름)')).toBeInTheDocument();
+      fireEvent.click(add);
+
+      expect(itemNames()).toEqual(['유산슬', '꽃빵', '짬뽕']);
+      expect(row).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.queryByRole('group', { name: '식사 고르기' })).not.toBeInTheDocument();
+      // 세 줄 모두 양이 '조금'.
+      expect(screen.getAllByRole('button', { name: '조금' }).map((el) => el.getAttribute('aria-pressed'))).toEqual([
+        'true',
+        'true',
+        'true',
+      ]);
+
+      // 잘못 골랐으면 그 줄에서 바꾼다 — 메뉴 연결과 양은 그대로.
+      fireEvent.click(screen.getByRole('button', { name: '짜장면' }));
+      expect(itemNames()).toEqual(['유산슬', '꽃빵', '짜장면']);
+      expect(screen.getByRole('button', { name: '짬뽕' })).toBeInTheDocument();
+      expect(row).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: '저장' }));
+      await waitFor(() => expect(body).not.toBeNull());
+      expect((body as unknown as { items: unknown[] }).items).toEqual([
+        expect.objectContaining({ name: '유산슬', foodId: 'f4', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: 35000 }),
+        expect.objectContaining({ name: '꽃빵', foodId: null, source: 'manual', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: null }),
+        expect.objectContaining({ name: '짜장면', foodId: 'f5', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: null }),
+      ]);
+    });
+
+    it("'안 먹었어요'를 고르면 정해진 구성만 들어가고, 취소하면 아무것도 들어가지 않는다", async () => {
+      const row = await openCourse();
+      fireEvent.click(row);
+      // 고르는 칸의 취소(화면 아래의 취소와 다르다).
+      fireEvent.click(within(row.closest('li')!).getByRole('button', { name: '취소' }));
+      expect(row).toHaveAttribute('aria-expanded', 'false');
+      expect(itemNames()).toEqual([]);
+
+      fireEvent.click(row);
+      fireEvent.click(screen.getByRole('button', { name: '안 먹었어요' }));
+      expect(screen.getByText('2가지 · 약 114kcal (1가지는 열량 모름)')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '넣기' }));
+      expect(itemNames()).toEqual(['유산슬', '꽃빵']);
+
+      // 넣은 메뉴를 다시 누르면 구성이 한 번에 빠진다.
+      fireEvent.click(row);
+      expect(itemNames()).toEqual([]);
+    });
+  });
+
   it('이름을 고치면 그 집 메뉴 연결이 풀리고, 메뉴를 다시 누르면 줄이 빠진다', async () => {
     server.use(
       http.get(PLACE_MENUS_URL, () =>

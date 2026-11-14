@@ -1,23 +1,25 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Plus, Search, X } from 'lucide-react';
 import {
   MEAL_SIDE_DEFAULT_DISH_TYPES,
   type FoodSearchItemType,
   type FrequentMealItemType,
   type MealEntryType,
-  type MealPlaceMenuFoodType,
   type MealPlaceMenuType,
   type MealSlotType,
 } from '@repo/api-contract';
 import {
   mealItemNameKey,
+  mealMenuFoodPatch,
+  mealMenuFoods,
   useFoodSearch,
   useFrequentMealItems,
   useMealDraftStore,
   useMealEntries,
   useMealPlaceMenus,
   type MealDraftItem,
+  type MealMenuPicks,
 } from '@repo/shared';
 import {
   FOOD_DISH_TYPE_LABEL,
@@ -28,7 +30,8 @@ import {
 } from '@repo/utils';
 import { useDebounced } from '~/lib/useDebounced';
 import { emptyMealItem } from './mealDraftStart';
-import { placeMenuKcal, placeMenuMatches, placeMenuSub } from './mealPlaceMenu';
+import { MealPlaceMenuChooser } from './MealPlaceMenuChooser';
+import { placeMenuKcalLabel, placeMenuMatches, placeMenuSub } from './mealPlaceMenu';
 
 // 음식 찾기(휴대폰, 2026-11-08 리뉴얼 3단계) — 입력칸 아래 자동완성(키보드에 가리고 2자부터·칩이 작다) 대신 화면 전체를
 // 쓰는 시트. 검색칸은 위에 붙고, 치기 전엔 이 끼니에 자주 먹은 음식·최근 끼니 통째로, 치는 중엔 '그대로 넣기' →
@@ -95,22 +98,6 @@ const fromEntryItem = (it: MealEntryType['items'][number]): FrequentMealItemType
   kcal: it.kcal,
 });
 
-// 식당 메뉴의 음식 하나 → 항목 값(이름은 표준명, 양은 비워 1인분). 메뉴명·가격은 호출부가 붙인다.
-const menuFoodPatch = (food: MealPlaceMenuFoodType) => ({
-  name: food.name,
-  foodId: food.foodId,
-  dishType: food.dishType,
-  mainIngredient: food.mainIngredient,
-  cuisine: food.cuisine,
-  portion: null,
-  servings: null,
-  portionSource: null,
-  isMain: food.isMain,
-  catalogMatchedBy: food.foodId ? ('food_id' as const) : ('none' as const),
-  catalogMatchScore: food.foodId ? 1 : null,
-  source: food.foodId ? ('catalog' as const) : ('manual' as const),
-});
-
 // 줄 하나를 바꿀 때 — 사진 인식 계보(recognitionDishId)는 남기고 이름·연결·분류·양만 바꾼다(자동완성에서 고를 때와 같다).
 const replacePatch = (q: FrequentMealItemType): Partial<MealDraftItem> => ({
   name: q.name,
@@ -147,6 +134,8 @@ export const MealFoodSheet = ({
     mode.kind === 'replace' ? items.find((it) => it.clientId === mode.clientId) : undefined;
   const [q, setQ] = useState(replacing?.name ?? '');
   const [added, setAdded] = useState(0);
+  // 고르는 칸이 열린 식당 메뉴(코스의 "짜장면 / 짬뽕"처럼 넣기 전에 골라야 하는 메뉴).
+  const [choosing, setChoosing] = useState<string | null>(null);
   const term = useDebounced(q, SEARCH_DEBOUNCE_MS).replace(TRAILING_JAMO, '').trim();
   const typed = q.trim();
   const searching = typed.length > 0 && term.length > 0;
@@ -223,26 +212,26 @@ export const MealFoodSheet = ({
     setAdded((n) => Math.max(0, n + (wasIn ? -1 : 1)));
   };
 
-  const pickMenu = (menu: MealPlaceMenuType) => {
+  const pickMenu = (menu: MealPlaceMenuType, picks?: MealMenuPicks) => {
+    setChoosing(null);
     if (mode.kind === 'replace') {
       // 그 줄을 메뉴의 첫 음식으로 바꾸고, 세트의 나머지 구성요소는 새 줄로 잇는다(가격은 첫 줄에만).
-      const [first, ...rest] = menu.foods;
-      if (first) {
-        updateItem(mode.clientId, {
-          ...menuFoodPatch(first),
-          selectedCandidateRank: null,
-          menuName: menu.menuName,
-          menuPrice: menu.price,
-        });
-      }
+      const [first, ...rest] = mealMenuFoods(menu, picks);
+      if (!first) return;
+      updateItem(mode.clientId, {
+        ...mealMenuFoodPatch(first),
+        selectedCandidateRank: null,
+        menuName: menu.menuName,
+        menuPrice: menu.price,
+      });
       for (const food of rest) {
-        addItem({ ...emptyMealItem(), ...menuFoodPatch(food), menuName: menu.menuName, menuPrice: null });
+        addItem({ ...emptyMealItem(), ...mealMenuFoodPatch(food), menuName: menu.menuName, menuPrice: null });
       }
       onClose();
       return;
     }
     const wasIn = chosenMenus.has(menu.menuName);
-    toggleMenuItem(menu);
+    toggleMenuItem(menu, picks);
     setAdded((n) => Math.max(0, n + (wasIn ? -1 : 1)));
   };
 
@@ -270,16 +259,32 @@ export const MealFoodSheet = ({
   const menuGroup =
     shownMenus.length > 0 ? (
       <SheetGroup title={`${placeMenus.data?.placeName ?? placeName ?? '식당'} 메뉴`}>
-        {shownMenus.map((menu) => (
-          <SheetRow
-            key={`p-${menu.menuName}`}
-            title={menu.menuName}
-            sub={placeMenuSub(menu)}
-            kcal={placeMenuKcal(menu)}
-            on={chosenMenus.has(menu.menuName)}
-            onClick={() => pickMenu(menu)}
-          />
-        ))}
+        {shownMenus.map((menu) => {
+          const on = chosenMenus.has(menu.menuName);
+          // 넣기 전에 골라야 하는 메뉴 — 누르면 줄 아래에 고르는 칸이 열린다. 넣은 메뉴는 다시 누르면 빠진다
+          // (줄을 바꾸는 중이면 넣은 메뉴라도 다시 고른다).
+          const mustChoose = (menu.choices?.length ?? 0) > 0 && (mode.kind === 'replace' || !on);
+          const open = mustChoose && choosing === menu.menuName;
+          return (
+            <SheetRow
+              key={`p-${menu.menuName}`}
+              title={menu.menuName}
+              sub={placeMenuSub(menu)}
+              kcalText={placeMenuKcalLabel(menu)}
+              on={on}
+              expanded={mustChoose ? open : undefined}
+              onClick={() => (mustChoose ? setChoosing(open ? null : menu.menuName) : pickMenu(menu))}
+            >
+              {open ? (
+                <MealPlaceMenuChooser
+                  menu={menu}
+                  onAdd={(picks) => pickMenu(menu, picks)}
+                  onCancel={() => setChoosing(null)}
+                />
+              ) : null}
+            </SheetRow>
+          );
+        })}
         {matchedMenus.length > shownMenus.length ? (
           <li className="meal-sheet-empty">
             메뉴가 {matchedMenus.length - shownMenus.length}개 더 있어요 — 이름을 치면 찾아요.
@@ -495,34 +500,54 @@ const SheetRow = ({
   title,
   sub,
   kcal,
+  kcalText,
   on,
   action,
+  expanded,
   onClick,
+  children,
 }: {
   title: string;
   sub?: string;
   kcal?: number | null;
+  /** 숫자 하나가 아닌 열량 글("740~1,010kcal") — 있으면 kcal 대신 쓴다. */
+  kcalText?: string | null;
   on: boolean;
   action?: string;
+  /** 누르면 줄 아래가 열리는 줄(고르는 칸) — 열렸는지. */
+  expanded?: boolean;
   onClick: () => void;
-}) => (
-  <li>
-    <button
-      type="button"
-      className="meal-sheet-row"
-      aria-pressed={action ? undefined : on}
-      onClick={onClick}
-    >
-      <span className="min-w-0 flex-1">
-        <span className="meal-sheet-row-title">{title}</span>
-        {sub ? <span className="meal-sheet-row-sub">{sub}</span> : null}
-      </span>
-      {kcal !== undefined && kcal !== null ? (
-        <span className="meal-sheet-row-kcal">{fmt(kcal)}kcal</span>
-      ) : null}
-      <span className="meal-sheet-row-mark" aria-hidden>
-        {action ? action : on ? <Check className="size-4" /> : <Plus className="size-4" />}
-      </span>
-    </button>
-  </li>
-);
+  /** 줄 아래에 펼치는 내용. */
+  children?: ReactNode;
+}) => {
+  const kcalLabel = kcalText ?? (kcal !== undefined && kcal !== null ? `${fmt(kcal)}kcal` : null);
+  return (
+    <li>
+      <button
+        type="button"
+        className="meal-sheet-row"
+        aria-pressed={action ? undefined : on}
+        aria-expanded={expanded}
+        onClick={onClick}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="meal-sheet-row-title">{title}</span>
+          {sub ? <span className="meal-sheet-row-sub">{sub}</span> : null}
+        </span>
+        {kcalLabel ? <span className="meal-sheet-row-kcal">{kcalLabel}</span> : null}
+        <span className="meal-sheet-row-mark" aria-hidden>
+          {action ? (
+            action
+          ) : on ? (
+            <Check className="size-4" />
+          ) : expanded !== undefined ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <Plus className="size-4" />
+          )}
+        </span>
+      </button>
+      {children}
+    </li>
+  );
+};
