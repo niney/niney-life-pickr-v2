@@ -7,6 +7,7 @@ import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 import { FoodService } from '../modules/food/food.service.js';
 import { FoodNutrientRefService } from '../modules/food/food-nutrient-ref.service.js';
 import { FoodWebEstimateService } from '../modules/food/food-web-estimate.service.js';
+import { MenuCompositionService } from '../modules/food/menu-composition.service.js';
 import { MenuLlmMatchService } from '../modules/food/menu-llm-match.service.js';
 import { MenuNutritionResolver } from '../modules/food/menu-nutrition.js';
 import { sweepMealRecognitionDebugDumps } from '../modules/meal/meal-recognition-debug.store.js';
@@ -59,7 +60,9 @@ export default fp(
     );
 
     // 식당 메뉴에서 넣기 — 기록에 식당이 정해지면 그 집 메뉴를 넣을 음식(표준명·분류·1인분 열량)으로 바꿔 준다.
-    // DB 만 읽는다(LLM·웹 호출 없음). 메뉴 목록은 공개 상세와 같은 스냅샷 병합(네이버 → 테이블링 → 다이닝코드).
+    // 응답은 DB 만 읽는다. 메뉴 목록은 공개 상세와 같은 스냅샷 병합(네이버 → 테이블링 → 다이닝코드).
+    // 코스·세트의 구성(설명에 적힌 음식 나열·택1)은 LLM 이 글마다 한 번 읽어 저장한다 — 응답 뒤 백그라운드에서,
+    // 메뉴 칼로리 매칭과 같은 chat 용도·모델. 테스트는 외부 호출 없이 구성 읽기 없이 돈다.
     const restaurants = new RestaurantService(app.prisma);
     app.decorate(
       'mealPlaceMenus',
@@ -68,10 +71,20 @@ export default fp(
         food,
         resolver,
         estimator: app.mealNutritionEstimator,
+        ...(isTest
+          ? {}
+          : {
+              compositions: new MenuCompositionService(
+                app.prisma,
+                new AiConfigService(app.prisma, buildLlmProviderEnv()),
+                { model: env.OLLAMA_MENU_MATCH_MODEL, logger: app.log },
+              ),
+            }),
         loadPlace: async (placeId) => {
           const meta = await restaurants.getPublicSeoMeta(placeId);
           return meta ? { name: meta.name, menus: meta.menus } : null;
         },
+        logger: app.log,
       }),
     );
 

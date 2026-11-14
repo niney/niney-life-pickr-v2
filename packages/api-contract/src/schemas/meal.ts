@@ -293,6 +293,10 @@ export type MealItemInputType = z.infer<typeof MealItemInput>;
 // foods 는 기록에 들어갈 항목 — 메뉴 칼로리 규칙 엔진이 카탈로그 음식으로 이은 표준명·분류·1인분 열량이다.
 // 보통 하나이고, 구성이 이름에 드러난 세트("돈가스 + 우동")는 구성요소 수만큼 온다. 카탈로그로 못 이은 메뉴는
 // 다듬은 메뉴명 그대로(foodId null) — 자유 입력과 같이 저장할 때 서버가 다시 맞춰 본다.
+//
+// 코스·세트처럼 이름만으로는 알 수 없는 메뉴는 설명에 적힌 구성을 읽어 준다("춘권샐러드 + 유산슬 + (짜장,짬뽕 택1)").
+// 정해진 구성은 foods 로, 그중 하나를 고르는 묶음은 choices 로 온다 — 화면은 묶음마다 하나를 고르게 한 뒤 넣는다.
+// 구성은 서버가 한 번 읽어 저장해 두는 값이라, 처음 보는 식당이면 읽는 동안 pending 이 true 다(잠시 뒤 다시 부른다).
 
 export const MealPlaceMenusQuery = z.object({
   placeId: z.string().trim().min(1).max(64),
@@ -307,10 +311,20 @@ export const MealPlaceMenuFood = z.object({
   cuisine: FoodCuisine.nullable(),
   // 김치·나물·음료는 곁들임으로 들어간다(빠른 추가·음식 찾기와 같은 기준).
   isMain: z.boolean(),
-  // 넣으면 붙을 1인분 열량(저장 때와 같은 계산). 모르면 null.
+  // 넣으면 붙을 열량(저장 때와 같은 계산, portion 이 있으면 그 양만큼). 모르면 null.
   kcal: z.number().nullable(),
+  // 넣을 때의 양 — 코스 구성은 여러 접시를 조금씩 먹으니 'small'. 없으면 1인분.
+  portion: MealPortion.optional(),
 });
 export type MealPlaceMenuFoodType = z.infer<typeof MealPlaceMenuFood>;
+
+// 그중 하나만 먹는 묶음("식사: 짜장면 / 짬뽕").
+export const MealPlaceMenuChoice = z.object({
+  // 묶음이 무엇인지("식사") — 메뉴에 적혀 있지 않으면 null.
+  label: z.string().nullable(),
+  options: z.array(MealPlaceMenuFood).min(2),
+});
+export type MealPlaceMenuChoiceType = z.infer<typeof MealPlaceMenuChoice>;
 
 export const MealPlaceMenu = z.object({
   menuName: z.string(),
@@ -318,7 +332,10 @@ export const MealPlaceMenu = z.object({
   price: z.number().int().nonnegative().nullable(),
   // 그 집 대표 메뉴 표시.
   recommend: z.boolean(),
-  foods: z.array(MealPlaceMenuFood).min(1),
+  // 넣을 음식. choices 가 없으면 하나 이상이고, 고르는 것만 있는 메뉴("냉면(물/비빔)")는 비어 있다.
+  foods: z.array(MealPlaceMenuFood),
+  // 고르는 묶음 — 있으면 묶음마다 하나를 골라(또는 안 먹음) foods 와 함께 넣는다.
+  choices: z.array(MealPlaceMenuChoice).optional(),
 });
 export type MealPlaceMenuType = z.infer<typeof MealPlaceMenu>;
 
@@ -327,6 +344,8 @@ export const MealPlaceMenusResult = z.object({
   placeName: z.string(),
   // 식당이 올린 순서 그대로(같은 이름은 한 번만).
   menus: z.array(MealPlaceMenu),
+  // 메뉴 설명의 구성을 읽는 중 — 몇 초 뒤 다시 부르면 코스·세트가 구성으로 풀려 온다.
+  pending: z.boolean().optional(),
 });
 export type MealPlaceMenusResultType = z.infer<typeof MealPlaceMenusResult>;
 

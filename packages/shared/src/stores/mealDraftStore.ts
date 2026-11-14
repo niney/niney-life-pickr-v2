@@ -6,6 +6,7 @@ import {
   type FrequentMealItemType,
   type MealEntryType,
   type MealItemInputType,
+  type MealPlaceMenuFoodType,
   type MealPlaceMenuType,
   type MealPortionType,
   type MealRecommendationType,
@@ -322,8 +323,9 @@ interface MealDraftState {
   // 있으면 외식으로 둔다. placeId 없이 이름만 줄 수도 있다(등록되지 않은 식당).
   setPlace: (place: { placeId: string | null; placeName: string } | null) => void;
   // 식당 메뉴 — 넣은 메뉴면 빼고, 아니면 넣는다. 같은 음식이 이미 있으면(사진 인식·직접 입력) 새 줄을 만들지 않고
-  // 그 줄에 메뉴명·가격을 잇는다.
-  toggleMenuItem: (menu: MealPlaceMenuType) => void;
+  // 그 줄에 메뉴명·가격을 잇는다. 고르는 묶음이 있는 메뉴(코스의 "짜장면 / 짬뽕")는 picks 로 묶음마다 고른 선택지
+  // 번호를 준다(안 먹었으면 null) — 정해진 구성과 고른 것만 들어간다.
+  toggleMenuItem: (menu: MealPlaceMenuType, picks?: MealMenuPicks) => void;
   // 사진에서 인식한 줄을 식당 메뉴에 잇는다 — 식당을 알면 "무슨 음식인가"가 "이 집 메뉴 중 무엇인가"로 좁아진다.
   // 이름·카탈로그 음식이 같은 메뉴를 찾아 잇고, 없으면 인식이 함께 낸 다른 후보 가운데 메뉴에 있는 것으로 바꾼다
   // (후보 안에 정답이 든 비율이 1순위 적중보다 높다). 사용자가 손본 줄·이미 이은 줄은 건드리지 않고, 구성요소로
@@ -356,6 +358,38 @@ type MealDraftActions = Pick<
 /** 같은 음식인지 보는 이름 키 — 대소문자·공백 무시. 빠른 추가 칩의 선택 표시에도 쓴다. */
 export const mealItemNameKey = (name: string): string =>
   name.trim().toLocaleLowerCase().replace(/\s+/g, '');
+
+/** 메뉴의 고르는 묶음마다 고른 선택지 번호. null = 그 묶음은 안 먹었다. */
+export type MealMenuPicks = readonly (number | null)[];
+
+/** 그 메뉴를 넣으면 들어갈 음식 — 정해진 구성 + 묶음마다 고른 것. 고르지 않은 묶음은 들어가지 않는다. */
+export const mealMenuFoods = (menu: MealPlaceMenuType, picks?: MealMenuPicks): MealPlaceMenuFoodType[] => [
+  ...menu.foods,
+  ...(menu.choices ?? []).flatMap((group, index) => {
+    const pick = picks?.[index];
+    const option = pick === null || pick === undefined ? undefined : group.options[pick];
+    return option ? [option] : [];
+  }),
+];
+
+/**
+ * 식당 메뉴의 음식 하나 → 항목 값(이름은 표준명). 양은 메뉴가 정해 준 것(코스 구성은 '조금')이 있으면 그것, 없으면
+ * 비워 1인분. 메뉴명·가격은 호출부가 붙인다.
+ */
+export const mealMenuFoodPatch = (food: MealPlaceMenuFoodType) => ({
+  name: food.name,
+  foodId: food.foodId,
+  dishType: food.dishType,
+  mainIngredient: food.mainIngredient,
+  cuisine: food.cuisine,
+  portion: food.portion ?? null,
+  servings: null,
+  portionSource: food.portion ? ('vision_ordinal' as const) : null,
+  isMain: food.isMain,
+  catalogMatchedBy: food.foodId ? ('food_id' as const) : ('none' as const),
+  catalogMatchScore: food.foodId ? 1 : null,
+  source: food.foodId ? ('catalog' as const) : ('manual' as const),
+});
 
 const nextClientId = (): string =>
   `d${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -602,7 +636,7 @@ export const useMealDraftStore = create<MealDraftState>()(
           };
         }),
 
-      toggleMenuItem: (menu) =>
+      toggleMenuItem: (menu, picks) =>
         set((s) => {
           const linked = s.items.filter((it) => it.menuName === menu.menuName);
           if (linked.length > 0) {
@@ -618,8 +652,10 @@ export const useMealDraftStore = create<MealDraftState>()(
               updatedAt: Date.now(),
             };
           }
+          const foods = mealMenuFoods(menu, picks);
+          if (foods.length === 0) return s;
           const items = [...s.items];
-          for (const [index, food] of menu.foods.entries()) {
+          for (const [index, food] of foods.entries()) {
             // 세트를 구성요소로 풀어 넣으면 가격은 첫 줄에만 둔다(합치면 한 번만 세어지게).
             const link = { menuName: menu.menuName, menuPrice: index === 0 ? menu.price : null };
             const key = mealItemNameKey(food.name);
@@ -634,19 +670,8 @@ export const useMealDraftStore = create<MealDraftState>()(
             }
             const added: MealDraftItem = {
               clientId: nextClientId(),
-              name: food.name,
-              foodId: food.foodId,
-              dishType: food.dishType,
-              mainIngredient: food.mainIngredient,
-              cuisine: food.cuisine,
-              portion: null,
-              servings: null,
-              portionSource: null,
-              isMain: food.isMain,
+              ...mealMenuFoodPatch(food),
               confidence: null,
-              catalogMatchedBy: food.foodId ? 'food_id' : 'none',
-              catalogMatchScore: food.foodId ? 1 : null,
-              source: food.foodId ? 'catalog' : 'manual',
               candidates: [],
               ...link,
             };
@@ -659,7 +684,8 @@ export const useMealDraftStore = create<MealDraftState>()(
         }),
 
       linkRecognizedToMenus: (menus) => {
-        const singles = menus.filter((menu) => menu.foods.length === 1);
+        // 음식 하나로 들어가는 메뉴만 — 구성으로 풀리는 세트·고르는 묶음이 있는 메뉴에는 잇지 않는다.
+        const singles = menus.filter((menu) => menu.foods.length === 1 && !menu.choices?.length);
         const byName = (name: string): MealPlaceMenuType | undefined => {
           const key = mealItemNameKey(name);
           return key

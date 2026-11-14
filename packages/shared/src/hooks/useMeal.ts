@@ -299,15 +299,24 @@ export const useFrequentMealItems = (slot: MealSlotType | null | undefined, enab
     placeholderData: keepPreviousData,
   });
 
+// 서버가 메뉴 설명의 구성(코스·세트·택1)을 읽는 동안(pending) 다시 부르는 간격과 횟수 — 보통 10초 안팎이면 끝난다.
+const PLACE_MENUS_PENDING_INTERVAL_MS = 3000;
+const PLACE_MENUS_PENDING_MAX_POLLS = 12;
+
 /**
  * 식당 메뉴에서 넣기 — 기록에 정한 식당(placeId)의 등록 메뉴. 식당 메뉴는 재크롤 때만 바뀌어 넉넉히 묵혀 둔다.
- * 식당이 지워졌으면(404) 다시 묻지 않는다.
+ * 식당이 지워졌으면(404) 다시 묻지 않는다. 처음 보는 식당이라 서버가 구성을 읽는 중이면 몇 초 간격으로 다시 불러
+ * 코스·세트가 구성으로 풀린 목록으로 바뀐다.
  */
 export const useMealPlaceMenus = (placeId: string | null | undefined) =>
   useQuery({
     ...mealPlaceMenusQuery(placeId ?? ''),
     queryKey: [...KEY, 'place-menus', placeId ?? null],
     enabled: !!placeId,
+    refetchInterval: (query) =>
+      query.state.data?.pending && query.state.dataUpdateCount <= PLACE_MENUS_PENDING_MAX_POLLS
+        ? PLACE_MENUS_PENDING_INTERVAL_MS
+        : false,
   });
 
 /** 식당 메뉴 조회 설정 — 화면(useMealPlaceMenus)과 이벤트 안의 조회(queryClient.fetchQuery)가 같은 캐시를 쓴다. */

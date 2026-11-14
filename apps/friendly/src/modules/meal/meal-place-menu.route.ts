@@ -16,7 +16,11 @@ const mealPlaceMenuRoutes: FastifyPluginAsync = async (app) => {
       description:
         'placeId 는 등록 식당(공개 맛집 목록·상세의 placeId). 메뉴마다 그 집 표기(menuName)·가격(원, 한 값이 아니면 null)과 ' +
         '기록에 넣을 음식(foods)을 준다 — 보통 하나이고, 구성이 이름에 드러난 세트는 구성요소 수만큼. foods 의 name 은 음식 ' +
-        '카탈로그의 표준명이고(못 이으면 다듬은 메뉴명, foodId null) kcal 은 저장하면 붙을 1인분 열량이다(모르면 null). ' +
+        '카탈로그의 표준명이고(못 이으면 다듬은 메뉴명, foodId null) kcal 은 저장하면 붙을 열량이다(모르면 null). ' +
+        '코스·세트처럼 이름만으로는 알 수 없는 메뉴는 설명에 적힌 구성으로 풀려 온다 — 정해진 구성은 foods(코스는 ' +
+        "portion 'small' — 조금씩), 그중 하나만 고르는 것(\"짜장, 짬뽕 택1\")은 choices 의 묶음으로. choices 가 있으면 " +
+        '묶음마다 하나를 고르게 한 뒤 foods 와 함께 넣는다(고르는 것만 있는 메뉴는 foods 가 빈 배열). 구성은 서버가 ' +
+        '글마다 한 번 읽어 저장하는 값이라, 처음 보는 식당이면 pending 이 true 로 온다 — 몇 초 뒤 다시 부르면 풀려 있다. ' +
         '식단 기록을 저장할 때 항목의 menuName·menuPrice 에 그 집 표기와 가격을 실으면 스냅샷으로 남는다. 식당이 없으면 404.',
       security: [{ bearerAuth: [] }],
       querystring: MealPlaceMenusQuery,

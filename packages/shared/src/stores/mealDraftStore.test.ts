@@ -17,6 +17,7 @@ import {
   MEAL_DRAFT_MAX_PHOTOS,
   mealDraftInitForRepeat,
   mealDraftInitFromEntry,
+  mealMenuFoods,
   setMealDraftLocalFileAdapter,
   setMealDraftPrincipal,
   setMealDraftStorage,
@@ -665,6 +666,68 @@ describe('meal draft 식당·식당 메뉴', () => {
     // 세트는 한 번에 빠진다.
     useMealDraftStore.getState().toggleMenuItem(setMenu);
     expect(names()).toEqual(['주모의 한상']);
+  });
+
+  // 설명에 구성이 적힌 코스 — 정해진 구성은 '조금'씩, 식사는 둘 중 하나.
+  const courseMenu = menu({
+    menuName: '이 코스(2인이상)',
+    price: 35000,
+    foods: [
+      { name: '유산슬', foodId: 'food-4', dishType: 'stir_fry', mainIngredient: 'seafood', cuisine: 'chinese', isMain: true, kcal: 114, portion: 'small' },
+      { name: '꽃빵', foodId: null, dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: null, portion: 'small' },
+    ],
+    choices: [
+      {
+        label: '식사',
+        options: [
+          { name: '짜장면', foodId: 'food-5', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'chinese', isMain: true, kcal: 551, portion: 'small' },
+          { name: '짬뽕', foodId: 'food-6', dishType: 'noodle', mainIngredient: 'seafood', cuisine: 'chinese', isMain: true, kcal: 278, portion: 'small' },
+        ],
+      },
+    ],
+  });
+
+  it('고르는 묶음이 있는 메뉴는 정해진 구성과 고른 것만 넣는다 — 코스 구성은 양이 조금으로 들어간다', () => {
+    expect(mealMenuFoods(courseMenu, [1]).map((food) => food.name)).toEqual(['유산슬', '꽃빵', '짬뽕']);
+    expect(mealMenuFoods(courseMenu, [null]).map((food) => food.name)).toEqual(['유산슬', '꽃빵']);
+    expect(mealMenuFoods(courseMenu).map((food) => food.name)).toEqual(['유산슬', '꽃빵']);
+
+    const st = useMealDraftStore.getState();
+    st.toggleMenuItem(courseMenu, [0]);
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '유산슬', foodId: 'food-4', portion: 'small', portionSource: 'vision_ordinal', menuName: '이 코스(2인이상)', menuPrice: 35000 },
+      { name: '꽃빵', foodId: null, source: 'manual', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: null },
+      { name: '짜장면', foodId: 'food-5', portion: 'small', menuName: '이 코스(2인이상)', menuPrice: null },
+    ]);
+    expect(draftItemToInput(useMealDraftStore.getState().items[2]!)).toMatchObject({ name: '짜장면', portion: 'small' });
+
+    // 다시 누르면 구성이 한 번에 빠진다.
+    useMealDraftStore.getState().toggleMenuItem(courseMenu);
+    expect(useMealDraftStore.getState().items).toEqual([]);
+  });
+
+  it('고르는 것만 있는 메뉴는 고르지 않으면 넣을 것이 없다 — 고른 하나만 들어간다', () => {
+    const pickMenu = menu({
+      menuName: '후식 냉면(물/비빔)',
+      price: 6000,
+      foods: [],
+      choices: [
+        {
+          label: null,
+          options: [
+            { name: '물냉면', foodId: 'food-7', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'korean', isMain: true, kcal: 480 },
+            { name: '비빔냉면', foodId: 'food-8', dishType: 'noodle', mainIngredient: 'grain', cuisine: 'korean', isMain: true, kcal: 560 },
+          ],
+        },
+      ],
+    });
+    const st = useMealDraftStore.getState();
+    st.toggleMenuItem(pickMenu, [null]);
+    expect(useMealDraftStore.getState().items).toEqual([]);
+    st.toggleMenuItem(pickMenu, [1]);
+    expect(useMealDraftStore.getState().items).toMatchObject([
+      { name: '비빔냉면', portion: null, portionSource: null, menuName: '후식 냉면(물/비빔)', menuPrice: 6000 },
+    ]);
   });
 
   it('같은 음식이 이미 있으면 새 줄을 만들지 않고 그 줄에 메뉴를 잇는다 — 사진 인식 줄은 다시 누르면 연결만 풀린다', () => {

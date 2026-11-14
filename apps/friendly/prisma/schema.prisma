@@ -1901,6 +1901,28 @@ model MenuLlmDecomposition {
   @@map("menu_llm_decompositions")
 }
 
+// 메뉴 구성 읽기 캐시 — 식당 메뉴 한 줄(이름 + 설명)에 적힌 구성(코스·세트의 음식 나열, 택1 묶음)을 LLM 이 읽은 결과.
+// 세트 분해(menu_llm_decompositions)는 이름만 보고 어휘 단위로 저장하지만, 구성은 설명에 적혀 있고 "A코스"는 식당마다
+// 다르므로 글(이름 + 설명)의 해시가 키다 — 같은 글이면 식당이 달라도(체인점) 한 번만 묻는다.
+model MenuLlmComposition {
+  id          String   @id @default(cuid())
+  // sha256(이름 + '\n' + 설명) — 공백만 정리한 글 그대로.
+  textHash    String   @unique
+  menuName    String
+  description String
+  // { fixed: string[], choices: { label, options[] }[] } — 구성이 없거나 채택하지 않았으면 'null'.
+  resultJson  String
+  confidence  String?
+  reason      String?
+  model       String
+  version     Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([version])
+  @@map("menu_llm_compositions")
+}
+
 model MenuLlmMatch {
   id         String   @id @default(cuid())
   // normalizeTerm(menuName) — 같은 표기는 식당이 달라도 답이 같다.
