@@ -917,10 +917,8 @@ export const MealEntryEditor = ({
               <Chip
                 label="지우기"
                 disabled={actionBusy}
-                onPress={() => {
-                  draft.setField('placeId', null);
-                  draft.setField('placeName', null);
-                }}
+                // 식당을 지우면 그 집 메뉴 연결도 함께 푼다(음식은 남는다).
+                onPress={() => draft.setPlace(null)}
               />
             ) : null}
           </View>
@@ -1012,9 +1010,8 @@ export const MealEntryEditor = ({
         open={placePickerOpen}
         onClose={() => setPlacePickerOpen(false)}
         onPick={(restaurant) => {
-          draft.setField('placeId', restaurant.placeId);
-          draft.setField('placeName', restaurant.name);
-          if (draft.mealType === null) draft.setField('mealType', 'dining_out');
+          // setPlace 가 앞 식당의 메뉴 연결(항목의 메뉴명·가격)을 풀고, 식사 방식이 비어 있으면 외식으로 둔다.
+          draft.setPlace({ placeId: restaurant.placeId, placeName: restaurant.name });
         }}
       />
     </KeyboardAvoidingView>
