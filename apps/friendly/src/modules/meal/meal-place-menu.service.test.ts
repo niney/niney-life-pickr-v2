@@ -25,7 +25,9 @@ type Deps = ConstructorParameters<typeof MealPlaceMenuService>[0];
 
 const makeService = (
   place: MealPlaceMenuSource | null,
-  opts: { inactive?: string[] } & Partial<Pick<Deps, 'compositions' | 'estimator'>> = {},
+  opts: { inactive?: string[]; food?: Partial<Deps['food']> } & Partial<
+    Pick<Deps, 'compositions' | 'estimator' | 'loadPlace'>
+  > = {},
 ) =>
   new MealPlaceMenuService({
     prisma: {
@@ -43,9 +45,14 @@ const makeService = (
       },
     } as unknown as PrismaClient,
     // 이름 매칭은 엔진이 맡는다 — 여기서는 저장 경로의 이름 매칭(matchFood)이 아무것도 못 찾는 경우로 둔다.
-    food: { servingLexicon: async () => DEFAULT_LEXICON, matchFood: async () => null },
+    food: {
+      servingLexicon: async () => DEFAULT_LEXICON,
+      matchFood: async () => null,
+      matchFoods: async (names: readonly string[]) => new Map(names.map((name) => [name, null])),
+      ...opts.food,
+    },
     resolver: { resolveMany: async (names: string[]) => engine.resolveMany(names) },
-    loadPlace: async () => place,
+    loadPlace: opts.loadPlace ?? (async () => place),
     ...(opts.compositions ? { compositions: opts.compositions } : {}),
     ...(opts.estimator ? { estimator: opts.estimator } : {}),
   });
@@ -386,5 +393,156 @@ describe('MealPlaceMenuService.forPlace — 메뉴 설명의 구성', () => {
       expect((await service.forPlace('place-1'))!.pending).toBeUndefined();
     });
     expect(compositions.asked).toHaveLength(1);
+  });
+
+  it('구성을 읽는 중인 응답은 기억하지 않는다 — 읽고 난 뒤의 응답부터 기억한다', async () => {
+    const compositions = fakeCompositions([]);
+    let release = (): void => undefined;
+    const reading = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const loadPlace = vi.fn(async () => ({ name: '도원반점', menus: [course] }));
+    const service = makeService(null, {
+      loadPlace,
+      compositions: {
+        lookupCached: compositions.service.lookupCached,
+        readMany: async (lines: MenuLine[]) => {
+          await reading;
+          const fresh = new Map<string, MenuComposition | null>();
+          for (const line of lines) {
+            const key = compositionKey(line.name, line.description);
+            compositions.cache.set(key, null);
+            fresh.set(key, null);
+          }
+          return fresh;
+        },
+      },
+    });
+    expect((await service.forPlace('place-1'))!.pending).toBe(true);
+    expect((await service.forPlace('place-1'))!.pending).toBe(true);
+    // 읽는 중에는 부를 때마다 다시 만든다.
+    expect(loadPlace).toHaveBeenCalledTimes(2);
+
+    release();
+    await vi.waitFor(async () => {
+      expect((await service.forPlace('place-1'))!.pending).toBeUndefined();
+    });
+    const calls = loadPlace.mock.calls.length;
+    await service.forPlace('place-1');
+    await service.forPlace('place-1');
+    expect(loadPlace).toHaveBeenCalledTimes(calls);
+  });
+});
+
+// 식당을 고를 때마다 불리는 조회 — 이름 매칭은 한 번에, 다 만든 응답은 식당별로 잠깐 기억한다.
+describe('MealPlaceMenuService.forPlace — 한 번에 맞추고 기억한다', () => {
+  const menus = [{ name: '어향완자가지' }, { name: '멘보샤' }, { name: '김치찌개' }, { name: '유린기', price: '18,000원' }];
+
+  it('엔진이 못 이은 이름은 이름 매칭을 한 번에 묻는다 — 메뉴마다 따로 묻지 않는다', async () => {
+    const matchFood = vi.fn(async () => null);
+    const matchFoods = vi.fn(async (names: readonly string[]) => new Map(names.map((name) => [name, null])));
+    const service = makeService({ name: '도원반점', menus }, { food: { matchFood, matchFoods } });
+    const result = await service.forPlace('place-1');
+    expect(result!.menus.map((m) => m.foods[0]!.name)).toEqual(['어향완자가지', '멘보샤', '김치찌개', '유린기']);
+    expect(matchFoods).toHaveBeenCalledTimes(1);
+    // 엔진이 이은 메뉴(김치찌개)는 묻지 않는다.
+    expect(matchFoods.mock.calls[0]![0]).toEqual(['어향완자가지', '멘보샤', '유린기']);
+    expect(matchFood).not.toHaveBeenCalled();
+  });
+
+  it('한 번에 맞춘 이름 매칭이 열량에 쓰인다 — 퍼지로 닿은 음식은 열량만 빌리고 이름은 그대로', async () => {
+    const base = {
+      nameNorm: '',
+      dishType: 'fried' as const,
+      mainIngredient: null,
+      cuisine: null,
+      kcal: 300,
+      proteinG: null,
+      sodiumMg: null,
+      servingG: 200,
+      kcalPer100g: 150,
+      nutritionFrom: null,
+      source: 'manual',
+      sourceCategory: null,
+    };
+    const service = makeService(
+      { name: '도원반점', menus: [{ name: '멘보샤' }, { name: '유린기' }] },
+      {
+        food: {
+          matchFoods: async (names: readonly string[]) =>
+            new Map(
+              names.map((name) => [
+                name,
+                name === '멘보샤'
+                  ? { ...base, foodId: 'f-toast', name: '새우토스트', score: 0.6, matchedBy: 'fuzzy' as const }
+                  : null,
+              ]),
+            ),
+        },
+      },
+    );
+    const result = await service.forPlace('place-1');
+    const [toast] = result!.menus[0]!.foods;
+    expect(toast).toMatchObject({ name: '멘보샤', foodId: null, dishType: null, isMain: true });
+    expect(toast!.kcal).toBeGreaterThan(0);
+    expect(result!.menus[1]!.foods[0]).toMatchObject({ name: '유린기', foodId: null, kcal: null });
+  });
+
+  it('다 만든 응답은 기억한다 — 같은 식당을 다시 불러도 식당·카탈로그를 다시 읽지 않는다', async () => {
+    const loadPlace = vi.fn(async () => ({ name: '도원반점', menus }));
+    const matchFoods = vi.fn(async (names: readonly string[]) => new Map(names.map((name) => [name, null])));
+    const service = makeService(null, { loadPlace, food: { matchFoods } });
+    const first = await service.forPlace('place-1');
+    const second = await service.forPlace('place-1');
+    expect(second).toBe(first);
+    expect(loadPlace).toHaveBeenCalledTimes(1);
+    expect(matchFoods).toHaveBeenCalledTimes(1);
+    // 다른 식당은 따로 만든다.
+    await service.forPlace('place-2');
+    expect(loadPlace).toHaveBeenCalledTimes(2);
+  });
+
+  it('기억한 응답은 10분 뒤 다시 만든다', async () => {
+    const loadPlace = vi.fn(async () => ({ name: '도원반점', menus }));
+    const service = makeService(null, { loadPlace });
+    const realNow = Date.now;
+    let offset = 0;
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+    try {
+      await service.forPlace('place-1');
+      offset = 9 * 60_000;
+      await service.forPlace('place-1');
+      expect(loadPlace).toHaveBeenCalledTimes(1);
+      offset = 10 * 60_000 + 1000;
+      await service.forPlace('place-1');
+      expect(loadPlace).toHaveBeenCalledTimes(2);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('같은 식당을 겹쳐 부르면 한 번만 만든다', async () => {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const loadPlace = vi.fn(async () => {
+      await gate;
+      return { name: '도원반점', menus };
+    });
+    const service = makeService(null, { loadPlace });
+    const both = Promise.all([service.forPlace('place-1'), service.forPlace('place-1')]);
+    release();
+    const [a, b] = await both;
+    expect(a).toBe(b);
+    expect(loadPlace).toHaveBeenCalledTimes(1);
+  });
+
+  it('식당이 없으면 기억하지 않는다 — 뒤에 등록되면 바로 보인다', async () => {
+    let place: MealPlaceMenuSource | null = null;
+    const service = makeService(null, { loadPlace: async () => place });
+    expect(await service.forPlace('place-1')).toBeNull();
+    place = { name: '도원반점', menus };
+    expect((await service.forPlace('place-1'))!.menus).toHaveLength(4);
   });
 });

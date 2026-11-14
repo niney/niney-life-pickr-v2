@@ -38,6 +38,10 @@ import type { MealNutritionEstimator } from './meal-nutrition-estimate.js';
 //   - 열량은 저장 때와 같은 계산(카탈로그 매칭 → mealServingNutrition → 이름 추정 캐시)이라 넣은 뒤 숫자가 달라지지 않는다.
 // 응답은 DB 만 읽는다(식당을 고를 때마다 불린다). 아직 읽지 않은 구성이 있으면 응답 뒤 백그라운드로 읽고(pending),
 // 화면이 잠시 뒤 다시 부른다.
+//
+// 비용(2026-11-14 운영 사본 407곳 실측) — 엔진이 못 이은 이름마다 저장 경로의 이름 매칭을 하나씩 물으면 메뉴 141개
+// 가게가 쿼리 543회·0.7초였다. 이름 매칭은 한 번에 맞추고(FoodService.matchFoods), 다 만든 응답은 식당별로 잠깐
+// 기억한다(RESULT_MEMO_TTL_MS) — 다시 부를 때마다 이름 추정 캐시를 다시 읽지 않는다.
 
 // 폭주 방지 — 메뉴가 비정상적으로 많은 스냅샷(메뉴 칼로리와 같은 상한).
 const MAX_MENUS = 200;
@@ -57,6 +61,10 @@ const WARM_NAMES_MAX = 40;
 // 이름 → 카탈로그 매칭 메모(같은 식당을 다시 부를 때 — pending 동안 몇 초 간격으로 불린다).
 const MATCH_MEMO_TTL_MS = 10 * 60_000;
 const MATCH_MEMO_MAX = 5000;
+// 다 만든 응답을 식당별로 기억하는 시간·식당 수. 식당 메뉴는 재크롤 때만 바뀌고 화면도 같은 시간만큼 묵혀 쓴다
+// (useMealPlaceMenus staleTime) — 그사이 카탈로그·추정 캐시가 바뀐 것은 이 시간 뒤에 반영된다.
+const RESULT_MEMO_TTL_MS = 10 * 60_000;
+const RESULT_MEMO_MAX = 200;
 
 // 곁들임으로 넣는 조리 형태 — 김치·나물(빠른 추가·음식 찾기와 같은 기준)과 음료·주류(사진 인식도 음료는 곁들임으로 둔다).
 const SIDE_DISH_TYPES: ReadonlySet<string> = new Set([...MEAL_SIDE_DEFAULT_DISH_TYPES, 'beverage', 'alcohol']);
@@ -91,7 +99,7 @@ export interface MealPlaceMenuSource {
 
 export interface MealPlaceMenuServiceDeps {
   prisma: PrismaClient;
-  food: Pick<FoodService, 'servingLexicon' | 'matchFood'>;
+  food: Pick<FoodService, 'servingLexicon' | 'matchFood' | 'matchFoods'>;
   resolver: Pick<MenuNutritionResolver, 'resolveMany'>;
   /** 카탈로그 행에 영양이 비었을 때만 본다(저장 경로와 같은 캐시 조회). 없으면 그 열량은 빈 채로. */
   estimator?: Pick<MealNutritionEstimator, 'lookup' | 'ask'>;
@@ -142,12 +150,29 @@ export class MealPlaceMenuService {
   // 한 줄도 못 읽은 식당 → 다시 시도할 수 있는 시각.
   private readonly retryAt = new Map<string, number>();
   private readonly matchMemo = new Map<string, { at: number; match: FoodMatch | null }>();
+  // 다 만든 응답(식당별, until 까지). 구성을 읽는 중인 응답은 곧 바뀌므로 담지 않는다.
+  private readonly results = new Map<string, { until: number; value: MealPlaceMenusResultType }>();
+  // 만드는 중인 응답 — 같은 식당을 겹쳐 부르면 한 번만 만든다.
+  private readonly building = new Map<string, Promise<MealPlaceMenusResultType | null>>();
 
   constructor(private readonly deps: MealPlaceMenuServiceDeps) {
     this.gate = deps.gate ?? new AsyncGate(READ_CHAINS, { maxQueue: READ_QUEUE });
   }
 
+  /** 응답은 기억해 둔 것을 여러 요청이 같이 쓴다 — 받은 쪽에서 고치지 않는다. */
   async forPlace(placeId: string): Promise<MealPlaceMenusResultType | null> {
+    const kept = this.results.get(placeId);
+    if (kept && kept.until > Date.now()) return kept.value;
+    const running = this.building.get(placeId);
+    if (running) return running;
+    const task = this.build(placeId).finally(() => {
+      this.building.delete(placeId);
+    });
+    this.building.set(placeId, task);
+    return task;
+  }
+
+  private async build(placeId: string): Promise<MealPlaceMenusResultType | null> {
     const place = await this.deps.loadPlace(placeId);
     if (!place) return null;
 
@@ -229,6 +254,23 @@ export class MealPlaceMenuService {
       this.deps.food.servingLexicon(),
     ]);
     const rowById = new Map<string, FoodRow>(rows.map((row) => [row.id, row]));
+
+    // 엔진이 못 이은 이름(메뉴 한 줄·구성 음식)은 아래 fromName 이 저장 경로의 이름 매칭을 거친다 — 메뉴마다 하나씩
+    // 묻지 않게 여기서 한 번에 맞춰 둔다. 구성이 통째로 버려지면 메뉴 한 줄로 돌아가므로 그 이름도 함께 넣는다.
+    const loose = new Set<string>();
+    for (const plan of plans) {
+      const composition = compositionOf(plan.name);
+      if (composition) {
+        for (const name of [...composition.fixed, ...composition.choices.flatMap((g) => g.options)]) {
+          const id = componentFoodId(name);
+          if (!id || !rowById.has(id)) loose.add(name.slice(0, ITEM_NAME_MAX));
+        }
+      }
+      if (!plan.parts.every((part) => part.foodId !== null && rowById.has(part.foodId))) {
+        loose.add(plainName(plan.name));
+      }
+    }
+    await this.warmMatches([...loose]);
 
     const scaled = (kcal: number | null, portion: MealPortionType | undefined): number | null =>
       kcal === null ? null : Math.round(kcal * mealPortionFactor(portion));
@@ -312,7 +354,44 @@ export class MealPlaceMenuService {
     }
 
     const pending = unread.length > 0 ? this.startReading(placeId, unread) : this.reading.has(placeId);
-    return { placeId, placeName: place.name, menus, ...(pending ? { pending: true } : {}) };
+    const result: MealPlaceMenusResultType = {
+      placeId,
+      placeName: place.name,
+      menus,
+      ...(pending ? { pending: true } : {}),
+    };
+    if (!pending) this.keep(placeId, result, unread.length > 0);
+    return result;
+  }
+
+  // 읽을 글이 남았는데 지금 읽지 못한 응답은, 다시 시도하지 않기로 한 동안(방금 한 줄도 못 읽었거나 구성 읽기가 없는
+  // 환경)만 기억한다 — 자리가 없어 못 읽은 것이면 기억하지 않아 다음 호출이 바로 다시 시도한다.
+  private keep(placeId: string, value: MealPlaceMenusResultType, unread: boolean): void {
+    const now = Date.now();
+    const until =
+      !unread || !this.deps.compositions
+        ? now + RESULT_MEMO_TTL_MS
+        : Math.min(now + RESULT_MEMO_TTL_MS, this.retryAt.get(placeId) ?? 0);
+    if (until <= now) return;
+    this.results.delete(placeId);
+    if (this.results.size >= RESULT_MEMO_MAX) {
+      const oldest = this.results.keys().next();
+      if (!oldest.done) this.results.delete(oldest.value);
+    }
+    this.results.set(placeId, { until, value });
+  }
+
+  // 아직 메모에 없는 이름을 한 번에 맞춰 둔다(FoodService.matchFoods — 결과는 이름마다 matchFood 와 같다).
+  private async warmMatches(names: string[]): Promise<void> {
+    const now = Date.now();
+    const cold = names.filter((name) => {
+      const hit = this.matchMemo.get(normalizeTerm(name));
+      return !hit || now - hit.at >= MATCH_MEMO_TTL_MS;
+    });
+    if (cold.length === 0) return;
+    const matches = await this.deps.food.matchFoods(cold);
+    if (this.matchMemo.size + matches.size > MATCH_MEMO_MAX) this.matchMemo.clear();
+    for (const [name, match] of matches) this.matchMemo.set(normalizeTerm(name), { at: now, match });
   }
 
   private async matchFood(name: string): Promise<FoodMatch | null> {

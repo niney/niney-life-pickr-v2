@@ -56,7 +56,7 @@ export class FoodServiceError extends Error {
 // 퍼지 매칭 임계 — bigram Jaccard 또는 포함 비율. "김치찌게"↔"김치찌개" 0.5, "묵은지김치찌개"↔"김치찌개"
 // 포함 4/7≈0.57 는 통과, "된장찌개"↔"김치찌개" 0.2 는 탈락.
 export const FOOD_MATCH_FUZZY_MIN = 0.5;
-const FUZZY_CANDIDATE_LIMIT = 300;
+export const FUZZY_CANDIDATE_LIMIT = 300;
 
 // 흔한 표기 → 카탈로그 표기(정확·별칭 일치가 없을 때만). 직접 적은 식단 41끼 중 15개 음식이 표기 차이로
 // 영양이 비었다(2026-10-04 — 계란말이·떡만둣국·크루아상·동그랑땡…). 표기 변형(계란↔달걀·둣국↔두국)은 메뉴
@@ -268,11 +268,161 @@ const SERVING_ROW_SELECT = {
   nutritionFrom: true,
 } as const satisfies Prisma.FoodItemSelect;
 
+// ── 묶음 매칭(matchFoods) ── 활성 카탈로그를 한 번 읽어 메모리에서 matchFood 와 같은 순서로 판정한다.
+// matchFood 는 이름마다 쿼리 3개 이상(별칭·퍼지는 카탈로그 전체 LIKE)이라, 식당 메뉴처럼 이름이 수십~백여 개면
+// 수백 번 왕복한다(메뉴 141개 가게 449회 — 2026-11-14 실측).
+
+// toMatch 에 필요한 열 + 판정에 쓰는 별칭·인기도.
+const MATCH_ROW_SELECT = {
+  id: true,
+  name: true,
+  nameNorm: true,
+  aliasNormsJson: true,
+  popularity: true,
+  dishType: true,
+  mainIngredient: true,
+  cuisine: true,
+  kcal: true,
+  proteinG: true,
+  sodiumMg: true,
+  servingG: true,
+  kcalPer100g: true,
+  nutritionFrom: true,
+  source: true,
+  sourceCategory: true,
+} as const satisfies Prisma.FoodItemSelect;
+export type FoodMatchRow = Prisma.FoodItemGetPayload<{ select: typeof MATCH_ROW_SELECT }>;
+
+// 색인이 없을 때, 이름이 이보다 적으면 카탈로그 전체를 읽는 것(약 5,500행 — 수십 ms)보다 하나씩 묻는 쪽이 싸다.
+const MATCH_BATCH_MIN = 8;
+
+export interface FoodMatchIndex {
+  byNorm: Map<string, FoodMatchRow>;
+  // matchFood 의 LIKE 와 같은 비교를 하려고 ASCII 만 소문자로 맞춘 글(SQLite LIKE 는 ASCII 대소문자만 가리지 않는다).
+  names: { row: FoodMatchRow; text: string }[];
+  aliases: { row: FoodMatchRow; text: string }[];
+}
+
+const asciiLower = (s: string): string => s.replace(/[A-Z]+/g, (m) => m.toLowerCase());
+
+export const buildFoodMatchIndex = (rows: readonly FoodMatchRow[]): FoodMatchIndex => {
+  const byNorm = new Map<string, FoodMatchRow>();
+  const names: FoodMatchIndex['names'] = [];
+  const aliases: FoodMatchIndex['aliases'] = [];
+  for (const row of rows) {
+    byNorm.set(row.nameNorm, row);
+    names.push({ row, text: asciiLower(row.nameNorm) });
+    // '[]' 보다 길어야 별칭이 있다.
+    if (row.aliasNormsJson.length > 2) aliases.push({ row, text: asciiLower(row.aliasNormsJson) });
+  }
+  return { byNorm, names, aliases };
+};
+
+/**
+ * 메모리 판정으로는 답을 정할 수 없는 이름 — 인기도가 같은 후보가 겹쳐 DB 가 돌려주는 순서에 답이 달렸다.
+ * 이런 이름은 matchFood(DB)로 넘겨 결과를 같게 한다.
+ */
+export const FOOD_MATCH_UNDECIDED = Symbol('food-match-undecided');
+export type IndexedFoodMatch =
+  | { row: FoodMatchRow; score: number; matchedBy: FoodMatch['matchedBy'] }
+  | null
+  | typeof FOOD_MATCH_UNDECIDED;
+
+// 별칭 일치 — DB 는 인기순 첫 행을 준다. 가장 인기 있는 행이 둘 이상이면 어느 쪽이 먼저인지 여기서는 알 수 없다.
+const aliasInIndex = (index: FoodMatchIndex, norm: string): FoodMatchRow | null | typeof FOOD_MATCH_UNDECIDED => {
+  const needle = `"${norm}"`;
+  let best: FoodMatchRow | null = null;
+  let tied = false;
+  for (const alias of index.aliases) {
+    if (!alias.text.includes(needle)) continue;
+    if (!best || alias.row.popularity > best.popularity) {
+      best = alias.row;
+      tied = false;
+    } else if (alias.row.popularity === best.popularity) {
+      tied = true;
+    }
+  }
+  return tied ? FOOD_MATCH_UNDECIDED : best;
+};
+
+// 퍼지 후보 가운데 가장 닮은 행(같으면 인기 있는 쪽). 닮음도 인기도 같은 행이 겹치면 tied.
+const bestFuzzy = (
+  norm: string,
+  rows: readonly FoodMatchRow[],
+): { row: FoodMatchRow; score: number; tied: boolean } | null => {
+  let best: { row: FoodMatchRow; score: number } | null = null;
+  let tied = false;
+  for (const row of rows) {
+    const score = foodNameSimilarity(norm, row.nameNorm);
+    if (score < FOOD_MATCH_FUZZY_MIN) continue;
+    if (!best || score > best.score || (score === best.score && row.popularity > best.row.popularity)) {
+      best = { row, score };
+      tied = false;
+    } else if (score === best.score && row.popularity === best.row.popularity) {
+      tied = true;
+    }
+  }
+  return best ? { ...best, tied } : null;
+};
+
+/** matchFood 와 같은 순서(정확 → 별칭 → 표기 변형 → 퍼지)의 메모리 판정. norm 은 normalizeTerm 을 거친 이름. */
+export const matchInFoodIndex = (norm: string, index: FoodMatchIndex, lexicon: Lexicon): IndexedFoodMatch => {
+  if (!norm) return null;
+  const exact = index.byNorm.get(norm);
+  if (exact) return { row: exact, score: 1, matchedBy: 'exact' };
+
+  const alias = aliasInIndex(index, norm);
+  if (alias === FOOD_MATCH_UNDECIDED) return FOOD_MATCH_UNDECIDED;
+  if (alias) return { row: alias, score: 0.95, matchedBy: 'alias' };
+
+  for (const variant of foodNameVariants(norm, lexicon)) {
+    const hit = index.byNorm.get(variant) ?? aliasInIndex(index, variant);
+    if (hit === FOOD_MATCH_UNDECIDED) return FOOD_MATCH_UNDECIDED;
+    if (hit) return { row: hit, score: 0.95, matchedBy: 'alias' };
+  }
+
+  if (norm.length < 2) return null;
+  const head = norm.slice(0, 2);
+  const tail = norm.slice(-2);
+  const candidates: FoodMatchRow[] = [];
+  for (const entry of index.names) {
+    if (entry.text.includes(head) || entry.text.includes(tail)) candidates.push(entry.row);
+  }
+  if (candidates.length === 0) return null;
+
+  // DB 는 후보를 인기순으로 FUZZY_CANDIDATE_LIMIT 개만 본다. 끊기는 자리의 인기도와 같은 행들은 일부만 들어가는데
+  // 어느 것이 들어갔는지는 DB 순서에 달렸다 — 그 행들이 답을 바꿀 수 없을 때만 여기서 정한다.
+  let sure = candidates;
+  let partial: FoodMatchRow[] = [];
+  if (candidates.length > FUZZY_CANDIDATE_LIMIT) {
+    const sorted = [...candidates].sort((a, b) => b.popularity - a.popularity);
+    const cutoff = sorted[FUZZY_CANDIDATE_LIMIT - 1]!.popularity;
+    const atLeast = sorted.filter((row) => row.popularity >= cutoff);
+    if (atLeast.length === FUZZY_CANDIDATE_LIMIT) {
+      sure = atLeast;
+    } else {
+      sure = sorted.filter((row) => row.popularity > cutoff);
+      partial = sorted.filter((row) => row.popularity === cutoff);
+    }
+  }
+  const best = bestFuzzy(norm, sure);
+  if (partial.length > 0) {
+    // 일부만 들어간 행은 확실히 들어간 행보다 인기도가 낮다 — 더 닮았을 때만 답을 바꾼다.
+    const among = bestFuzzy(norm, partial);
+    if (among && (!best || among.score > best.score)) return FOOD_MATCH_UNDECIDED;
+  }
+  if (!best) return null;
+  return best.tied ? FOOD_MATCH_UNDECIDED : { row: best.row, score: best.score, matchedBy: 'fuzzy' };
+};
+
 // 메뉴 칼로리 엔진의 인덱스 주기(INDEX_TTL)와 같다.
 const LEXICON_TTL_MS = 10 * 60 * 1000;
 
 export class FoodService {
   private lexiconCache: { value: Lexicon; at: number } | null = null;
+  // 묶음 매칭용 카탈로그 색인 — 어휘와 같은 주기로 다시 읽는다. 가게마다 새로 읽으면 메뉴 몇 개짜리 가게는 하나씩
+  // 묻던 때보다 느려진다(운영 사본 407곳 첫 조회 중앙 38 → 63ms, 2026-11-14).
+  private matchIndexCache: { value: Promise<FoodMatchIndex>; at: number } | null = null;
 
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -685,7 +835,59 @@ export class FoodService {
     return best ? this.toMatch(best.row, best.score, 'fuzzy') : null;
   }
 
-  private toMatch(r: PrismaFoodItem, score: number, matchedBy: FoodMatch['matchedBy']): FoodMatch {
+  /**
+   * 이름 여러 개를 한 번에 — 이름마다 결과는 matchFood 와 같다. 활성 카탈로그 색인을 메모리에서 판정하고,
+   * 인기도가 같은 후보가 겹쳐 DB 순서에 답이 달린 이름(FOOD_MATCH_UNDECIDED)만 matchFood 로 넘긴다.
+   * 색인은 어휘와 같은 주기(10분)로 다시 읽는다 — 그사이 카탈로그를 고친 것은 그만큼 늦게 보인다(메뉴 칼로리 엔진의
+   * 색인과 같다). 색인이 없고 이름이 몇 개 안 되면 카탈로그를 읽지 않고 하나씩 묻는다.
+   */
+  async matchFoods(names: readonly string[]): Promise<Map<string, FoodMatch | null>> {
+    const out = new Map<string, FoodMatch | null>();
+    const distinct = [...new Set(names)];
+    const fresh = this.matchIndexCache !== null && Date.now() - this.matchIndexCache.at < LEXICON_TTL_MS;
+    if (!fresh && distinct.length < MATCH_BATCH_MIN) {
+      for (const name of distinct) out.set(name, await this.matchFood(name));
+      return out;
+    }
+    const [index, lexicon] = await Promise.all([this.matchIndex(), this.servingLexicon()]);
+    // matchFood 는 정규화한 이름만 본다 — 표기만 다른 이름("김치 찌개"·"김치찌개")은 한 번만 판정한다.
+    const byNorm = new Map<string, FoodMatch | null>();
+    for (const name of distinct) {
+      const norm = normalizeTerm(name);
+      let match = byNorm.get(norm);
+      if (match === undefined) {
+        const hit = matchInFoodIndex(norm, index, lexicon);
+        match =
+          hit === FOOD_MATCH_UNDECIDED
+            ? await this.matchFood(name)
+            : hit
+              ? this.toMatch(hit.row, hit.score, hit.matchedBy)
+              : null;
+        byNorm.set(norm, match);
+      }
+      out.set(name, match);
+    }
+    return out;
+  }
+
+  // 겹쳐 불려도 카탈로그는 한 번만 읽는다. 읽기에 실패하면 버려서 다음 호출이 다시 읽는다.
+  private matchIndex(): Promise<FoodMatchIndex> {
+    const cached = this.matchIndexCache;
+    if (cached && Date.now() - cached.at < LEXICON_TTL_MS) return cached.value;
+    const entry = {
+      value: this.prisma.foodItem
+        .findMany({ where: { active: true }, select: MATCH_ROW_SELECT })
+        .then(buildFoodMatchIndex),
+      at: Date.now(),
+    };
+    this.matchIndexCache = entry;
+    entry.value.catch(() => {
+      if (this.matchIndexCache === entry) this.matchIndexCache = null;
+    });
+    return entry.value;
+  }
+
+  private toMatch(r: FoodMatchRow, score: number, matchedBy: FoodMatch['matchedBy']): FoodMatch {
     return {
       foodId: r.id,
       name: r.name,
