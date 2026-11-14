@@ -33,13 +33,13 @@
 | `useMealPlaceMenus(placeId)` | `@repo/shared` `hooks/useMeal.ts` | 화면용 조회(식당 없으면 꺼짐, 10분 캐시, 재시도 없음) |
 | `mealPlaceMenusQuery(placeId)` | 같은 파일 | 이벤트 안에서 `queryClient.fetchQuery(...)` 로 같은 캐시를 쓴다 |
 | `setPlace(place \| null)` | `@repo/shared` `stores/mealDraftStore.ts` | 식당 정하기·바꾸기·지우기. 식당이 바뀌면 앞 식당의 메뉴 연결을 풀고, 식사 방식이 비어 있으면 외식으로. `placeId: null` 로 이름만 줄 수 있다 |
-| `toggleMenuItem(menu)` | 같은 파일 | 메뉴를 누르면 넣고 다시 누르면 뺀다. 같은 음식 줄이 있으면 새 줄 대신 그 줄에 잇는다. 세트는 구성요소마다 한 줄, 가격은 첫 줄에만 |
+| `toggleMenuItem(menu, picks?)` | 같은 파일 | 메뉴를 누르면 넣고 다시 누르면 뺀다. 같은 음식 줄이 있으면 새 줄 대신 그 줄에 잇는다. 세트는 구성요소마다 한 줄, 가격은 첫 줄에만. 고르는 묶음이 있는 메뉴는 `picks` 를 준다(§8) |
 | `linkRecognizedToMenus(menus)` | 같은 파일 | 손대지 않은 인식 줄을 메뉴에 잇는다 → `{ linked, unmatched }` |
 | `updateItem` | 같은 파일 | 이름을 바꾸면 메뉴 연결이 **저절로 풀린다**(메뉴를 함께 바꾸려면 patch 에 `menuName` 을 싣는다) |
 | `MealDraftItem.menuName`·`menuPrice` | 같은 파일 | draft ↔ 기록 ↔ 저장 입력 매핑에 이미 들어 있다(`mealDraftInitFromEntry`·`mealDraftInitForRepeat`·`draftItemToInput`) |
 | `mealItemLabels(items)` · `formatMenuPrice(n)` | `@repo/utils` `mealSlot.ts` | 화면에서 부르는 이름(메뉴명 우선, 풀어 넣은 세트는 구성요소 이름) · "9,000원" |
 | `haversineM` · `formatDistanceM` | `@repo/utils` `geo.ts` · `format.ts` | 거리 계산·표기(`formatDistanceM` 은 **정수 m** 를 받는다 — 반올림해서 넘긴다) |
-| `MealPlaceMenuType` 등 | `@repo/api-contract` `schemas/meal.ts` | `{ menuName, price, recommend, foods[] }`, `foods[]` 는 `{ name, foodId, dishType, mainIngredient, cuisine, isMain, kcal }` |
+| `MealPlaceMenuType` 등 | `@repo/api-contract` `schemas/meal.ts` | `{ menuName, price, recommend, foods[], choices?[] }`, `foods[]` 는 `{ name, foodId, dishType, mainIngredient, cuisine, isMain, kcal, portion? }` — `choices`·`portion`·`pending` 은 §8 |
 
 웹 참고 구현(동작·문구의 기준): `apps/web/src/routes/meal/` 의 `MealPlaceSection.tsx`(식당 고르기·근처 칩·잇기 알림),
 `MealPlaceMenus.tsx`(메뉴 목록), `mealPlaceMenu.ts`(한 줄 표시 값), `mealPlaceLink.ts`(잇기), `useMealNearbyPlaces.ts`(근처 후보),
@@ -237,3 +237,49 @@ router.push('/meal/new' as never);
 - 5번 체크리스트를 Expo Web 과 iOS(시뮬레이터 또는 실기기)에서 모두 확인했고, Android 는 확인했거나 못 한 항목을 적어 두었다.
 - [PLAN-mobile-meal.md](PLAN-mobile-meal.md) 2번의 이 항목을 지우고, [PLAN-meal.md](PLAN-meal.md) 진행 기록에 앱 적용을 한 줄 남겼다.
 - 웹의 동작·문구가 바뀌지 않았다(웹 테스트 통과).
+
+## 8. 2026-11-14 추가 — 구성으로 풀리는 메뉴(코스·세트)와 택1
+
+웹에 하루 뒤 들어간 것. 위 3.3(그 집 메뉴에서 넣기)을 만들 때 **같이** 만든다 — 응답 모양이 바뀌어 이 절을 빼고 만들면
+고르는 것만 있는 메뉴가 빈 줄로 보인다. 배경·실측은 [PLAN-meal.md](PLAN-meal.md) 진행 기록 `2026-11-14`.
+
+바뀐 것(서버·계약·스토어는 끝났다):
+
+| 무엇 | 내용 |
+|---|---|
+| `MealPlaceMenuType.foods` | **빈 배열일 수 있다**(고르는 것만 있는 메뉴 — "후식 냉면(물/비빔)"). `foods[0]!` 로 읽지 않는다 |
+| `MealPlaceMenuType.choices?` | `{ label: string \| null, options: MealPlaceMenuFood[] }[]` — 묶음마다 **하나만** 먹는다. 선택지는 2개 이상 |
+| `MealPlaceMenuFood.portion?` | `'small'` 이면 그 양으로 넣는다(코스 구성 — 조금씩). `kcal` 은 이미 그 양만큼이다 |
+| `MealPlaceMenusResult.pending?` | 서버가 그 식당의 구성을 읽는 중. `useMealPlaceMenus` 가 3초 간격으로 알아서 다시 부른다(최대 12번) — 화면은 "코스·세트 구성을 읽는 중…"만 보여 준다 |
+| `toggleMenuItem(menu, picks?)` | `picks` 는 묶음마다 고른 선택지 번호(안 먹었으면 `null`). 고르는 묶음이 있는 메뉴를 넣을 때 반드시 준다. 뺄 때는 그대로 `toggleMenuItem(menu)` |
+| `mealMenuFoods(menu, picks)` · `mealMenuFoodPatch(food)` | `@repo/shared` — 넣을 음식 목록(정해진 구성 + 고른 것) · 음식 하나의 항목 값(양 포함) |
+| `linkRecognizedToMenus` | 고르는 묶음이 있는 메뉴에는 잇지 않는다(스토어가 한다) |
+
+웹 참고 구현: `MealPlaceMenuChooser.tsx`(고르는 칸), `MealPlaceMenus.tsx`(줄을 누르면 칸이 열림), `mealPlaceMenu.ts` 의
+`placeMenuKcal`(범위 `{ min, max, known, total }`)·`placeMenuKcalLabel`("741~1,014kcal")·`placeMenuSub`(구성·"(짜장면·짬뽕 중
+하나)"·"열량은 5가지 중 4가지만")·`placeMenuSwapOptions`(넣은 줄을 다른 선택지로 바꿀 후보), `MealItemInputRow.tsx` 의
+'이걸로 바꾸기' 칩. 3.1 에서 패키지로 올릴 때 이 함수들도 함께 올린다. 동작을 고정한 테스트: `MealEntryFormPage.test.tsx` 의
+'구성으로 풀리는 메뉴' 묶음, `mealPlaceMenu.test.ts`, `mealDraftStore.test.ts` 의 '고르는 묶음…' 두 건.
+
+앱에서 할 것:
+
+- 메뉴 줄: 열량은 `placeMenuKcalLabel(menu)`(글 — 숫자가 아니다), 아랫줄은 `placeMenuSub(menu)`. 고르는 묶음이 있고 아직 넣지
+  않은 메뉴는 `+` 대신 펼침 표시를 두고, 누르면 `toggleMenuItem` 을 부르지 말고 고르는 칸을 연다.
+- 고르는 칸(시트 안의 한 구역 또는 작은 시트): 맨 위에 "함께 나오는 음식 …"(정해진 구성, 코스면 "조금씩 먹은 것으로 넣어요"),
+  묶음마다 선택지 칩(이름 + 열량) + **'안 먹었어요'**, 아래에 [넣기] [취소]와 합계("5가지 · 약 741kcal (1가지는 열량 모름)").
+  - **미리 골라 두지 않는다.** 묶음을 모두 정해야(고르거나 안 먹었어요) [넣기]가 켜진다 — 틀린 기본값이 그대로 기록되는 것을 막는다.
+  - [넣기] → `toggleMenuItem(menu, picks)`.
+- 넣은 줄 바꾸기: 항목 줄(`MealItemRow`)의 '이 집 메뉴' 줄 아래에 `placeMenuSwapOptions(menus, item)` 이 주는 선택지를 칩으로.
+  누르면 `updateItem(clientId, { ...mealMenuFoodPatch(option), portion: item.portion, servings: item.servings ?? null,
+  portionSource: item.portionSource ?? null, selectedCandidateRank: null, menuName: item.menuName, menuPrice: item.menuPrice ?? null })`
+  — patch 에 `menuName` 을 실어야 연결이 풀리지 않고, 양은 그 줄에 정해 둔 그대로 둔다.
+- 메뉴 아래 안내문은 코스가 있는 집에서만 한 문장을 덧붙인다: "코스는 음식마다 조금씩 먹은 것으로 들어가요."
+
+확인(5번 목록에 더한다) — 로컬 운영 사본에서 "도원반점"(등촌역점·판교점, 코스 4개):
+
+- [ ] 식당을 처음 고르면 잠깐 "구성을 읽는 중…"이 보였다가 코스 줄이 구성 + "(짜장면·짬뽕 중 하나)"로 바뀐다(다시 고르면 바로).
+- [ ] 코스 줄을 누르면 고르는 칸이 열리고, 고르기 전에는 [넣기]가 꺼져 있다. 아무것도 미리 골라져 있지 않다.
+- [ ] 짬뽕을 골라 넣으면 구성 줄들과 짬뽕이 모두 양 '조금'으로 들어가고, 가격은 첫 줄에만 붙는다.
+- [ ] '안 먹었어요'로 넣으면 정해진 구성만 들어간다. 넣은 코스를 다시 누르면 구성이 한 번에 빠진다.
+- [ ] 짬뽕 줄의 '이걸로 바꾸기 › 짜장면'을 누르면 이름만 바뀌고 '이 집 메뉴' 표시와 양은 그대로다.
+- [ ] 고르는 것만 있는 메뉴(예: "후식 냉면(물/비빔)"이 있는 고깃집)는 고른 하나만 들어간다.
