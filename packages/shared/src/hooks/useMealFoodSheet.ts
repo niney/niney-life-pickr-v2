@@ -72,11 +72,11 @@ export const useMealFoodSheet = (mode: MealFoodSheetMode, slot: MealSlotType) =>
   const mineItems = searching ? (mine.data?.items ?? []) : [];
   // 두 글자 밑으로 줄면 지난 목록(keepPreviousData)이 남는다 — 보이지 않는 목록으로 '그대로 넣기'를 감추지 않게.
   const catalogFound = catalogEnabled ? (catalog.data?.items ?? []) : [];
-  const { catalog: catalogItems, exactKnown } = splitMealFoodResults(
-    mineItems,
-    catalogFound,
-    typed,
-  );
+  const {
+    catalog: catalogItems,
+    exactKnown,
+    exact,
+  } = splitMealFoodResults(mineItems, catalogFound, typed);
 
   // 스토어를 바꾸고, 이름 있는 줄 수가 달라진 만큼 넣은 개수에 더한다. 화면이 스토어에 직접 넣는 것(웹 시트의 식당 메뉴)도
   // 이 셈으로 센다 — 따로 세면 메뉴로 넣은 음식을 다른 줄에서 눌러 뺀 뒤에도 개수가 남는다.
@@ -97,15 +97,17 @@ export const useMealFoodSheet = (mode: MealFoodSheetMode, slot: MealSlotType) =>
     return delta > 0 ? 'added' : delta < 0 ? 'removed' : 'full';
   };
 
-  // 엔터·키보드 완료 키 — 친 이름 그대로 넣고 검색칸을 비워 다음 음식을 바로 친다. 이미 넣은 이름이면 빼지 않는다
-  // (줄을 누르는 것과 달리 '넣기'만 한다).
+  // 엔터·키보드 완료 키 — 친 이름으로 넣고 검색칸을 비워 다음 음식을 바로 친다. 이미 넣은 이름이면 빼지 않는다
+  // (줄을 누르는 것과 달리 '넣기'만 한다). 같은 이름이 내 기록·음식 목록에 있으면 그 줄을 고른 것으로 넣는다 —
+  // 친 이름 그대로면 연결·지난번 양이 빠지고 '김치'도 주식으로 들어갔다. 결과가 아직 안 왔으면(빨리 치고 누름)
+  // 친 이름 그대로 넣는다(저장할 때 서버가 이름으로 음식 목록에 잇는다).
   const submitTyped = (): MealFoodPickResult | null => {
     if (!typed) return null;
     if (mode.kind === 'add' && isIn(typed)) {
       setQ('');
       return 'already';
     }
-    const result = pick(mealQuickFromTyped(typed));
+    const result = pick(exact ?? mealQuickFromTyped(typed));
     if (mode.kind === 'add') setQ('');
     return result;
   };

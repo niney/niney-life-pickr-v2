@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useRef, type ReactNode } from 'react';
 import {
   Modal,
   Platform,
@@ -89,16 +89,34 @@ const SheetBody = ({
   };
   const pick = (quick: FrequentMealItemType) => after(sheet.pick(quick));
 
+  // 줄을 바꾸러 열면 검색칸에 옛 이름이 들어 있다 — 통째로 골라 두어 치면 바로 덮어쓴다(지우고 칠 필요 없이).
+  // 열 때 한 번만 고른다(다시 눌러 커서를 놓을 때마다 고르지 않게).
+  // iOS 는 자동 포커스와 함께면 selectTextOnFocus 가 먹지 않는다(시뮬레이터 실측 — 커서가 끝에 놓여 '라면x' 가 됐다).
+  // 포커스가 자리 잡은 뒤 범위를 직접 준다.
+  const inputRef = useRef<TextInput>(null);
+  const selectOnOpen = useRef(mode.kind === 'replace' && q.length > 0);
+  const selectAllOnce = () => {
+    if (Platform.OS !== 'ios' || !selectOnOpen.current) return;
+    selectOnOpen.current = false;
+    const length = q.length;
+    requestAnimationFrame(() => inputRef.current?.setSelection(0, length));
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.searchBox}>
           <MaterialCommunityIcons name="magnify" size={18} color={theme.colors.textMuted} />
           <TextInput
+            ref={inputRef}
             autoFocus
+            onFocus={selectAllOnce}
+            // iOS 밖(Android·Expo Web)은 포커스 때 고르기가 그대로 먹는다.
+            selectTextOnFocus={Platform.OS !== 'ios' && mode.kind === 'replace'}
             value={q}
             onChangeText={sheet.setQ}
-            // 키보드 완료 키는 친 이름 그대로 넣기 — 키보드는 내리지 않고 다음 음식을 바로 친다(웹은 blurOnSubmit).
+            // 키보드 완료 키는 친 이름으로 넣기(같은 이름이 내 기록·음식 목록에 있으면 그 줄을 고른 것으로 — 훅) —
+            // 키보드는 내리지 않고 다음 음식을 바로 친다(웹은 blurOnSubmit).
             onSubmitEditing={() => after(sheet.submitTyped())}
             submitBehavior="submit"
             blurOnSubmit={false}

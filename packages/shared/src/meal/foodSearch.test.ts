@@ -209,6 +209,25 @@ describe('splitMealFoodResults', () => {
     expect(splitMealFoodResults([], [food({ name: '배추김치' })], '김치').exactKnown).toBe(false);
     expect(splitMealFoodResults([], [], '').exactKnown).toBe(false);
   });
+
+  it('exact — 친 이름과 같은 줄을 넣을 항목으로: 내 기록이 먼저(지난번 양), 없으면 음식 목록(김치는 반찬)', () => {
+    const mine = [quick({ name: '김치볶음밥', foodId: 'f-kbb', portion: 'large' })];
+    const catalog = [
+      food({ id: 'f-other', name: '김치 볶음밥' }),
+      food({ id: 'f-kimchi', name: '배추김치', dishType: 'kimchi', servingKcal: 18 }),
+    ];
+    // 내 기록의 줄 그대로 — 음식 목록의 같은 이름이 아니라.
+    expect(splitMealFoodResults(mine, catalog, '김치 볶음밥').exact).toBe(mine[0]);
+    expect(splitMealFoodResults(mine, catalog, '배추김치').exact).toMatchObject({
+      name: '배추김치',
+      foodId: 'f-kimchi',
+      isMain: false,
+      kcal: 18,
+    });
+    // 일부만 같으면 고른 것으로 보지 않는다.
+    expect(splitMealFoodResults(mine, catalog, '김치').exact).toBeNull();
+    expect(splitMealFoodResults(mine, catalog, '').exact).toBeNull();
+  });
 });
 
 describe('pickRecentMeals', () => {

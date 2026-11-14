@@ -256,6 +256,33 @@ describe('음식 찾기 시트 — 휴대폰', () => {
     expect(input).toHaveValue('');
   });
 
+  it('엔터 — 친 이름과 같은 줄이 내 기록·음식 목록에 있으면 그 줄을 고른 것으로 넣는다', async () => {
+    renderNew();
+    fireEvent.click(await screen.findByRole('button', { name: '음식 찾기' }));
+    const input = within(sheet()).getByLabelText('음식 찾기');
+
+    // 음식 목록의 배추김치 — 목록 줄을 누른 것처럼 반찬으로, 연결까지(친 이름 그대로면 연결 없는 주식이었다).
+    fireEvent.change(input, { target: { value: '배추김치' } });
+    await within(sheet()).findByRole('button', { name: /^배추김치/ });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(useMealDraftStore.getState().items.find((i) => i.name === '배추김치')).toMatchObject({
+      foodId: 'f-kimchi',
+      isMain: false,
+      source: 'catalog',
+    });
+    expect(input).toHaveValue('');
+
+    // 내 기록의 김치볶음밥 — 지난번 양까지 따라온다.
+    fireEvent.change(input, { target: { value: '김치볶음밥' } });
+    await within(sheet()).findByRole('button', { name: /^김치볶음밥/ });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(useMealDraftStore.getState().items.find((i) => i.name === '김치볶음밥')).toMatchObject({
+      foodId: 'f-kbb',
+      portion: 'large',
+      source: 'catalog',
+    });
+  });
+
   it('한 끼 안의 같은 이름은 한 번만 넣고, 엔터로 이미 넣은 이름은 빼지 않는다', async () => {
     server.use(
       http.get('/api/v1/meals', () =>
@@ -331,6 +358,9 @@ describe('음식 찾기 시트 — 휴대폰', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '라면 바꾸기' }));
     expect(within(sheet()).getByLabelText('음식 찾기')).toHaveValue('라면');
+    // 옛 이름이 통째로 골라져 있다 — 치면 바로 덮어쓴다.
+    const replaceInput = within(sheet()).getByLabelText<HTMLInputElement>('음식 찾기');
+    expect([replaceInput.selectionStart, replaceInput.selectionEnd]).toEqual([0, 2]);
     fireEvent.change(within(sheet()).getByLabelText('음식 찾기'), {
       target: { value: '김치볶음밥' },
     });

@@ -131,26 +131,29 @@ export const mealCatalogSub = (f: FoodSearchItemType): string =>
     .join(' · ');
 
 /**
- * 내 기록과 겹치는 음식 목록 줄은 뺀다(같은 foodId 이거나 같은 이름). exactKnown — 친 이름이 남은 두 목록에
- * 그대로 있으면 '그대로 넣기' 줄을 감춘다(목록에서 고르면 연결·분류가 붙는다).
+ * 내 기록과 겹치는 음식 목록 줄은 뺀다(같은 foodId 이거나 같은 이름). exact — 친 이름과 같은 이름의 줄을 넣을
+ * 항목으로(내 기록 먼저 — 지난번 양이 따라온다, 없으면 음식 목록). 있으면(exactKnown) '그대로 넣기' 줄을 감추고,
+ * 엔터·키보드 완료 키도 그 줄을 고른 것으로 넣는다 — 친 이름 그대로 넣으면 연결·지난번 양이 빠지고 김치도 주식으로
+ * 들어간다.
  */
 export const splitMealFoodResults = (
   mine: readonly FrequentMealItemType[],
   catalog: readonly FoodSearchItemType[],
   typed: string,
-): { catalog: FoodSearchItemType[]; exactKnown: boolean } => {
+): { catalog: FoodSearchItemType[]; exactKnown: boolean; exact: FrequentMealItemType | null } => {
   const mineKeys = new Set(mine.map((m) => mealItemNameKey(m.name)));
   const mineFoods = new Set(mine.flatMap((m) => (m.foodId ? [m.foodId] : [])));
   const rest = catalog.filter(
     (f) => !mineFoods.has(f.id) && !mineKeys.has(mealItemNameKey(f.name)),
   );
   const typedKey = mealItemNameKey(typed);
-  const exactKnown =
-    typedKey.length > 0 &&
-    [...mine.map((m) => m.name), ...rest.map((f) => f.name)].some(
-      (name) => mealItemNameKey(name) === typedKey,
-    );
-  return { catalog: rest, exactKnown };
+  const sameName = (name: string): boolean => mealItemNameKey(name) === typedKey;
+  const inCatalog = rest.find((f) => sameName(f.name));
+  const exact =
+    typedKey.length === 0
+      ? null
+      : (mine.find((m) => sameName(m.name)) ?? (inCatalog ? mealQuickFromCatalog(inCatalog) : null));
+  return { catalog: rest, exactKnown: exact !== null, exact };
 };
 
 export interface MealRecentMealOption {

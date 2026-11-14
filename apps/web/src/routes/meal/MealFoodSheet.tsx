@@ -74,15 +74,20 @@ export const MealFoodSheet = ({
   const chosenMenus = new Set(items.flatMap((it) => (it.menuName ? [it.menuName] : [])));
 
   // 시트가 떠 있는 동안 뒤 화면 스크롤을 막고 검색칸에 포커스, Esc 로 닫는다 — 문서(외부)와 맞추는 일이라 effect.
+  // 줄을 바꾸러 열면 검색칸에 옛 이름이 들어 있다 — 통째로 골라 두어 치면 바로 덮어쓴다(지우고 칠 필요 없이).
+  const replacing = mode.kind === 'replace';
   useEffect(() => {
     const root = document.documentElement;
     const before = root.style.overflow;
     root.style.overflow = 'hidden';
-    inputRef.current?.focus();
+    const input = inputRef.current;
+    input?.focus();
+    // select() 는 iOS Safari 에서 고르지 못한다 — 범위를 직접 준다.
+    if (replacing) input?.setSelectionRange(0, input.value.length);
     return () => {
       root.style.overflow = before;
     };
-  }, []);
+  }, [replacing]);
   // 휴대폰 키보드가 올라오면 보이는 화면(visualViewport)에 맞춘다 — iOS 는 fixed 화면이 키보드 뒤로 깔려 목록 끝이
   // 가린다. 위치·높이를 보이는 화면에 붙인다.
   useEffect(() => {
@@ -203,7 +208,7 @@ export const MealFoodSheet = ({
             value={q}
             onChange={(event) => sheet.setQ(event.target.value)}
             onKeyDown={(event) => {
-              // 엔터는 친 이름 그대로 — 목록에서 고르려면 누른다.
+              // 엔터는 친 이름으로 넣는다 — 같은 이름이 내 기록·음식 목록에 있으면 그 줄을 고른 것으로(훅 submitTyped).
               if (event.key === 'Enter' && typed && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 if (sheet.submitTyped() === 'replaced') onClose();

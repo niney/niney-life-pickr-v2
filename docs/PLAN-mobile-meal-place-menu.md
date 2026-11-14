@@ -43,13 +43,9 @@
 | `MealDraftItem.menuName`·`menuPrice` | 같은 파일 | draft ↔ 기록 ↔ 저장 입력 매핑에 이미 들어 있다(`mealDraftInitFromEntry`·`mealDraftInitForRepeat`·`draftItemToInput`) |
 | `mealItemLabels(items)` · `formatMenuPrice(n)` | `@repo/utils` `mealSlot.ts` | 화면에서 부르는 이름(메뉴명 우선, 풀어 넣은 세트는 구성요소 이름) · "9,000원" |
 | `haversineM` · `formatDistanceM` | `@repo/utils` `geo.ts` · `format.ts` | 거리 계산·표기(`formatDistanceM` 은 **정수 m** 를 받는다 — 반올림해서 넘긴다) |
-<<<<<<< HEAD
 | `MealPlaceMenuType` 등 | `@repo/api-contract` `schemas/meal.ts` | `{ menuName, price, recommend, foods[], choices?[] }`, `foods[]` 는 `{ name, foodId, dishType, mainIngredient, cuisine, isMain, kcal, portion? }` — `choices`·`portion`·`pending` 은 §8 |
-=======
-| `MealPlaceMenuType` 등 | `@repo/api-contract` `schemas/meal.ts` | `{ menuName, price, recommend, foods[] }`, `foods[]` 는 `{ name, foodId, dishType, mainIngredient, cuisine, isMain, kcal }` |
 | `useMealFoodSheet(mode, slot)` | `@repo/shared` `hooks/useMealFoodSheet.ts` | 음식 찾기 시트의 상태·조회·넣고 빼기(웹 휴대폰 시트·앱 시트 공통). **식당 메뉴는 아직 모른다** — 3.1 에서 올린다 |
 | `draftItemToInput(item)` | `@repo/shared` `stores/mealDraftStore.ts` | 저장 입력 매핑. 앱 저장(`MealEntryEditor.tsx:632`)이 이걸 써서 메뉴명·가격이 이미 실린다 |
->>>>>>> 0bb34443 (docs(meal): 앱 작업 지시서(식당에서 먹은 기록)를 지금 코드에 맞춰 고치다)
 
 웹 참고 구현(동작·문구의 기준): `apps/web/src/routes/meal/` 의 `MealPlaceSection.tsx`(식당 고르기·근처 칩·잇기 알림),
 `MealPlaceMenus.tsx`(메뉴 목록), `mealPlaceMenu.ts`(한 줄 표시 값), `mealPlaceLink.ts`(잇기), `useMealNearbyPlaces.ts`(근처 후보),
@@ -125,6 +121,9 @@
     식당이 없거나 메뉴가 없으면 빈 묶음.
   - 넣은 개수는 지금처럼 **이름 있는 줄 수**로 센다 — 세트는 구성요소만큼 늘고, 이미 있는 줄에 메뉴만 이으면 그대로다.
     `countChange` 는 웹 시트가 메뉴를 같은 셈으로 세려고 훅 밖으로 내보낸 것이니, 올린 뒤에는 다시 훅 안으로 넣는다.
+  - 엔터·키보드 완료 키는 친 이름과 같은 줄이 내 기록·음식 목록에 있으면 그 줄을 고른 것으로 넣는다(2026-11-14,
+    `submitTyped`). **메뉴는 아직 보지 않는다** — 메뉴를 훅으로 올릴 때 친 이름이 메뉴명과 같으면 그 메뉴를 고른 것으로
+    넣게 잇는다(지금은 메뉴명을 치고 엔터를 누르면 연결 없는 수동 항목이 된다).
   - 웹 `MealFoodSheet.test.tsx` 의 '식당이 정해져 있으면 그 집 메뉴가 맨 위에…' 가 그대로 통과해야 한다.
 - `packages/*` 에는 import 만으로 무언가를 등록하는 모듈을 두지 않는다(`sideEffects: false`).
 - 상수는 그대로 옮긴다: 기본 반경 150m, 최대 500m, 오차 400m 초과면 후보 없음, 후보 최대 5곳, 조회 범위 여유 1.2배.
