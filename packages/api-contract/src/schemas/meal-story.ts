@@ -125,8 +125,9 @@ export type MealStoryStatusType = z.infer<typeof MealStoryStatus>;
 /**
  * 스토리 주제 — 영양 탭 영양소 + 열량(kcal, 2026-11-12 면 편). 열량은 '많음'·'부족' 판정이 없어(영양 탭에 줄이 없고 통계의
  * 열량 줄도 판정을 주지 않는다) 내 기록에 맞춰 잇지 않는다 — 목록, 홈의 가장 새 이야기, 기록 상세의 레시피 링크로 들어온다.
+ * 당류(sugar, 2026-11-21 음료 편)도 같다 — 영양 탭에 줄이 없고 통계의 당류 줄은 열량 중 비율만 보인다.
  */
-export const MealStoryTopicNutrient = z.enum([...MealNutrientKey.options, 'kcal']);
+export const MealStoryTopicNutrient = z.enum([...MealNutrientKey.options, 'kcal', 'sugar']);
 export type MealStoryTopicNutrientType = z.infer<typeof MealStoryTopicNutrient>;
 
 export const MealStoryTopic = z.object({

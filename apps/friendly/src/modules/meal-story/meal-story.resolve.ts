@@ -44,6 +44,8 @@ interface FoodValues {
   group?: { count: number; counts: MealStoryPer100CountsType; pick?: 'low' | 'high' };
   /** 음식 표준데이터의 한 그릇 무게(g). */
   servingG?: number;
+  /** 100ml 당 값인 식품(음료·간장) — 양을 g 이 아니라 ml 로 적는다. */
+  ml?: boolean;
 }
 
 const MY_BASIS = '내 최근 2주 하루 평균';
@@ -81,6 +83,7 @@ export const resolveMealStory = (
       source: built.source,
       group: built.matched ? { count: built.matched.count, counts: built.matched.counts ?? {}, pick: built.matched.pick } : undefined,
       servingG: built.servingG,
+      ml: built.basis === '100ml',
     });
   }
 
@@ -167,7 +170,7 @@ export const resolveMealStory = (
       return figure({
         value: v === null || v === undefined ? null : roundForUnit((v * ref.grams) / 100, unit),
         unit,
-        basis: `${food.label} ${ref.grams.toLocaleString('ko-KR')}g`,
+        basis: `${food.label} ${ref.grams.toLocaleString('ko-KR')}${food.ml ? 'ml' : 'g'}`,
         detail: v === null || v === undefined ? null : partialNote(food, ref.nutrient),
         sources: v === null || v === undefined ? [] : [food.source],
       });
@@ -203,7 +206,7 @@ export const resolveMealStory = (
       const sources = new Set<string>();
       for (const part of ref.foods) {
         const food = foods.get(part.food);
-        const grams = `${part.grams.toLocaleString('ko-KR')}g`;
+        const grams = `${part.grams.toLocaleString('ko-KR')}${food?.ml ? 'ml' : 'g'}`;
         if (!food) {
           issues.push(`${where}: 식품 '${part.food}' 가 foods 에 없다`);
           parts.push(`${part.food} ${grams}`);

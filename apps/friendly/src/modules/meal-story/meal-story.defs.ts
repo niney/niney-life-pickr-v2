@@ -96,7 +96,7 @@ export const fractionOf = (small: number, large: number): number | null => {
   return n >= 2 && Math.abs(ratio - n) / ratio <= 0.15 ? n : null;
 };
 
-const KDRI_KIND: Readonly<Record<MealStoryKdriKey, { kind: 'cdrr' | 'ai' | 'rni'; basis: string; unit: 'mg' | 'g' }>> = {
+const KDRI_KIND: Readonly<Record<Exclude<MealStoryKdriKey, 'sugar'>, { kind: 'cdrr' | 'ai' | 'rni'; basis: string; unit: 'mg' | 'g' }>> = {
   // 나트륨은 '이보다 적게'(만성질환위험감소섭취량), 칼륨·식이섬유는 '이만큼'(충분섭취량), 칼슘은 권장섭취량. basis 의 '성인' 자리에
   // 성별이 들어간다.
   sodium: { kind: 'cdrr', basis: '성인 하루 기준(이보다 적게)', unit: 'mg' },
@@ -106,6 +106,19 @@ const KDRI_KIND: Readonly<Record<MealStoryKdriKey, { kind: 'cdrr' | 'ai' | 'rni'
   // 비타민 C 는 성인 남녀·나이가 모두 같다(100mg) — 덧말이 없다.
   vitaminC: { kind: 'rni', basis: '성인 하루 권장섭취량', unit: 'mg' },
 };
+
+/**
+ * 당류 — 2020 섭취기준은 그램이 아니라 에너지 비율이다: 총당류는 총 에너지의 10~20%, 그 가운데 식품을 만들 때 넣는 당(첨가당)은
+ * 10% 이내. 숫자로 보이려고 식품 표시가 쓰는 하루 2,000kcal 로 환산한다(2,000 × 10% ÷ 4kcal/g = 50g) — 기준 글에 그 가정을
+ * 밝힌다. 성별·나이로 가르지 않는다(에너지를 더 쓰는 사람은 그만큼 많다).
+ */
+const ADDED_SUGAR = { energyKcal: 2000, share: 0.1, kcalPerG: 4 } as const;
+const addedSugarFigure = (): { value: number; unit: string; basis: string; detail: string } => ({
+  value: (ADDED_SUGAR.energyKcal * ADDED_SUGAR.share) / ADDED_SUGAR.kcalPerG,
+  unit: 'g',
+  basis: '넣은 당(첨가당) 하루 기준(이보다 적게)',
+  detail: `하루 ${ADDED_SUGAR.energyKcal.toLocaleString('ko-KR')}kcal 일 때 · 에너지의 ${ADDED_SUGAR.share * 100}% 이내`,
+});
 
 const SEX_LABEL = { male: '남자', female: '여자' } as const;
 
@@ -161,6 +174,7 @@ export const kdriFigure = (
   nutrient: MealStoryKdriKey,
   sex?: 'male' | 'female',
 ): { value: number | null; unit: string; basis: string; detail: string | null } => {
+  if (nutrient === 'sugar') return addedSugarFigure();
   const { kind, basis, unit } = KDRI_KIND[nutrient];
   const at = (s: 'male' | 'female', g: KdriAgeGroup) => nutrientReference(nutrient as KdriNutrient, s, g)[kind];
   if (sex) {

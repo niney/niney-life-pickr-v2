@@ -12372,7 +12372,8 @@
                                   "magnesium",
                                   "zinc",
                                   "folate",
-                                  "kcal"
+                                  "kcal",
+                                  "sugar"
                                 ]
                               },
                               "direction": {
@@ -12512,7 +12513,8 @@
                             "magnesium",
                             "zinc",
                             "folate",
-                            "kcal"
+                            "kcal",
+                            "sugar"
                           ]
                         },
                         "direction": {

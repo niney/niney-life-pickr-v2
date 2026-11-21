@@ -562,6 +562,59 @@ describe('buildMealStoryFoods', () => {
     ]);
   });
 
+  it('음료 묶음 — 100ml 당 값이면 포장도 양도 ml 로 적는다. 이름 조건이 any 뿐이어도 출처 글이 깨지지 않는다', () => {
+    const drink = (i: number, name: string, sugarG: number): FoodRow => ({
+      code: 'P112-000000001-0000',
+      name: `${name} ${i}`,
+      category: '음료류',
+      rep: '탄산음료',
+      sub: '탄산음료',
+      basis: '100ml',
+      per100: { kcal: 40, sugarG },
+      servingG: 355,
+      serving: '200ml',
+    });
+    const script = base({
+      foods: [{ id: 'soda', label: '콜라·사이다', group: { db: 'processed-full', rep: '탄산음료', any: ['콜라', '사이다'], none: ['제로'], weight: { min: 300, max: 360 } } }],
+      recipe: undefined,
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        {
+          type: 'bars',
+          title: '한 캔',
+          bars: [
+            { label: '넣은 당 하루 기준', value: { kdri: 'sugar' } },
+            { label: '한 캔', value: { food: 'soda', nutrient: 'sugarG', grams: 355 } },
+          ],
+        },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+    const built = buildMealStoryFoods(script, {
+      'processed-full': [drink(1, '콜라', 10), drink(2, '사이다', 11), drink(3, '콜라', 12), drink(4, '제로 콜라', 0), drink(5, '오렌지 탄산', 13)],
+    });
+    expect(built.problems).toEqual([]);
+    expect(built.file.foods.soda).toMatchObject({
+      per100: { sugarG: 11 },
+      basis: '100ml',
+      provenance: "식약처 가공식품 DB 전체판 '탄산음료 · 콜라|사이다 · 포장 300~360ml' 제품 3개의 중앙값 · 포장 용량 중앙값 355ml · 1회 섭취참고량 200ml",
+    });
+    const { story, issues } = resolveMealStory(script, built.file, imageUrl);
+    expect(issues).toEqual([]);
+    const bars = sceneOf(story.scenes, 'bars');
+    // 당류의 섭취기준은 에너지 비율이라 2,000kcal 로 환산한 첨가당 50g — 가정을 기준 글에 밝힌다.
+    expect(bars.bars[0]!.figure).toMatchObject({
+      value: 50,
+      unit: 'g',
+      basis: '넣은 당(첨가당) 하루 기준(이보다 적게)',
+      detail: '하루 2,000kcal 일 때 · 에너지의 10% 이내',
+      sources: ['kdri-2020'],
+    });
+    expect(bars.bars[1]!.figure).toMatchObject({ value: 39, unit: 'g', basis: '콜라·사이다 355ml' });
+    // 주제가 당류인 편 — 형식이 받는다(영양 탭에 줄이 없어 내 기록에는 잇지 않는다).
+    expect(base({ topic: { nutrient: 'sugar', direction: 'reduce' } }).topic).toEqual({ nutrient: 'sugar', direction: 'reduce' });
+  });
+
   it('화면 덧말 — 값을 적은 제품이 눈에 띄게 적을 때만 밝히고(열에 아홉 아래), 낮은·높은 쪽 값이면 중앙값이라 하지 않는다', () => {
     const script = base({
       foods: [

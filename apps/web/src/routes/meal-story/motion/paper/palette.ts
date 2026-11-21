@@ -91,6 +91,8 @@ const TOPIC_STAGE: Readonly<Record<string, { stage: string; stageDeep: string; d
   vitaminC: { stage: '#b8551a', stageDeep: '#9f4614', darkDeep: '#853a10' },
   // 열량(면 편) — 청록. 흰 손글씨 머리말과의 대비 4.9:1.
   kcal: { stage: '#1b7c8c', stageDeep: '#166978', darkDeep: '#115562' },
+  // 당류(음료 편) — 자주. 흰 손글씨 머리말과의 대비 5.5:1.
+  sugar: { stage: '#a8477a', stageDeep: '#8f3a67', darkDeep: '#762f55' },
 };
 const DEFAULT_STAGE = TOPIC_STAGE.sodium!;
 

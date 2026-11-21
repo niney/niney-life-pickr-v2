@@ -18,6 +18,7 @@ const NUTRIENT_LABEL: Record<MealStoryTopicNutrientType, string> = {
   zinc: '아연',
   folate: '엽산',
   kcal: '열량',
+  sugar: '당류',
 };
 
 /** 건강식단 목록의 한 줄 소개 — 로그인 전 목록과 식단 안 목록이 같이 쓴다. */

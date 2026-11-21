@@ -201,12 +201,13 @@ const mode = (xs: string[]): { value: string; count: number } | null => {
 
 /**
  * 묶음의 포장 무게·한 번 먹는 양 — 원고가 '한 봉 110g'·'한 번 30g' 으로 적은 양을 사람이 자료와 맞춰 보라고 출처 글에 붙인다
- * (계산에는 쓰지 않는다). 무게는 절반 넘는 제품이 적었을 때, 한 번 먹는 양은 절반 넘는 제품이 같은 값일 때만.
+ * (계산에는 쓰지 않는다). 무게는 절반 넘는 제품이 적었을 때, 한 번 먹는 양은 절반 넘는 제품이 같은 값일 때만. 음료처럼
+ * 100ml 당 값인 묶음은 무게가 아니라 용량(ml)이다.
  */
-const amountsNote = (hits: FoodRow[]): string => {
+const amountsNote = (hits: FoodRow[], ml: boolean): string => {
   const out: string[] = [];
   const weights = hits.map((h) => h.servingG).filter((v): v is number => typeof v === 'number' && v > 0);
-  if (weights.length * 2 > hits.length) out.push(`포장 무게 중앙값 ${median(weights)!.toLocaleString('ko-KR')}g`);
+  if (weights.length * 2 > hits.length) out.push(`포장 ${ml ? '용량' : '무게'} 중앙값 ${median(weights)!.toLocaleString('ko-KR')}${ml ? 'ml' : 'g'}`);
   const serving = mode(hits.map((h) => (h.serving ?? '').replace(/\s/g, '')).filter((s) => /^[\d.]+(g|ml)$/i.test(s)));
   if (serving && serving.count * 2 > hits.length) out.push(`1회 섭취참고량 ${serving.value}`);
   return out.length > 0 ? ` · ${out.join(' · ')}` : '';
@@ -325,10 +326,10 @@ export const buildMealStoryFoods = (
           if (values.length < hits.length) counts[k] = values.length;
         }
       }
-      const ml = hits.filter((h) => h.basis === '100ml').length;
+      const ml = hits.filter((h) => h.basis === '100ml').length > hits.length / 2;
       const byClass = [g.rep, g.sub].filter(Boolean).join(' > ');
-      const byName = `${(g.all ?? []).join('·')}${g.any?.length ? ` + ${g.any.join('|')}` : ''}`;
-      const byWeight = g.weight ? `포장 ${g.weight.min ?? ''}~${g.weight.max ?? ''}g` : '';
+      const byName = [(g.all ?? []).join('·'), (g.any ?? []).join('|')].filter(Boolean).join(' + ');
+      const byWeight = g.weight ? `포장 ${g.weight.min ?? ''}~${g.weight.max ?? ''}${ml ? 'ml' : 'g'}` : '';
       const words = `${[byClass, byName, byWeight].filter(Boolean).join(' · ')}${g.category ? ` (${g.category})` : ''}`;
       const count = hits.length.toLocaleString('ko-KR');
       const what = g.pick
@@ -336,8 +337,8 @@ export const buildMealStoryFoods = (
         : `제품 ${count}개의 중앙값`;
       foods[spec.id] = {
         per100,
-        basis: ml > hits.length / 2 ? '100ml' : '100g',
-        provenance: `${DB_LABEL[g.db]} '${words}' ${what}${amountsNote(hits)}`,
+        basis: ml ? '100ml' : '100g',
+        provenance: `${DB_LABEL[g.db]} '${words}' ${what}${amountsNote(hits, ml)}`,
         source: DB_SOURCE[g.db],
         matched: {
           count: hits.length,

@@ -28,7 +28,8 @@ import {
 // 글자 수 상한은 휴대폰 360px 화면 한 장에 들어가게 잡았다.
 
 /** 원고가 가리킬 수 있는 섭취기준 — 서버 표(meal-story.defs 의 KDRI_KIND)와 같은 이름. */
-export const MEAL_STORY_KDRI_KEYS = ['sodium', 'potassium', 'fiber', 'calcium', 'vitaminC'] as const;
+// sugar 는 영양 탭의 표에 없다 — 섭취기준이 그램이 아니라 '첨가당은 총 에너지의 10% 이내'라 서버가 2,000kcal 로 환산한다(defs).
+export const MEAL_STORY_KDRI_KEYS = ['sodium', 'potassium', 'fiber', 'calcium', 'vitaminC', 'sugar'] as const;
 export type MealStoryKdriKey = (typeof MEAL_STORY_KDRI_KEYS)[number];
 /** 영양 탭과 같은 주의 문구를 붙일 수 있는 영양소. */
 export const MEAL_STORY_CAUTION_KEYS = ['potassium', 'fiber', 'calcium'] as const;
