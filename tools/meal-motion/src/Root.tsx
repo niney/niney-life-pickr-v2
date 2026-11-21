@@ -3,6 +3,7 @@ import { StoryVideo, type StoryVideoProps } from '../../../apps/web/src/routes/m
 import { variantChalkStory, variantMine, variantStory } from '../../../apps/web/src/routes/meal-story/motion/storyFixture';
 import { FPS, H, W } from '../../../apps/web/src/routes/meal-story/motion/theme';
 import { buildTimeline } from '../../../apps/web/src/routes/meal-story/motion/timeline';
+import { POSTER, Poster } from './Poster';
 import { PropsSheet } from './PropsSheet';
 
 // 영상 한 편 = 스토리 한 편. 입력은 --props 로 받는 JSON(pnpm --filter friendly export:meal-story 가 쓴다 — 서버가 계산한
@@ -63,6 +64,8 @@ export const Root = () => (
       durationInFrames={buildTimeline(variantChalkStory).total}
       defaultProps={{ story: variantChalkStory, mine: variantMine, loggedIn: true, dark: false }}
     />
+    {/* 그림 표지(가로 한 장) — 사진 표지가 없는 편의 목록 카드·공유 미리보기. npm run poster -- out/<slug>.json */}
+    <Composition id="Poster" component={Poster} width={POSTER.w} height={POSTER.h} fps={FPS} durationInFrames={1} defaultProps={placeholder} />
     {/* 소품 점검(한 장) */}
     <Composition id="Props" component={PropsSheet} width={W} height={H} fps={FPS} durationInFrames={1} />
   </>

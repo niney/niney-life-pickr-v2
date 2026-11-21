@@ -12,9 +12,9 @@ type CoverScene = Extract<MealStorySceneType, { type: 'cover' }>;
 
 /**
  * 표지(칠판) — 분필로 두른 테두리 안에 머리말 쪽지, 줄마다 써지는 큰 손글씨 제목, 노란 물결 밑줄, 부제. 아래에는 김 나는
- * 그릇과 소금통(선 그림). 사진이 있으면 그릇 대신 사진을 종이에 붙여 칠판에 테이프로 붙인다.
+ * 그릇(선 그림 — 나트륨 편이면 소금통도). 사진이 있으면 그릇 대신 사진을 종이에 붙여 칠판에 테이프로 붙인다.
  */
-export const ChalkCover = ({ scene }: { scene: CoverScene; ctx: ChapterContext }) => {
+export const ChalkCover = ({ scene, ctx }: { scene: CoverScene; ctx: ChapterContext }) => {
   const f = useClock();
   const t = chalkTitle(scene.title, 940);
   const top = scene.image ? 300 : 480;
@@ -38,7 +38,7 @@ export const ChalkCover = ({ scene }: { scene: CoverScene; ctx: ChapterContext }
         <path d={wave} stroke={CHALK.yellow} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" {...draw(prog(f, COVER.title + 26, COVER.title + 44))} />
         {scene.image ? null : (
           <g transform={`translate(0 ${Math.max(0, subBottom + 50 - 1196)})`}>
-            <ChalkBowl f={f} p={art} salt />
+            <ChalkBowl f={f} p={art} salt={ctx.story.topic?.nutrient === 'sodium'} />
           </g>
         )}
       </ChalkSvg>

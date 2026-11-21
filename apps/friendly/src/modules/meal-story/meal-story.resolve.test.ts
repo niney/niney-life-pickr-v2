@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { MealStorySceneType } from '@repo/api-contract';
 import { checkMealStory, kickerClashWarnings } from './meal-story.check.js';
 import { buildMealStoryFoods, dishProblem, foodRowsFromCsv, type FoodRow } from './meal-story.foods.js';
-import { fractionOf, kdriFigure } from './meal-story.defs.js';
+import { fractionOf, kdriFigure, mealStoryPosterName } from './meal-story.defs.js';
 import { resolveMealStory } from './meal-story.resolve.js';
 import {
   MealStoryScript,
@@ -682,6 +682,50 @@ describe('checkMealStory', () => {
       ],
     });
     expect(checkMealStory(loaded(menus)).errors).toEqual([]);
+  });
+
+  it('그림 표지(poster) — 목록·공유의 표지는 사진이 먼저, 없으면 그림. 영상의 표지 장면에는 넣지 않는다. 이름의 해시가 원고와 다르면 오류', () => {
+    const anyImage = (f: string) => `/img/${f}`;
+    // 레시피 없이 메뉴를 견주는 편.
+    const menus = (over: Partial<MealStoryScriptType> = {}) =>
+      base({
+        recipe: undefined,
+        scenes: [
+          { type: 'cover', kicker: '외식 시험', title: '시험 표지' },
+          { type: 'list', title: '방법', items: [{ title: '하나' }, { title: '둘' }] },
+          { type: 'outro', title: '끝', actions: ['log', 'share'] },
+        ],
+        ...over,
+      });
+    const name = mealStoryPosterName(resolveMealStory(menus(), foods, anyImage).story);
+    expect(name).toMatch(/^poster-[0-9a-f]{8}\.jpg$/);
+    // 같은 원고면 같은 이름, 제목이 바뀌면 다른 이름. 마무리 단추처럼 그림에 없는 것은 이름을 바꾸지 않는다.
+    expect(mealStoryPosterName(resolveMealStory(menus({ poster: name }), foods, anyImage).story)).toBe(name);
+    const retitled = menus();
+    retitled.scenes[0] = { type: 'cover', kicker: '외식 시험', title: '다른 제목' };
+    expect(mealStoryPosterName(resolveMealStory(retitled, foods, anyImage).story)).not.toBe(name);
+
+    const withPoster = resolveMealStory(menus({ poster: name }), foods, anyImage);
+    expect(withPoster.story.coverUrl).toBe(`/img/${name}`);
+    expect(withPoster.listItem.coverUrl).toBe(`/img/${name}`);
+    expect(sceneOf(withPoster.story.scenes, 'cover').image).toBeNull();
+    // 사진 표지가 있으면 사진이 먼저(영상의 표지 장면에도 사진).
+    const both = resolveMealStory(menus({ poster: name, cover: 'cover.jpg' }), foods, anyImage);
+    expect(both.story.coverUrl).toBe('/img/cover.jpg');
+    expect(sceneOf(both.story.scenes, 'cover').image).toBe('/img/cover.jpg');
+    // 파일이 없으면 가리킴 오류.
+    expect(resolveMealStory(menus({ poster: name }), foods, imageUrl).issues).toEqual([expect.stringContaining(`그림 표지: 사진 '${name}'`)]);
+
+    const check = (script: MealStoryScriptType) => checkMealStory({ ...resolveMealStory(script, foods, anyImage), script, dir: '/x' }).errors;
+    const live = { status: 'published', reviewedAt: '2026-11-20' } as const;
+    // 레시피 없는 편은 그림 표지로 게시할 수 있다. 표지가 아예 없으면 오류.
+    expect(check(menus({ ...live, poster: name }))).toEqual([]);
+    expect(check(menus({ ...live }))).toEqual([expect.stringContaining('표지가 있어야 한다')]);
+    // 제목을 고치고 그림 표지를 다시 만들지 않았다.
+    expect(check(menus({ ...live, poster: 'poster-00000000.jpg' }))).toEqual([expect.stringContaining("그림 표지 'poster-00000000.jpg' 가 지금 원고")]);
+    // 레시피가 있는 편은 그림 표지가 있어도 사진 표지가 있어야 게시한다(직접 만들어 본 사진).
+    const recipePoster = mealStoryPosterName(resolveMealStory(base(), foods, anyImage).story);
+    expect(check(base({ ...live, poster: recipePoster }))).toEqual(expect.arrayContaining([expect.stringContaining('표지 사진(cover)')]));
   });
 
   it('영상 틀의 한도 — 형식은 통과해도 영상에서 글씨가 작아지거나 잘리는 원고는 경고로 알린다', () => {

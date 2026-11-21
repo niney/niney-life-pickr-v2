@@ -1,4 +1,5 @@
-import type { MealStoryLookType, MealStoryNutrientType, MealStorySceneType } from '@repo/api-contract';
+import { createHash } from 'node:crypto';
+import type { MealStoryLookType, MealStoryNutrientType, MealStorySceneType, MealStoryType } from '@repo/api-contract';
 import { KDRI_AGE_GROUPS, nutrientReference, type KdriAgeGroup, type KdriNutrient } from '../meal-nutrition/kdri.js';
 import { NUTRIENT_DEFS } from '../meal-nutrition/meal-nutrition.defs.js';
 import type { MealStoryCautionKey, MealStoryKdriKey } from './meal-story.script.js';
@@ -40,6 +41,22 @@ export const MEAL_STORY_RECIPE_NUTRIENTS: readonly MealStoryNutrientType[] = [
 export const MEAL_STORY_LOOK_SCENES: Readonly<Record<MealStoryLookType, readonly MealStorySceneType['type'][] | null>> = {
   paper: null,
   chalk: ['cover', 'stat', 'bars', 'lineup', 'list', 'outro'],
+};
+
+// 그림 표지의 그림을 바꾸면(tools/meal-motion 의 Poster) 이 숫자를 올린다 — 모든 편의 그림 표지를 다시 만들게 된다.
+const POSTER_VERSION = 1;
+
+/**
+ * 그림 표지 파일 이름 — 그림에 들어가는 것(그림체·주제색·머리말·제목·소품)의 해시를 이름에 넣는다. 제목을 고치고 그림 표지를
+ * 다시 만들지 않으면 원고의 이름과 달라져 점검이 잡는다. 내보내기(export:meal-story)가 이 이름으로 만들 자리를 알려 준다.
+ */
+export const mealStoryPosterName = (story: Pick<MealStoryType, 'look' | 'topic' | 'scenes'>): string => {
+  const cover = story.scenes.find((s) => s.type === 'cover');
+  const icons = story.scenes.flatMap((s) =>
+    s.type === 'ingredients' || s.type === 'list' ? s.items.map((i) => i.icon) : s.type === 'lineup' ? s.rows.map((r) => r.icon) : s.type === 'step' ? [s.icon] : [],
+  );
+  const drawn = [POSTER_VERSION, story.look, story.topic?.nutrient ?? null, cover?.type === 'cover' ? [cover.kicker, cover.title] : null, icons];
+  return `poster-${createHash('sha1').update(JSON.stringify(drawn)).digest('hex').slice(0, 8)}.jpg`;
 };
 
 /** 단위대로 반올림 — mg·kcal·% 는 정수, g 은 10 미만이면 소수 한 자리. */

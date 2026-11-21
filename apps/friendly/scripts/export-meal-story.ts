@@ -10,7 +10,8 @@
 /* eslint-disable no-console */
 import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { loadMealStoryDir, mealStoryDir } from '../src/modules/meal-story/meal-story.store.js';
+import { mealStoryPosterName } from '../src/modules/meal-story/meal-story.defs.js';
+import { MEAL_STORY_IMAGE_DIR, loadMealStoryDir, mealStoryDir } from '../src/modules/meal-story/meal-story.store.js';
 
 const arg = (name: string): string | null => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -45,7 +46,18 @@ const mine =
     : null;
 writeFileSync(
   out,
-  `${JSON.stringify({ story: loaded.story, mine, loggedIn: mine !== null, dark: process.argv.includes('--dark') }, null, 1)}\n`,
+  `${JSON.stringify(
+    {
+      story: loaded.story,
+      mine,
+      loggedIn: mine !== null,
+      dark: process.argv.includes('--dark'),
+      // 그림 표지를 만들 자리(tools/meal-motion 의 npm run poster 가 여기에 쓴다) — 이름의 해시는 점검과 같은 셈.
+      posterFile: resolve(join(mealStoryDir(), slug, MEAL_STORY_IMAGE_DIR, mealStoryPosterName(loaded.story))),
+    },
+    null,
+    1,
+  )}\n`,
 );
 console.log(
   `${out} — 장면 ${loaded.story.scenes.length} · 풀리지 않은 가리킴 ${loaded.issues.length}${mine ? ` · 내 평균 ${mineArg}${unit}(예시 ${myKey}, 기준 ${standard}${unit})` : ''}`,

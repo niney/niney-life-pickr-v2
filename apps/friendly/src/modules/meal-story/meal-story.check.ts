@@ -1,4 +1,4 @@
-import { MEAL_STORY_LOOK_SCENES } from './meal-story.defs.js';
+import { MEAL_STORY_LOOK_SCENES, mealStoryPosterName } from './meal-story.defs.js';
 import type { LoadedMealStory } from './meal-story.store.js';
 import type { MealStoryFoodsFileType } from './meal-story.script.js';
 
@@ -229,8 +229,21 @@ export const checkMealStory = (
 
   if (s.script.status === 'published') {
     if (!s.script.reviewedAt) errors.push('게시하려면 검수일(reviewedAt)이 있어야 한다');
-    if (!s.script.cover) errors.push('게시하려면 표지 사진(cover)이 있어야 한다');
+    // 표지 — 레시피가 있는 편은 직접 만들어 찍은 사진(cover)이 있어야 한다. 레시피 없이 메뉴를 견주는 편은 그림 표지(poster)도 된다.
+    if (s.script.recipe) {
+      if (!s.script.cover) errors.push('게시하려면 표지 사진(cover)이 있어야 한다');
+    } else if (!s.script.cover && !s.script.poster) {
+      errors.push('게시하려면 표지가 있어야 한다 — 사진(cover) 또는 그림 표지(poster)');
+    }
     if (s.script.recipe?.steps.some((st) => !st.image)) warnings.push('사진이 없는 레시피 단계가 있다');
+  }
+
+  // 그림 표지 — 이름의 해시가 지금 원고의 그림(그림체·머리말·제목·소품)과 같아야 한다.
+  if (s.script.poster) {
+    const expected = mealStoryPosterName(s.story);
+    if (s.script.poster !== expected) {
+      errors.push(`그림 표지 '${s.script.poster}' 가 지금 원고(제목·머리말·그림체)와 다르다 — 다시 만든다(tools/meal-motion 에서 npm run poster, 새 이름 ${expected})`);
+    }
   }
 
   // 사진 — 크기와 쓰이지 않는 파일.
@@ -238,6 +251,7 @@ export const checkMealStory = (
     const used = new Set<string>(
       [
         s.script.cover,
+        s.script.poster,
         ...scenes.map((sc) => (sc.type === 'cover' ? sc.image : undefined)),
         ...(s.script.recipe?.steps.map((st) => st.image) ?? []),
       ].filter((x): x is string => !!x),

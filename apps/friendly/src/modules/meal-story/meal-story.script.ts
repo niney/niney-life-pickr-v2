@@ -258,6 +258,9 @@ export const MealStoryScript = z
     publishedAt: DateString,
     reviewedAt: DateString.nullable(),
     cover: ImageName.optional(),
+    // 그림 표지 — 영상의 표지를 가로 그림 한 장으로 뽑은 것(tools/meal-motion 의 npm run poster 가 만든다, 이름 poster-<해시>.jpg).
+    // 목록 카드와 공유 미리보기에만 쓰고(사진 표지가 있으면 사진이 먼저), 영상의 표지 장면에는 넣지 않는다.
+    poster: ImageName.optional(),
     sources: z.array(MealStorySourceSpec).max(12),
     foods: z.array(MealStoryFoodSpec).max(30),
     recipe: MealStoryRecipeSpec.optional(),

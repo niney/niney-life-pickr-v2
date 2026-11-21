@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { AbsoluteFill } from 'remotion';
 import { prog, useClock } from '../anim';
 import { FONT, HAND, amountDecimals } from '../theme';
@@ -19,6 +19,11 @@ export const ChalkSvg = ({ children }: { children: ReactNode }) => (
   <svg width={1080} height={1920} viewBox="0 0 1080 1920" style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
     {children}
   </svg>
+);
+
+/** 분필 결 한 장 — 칠판 위 글·선을 덮는다. 자리는 부르는 쪽이 준다(영상의 칠판, 도구의 그림 표지). */
+export const ChalkGrain = ({ style }: { style: CSSProperties }) => (
+  <div style={{ position: 'absolute', backgroundImage: GRAIN, backgroundSize: '320px 320px', opacity: 0.62, pointerEvents: 'none', ...style }} />
 );
 
 /** 칠판 한 장 — 나무 테, 지우개 자국·분필 가루, 내용, 분필 결, 분필 받침(분필 셋과 지우개). */
@@ -43,7 +48,7 @@ export const ChalkBoard = ({ children }: { children?: ReactNode }) => (
       <ellipse cx={400} cy={1680} rx={420} ry={200} fill="url(#chalk-dust)" />
     </ChalkSvg>
     {children}
-    <div style={{ position: 'absolute', left: 38, top: 38, width: 1004, height: 1844, backgroundImage: GRAIN, backgroundSize: '320px 320px', opacity: 0.62, pointerEvents: 'none' }} />
+    <ChalkGrain style={{ left: 38, top: 38, width: 1004, height: 1844 }} />
     <ChalkSvg>
       <rect x={38} y={1808} width={1004} height={30} fill={CHALK.wood} />
       <rect x={38} y={1838} width={1004} height={12} fill={CHALK.woodDeep} />

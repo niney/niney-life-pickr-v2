@@ -389,7 +389,8 @@ export const resolveMealStory = (
   };
 
   const scenes = script.scenes.map(scene);
-  const coverUrl = image(script.cover, '표지 사진');
+  // 목록 카드·공유 미리보기의 표지 — 사진이 먼저, 없으면 그림 표지. 영상의 표지 장면(위 scene)은 사진만 쓴다.
+  const coverUrl = image(script.cover, '표지 사진') ?? image(script.poster, '그림 표지');
   const recipeOut: MealStoryType['recipe'] = recipe
     ? {
         name: recipe.name,

@@ -8,7 +8,8 @@
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts MealStory",
     "frames": "remotion render src/index.ts MealStory --sequence --every-nth-frame=6 --image-format=jpeg --scale=0.25",
-    "sheet": "node sheet.mjs"
+    "sheet": "node sheet.mjs",
+    "poster": "node poster.mjs"
   },
   "dependencies": {
     "@remotion/cli": "4.0.541",
