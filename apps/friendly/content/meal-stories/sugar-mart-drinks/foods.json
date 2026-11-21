@@ -1,0 +1,374 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "soda": {
+      "per100": {
+        "kcal": 42,
+        "carbG": 10.6,
+        "proteinG": 0,
+        "fatG": 0,
+        "sugarG": 10,
+        "fiberG": 0,
+        "sodiumMg": 3,
+        "potassiumMg": 1,
+        "calciumMg": 1.5,
+        "vitaminCMg": 0
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '탄산음료 > 탄산음료 · 콜라|사이다' 제품 147개의 중앙값 · 포장 용량 중앙값 355ml · 1회 섭취참고량 200ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 147,
+        "names": [
+          "1945 라임사이다",
+          "1945 레몬콜라",
+          "815사이다",
+          "815콜라",
+          "갈바니나 노카페인 유기농 콜라",
+          "갈바니나유기농콜라",
+          "갈배사이다",
+          "광씨 비닝 레몬맛 사이다",
+          "광씨 청바오 오렌지맛 사이다",
+          "나랑드사이다"
+        ],
+        "counts": {
+          "fiberG": 6,
+          "sodiumMg": 146,
+          "potassiumMg": 4,
+          "calciumMg": 4,
+          "vitaminCMg": 3
+        }
+      }
+    },
+    "soda-zero": {
+      "per100": {
+        "kcal": 1,
+        "carbG": 1,
+        "proteinG": 0,
+        "fatG": 0,
+        "sugarG": 0,
+        "fiberG": 0.65,
+        "sodiumMg": 8,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": 125
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '탄산음료 > 탄산음료 · 제로' 제품 340개의 중앙값 · 포장 용량 중앙값 355ml · 1회 섭취참고량 200ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 340,
+        "names": [
+          "815콜라제로",
+          "815피즈 제로 포도맛",
+          "가평잣막걸리맛 제로0.00",
+          "갈배 사이다 제로",
+          "갈배사이다 제로",
+          "갑 토닉워터 제로",
+          "고려은단 비타민C1000 스파클링 제로",
+          "고릴라 에너지 드링크 제로 슈가",
+          "글래디에이터 에너지드링크 제로슈가",
+          "글루라이트 제로 레몬 유자"
+        ],
+        "counts": {
+          "fiberG": 20,
+          "vitaminCMg": 3
+        }
+      }
+    },
+    "ade": {
+      "per100": {
+        "kcal": 50,
+        "carbG": 11.62,
+        "proteinG": 0,
+        "fatG": 0,
+        "sugarG": 10,
+        "fiberG": 1,
+        "sodiumMg": 12,
+        "potassiumMg": 30,
+        "calciumMg": 6,
+        "vitaminCMg": 28.1
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '과·채음료 > 과·채음료 · 포장 180~350ml' 제품 922개의 중앙값 · 포장 용량 중앙값 245ml · 1회 섭취참고량 200ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 922,
+        "names": [
+          "’얼린’ 코코넛밀크",
+          "100제주감귤착즙",
+          "7-SELECT GRAPEFRUIT BLACK 자몽허니블랙티",
+          "7-SELECT YUZU LEMON 유자레몬티",
+          "가나디 망고드링크",
+          "가나디 자몽드링크",
+          "가야농장 망고농장",
+          "가야농장 캘리포니아 푸룬데이",
+          "가야농장배농장",
+          "가야농장제주감귤"
+        ],
+        "counts": {
+          "fiberG": 54,
+          "potassiumMg": 18,
+          "calciumMg": 19,
+          "vitaminCMg": 44
+        }
+      }
+    },
+    "juice": {
+      "per100": {
+        "kcal": 45,
+        "carbG": 10.55,
+        "proteinG": 0.46,
+        "fatG": 0,
+        "sugarG": 8.97,
+        "fiberG": 1,
+        "sodiumMg": 5,
+        "potassiumMg": 208,
+        "calciumMg": 12,
+        "vitaminCMg": 31
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '과·채주스 > 과·채주스 · 포장 180~250ml' 제품 762개의 중앙값 · 포장 용량 중앙값 200ml · 1회 섭취참고량 200ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 762,
+        "names": [
+          "’얼린’ 생 수박주스",
+          "’얼린’ 에이비씨주스 사과&비트&당근",
+          "’얼린’ 폰칸 감귤주스",
+          "100% 블랙  슈가케인 주스",
+          "100% 생강레몬원액",
+          "100% 유기농 레몬생강즙 스틱",
+          "100% 유기농 야채농장 유기농 과일야채",
+          "100% 유기농 야채농장 ABC",
+          "100%유기농 레몬즙 스틱",
+          "100%제주한라봉감귤착즙"
+        ],
+        "counts": {
+          "fiberG": 27,
+          "potassiumMg": 13,
+          "calciumMg": 11,
+          "vitaminCMg": 25
+        }
+      }
+    },
+    "latte": {
+      "per100": {
+        "kcal": 62,
+        "carbG": 9.58,
+        "proteinG": 1.74,
+        "fatG": 2,
+        "sugarG": 8.4,
+        "fiberG": 0.25,
+        "sodiumMg": 52,
+        "potassiumMg": 113,
+        "calciumMg": 45,
+        "vitaminCMg": 0
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '액상커피 · 라떼 · 포장 200~350ml' 제품 286개의 중앙값 · 포장 용량 중앙값 257.5ml · 1회 섭취참고량 240ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 286,
+        "names": [
+          "1300원 카페라떼",
+          "7-SELECT 돌체라떼",
+          "7-SELECT 바닐라라떼",
+          "7-SELECT 카라멜라떼",
+          "7-SELECT 카페라떼",
+          "게이샤 라떼",
+          "놀라 라떼",
+          "더 가벼운 슬림슈가 카페라떼",
+          "더 깊고 진한 흑당카페라떼",
+          "더 진한 라라스윗 저당라떼 바닐라라떼"
+        ],
+        "counts": {
+          "fiberG": 12,
+          "potassiumMg": 9,
+          "calciumMg": 10,
+          "vitaminCMg": 3
+        }
+      }
+    },
+    "flavored-milk": {
+      "per100": {
+        "kcal": 73,
+        "carbG": 11,
+        "proteinG": 2.25,
+        "fatG": 2.2,
+        "sugarG": 9.6,
+        "fiberG": 1.3,
+        "sodiumMg": 46,
+        "potassiumMg": 136.5,
+        "calciumMg": 93,
+        "vitaminCMg": 0
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '가공우유 > 가공유 · 포장 180~320ml' 제품 520개의 중앙값 · 포장 용량 중앙값 200ml · 1회 섭취참고량 200ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 520,
+        "names": [
+          "(군납)딸기우유",
+          "16곡 미숫가루우유",
+          "1등이되고싶은바나나우유",
+          "990 바나나 우유",
+          "가공우유_딸기맛",
+          "가나 초콜릿밀크",
+          "가나 쵸코 우유",
+          "가나디 바나나우유",
+          "가나초코우유",
+          "가나초콜릿밀크"
+        ],
+        "counts": {
+          "fiberG": 25,
+          "potassiumMg": 16,
+          "calciumMg": 87,
+          "vitaminCMg": 8
+        }
+      }
+    },
+    "milk": {
+      "per100": {
+        "kcal": 65,
+        "carbG": 5,
+        "proteinG": 3,
+        "fatG": 3.6,
+        "sugarG": 4.8,
+        "fiberG": 0,
+        "sodiumMg": 50,
+        "potassiumMg": 116,
+        "calciumMg": 100,
+        "vitaminCMg": 0
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '우유 > 우유' 제품 442개의 중앙값 · 포장 용량 중앙값 900ml · 1회 섭취참고량 200ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 442,
+        "names": [
+          "1974 우유",
+          "1등급 우유",
+          "1등급 원유로 만든 고소한 우유",
+          "1A 우유",
+          "1A 프레시 우유",
+          "1A등급 대용량 우유",
+          "1A등급 저지방우유",
+          "1A등급우유",
+          "1A우유",
+          "1A우유 오리지널"
+        ],
+        "counts": {
+          "fiberG": 7,
+          "potassiumMg": 5,
+          "calciumMg": 335,
+          "vitaminCMg": 5
+        }
+      }
+    },
+    "soymilk": {
+      "per100": {
+        "kcal": 50,
+        "carbG": 5.26,
+        "proteinG": 2.78,
+        "fatG": 1.95,
+        "sugarG": 2.11,
+        "fiberG": 1.6,
+        "sodiumMg": 74,
+        "potassiumMg": 136,
+        "calciumMg": 105,
+        "vitaminCMg": 0.76
+      },
+      "basis": "100ml",
+      "provenance": "식약처 가공식품 DB 전체판 '두유 > 가공두유 · 포장 170~210ml' 제품 529개의 중앙값 · 포장 용량 중앙값 190ml · 1회 섭취참고량 200ml",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 529,
+        "names": [
+          "100%국산서리태콩물",
+          "21곡 서리태 통째로갈아 넣은 콩물 두유",
+          "6611 속청 서리태 콩물두유",
+          "갈아만든 진한 국산콩 두유 검은콩",
+          "갈아만든 진한 국산콩 두유 검은콩 고칼슘",
+          "갈아만든 진한 국산콩 두유 검은콩 호두아몬드",
+          "갈아만든 진한 국산콩 두유 무가당",
+          "강두유 마카다미아 호두와 아몬드 두유",
+          "강두유 호두와 아몬드 두유",
+          "강스푸드 호두와 아몬드 두유"
+        ],
+        "counts": {
+          "fiberG": 69,
+          "potassiumMg": 17,
+          "calciumMg": 276,
+          "vitaminCMg": 19
+        }
+      }
+    },
+    "yogurt-low": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": 2,
+        "fiberG": null,
+        "sodiumMg": null,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '농후발효유 > 농후발효유 · 포장 80~110g' 제품 554개를 당류 순으로 세운 아래에서 10%째 값 · 포장 무게 중앙값 100g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 554,
+        "names": [
+          "99.9% 플레인 요거트 오리지널",
+          "건강한 토종다래 요구르트",
+          "건국하이요 플레인",
+          "건국하이요딸기",
+          "건국하이요복숭아",
+          "건국하이요블루베리",
+          "건국하이요플레인",
+          "곰표 플레인 요거트",
+          "구르미 그릭 프로요",
+          "국산 A2우유 그릭요거트"
+        ],
+        "pick": "low"
+      }
+    },
+    "yogurt-high": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": 13.13,
+        "fiberG": null,
+        "sodiumMg": null,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '농후발효유 > 농후발효유 · 포장 80~110g' 제품 554개를 당류 순으로 세운 위에서 10%째 값 · 포장 무게 중앙값 100g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 554,
+        "names": [
+          "99.9% 플레인 요거트 오리지널",
+          "건강한 토종다래 요구르트",
+          "건국하이요 플레인",
+          "건국하이요딸기",
+          "건국하이요복숭아",
+          "건국하이요블루베리",
+          "건국하이요플레인",
+          "곰표 플레인 요거트",
+          "구르미 그릭 프로요",
+          "국산 A2우유 그릭요거트"
+        ],
+        "pick": "high"
+      }
+    }
+  }
+}

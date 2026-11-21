@@ -1,0 +1,117 @@
+{
+  "slug": "sugar-mart-drinks",
+  "status": "draft",
+  "title": "음료 고르기로 당류 줄이기",
+  "summary": "탄산음료·주스·맛 우유·라떼 한 병의 당류를 제품 수백 개로 줄 세워 봤어요. 제로·흰 우유·플레인처럼 고르기만 해도 달라져요.",
+  "topic": { "nutrient": "sugar", "direction": "reduce" },
+  "look": "chalk",
+  "publishedAt": "2026-11-21",
+  "reviewedAt": null,
+  "poster": "poster-d52dbcb1.jpg",
+  "sources": [],
+  "foods": [
+    {
+      "id": "soda",
+      "label": "콜라·사이다",
+      "group": { "db": "processed-full", "rep": "탄산음료", "sub": "탄산음료", "any": ["콜라", "사이다"], "none": ["제로", "ZERO", "Zero", "zero", "라이트", "무설탕"] }
+    },
+    { "id": "soda-zero", "label": "제로 탄산음료", "group": { "db": "processed-full", "rep": "탄산음료", "sub": "탄산음료", "all": ["제로"] } },
+    { "id": "ade", "label": "과일 맛 음료", "group": { "db": "processed-full", "rep": "과·채음료", "sub": "과·채음료", "weight": { "min": 180, "max": 350 } } },
+    { "id": "juice", "label": "과일 주스", "group": { "db": "processed-full", "rep": "과·채주스", "sub": "과·채주스", "weight": { "min": 180, "max": 250 } } },
+    { "id": "latte", "label": "라떼 커피", "group": { "db": "processed-full", "rep": "액상커피", "all": ["라떼"], "weight": { "min": 200, "max": 350 } } },
+    { "id": "flavored-milk", "label": "맛 우유", "group": { "db": "processed-full", "rep": "가공우유", "sub": "가공유", "weight": { "min": 180, "max": 320 } } },
+    { "id": "milk", "label": "흰 우유", "group": { "db": "processed-full", "rep": "우유", "sub": "우유" } },
+    { "id": "soymilk", "label": "두유", "group": { "db": "processed-full", "rep": "두유", "sub": "가공두유", "weight": { "min": 170, "max": 210 } } },
+    {
+      "id": "yogurt-low",
+      "label": "떠먹는 요거트(당류가 낮은 제품)",
+      "group": { "db": "processed-full", "rep": "농후발효유", "sub": "농후발효유", "weight": { "min": 80, "max": 110 }, "pick": { "by": "sugarG", "at": "low" } }
+    },
+    {
+      "id": "yogurt-high",
+      "label": "떠먹는 요거트(당류가 높은 제품)",
+      "group": { "db": "processed-full", "rep": "농후발효유", "sub": "농후발효유", "weight": { "min": 80, "max": 110 }, "pick": { "by": "sugarG", "at": "high" } }
+    }
+  ],
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "음료 당류 줄이기",
+      "title": "음료 고르기로 당류 줄이기",
+      "subtitle": "마트 음료 한 병의 당류를 줄 세워 봤어요"
+    },
+    {
+      "type": "stat",
+      "title": "넣은 당, 하루 이 안으로",
+      "figures": [{ "label": "넣은 당 하루 기준", "value": { "kdri": "sugar" } }],
+      "note": "성분표의 당류는 넣은 당에 우유·과일에 원래 든 당을 더한 값이에요."
+    },
+    {
+      "type": "bars",
+      "title": "한 캔이면 이만큼",
+      "bars": [
+        { "label": "넣은 당 하루 기준", "value": { "kdri": "sugar" } },
+        { "label": "콜라·사이다 한 캔 355ml", "value": { "food": "soda", "nutrient": "sugarG", "grams": 355 }, "highlight": true }
+      ],
+      "note": "제로가 아닌 콜라·사이다 제품들의 가운데 값이에요."
+    },
+    {
+      "type": "lineup",
+      "title": "한 병에 든 당류",
+      "basis": "한 병·한 팩",
+      "rows": [
+        { "label": "콜라·사이다", "sub": "한 캔 355ml", "value": { "food": "soda", "nutrient": "sugarG", "grams": 355 } },
+        { "label": "과일 맛 음료", "sub": "한 병 240ml", "value": { "food": "ade", "nutrient": "sugarG", "grams": 240 } },
+        { "label": "라떼 커피", "sub": "한 컵 250ml", "value": { "food": "latte", "nutrient": "sugarG", "grams": 250 } },
+        { "label": "맛 우유", "sub": "한 팩 200ml", "value": { "food": "flavored-milk", "nutrient": "sugarG", "grams": 200 } },
+        { "label": "과일 주스", "sub": "한 팩 200ml", "value": { "food": "juice", "nutrient": "sugarG", "grams": 200 } },
+        { "label": "흰 우유", "sub": "한 팩 200ml", "value": { "food": "milk", "nutrient": "sugarG", "grams": 200 } },
+        { "label": "두유", "sub": "한 팩 190ml", "value": { "food": "soymilk", "nutrient": "sugarG", "grams": 190 } }
+      ],
+      "note": "종류마다 제품 수백 개의 가운데 값이에요. 흰 우유의 당류는 원래 든 유당이에요."
+    },
+    {
+      "type": "bars",
+      "title": "탄산음료, 제로와 견주면",
+      "bars": [
+        { "label": "제로 탄산음료 한 캔", "value": { "food": "soda-zero", "nutrient": "sugarG", "grams": 355 }, "highlight": true },
+        { "label": "콜라·사이다 한 캔", "value": { "food": "soda", "nutrient": "sugarG", "grams": 355 } }
+      ],
+      "note": "제로 제품은 당류 대신 감미료로 단맛을 내요."
+    },
+    {
+      "type": "bars",
+      "title": "우유에 맛을 넣으면",
+      "bars": [
+        { "label": "흰 우유 한 팩 200ml", "value": { "food": "milk", "nutrient": "sugarG", "grams": 200 }, "highlight": true },
+        { "label": "맛 우유 한 팩 200ml", "value": { "food": "flavored-milk", "nutrient": "sugarG", "grams": 200 } }
+      ],
+      "note": "초코·딸기·바나나 맛 우유예요. 늘어난 만큼은 대체로 넣은 당이에요."
+    },
+    {
+      "type": "bars",
+      "title": "떠먹는 요거트, 제품에 따라",
+      "bars": [
+        { "label": "당류가 낮은 제품 한 컵 100g", "value": { "food": "yogurt-low", "nutrient": "sugarG", "grams": 100 }, "highlight": true },
+        { "label": "당류가 높은 제품 한 컵 100g", "value": { "food": "yogurt-high", "nutrient": "sugarG", "grams": 100 } }
+      ],
+      "note": "당류 순으로 줄 세웠을 때 열 개 중 하나쯤인 낮은 값과 높은 값이에요."
+    },
+    {
+      "type": "list",
+      "title": "고르는 요령",
+      "items": [
+        { "title": "제로·무가당 찾기", "text": "탄산음료·커피·차에는 당류가 없는 제품이 많아요", "icon": "magnifier" },
+        { "title": "흰 우유·플레인으로", "text": "맛을 넣은 우유·요거트 대신 그대로인 것을 골라요", "icon": "milk" },
+        { "title": "주스도 살피기", "text": "과일 주스의 당류도 탄산음료와 비슷한 편이에요", "icon": "apple" },
+        { "title": "성분표의 당류 줄 보기", "text": "값이 한 병 전체 기준인지, 일부 기준인지 함께 봐요", "icon": "label" }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "다음에 음료 고를 때 떠올려요",
+      "text": "마신 것을 기록해 두면 통계에서 당류가 어떻게 달라지는지 보여요.",
+      "actions": ["log", "stats", "share"]
+    }
+  ]
+}
