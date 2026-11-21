@@ -7,6 +7,7 @@
   "look": "chalk",
   "publishedAt": "2026-11-12",
   "reviewedAt": null,
+  "poster": "poster-b8c1da0b.jpg",
   "sources": [],
   "foods": [
     { "id": "udon", "label": "우동(중식)", "ref": { "db": "dish", "code": "D303-164430000-0001" } },
@@ -110,8 +111,8 @@
     {
       "type": "outro",
       "title": "오늘 점심 메뉴부터",
-      "text": "기록해 두면 통계에서 나트륨이 어떻게 달라지는지 보여요.",
-      "actions": ["share", "stats"]
+      "text": "먹은 메뉴를 기록해 두면 통계에서 나트륨이 어떻게 달라지는지 보여요.",
+      "actions": ["log", "stats", "share"]
     }
   ]
 }

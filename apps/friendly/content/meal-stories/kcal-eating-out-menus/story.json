@@ -1,0 +1,134 @@
+{
+  "slug": "kcal-eating-out-menus",
+  "status": "draft",
+  "title": "메뉴 고르기로 외식 열량 줄이기",
+  "summary": "식당 음식 한 그릇의 열량을 면·밥·튀김과 구이·찌개와 탕으로 나눠 줄 세워 봤어요. 열량이 높은 메뉴와 고르는 요령까지.",
+  "topic": { "nutrient": "kcal", "direction": "reduce" },
+  "look": "chalk",
+  "publishedAt": "2026-11-20",
+  "reviewedAt": null,
+  "poster": "poster-4fbebea0.jpg",
+  "sources": [],
+  "foods": [
+    { "id": "rice", "label": "흰쌀밥", "ref": { "db": "raw", "code": "R101-013000300-0000" } },
+    { "id": "cream-spaghetti", "label": "해물 크림 스파게티", "ref": { "db": "dish", "code": "D303-161504800-0001" } },
+    { "id": "jajangmyeon", "label": "자장면", "ref": { "db": "dish", "code": "D303-168000000-0001" } },
+    { "id": "jjamppong", "label": "삼선짬뽕", "ref": { "db": "dish", "code": "D303-172310000-0001" } },
+    { "id": "udon", "label": "우동(중식)", "ref": { "db": "dish", "code": "D303-164430000-0001" } },
+    { "id": "tomato-spaghetti", "label": "토마토 스파게티", "ref": { "db": "dish", "code": "D303-161490000-0001" } },
+    { "id": "naengmyeon", "label": "열무냉면", "ref": { "db": "dish", "code": "D303-144360000-0001" } },
+    { "id": "pho", "label": "쌀국수", "ref": { "db": "dish", "code": "D303-162000000-0001" } },
+    { "id": "pork-gukbap", "label": "돼지국밥", "ref": { "db": "dish", "code": "D301-004140000-0001" } },
+    { "id": "deopbap", "label": "해물덮밥", "ref": { "db": "dish", "code": "D301-010550000-0001" } },
+    { "id": "jajangbap", "label": "자장밥", "ref": { "db": "dish", "code": "D301-031000000-0001" } },
+    { "id": "fried-rice", "label": "삼선볶음밥", "ref": { "db": "dish", "code": "D301-017250000-0001" } },
+    { "id": "hoedeopbap", "label": "회덮밥", "ref": { "db": "dish", "code": "D301-051000000-0001" } },
+    { "id": "gondre-rice", "label": "곤드레나물밥", "ref": { "db": "dish", "code": "D301-002000000-0001" } },
+    { "id": "gimbap", "label": "소고기김밥", "ref": { "db": "dish", "code": "D301-007280000-0001" } },
+    { "id": "galbi", "label": "양념 소갈비구이", "ref": { "db": "dish", "code": "D308-354123400-0001" } },
+    { "id": "fried-chicken", "label": "닭튀김", "ref": { "db": "dish", "code": "D312-549000000-0001" } },
+    { "id": "smoked-duck", "label": "훈제오리", "ref": { "db": "dish", "code": "D308-406000000-0001" } },
+    { "id": "cheese-donkatsu", "label": "치즈돈가스", "ref": { "db": "dish", "code": "D312-550140000-0001" } },
+    { "id": "donkatsu", "label": "등심돈가스", "ref": { "db": "dish", "code": "D312-550080000-0001" } },
+    { "id": "hamburg", "label": "함박스테이크", "ref": { "db": "dish", "code": "D308-404000000-0002" } },
+    { "id": "eel", "label": "양념 장어구이", "ref": { "db": "dish", "code": "D308-396160000-0001" } },
+    { "id": "haejangguk", "label": "뼈다귀해장국", "ref": { "db": "dish", "code": "D305-256210000-0001" } },
+    { "id": "sundaeguk", "label": "순대국", "ref": { "db": "dish", "code": "D305-234000000-0001" } },
+    { "id": "sundubu", "label": "초당순두부", "ref": { "db": "dish", "code": "D305-252000000-0001" } },
+    { "id": "budaejjigae", "label": "부대찌개", "ref": { "db": "dish", "code": "D306-284000000-0004" } },
+    { "id": "chueotang", "label": "추어탕", "ref": { "db": "dish", "code": "D306-298000000-0001" } },
+    { "id": "kimchijjigae", "label": "김치찌개", "ref": { "db": "dish", "code": "D306-266000000-0001" } }
+  ],
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "외식 열량 줄이기",
+      "title": "메뉴 고르기로 외식 열량 줄이기",
+      "subtitle": "식당 음식 한 그릇의 열량을 줄 세워 봤어요"
+    },
+    {
+      "type": "bars",
+      "title": "밥 한 공기와 견주면",
+      "bars": [
+        { "label": "밥 한 공기(210g)", "value": { "food": "rice", "nutrient": "kcal", "grams": 210 } },
+        { "label": "해물 크림 스파게티 한 접시", "value": { "dish": "cream-spaghetti", "nutrient": "kcal" }, "highlight": true }
+      ],
+      "note": "식약처가 식당 음식을 모아 분석한 값이에요. 가게와 양에 따라 달라요."
+    },
+    {
+      "type": "lineup",
+      "title": "면 요리 한 그릇",
+      "basis": "식당 한 그릇",
+      "rows": [
+        { "label": "해물 크림 스파게티", "value": { "dish": "cream-spaghetti", "nutrient": "kcal" } },
+        { "label": "자장면", "value": { "dish": "jajangmyeon", "nutrient": "kcal" } },
+        { "label": "삼선짬뽕", "value": { "dish": "jjamppong", "nutrient": "kcal" } },
+        { "label": "우동(중식)", "value": { "dish": "udon", "nutrient": "kcal" } },
+        { "label": "토마토 스파게티", "value": { "dish": "tomato-spaghetti", "nutrient": "kcal" } },
+        { "label": "열무냉면", "value": { "dish": "naengmyeon", "nutrient": "kcal" }, "highlight": true },
+        { "label": "쌀국수", "value": { "dish": "pho", "nutrient": "kcal" }, "highlight": true }
+      ],
+      "note": "크림소스나 볶은 소스가 들어간 면이 높은 편이에요."
+    },
+    {
+      "type": "lineup",
+      "title": "밥 요리 한 그릇",
+      "basis": "식당 한 그릇",
+      "rows": [
+        { "label": "돼지국밥", "value": { "dish": "pork-gukbap", "nutrient": "kcal" } },
+        { "label": "해물덮밥", "value": { "dish": "deopbap", "nutrient": "kcal" } },
+        { "label": "자장밥", "value": { "dish": "jajangbap", "nutrient": "kcal" } },
+        { "label": "삼선볶음밥", "value": { "dish": "fried-rice", "nutrient": "kcal" } },
+        { "label": "회덮밥", "value": { "dish": "hoedeopbap", "nutrient": "kcal" } },
+        { "label": "곤드레나물밥", "value": { "dish": "gondre-rice", "nutrient": "kcal" }, "highlight": true },
+        { "label": "소고기김밥", "value": { "dish": "gimbap", "nutrient": "kcal" }, "highlight": true }
+      ],
+      "note": "덮밥과 볶음밥은 한 그릇이 높은 편이에요. 나물밥과 김밥이 낮았어요."
+    },
+    {
+      "type": "lineup",
+      "title": "튀김과 구이 한 접시",
+      "basis": "식당 한 접시",
+      "rows": [
+        { "label": "양념 소갈비구이", "value": { "dish": "galbi", "nutrient": "kcal" } },
+        { "label": "닭튀김", "value": { "dish": "fried-chicken", "nutrient": "kcal" } },
+        { "label": "훈제오리", "value": { "dish": "smoked-duck", "nutrient": "kcal" } },
+        { "label": "치즈돈가스", "value": { "dish": "cheese-donkatsu", "nutrient": "kcal" } },
+        { "label": "등심돈가스", "value": { "dish": "donkatsu", "nutrient": "kcal" } },
+        { "label": "함박스테이크", "value": { "dish": "hamburg", "nutrient": "kcal" } },
+        { "label": "양념 장어구이", "value": { "dish": "eel", "nutrient": "kcal" } }
+      ],
+      "note": "접시마다 양이 달라요. 밥을 곁들이면 밥 한 공기만큼 더해져요."
+    },
+    {
+      "type": "lineup",
+      "title": "찌개와 탕 한 그릇",
+      "basis": "식당 한 그릇",
+      "rows": [
+        { "label": "뼈다귀해장국", "value": { "dish": "haejangguk", "nutrient": "kcal" } },
+        { "label": "순대국", "value": { "dish": "sundaeguk", "nutrient": "kcal" } },
+        { "label": "초당순두부", "value": { "dish": "sundubu", "nutrient": "kcal" } },
+        { "label": "부대찌개", "value": { "dish": "budaejjigae", "nutrient": "kcal" } },
+        { "label": "추어탕", "value": { "dish": "chueotang", "nutrient": "kcal" } },
+        { "label": "김치찌개", "value": { "dish": "kimchijjigae", "nutrient": "kcal" } }
+      ],
+      "note": "찌개와 탕은 대체로 낮은 편이에요. 밥 한 공기가 더해지고, 나트륨은 높은 편이에요."
+    },
+    {
+      "type": "list",
+      "title": "고르고 먹는 요령",
+      "items": [
+        { "title": "소스부터 살피기", "text": "크림·볶은 소스보다 국물이나 토마토 쪽이 낮은 편이에요" },
+        { "title": "튀김은 가끔", "text": "튀김과 양념 구이는 한 접시가 높은 편이에요" },
+        { "title": "밥은 덜어 두기", "text": "덮밥과 볶음밥은 먹기 전에 조금 덜어 두어요" },
+        { "title": "거르지는 않기", "text": "끼니를 거르기보다 메뉴를 바꿔 보세요" }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "다음 외식 때 떠올려요",
+      "text": "먹은 메뉴를 기록해 두면 통계에서 하루 열량이 보여요.",
+      "actions": ["log", "stats", "share"]
+    }
+  ]
+}
