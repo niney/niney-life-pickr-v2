@@ -1,0 +1,148 @@
+{
+  "slug": "sodium-mart-labels",
+  "status": "draft",
+  "title": "영양성분표로 마트 나트륨 줄이기",
+  "summary": "라면·도시락·김치·햄 같은 가공식품의 나트륨을 제품 수천 개로 줄 세워 봤어요. 같은 종류도 제품마다 꽤 달라요. 성분표 보는 요령까지.",
+  "topic": { "nutrient": "sodium", "direction": "reduce" },
+  "look": "chalk",
+  "publishedAt": "2026-11-21",
+  "reviewedAt": null,
+  "poster": "poster-a10b0b5a.jpg",
+  "sources": [],
+  "foods": [
+    { "id": "ramen", "label": "라면", "group": { "db": "processed-full", "rep": "라면", "sub": "유탕면", "weight": { "min": 100, "max": 140 } } },
+    {
+      "id": "ramen-low",
+      "label": "라면(나트륨이 낮은 제품)",
+      "group": { "db": "processed-full", "rep": "라면", "sub": "유탕면", "weight": { "min": 100, "max": 140 }, "pick": { "by": "sodiumMg", "at": "low" } }
+    },
+    {
+      "id": "ramen-high",
+      "label": "라면(나트륨이 높은 제품)",
+      "group": { "db": "processed-full", "rep": "라면", "sub": "유탕면", "weight": { "min": 100, "max": 140 }, "pick": { "by": "sodiumMg", "at": "high" } }
+    },
+    { "id": "bibim", "label": "비빔·볶음면", "group": { "db": "processed-full", "rep": "볶음/비빔라면", "sub": "유탕면", "weight": { "min": 100, "max": 160 } } },
+    { "id": "dosirak", "label": "도시락", "group": { "db": "processed-full", "rep": "도시락", "sub": "즉석섭취식품" } },
+    {
+      "id": "gimbap",
+      "label": "김밥",
+      "group": { "db": "processed-full", "rep": "주먹밥/김밥/초밥", "sub": "즉석섭취식품", "all": ["김밥"], "none": ["삼각", "주먹", "유부", "초밥"] }
+    },
+    { "id": "burger", "label": "버거", "group": { "db": "processed-full", "rep": "버거", "sub": "즉석섭취식품" } },
+    { "id": "sandwich", "label": "샌드위치", "group": { "db": "processed-full", "rep": "샌드위치", "sub": "즉석섭취식품" } },
+    { "id": "juk", "label": "즉석 죽", "group": { "db": "processed-full", "rep": "죽", "sub": "즉석조리식품" } },
+    { "id": "kimchi", "label": "배추김치", "group": { "db": "processed-full", "rep": "배추김치", "sub": "김치" } },
+    {
+      "id": "kimchi-low",
+      "label": "배추김치(나트륨이 낮은 제품)",
+      "group": { "db": "processed-full", "rep": "배추김치", "sub": "김치", "pick": { "by": "sodiumMg", "at": "low" } }
+    },
+    {
+      "id": "kimchi-high",
+      "label": "배추김치(나트륨이 높은 제품)",
+      "group": { "db": "processed-full", "rep": "배추김치", "sub": "김치", "pick": { "by": "sodiumMg", "at": "high" } }
+    },
+    { "id": "ham", "label": "햄", "group": { "db": "processed-full", "rep": "햄", "sub": "프레스햄", "none": ["오리", "닭", "편육", "족발", "수육", "보쌈", "삼겹", "치킨"] } },
+    {
+      "id": "ham-low",
+      "label": "햄(나트륨이 낮은 제품)",
+      "group": { "db": "processed-full", "rep": "햄", "sub": "프레스햄", "none": ["오리", "닭", "편육", "족발", "수육", "보쌈", "삼겹", "치킨"], "pick": { "by": "sodiumMg", "at": "low" } }
+    },
+    {
+      "id": "ham-high",
+      "label": "햄(나트륨이 높은 제품)",
+      "group": { "db": "processed-full", "rep": "햄", "sub": "프레스햄", "none": ["오리", "닭", "편육", "족발", "수육", "보쌈", "삼겹", "치킨"], "pick": { "by": "sodiumMg", "at": "high" } }
+    },
+    { "id": "fishcake", "label": "어묵", "group": { "db": "processed-full", "rep": "어묵", "sub": "어묵" } },
+    { "id": "sausage", "label": "소시지", "group": { "db": "processed-full", "rep": "소시지", "sub": "소시지" } },
+    { "id": "bacon", "label": "베이컨", "group": { "db": "processed-full", "rep": "베이컨", "all": ["베이컨"] } }
+  ],
+  "scenes": [
+    {
+      "type": "cover",
+      "kicker": "마트 나트륨 줄이기",
+      "title": "영양성분표로 마트 나트륨 줄이기",
+      "subtitle": "가공식품 제품 수천 개의 나트륨을 줄 세워 봤어요"
+    },
+    {
+      "type": "stat",
+      "title": "하루 나트륨, 이보다 적게",
+      "figures": [
+        { "label": "성인 하루 기준", "value": { "kdri": "sodium" } },
+        { "label": "내 최근 2주 하루 평균", "value": { "my": "sodium" } }
+      ],
+      "note": "이보다 많이 먹는다면 줄이는 만큼 만성질환 위험을 낮출 수 있다는 기준이에요."
+    },
+    {
+      "type": "lineup",
+      "title": "한 끼로 사 먹는 것",
+      "basis": "한 봉·한 개",
+      "rows": [
+        { "label": "라면", "sub": "한 봉 115g", "value": { "food": "ramen", "nutrient": "sodiumMg", "grams": 115 }, "icon": "ramen" },
+        { "label": "비빔·볶음면", "sub": "한 봉 130g", "value": { "food": "bibim", "nutrient": "sodiumMg", "grams": 130 }, "icon": "bibimnoodle" },
+        { "label": "도시락", "sub": "한 개 410g", "value": { "food": "dosirak", "nutrient": "sodiumMg", "grams": 410 } },
+        { "label": "김밥", "sub": "한 줄 250g", "value": { "food": "gimbap", "nutrient": "sodiumMg", "grams": 250 }, "icon": "gimbap" },
+        { "label": "버거", "sub": "한 개 185g", "value": { "food": "burger", "nutrient": "sodiumMg", "grams": 185 } },
+        { "label": "샌드위치", "sub": "한 개 170g", "value": { "food": "sandwich", "nutrient": "sodiumMg", "grams": 170 } },
+        { "label": "즉석 죽", "sub": "한 팩 285g", "value": { "food": "juk", "nutrient": "sodiumMg", "grams": 285 }, "icon": "bowl" }
+      ],
+      "note": "종류마다 제품 수백~수천 개의 가운데 값이에요. 한 개의 양은 서로 달라요."
+    },
+    {
+      "type": "lineup",
+      "title": "반찬끼리는 비슷해요",
+      "basis": "한 번 먹는 양",
+      "rows": [
+        { "label": "배추김치", "sub": "40g", "value": { "food": "kimchi", "nutrient": "sodiumMg", "grams": 40 }, "icon": "kimchi" },
+        { "label": "햄", "sub": "30g", "value": { "food": "ham", "nutrient": "sodiumMg", "grams": 30 }, "icon": "can" },
+        { "label": "어묵", "sub": "30g", "value": { "food": "fishcake", "nutrient": "sodiumMg", "grams": 30 } },
+        { "label": "소시지", "sub": "30g", "value": { "food": "sausage", "nutrient": "sodiumMg", "grams": 30 } },
+        { "label": "베이컨", "sub": "30g", "value": { "food": "bacon", "nutrient": "sodiumMg", "grams": 30 } }
+      ],
+      "note": "한 번 먹는 양은 식품 표시의 기준량이에요. 더 먹으면 그만큼 늘어요."
+    },
+    {
+      "type": "bars",
+      "title": "라면 한 봉, 제품에 따라",
+      "bars": [
+        { "label": "나트륨이 낮은 제품", "value": { "food": "ramen-low", "nutrient": "sodiumMg", "grams": 115 }, "highlight": true },
+        { "label": "나트륨이 높은 제품", "value": { "food": "ramen-high", "nutrient": "sodiumMg", "grams": 115 } }
+      ],
+      "note": "무게가 비슷한 라면을 나트륨 순으로 줄 세웠을 때 열 개 중 하나쯤인 낮은 값과 높은 값이에요."
+    },
+    {
+      "type": "bars",
+      "title": "배추김치, 제품에 따라",
+      "bars": [
+        { "label": "나트륨이 낮은 제품 40g", "value": { "food": "kimchi-low", "nutrient": "sodiumMg", "grams": 40 }, "highlight": true },
+        { "label": "나트륨이 높은 제품 40g", "value": { "food": "kimchi-high", "nutrient": "sodiumMg", "grams": 40 } }
+      ],
+      "note": "같은 배추김치도 제품에 따라 이만큼 달라요."
+    },
+    {
+      "type": "bars",
+      "title": "햄, 제품에 따라",
+      "bars": [
+        { "label": "나트륨이 낮은 제품 30g", "value": { "food": "ham-low", "nutrient": "sodiumMg", "grams": 30 }, "highlight": true },
+        { "label": "나트륨이 높은 제품 30g", "value": { "food": "ham-high", "nutrient": "sodiumMg", "grams": 30 } }
+      ],
+      "note": "그래서 살 때 성분표를 견주어 보면 줄일 수 있어요."
+    },
+    {
+      "type": "list",
+      "title": "성분표, 이렇게 봐요",
+      "items": [
+        { "title": "나트륨 줄 찾기", "text": "영양정보 표에서 나트륨 줄과 옆의 % 를 봐요", "icon": "label" },
+        { "title": "기준량 확인하기", "text": "값이 한 봉 전체 기준인지, 한 번 먹는 양 기준인지 봐요", "icon": "magnifier" },
+        { "title": "같은 종류끼리 견주기", "text": "두 제품을 나란히 들고 낮은 쪽을 골라요", "icon": "can" },
+        { "title": "먹는 양으로도 줄이기", "text": "라면 스프는 덜 넣고, 김치·햄은 한 번에 조금만", "icon": "spoon" }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "다음 장보기 때 떠올려요",
+      "text": "먹은 것을 기록해 두면 통계에서 나트륨이 어떻게 달라지는지 보여요.",
+      "actions": ["log", "stats", "share"]
+    }
+  ]
+}

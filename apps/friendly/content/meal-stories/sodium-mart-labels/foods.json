@@ -1,0 +1,643 @@
+{
+  "generatedBy": "build:meal-stories",
+  "foods": {
+    "ramen": {
+      "per100": {
+        "kcal": 430,
+        "carbG": 65.71,
+        "proteinG": 8.57,
+        "fatG": 14.91,
+        "sugarG": 3.64,
+        "fiberG": 2,
+        "sodiumMg": 1496,
+        "potassiumMg": 203,
+        "calciumMg": 125.5,
+        "vitaminCMg": 0.89
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '라면 > 유탕면 · 포장 100~140g' 제품 547개의 중앙값 · 포장 무게 중앙값 114g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 547,
+        "names": [
+          "1980 소고기 라면",
+          "가락 맥앤치즈라면",
+          "가락김치맛라면",
+          "가락닭고기맛라면",
+          "가락라면",
+          "가락해물맛라면",
+          "간짬뽕",
+          "감동의신속찬라면",
+          "감리교농도쌀라면",
+          "감자라면"
+        ],
+        "counts": {
+          "fiberG": 48,
+          "potassiumMg": 42,
+          "calciumMg": 100,
+          "vitaminCMg": 11
+        }
+      }
+    },
+    "ramen-low": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": null,
+        "fiberG": null,
+        "sodiumMg": 1028,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '라면 > 유탕면 · 포장 100~140g' 제품 547개를 나트륨 순으로 세운 아래에서 10%째 값 · 포장 무게 중앙값 114g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 547,
+        "names": [
+          "1980 소고기 라면",
+          "가락 맥앤치즈라면",
+          "가락김치맛라면",
+          "가락닭고기맛라면",
+          "가락라면",
+          "가락해물맛라면",
+          "간짬뽕",
+          "감동의신속찬라면",
+          "감리교농도쌀라면",
+          "감자라면"
+        ],
+        "pick": "low"
+      }
+    },
+    "ramen-high": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": null,
+        "fiberG": null,
+        "sodiumMg": 1777,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '라면 > 유탕면 · 포장 100~140g' 제품 547개를 나트륨 순으로 세운 위에서 10%째 값 · 포장 무게 중앙값 114g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 547,
+        "names": [
+          "1980 소고기 라면",
+          "가락 맥앤치즈라면",
+          "가락김치맛라면",
+          "가락닭고기맛라면",
+          "가락라면",
+          "가락해물맛라면",
+          "간짬뽕",
+          "감동의신속찬라면",
+          "감리교농도쌀라면",
+          "감자라면"
+        ],
+        "pick": "high"
+      }
+    },
+    "bibim": {
+      "per100": {
+        "kcal": 412,
+        "carbG": 63.08,
+        "proteinG": 7.52,
+        "fatG": 14.58,
+        "sugarG": 7.62,
+        "fiberG": 2.05,
+        "sodiumMg": 1008,
+        "potassiumMg": 175,
+        "calciumMg": 71,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '볶음/비빔라면 > 유탕면 · 포장 100~160g' 제품 205개의 중앙값 · 포장 무게 중앙값 130g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 205,
+        "names": [
+          "4가지치즈불닭볶음면",
+          "가락까르보핫닭볶음면",
+          "가락핫닭볶음면",
+          "공화춘불짜장",
+          "군산꽃새우볶음면",
+          "굴소스볶음면",
+          "까르보나라 볶음라면",
+          "까르보나라불닭갈비맛볶음라면",
+          "까르보나라불닭갈비맛볶음라면큰컵",
+          "까르보나라불닭볶음면"
+        ],
+        "counts": {
+          "fiberG": 18,
+          "potassiumMg": 17,
+          "calciumMg": 34,
+          "vitaminCMg": 4
+        }
+      }
+    },
+    "dosirak": {
+      "per100": {
+        "kcal": 166,
+        "carbG": 22.24,
+        "proteinG": 5.81,
+        "fatG": 5.59,
+        "sugarG": 2.82,
+        "fiberG": 3.35,
+        "sodiumMg": 305,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '도시락 > 즉석섭취식품' 제품 1,656개의 중앙값 · 포장 무게 중앙값 411g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 1656,
+        "names": [
+          "[고등급식)이불돈까스도시락",
+          "[퍼스트클래스] 로스트포크랩&맥앤치즈&그릴드베지 밀박스",
+          "[퍼스트클래스] 머쉬룸베이컨 크림파스타&수비드치킨&그릴드베지 밀박스",
+          "[퍼스트클래스] 쉬림프로제파스타&단호박샐러드&그릴드베지 밀박스",
+          "[퍼스트클래스] 시저치킨랩&맥앤치즈&그릴드베지 밀박스",
+          "[퍼스트클래스] 에그베이컨샌드&단호박샐러드 밀박스",
+          "[퍼스트클래스] 잉글리쉬머핀&포테이토샐러드 밀박스",
+          "[퍼스트클래스] 크로와상샌드&수비드치킨&펜네샐러드 밀박스",
+          "[퍼스트클래스] 통등심카츠샌드&그릴드베지 밀박스",
+          "11가지찬많은도시락"
+        ],
+        "counts": {
+          "fiberG": 20,
+          "sodiumMg": 1655
+        }
+      }
+    },
+    "gimbap": {
+      "per100": {
+        "kcal": 161,
+        "carbG": 23.93,
+        "proteinG": 4.78,
+        "fatG": 4.69,
+        "sugarG": 2.43,
+        "fiberG": null,
+        "sodiumMg": 447.5,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '주먹밥/김밥/초밥 > 즉석섭취식품 · 김밥' 제품 1,194개의 중앙값 · 포장 무게 중앙값 250g · 1회 섭취참고량 210g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 1194,
+        "names": [
+          "(탭스)김밥(반제)_방풍나물김밥 3줄*1팩",
+          "1900김밥",
+          "2200김밥 간장불고기",
+          "2800알찬김밥",
+          "3 980 두줄김밥(원조+매콤어묵)",
+          "7미든든김밥",
+          "가쓰오어묵한입꼬마김밥",
+          "간장불고기김밥",
+          "간장양념불고기치즈김밥",
+          "간장치킨김밥"
+        ]
+      }
+    },
+    "burger": {
+      "per100": {
+        "kcal": 259,
+        "carbG": 25.39,
+        "proteinG": 8.78,
+        "fatG": 13,
+        "sugarG": 6.45,
+        "fiberG": null,
+        "sodiumMg": 542,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '버거 > 즉석섭취식품' 제품 996개의 중앙값 · 포장 무게 중앙값 185g · 1회 섭취참고량 150g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 996,
+        "names": [
+          "(반제)손보다빅버거",
+          "[고등급식)더블킹새우버거",
+          "1988)마늘갈비버거",
+          "1988)오리지널버거",
+          "1988버거",
+          "1988화이트어니언버거",
+          "2 300원불고기버거",
+          "2 300원치즈버거",
+          "2 500원올바른가격치킨버거",
+          "2 500원치킨버거"
+        ]
+      }
+    },
+    "sandwich": {
+      "per100": {
+        "kcal": 228,
+        "carbG": 24.39,
+        "proteinG": 7.15,
+        "fatG": 10.84,
+        "sugarG": 5.07,
+        "fiberG": 2.25,
+        "sodiumMg": 438,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '샌드위치 > 즉석섭취식품' 제품 2,526개의 중앙값 · 포장 무게 중앙값 171g · 1회 섭취참고량 150g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 2526,
+        "names": [
+          "(사전)옛날토스트",
+          "(에그포켓)스윗모짜치즈샌드위치",
+          "(제주항공기내용)샌드위치",
+          "[당근라페 리코타 3단 샌드위치]",
+          "[치킨클럽 2단 샌드위치]",
+          "[통밀햄에그 3단 샌드위치]",
+          "[통밀햄치즈 2단 샌드위치]",
+          "[플랜트 불고기 2단 샌드위치]",
+          "[하프]단호박에그샌드위치",
+          "[하프]수비드닭가슴살샌드위치"
+        ],
+        "counts": {
+          "fiberG": 6
+        }
+      }
+    },
+    "juk": {
+      "per100": {
+        "kcal": 70,
+        "carbG": 12,
+        "proteinG": 2.78,
+        "fatG": 0.94,
+        "sugarG": 0.48,
+        "fiberG": 2.05,
+        "sodiumMg": 136,
+        "potassiumMg": 60,
+        "calciumMg": 33,
+        "vitaminCMg": 1.23
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '죽 > 즉석조리식품' 제품 2,369개의 중앙값 · 포장 무게 중앙값 285g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 2369,
+        "names": [
+          "(국내산 채소로 만든)얼큰낙지김치죽",
+          "(대한항공기내용)죽(야채맛)",
+          "(아시아나항공기내용)새송이버섯죽",
+          "(D)국산 동지팥죽",
+          "150미음식단 1번(베이직)",
+          "24종류의곡물/견과/채소로채운죽",
+          "24종류의곡물/견과/채소로채운호두죽",
+          "26년전통맛집 귀빈정 바지락죽",
+          "26년전통맛집 귀빈정 전복죽",
+          "26년전통맛집 귀빈정 한우야채죽"
+        ],
+        "counts": {
+          "sugarG": 2368,
+          "fiberG": 92,
+          "potassiumMg": 37,
+          "calciumMg": 76,
+          "vitaminCMg": 16
+        }
+      }
+    },
+    "kimchi": {
+      "per100": {
+        "kcal": 38,
+        "carbG": 6.2,
+        "proteinG": 2,
+        "fatG": 0.4,
+        "sugarG": 3,
+        "fiberG": 1.85,
+        "sodiumMg": 598,
+        "potassiumMg": 311,
+        "calciumMg": 45,
+        "vitaminCMg": 7
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '배추김치 > 김치' 제품 2,598개의 중앙값 · 포장 무게 중앙값 900g · 1회 섭취참고량 40g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 2598,
+        "names": [
+          "(교동면옥)포기김치",
+          "(매운맛)불타김치",
+          "(보리죽)포기김치",
+          "(짱매운맛)불타김치",
+          "(프리미엄)할매 손 생굴겉절이",
+          "(프리미엄)해풍 생굴 겉절이",
+          "(P)겉절이",
+          "(P)맛김치",
+          "(P)백김치",
+          "(P)보쌈김치"
+        ],
+        "counts": {
+          "fiberG": 66,
+          "potassiumMg": 55,
+          "calciumMg": 65,
+          "vitaminCMg": 25
+        }
+      }
+    },
+    "kimchi-low": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": null,
+        "fiberG": null,
+        "sodiumMg": 375,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '배추김치 > 김치' 제품 2,598개를 나트륨 순으로 세운 아래에서 10%째 값 · 포장 무게 중앙값 900g · 1회 섭취참고량 40g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 2598,
+        "names": [
+          "(교동면옥)포기김치",
+          "(매운맛)불타김치",
+          "(보리죽)포기김치",
+          "(짱매운맛)불타김치",
+          "(프리미엄)할매 손 생굴겉절이",
+          "(프리미엄)해풍 생굴 겉절이",
+          "(P)겉절이",
+          "(P)맛김치",
+          "(P)백김치",
+          "(P)보쌈김치"
+        ],
+        "pick": "low"
+      }
+    },
+    "kimchi-high": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": null,
+        "fiberG": null,
+        "sodiumMg": 800,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '배추김치 > 김치' 제품 2,598개를 나트륨 순으로 세운 위에서 10%째 값 · 포장 무게 중앙값 900g · 1회 섭취참고량 40g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 2598,
+        "names": [
+          "(교동면옥)포기김치",
+          "(매운맛)불타김치",
+          "(보리죽)포기김치",
+          "(짱매운맛)불타김치",
+          "(프리미엄)할매 손 생굴겉절이",
+          "(프리미엄)해풍 생굴 겉절이",
+          "(P)겉절이",
+          "(P)맛김치",
+          "(P)백김치",
+          "(P)보쌈김치"
+        ],
+        "pick": "high"
+      }
+    },
+    "ham": {
+      "per100": {
+        "kcal": 234.5,
+        "carbG": 6.33,
+        "proteinG": 13,
+        "fatG": 16.59,
+        "sugarG": 2,
+        "fiberG": 2.6,
+        "sodiumMg": 748,
+        "potassiumMg": 234,
+        "calciumMg": 14,
+        "vitaminCMg": 24.55
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '햄 > 프레스햄' 제품 644개의 중앙값 · 포장 무게 중앙값 500g · 1회 섭취참고량 30g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 644,
+        "names": [
+          "120줄김밥햄",
+          "5무無훈제돼지목살 (냉동)",
+          "5무無훈제돼지목살 (냉장)",
+          "5無훈제돼지목살",
+          "90% 김밥햄",
+          "가닥가닥김밥햄",
+          "갈비맛후랑크",
+          "강남 런천미트",
+          "건강생각 사각햄",
+          "건강생각 햄"
+        ],
+        "counts": {
+          "fiberG": 13,
+          "potassiumMg": 13,
+          "calciumMg": 13,
+          "vitaminCMg": 13
+        }
+      }
+    },
+    "ham-low": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": null,
+        "fiberG": null,
+        "sodiumMg": 530,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '햄 > 프레스햄' 제품 644개를 나트륨 순으로 세운 아래에서 10%째 값 · 포장 무게 중앙값 500g · 1회 섭취참고량 30g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 644,
+        "names": [
+          "120줄김밥햄",
+          "5무無훈제돼지목살 (냉동)",
+          "5무無훈제돼지목살 (냉장)",
+          "5無훈제돼지목살",
+          "90% 김밥햄",
+          "가닥가닥김밥햄",
+          "갈비맛후랑크",
+          "강남 런천미트",
+          "건강생각 사각햄",
+          "건강생각 햄"
+        ],
+        "pick": "low"
+      }
+    },
+    "ham-high": {
+      "per100": {
+        "kcal": null,
+        "carbG": null,
+        "proteinG": null,
+        "fatG": null,
+        "sugarG": null,
+        "fiberG": null,
+        "sodiumMg": 970,
+        "potassiumMg": null,
+        "calciumMg": null,
+        "vitaminCMg": null
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '햄 > 프레스햄' 제품 644개를 나트륨 순으로 세운 위에서 10%째 값 · 포장 무게 중앙값 500g · 1회 섭취참고량 30g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 644,
+        "names": [
+          "120줄김밥햄",
+          "5무無훈제돼지목살 (냉동)",
+          "5무無훈제돼지목살 (냉장)",
+          "5無훈제돼지목살",
+          "90% 김밥햄",
+          "가닥가닥김밥햄",
+          "갈비맛후랑크",
+          "강남 런천미트",
+          "건강생각 사각햄",
+          "건강생각 햄"
+        ],
+        "pick": "high"
+      }
+    },
+    "fishcake": {
+      "per100": {
+        "kcal": 155,
+        "carbG": 20,
+        "proteinG": 10.24,
+        "fatG": 3.16,
+        "sugarG": 3.4,
+        "fiberG": 1.75,
+        "sodiumMg": 687,
+        "potassiumMg": 93,
+        "calciumMg": 123,
+        "vitaminCMg": 0
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '어묵 > 어묵' 제품 2,855개의 중앙값 · 포장 무게 중앙값 320g · 1회 섭취참고량 30g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 2855,
+        "names": [
+          "(80)미니사각어묵",
+          "(냉동  쿠팡)바른어묵 얇은사각",
+          "(냉동)바른어묵 국탕용종합",
+          "[냉동] 간편한 국탕용 모듬어묵",
+          "[냉동] 미도 옛날 꼬치 어묵",
+          "[냉동] 어묵 속 당면 매운맛",
+          "[냉동] 어묵 속 떡",
+          "[냉동] 어묵 속 우엉",
+          "[냉동] 옛날 봉어묵",
+          "[냉동] 오징어 볼"
+        ],
+        "counts": {
+          "fiberG": 46,
+          "potassiumMg": 26,
+          "calciumMg": 43,
+          "vitaminCMg": 22
+        }
+      }
+    },
+    "sausage": {
+      "per100": {
+        "kcal": 249,
+        "carbG": 6,
+        "proteinG": 14,
+        "fatG": 17.78,
+        "sugarG": 1.67,
+        "fiberG": 0.2,
+        "sodiumMg": 670,
+        "potassiumMg": 232,
+        "calciumMg": 20,
+        "vitaminCMg": 15.68
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '소시지 > 소시지' 제품 2,385개의 중앙값 · 포장 무게 중앙값 300g · 1회 섭취참고량 30g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 2385,
+        "names": [
+          "[그리츠x세스크멘슬]시그니처 램 소시지 오리지널",
+          "[그리츠x세스크멘슬]시그니처 램 소시지 허브맛",
+          "[냉동]헝가리안 소시지",
+          "1.5미터 롤 쓱시지",
+          "26년전통귀빈정 만두소세지",
+          "365칼집비엔나",
+          "3색 동글비엔나소세지",
+          "3색동글비엔나",
+          "50/50훈제소세지",
+          "60계 닭가슴살 소시지 꼬치 블랙페퍼"
+        ],
+        "counts": {
+          "fiberG": 14,
+          "potassiumMg": 9,
+          "calciumMg": 9,
+          "vitaminCMg": 9
+        }
+      }
+    },
+    "bacon": {
+      "per100": {
+        "kcal": 265,
+        "carbG": 2,
+        "proteinG": 16,
+        "fatG": 20.12,
+        "sugarG": 1,
+        "fiberG": 0.7,
+        "sodiumMg": 710,
+        "potassiumMg": 238,
+        "calciumMg": 6,
+        "vitaminCMg": 33.19
+      },
+      "basis": "100g",
+      "provenance": "식약처 가공식품 DB 전체판 '베이컨 · 베이컨' 제품 159개의 중앙값 · 포장 무게 중앙값 500g · 1회 섭취참고량 30g",
+      "source": "mfds-processed-full",
+      "matched": {
+        "count": 159,
+        "names": [
+          "91컴퍼니 베이컨 3mm",
+          "고메 애플우드 스모크 베이컨",
+          "고메 치폴레 베이컨",
+          "고메 페퍼콘 베이컨",
+          "고소담백 조각 베이컨",
+          "고소담백베이컨B",
+          "고소한 베이컨",
+          "곰곰 담백한 전지베이컨",
+          "구운베이컨",
+          "굿(good)베이컨"
+        ],
+        "counts": {
+          "fiberG": 5,
+          "potassiumMg": 5,
+          "calciumMg": 5,
+          "vitaminCMg": 5
+        }
+      }
+    }
+  }
+}
