@@ -6,7 +6,7 @@ import { cn } from '~/lib/utils';
 import { MEAL_PATH, MEAL_STORY_PATH } from '../meal/mealPaths';
 import { AmountText, EquivalentText, FigureValue } from './MealStoryFigure';
 import { fractionText } from './motion/layout';
-import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
+import { LogMealButton, RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
 
 // 장면 틀 9종 — 표지 · 큰 숫자 · 막대 비교 · 줄 세우기 · 목록 · 재료 · 만드는 법 · 영양정보 · 마무리. 글·숫자는 서버가 준 그대로
 // 그린다(숫자는 서버 계산). 떠오르는 차례는 --i(.msp-rise), 막대·숫자는 mealStory.css 의 애니메이션.
@@ -270,6 +270,7 @@ const Outro = ({ scene, story }: { scene: Scene<'outro'>; story: MealStoryType }
         </p>
       ) : null}
       <div className="mss-actions msp-rise" style={order(2)}>
+        {scene.actions.includes('log') ? <LogMealButton /> : null}
         {scene.actions.includes('record') ? <RecordRecipeButton story={story} /> : null}
         {scene.actions.includes('recipe') && story.recipe ? (
           <Link to={MEAL_STORY_PATH.recipe(story.slug)} className="mss-btn">

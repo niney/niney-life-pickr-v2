@@ -1,4 +1,4 @@
-import { Loader2, NotebookPen, Share2 } from 'lucide-react';
+import { Loader2, NotebookPen, Share2, Utensils } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { MealStoryType } from '@repo/api-contract';
@@ -9,6 +9,7 @@ import { MEAL_PATH, MEAL_STORY_PATH } from '../meal/mealPaths';
 
 // 스토리 끝의 행동 — [이 레시피로 기록]은 레시피를 카탈로그 음식으로 맞춘 뒤(서버) 새 기록을 그 음식으로 채워 입력 화면으로
 // 간다. 로그인 전이면 로그인 뒤 이 장면으로 돌아온다. [공유하기]는 휴대폰 공유창, 없으면 링크 복사.
+// [먹은 메뉴 기록하기](레시피 없이 메뉴를 견주는 편)는 새 기록 화면으로 — 맨 위 '어디서 먹었나요'에서 식당을 고르고 그 집 메뉴에서 넣는다.
 
 export const RecordRecipeButton = ({
   story,
@@ -64,6 +65,33 @@ export const RecordRecipeButton = ({
     >
       {food.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <NotebookPen className="size-4" aria-hidden />}
       {token ? '이 레시피로 기록' : '로그인하고 이 레시피로 기록'}
+    </button>
+  );
+};
+
+export const LogMealButton = ({
+  primary = true,
+  returnTo,
+}: {
+  primary?: boolean;
+  /** 로그인 뒤 돌아올 주소 — 없으면 지금 주소. */
+  returnTo?: string;
+}) => {
+  const token = useAuthStore((s) => s.token);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const onClick = () => {
+    if (!token) {
+      navigate(`/login?next=${encodeURIComponent(returnTo ?? `${location.pathname}${location.search}`)}`);
+      return;
+    }
+    prepareMealEntry();
+    navigate(MEAL_PATH.new);
+  };
+  return (
+    <button type="button" className={cn('mss-btn', primary && 'mss-btn-primary')} onClick={onClick}>
+      <Utensils className="size-4" aria-hidden />
+      {token ? '먹은 메뉴 기록하기' : '로그인하고 먹은 메뉴 기록하기'}
     </button>
   );
 };

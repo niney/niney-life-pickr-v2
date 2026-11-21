@@ -13790,7 +13790,8 @@
                                     "record",
                                     "recipe",
                                     "share",
-                                    "stats"
+                                    "stats",
+                                    "log"
                                   ]
                                 }
                               }

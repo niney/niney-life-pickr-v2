@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { MealStorySceneType, MealStoryType } from '@repo/api-contract';
 import { MEAL_STORY_PATH } from '../meal/mealPaths';
-import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
+import { LogMealButton, RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
 import { mealStoryKicker } from './mealStoryTopic';
 
 // 이야기 옆 칸(2026-11-10) — 식단 셸 안의 넓은 화면에서 재생기 카드 오른쪽에 놓는다(세로 영상 옆이 비어 있었다).
@@ -72,8 +72,9 @@ export const MealStoryAside = ({
           </li>
         ))}
       </ol>
-      {story.recipe || actions.includes('share') ? (
+      {story.recipe || actions.includes('share') || actions.includes('log') ? (
         <div className="msa-actions">
+          {actions.includes('log') ? <LogMealButton /> : null}
           {actions.includes('record') ? <RecordRecipeButton story={story} /> : null}
           {actions.includes('recipe') && story.recipe ? (
             <Link to={MEAL_STORY_PATH.recipe(story.slug)} className="mss-btn" onClick={onLeave}>

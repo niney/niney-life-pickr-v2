@@ -185,7 +185,9 @@ export const MealStoryNutritionRow = z.object({
 });
 export type MealStoryNutritionRowType = z.infer<typeof MealStoryNutritionRow>;
 
-export const MealStoryAction = z.enum(['record', 'recipe', 'share', 'stats']);
+// record = 이 레시피로 기록 · recipe = 레시피 전체 보기 · share = 공유 · stats = 통계에서 보기 ·
+// log = 먹은 메뉴 기록하기(새 기록 화면 — 식당을 고르고 그 집 메뉴에서 넣는다. 레시피 없이 메뉴를 견주는 편).
+export const MealStoryAction = z.enum(['record', 'recipe', 'share', 'stats', 'log']);
 export type MealStoryActionType = z.infer<typeof MealStoryAction>;
 
 const ImageUrl = z.string().nullable();

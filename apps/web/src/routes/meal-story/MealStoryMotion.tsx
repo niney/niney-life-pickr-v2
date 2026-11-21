@@ -8,7 +8,7 @@ import { useMediaQuery } from '~/lib/useMediaQuery';
 import { useThemeStore } from '~/stores/theme';
 import { MEAL_PATH, MEAL_STORY_PATH } from '../meal/mealPaths';
 import { MealStoryAside } from './MealStoryAside';
-import { RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
+import { LogMealButton, RecordRecipeButton, ShareStoryButton } from './mealStoryActions';
 import { useStoryFontsReady } from './mealStoryFont';
 import { toMotionMine, useStoryMyStats } from './mealStoryMine';
 import { PREV_ZONE, STORY_ASIDE_QUERY, SWIPE_PX, TAP_PX, focusOnMount, isInteractive, useLeaveStory, useStoryParams } from './mealStoryNav';
@@ -94,6 +94,7 @@ const EndCard = ({ story, onLeave }: { story: MealStoryType; onLeave: () => void
   const here = `${MEAL_STORY_PATH.story(story.slug)}?s=${story.scenes.length}`;
   return (
     <div className="msm-end">
+      {outro.actions.includes('log') ? <LogMealButton returnTo={here} /> : null}
       {outro.actions.includes('record') ? <RecordRecipeButton story={story} returnTo={here} /> : null}
       {outro.actions.includes('recipe') && story.recipe ? (
         <Link to={MEAL_STORY_PATH.recipe(story.slug)} className="mss-btn" onClick={onLeave}>

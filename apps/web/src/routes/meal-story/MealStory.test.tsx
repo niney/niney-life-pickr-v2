@@ -385,6 +385,28 @@ describe('건강식단 스토리', () => {
     expect(items.map((i) => [i.name, i.foodId, i.source])).toEqual([['저염 토마토 스파게티', 'food-1', 'catalog']]);
   });
 
+  it('먹은 메뉴 기록하기(레시피 없이 메뉴를 견주는 편) — 비로그인은 로그인으로(돌아올 주소), 레시피 단추는 없다', async () => {
+    const menus: MealStoryType = { ...story, recipe: null, scenes: [story.scenes[0]!, { type: 'outro', title: '다음 외식 때', text: null, actions: ['log', 'share'] }] };
+    server.use(http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(menus)));
+    renderAt(`/meal/stories/${story.slug}?s=2`);
+    const button = await screen.findByRole('button', { name: '로그인하고 먹은 메뉴 기록하기' });
+    expect(screen.queryByRole('button', { name: /이 레시피로 기록/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '레시피 전체 보기' })).not.toBeInTheDocument();
+    fireEvent.click(button);
+    expect(screen.getByTestId('where')).toHaveTextContent(`/login?next=${encodeURIComponent(`/meal/stories/${story.slug}?s=2`)}`);
+  });
+
+  it('먹은 메뉴 기록하기(로그인) — 새 기록 화면으로 간다(식당을 고르는 입력)', async () => {
+    useAuthStore.setState({ token: 't', user, isGuest: false });
+    await setMealDraftPrincipal('u1');
+    useMealDraftStore.getState().clear();
+    const menus: MealStoryType = { ...story, recipe: null, scenes: [story.scenes[0]!, { type: 'outro', title: '다음 외식 때', text: null, actions: ['log', 'share'] }] };
+    server.use(http.get(`${LIST_URL}/${story.slug}`, () => HttpResponse.json(menus)));
+    renderAt(`/meal/stories/${story.slug}?s=2`);
+    fireEvent.click(await screen.findByRole('button', { name: '먹은 메뉴 기록하기' }));
+    expect(await screen.findByText('새 기록 화면')).toBeInTheDocument();
+  });
+
   it('목록(로그인 전) — 식단의 공개 얼굴: 게시본 카드(주제·장면 수)와 로그인하고 기록하기, 식단 메뉴(셸)는 없다', async () => {
     server.use(http.get(LIST_URL, () => HttpResponse.json({ items: [listItem(), listItem({ slug: 'draft-x', status: 'draft', title: '초안 이야기' })] })));
     renderAt('/meal/stories');
