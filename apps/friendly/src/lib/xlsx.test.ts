@@ -1,6 +1,10 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { columnLetterToIndex, listXlsxSheets, parseXlsx } from './xlsx.js';
+import { streamXlsxRows } from './xlsx-stream.js';
 
 // 최소 XLSX 리더 — 실제 배포본(한식 800선)은 sharedStrings + sheet1 조합이라 그 모양을 만들어
 // 검증한다. zip 은 표준 라이브러리(deflateRaw)로 직접 조립한다(픽스처 바이너리를 리포에 넣지 않으려고).
@@ -114,5 +118,50 @@ describe('parseXlsx', () => {
 
   it('zip 이 아니면 오류', () => {
     expect(() => parseXlsx(Buffer.from('not a zip'))).toThrow(/XLSX/);
+  });
+});
+
+describe('streamXlsxRows — 큰 시트를 행 단위로', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'xlsx-stream-'));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  const fileOf = (name: string, buf: Buffer): string => {
+    const p = join(dir, name);
+    writeFileSync(p, buf);
+    return p;
+  };
+  const rowsOf = async (path: string): Promise<string[][]> => {
+    const out: string[][] = [];
+    for await (const row of streamXlsxRows(path)) out.push(row);
+    return out;
+  };
+
+  it('통째로 읽는 리더와 같은 값을 행마다 넘긴다(첫 행도 그대로)', async () => {
+    const t = parseXlsx(book());
+    expect(await rowsOf(fileOf('book.xlsx', book()))).toEqual([t.header, ...t.rows]);
+  });
+
+  it('행이 많아 조각 경계에 걸려도 빠뜨리지 않고, 빈 공유 문자열(<si/>)은 자리를 지킨다', async () => {
+    const shared = `<sst><si><t>이름</t></si><si/><si><t>값 &amp; 덧말</t></si>${Array.from({ length: 3000 }, (_, i) => `<si><t>제품 ${i} 가나다라마바사</t></si>`).join('')}</sst>`;
+    const sheet = `<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row>${Array.from(
+      { length: 3000 },
+      (_, i) => `<row r="${i + 2}" spans="1:3"><c r="A${i + 2}" t="s"><v>${i + 3}</v></c><c r="C${i + 2}"><v>${i * 1.5}</v></c></row>`,
+    ).join('')}<row r="3002"/></sheetData></worksheet>`;
+    const rows = await rowsOf(
+      fileOf(
+        'big.xlsx',
+        makeZip([
+          { name: 'xl/sharedStrings.xml', data: Buffer.from(shared, 'utf8') },
+          { name: 'xl/worksheets/sheet1.xml', data: Buffer.from(sheet, 'utf8') },
+        ]),
+      ),
+    );
+    expect(rows).toHaveLength(3001);
+    expect(rows[0]).toEqual(['이름', '', '값 & 덧말']);
+    expect(rows[1]).toEqual(['제품 0 가나다라마바사', '', '0']);
+    expect(rows[3000]).toEqual(['제품 2999 가나다라마바사', '', '4498.5']);
+  });
+
+  it('zip 이 아니면 오류', async () => {
+    await expect(rowsOf(fileOf('not.xlsx', Buffer.from('not a zip at all')))).rejects.toThrow(/XLSX/);
   });
 });

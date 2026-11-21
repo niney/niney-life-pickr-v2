@@ -63,7 +63,7 @@ const readEntry = (buf: Buffer, entry: ZipEntry): string => {
   throw new Error(`지원하지 않는 zip 압축 방식(${entry.method}): ${entry.name}`);
 };
 
-const decodeXmlText = (s: string): string =>
+export const decodeXmlText = (s: string): string =>
   s
     .replace(/&#x([0-9a-fA-F]+);/g, (_m, h: string) => String.fromCodePoint(Number.parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_m, d: string) => String.fromCodePoint(Number.parseInt(d, 10)))
@@ -97,41 +97,43 @@ export const columnLetterToIndex = (ref: string): number => {
   return n - 1;
 };
 
+/** `<row>` 하나의 안쪽 XML → 셀 값(빈 칸은 ''). 큰 시트를 흘려 읽는 쪽(xlsx-stream.ts)도 쓴다. */
+export const parseXlsxRowCells = (rowXml: string, shared: readonly string[]): string[] => {
+  const cells: string[] = [];
+  const cellRe = /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g;
+  let cm: RegExpExecArray | null;
+  while ((cm = cellRe.exec(rowXml)) !== null) {
+    const attrs = cm[1] ?? '';
+    const inner = cm[2] ?? '';
+    const ref = /r="([A-Z]+\d+)"/.exec(attrs)?.[1];
+    const type = /t="([^"]+)"/.exec(attrs)?.[1] ?? 'n';
+    let value = '';
+    if (type === 'inlineStr') {
+      const tRe = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
+      let t: RegExpExecArray | null;
+      while ((t = tRe.exec(inner)) !== null) value += t[1] ?? '';
+      value = decodeXmlText(value);
+    } else {
+      const v = /<v\b[^>]*>([\s\S]*?)<\/v>/.exec(inner)?.[1] ?? '';
+      if (type === 's') {
+        const idx = Number.parseInt(v, 10);
+        value = Number.isFinite(idx) ? (shared[idx] ?? '') : '';
+      } else {
+        value = decodeXmlText(v);
+      }
+    }
+    const col = ref ? columnLetterToIndex(ref) : cells.length;
+    while (cells.length < col) cells.push('');
+    cells[col] = value.trim();
+  }
+  return cells;
+};
+
 const parseSheet = (xml: string, shared: string[]): string[][] => {
   const rows: string[][] = [];
   const rowRe = /<row\b[^>]*>([\s\S]*?)<\/row>/g;
   let rm: RegExpExecArray | null;
-  while ((rm = rowRe.exec(xml)) !== null) {
-    const rowXml = rm[1] ?? '';
-    const cells: string[] = [];
-    const cellRe = /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g;
-    let cm: RegExpExecArray | null;
-    while ((cm = cellRe.exec(rowXml)) !== null) {
-      const attrs = cm[1] ?? '';
-      const inner = cm[2] ?? '';
-      const ref = /r="([A-Z]+\d+)"/.exec(attrs)?.[1];
-      const type = /t="([^"]+)"/.exec(attrs)?.[1] ?? 'n';
-      let value = '';
-      if (type === 'inlineStr') {
-        const tRe = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
-        let t: RegExpExecArray | null;
-        while ((t = tRe.exec(inner)) !== null) value += t[1] ?? '';
-        value = decodeXmlText(value);
-      } else {
-        const v = /<v\b[^>]*>([\s\S]*?)<\/v>/.exec(inner)?.[1] ?? '';
-        if (type === 's') {
-          const idx = Number.parseInt(v, 10);
-          value = Number.isFinite(idx) ? (shared[idx] ?? '') : '';
-        } else {
-          value = decodeXmlText(v);
-        }
-      }
-      const col = ref ? columnLetterToIndex(ref) : cells.length;
-      while (cells.length < col) cells.push('');
-      cells[col] = value.trim();
-    }
-    rows.push(cells);
-  }
+  while ((rm = rowRe.exec(xml)) !== null) rows.push(parseXlsxRowCells(rm[1] ?? '', shared));
   return rows;
 };
 
