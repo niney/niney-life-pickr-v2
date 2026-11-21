@@ -93,6 +93,13 @@ API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 
 (`mfds-nutrition-15100065.csv`·`-15100066.csv`)에서 원고가 가리킨 식품코드·제품 묶음의 100g당 값을 읽어 `foods.json` 을 만든다
 (가공식품은 잘린 5만 행 안에서 고른다 — 시판 토마토 소스·파르메산 치즈는 들어 있다). 작업 컴퓨터에서만 돌린다.
 
+제품을 견주는 편(2026-11-21, 여덟째 편 '마트 나트륨')은 5만 행 조각으로 안 된다 — 잘린 조각이 **이름 가나다순의 뒤쪽(ㅋ~ㅎ)**이라
+라면 228개가 '큰컵…'·'팔도…'와 수입 제품뿐이고 이름이 ㄴ·ㅅ·ㅇ·ㅊ 으로 시작하는 제품이 통째로 빠진다. 그래서 아래 전체판 엑셀과
+같은 곳에서 받는 **가공식품 DB**(`food/YYYYMMDD_가공식품DB_*.xlsx` — 2026-10-29 판 329,378행 · 200MB, 시트 XML 2.3GB)를
+`pnpm --filter friendly build:processed-food-csv` 로 줄여 `food/mfds-processed-full.csv`(스토리가 읽는 20열 · 60MB · 약 20초)를
+만들고, 원고의 묶음 `db: "processed-full"` 이 그것을 읽는다. 시트가 커서 통째로 못 풀어 행 단위로 흘려 읽는다
+(`apps/friendly/src/lib/xlsx-stream.ts`). 받을 때 K-FIND 음식 DB 와 같은 활용정보 입력이 필요하다(사람이 받는다).
+
 판정 규칙·골든셋·어휘 편집은 [menu-calorie-engine.md](menu-calorie-engine.md).
 
 ### 영양소 점검용 전체판 엑셀 2종 (2026-11-07, [PLAN-meal-nutrition.md](PLAN-meal-nutrition.md))
