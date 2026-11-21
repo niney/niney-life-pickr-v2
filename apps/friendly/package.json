@@ -32,6 +32,7 @@
     "load:life-flood": "tsx --env-file=.env scripts/load-life-flood.ts",
     "load:food-catalog": "tsx --env-file=.env scripts/load-food-catalog.ts",
     "build:meal-stories": "tsx scripts/build-meal-stories.ts",
+    "build:processed-food-csv": "tsx scripts/build-processed-food-csv.ts",
     "check:meal-stories": "tsx scripts/check-meal-stories.ts",
     "export:meal-story": "tsx scripts/export-meal-story.ts",
     "build:tarot-deck": "tsx scripts/build-tarot-deck.ts",

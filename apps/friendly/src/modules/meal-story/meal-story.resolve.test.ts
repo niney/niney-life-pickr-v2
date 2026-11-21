@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MealStorySceneType } from '@repo/api-contract';
 import { checkMealStory, kickerClashWarnings } from './meal-story.check.js';
-import { buildMealStoryFoods, dishProblem, foodRowsFromCsv, type FoodRow } from './meal-story.foods.js';
+import { buildMealStoryFoods, dishProblem, foodDbsOf, foodRowsFromCsv, missingFoodFiles, type FoodRow } from './meal-story.foods.js';
 import { fractionOf, kdriFigure, mealStoryPosterName } from './meal-story.defs.js';
 import { resolveMealStory } from './meal-story.resolve.js';
 import {
@@ -467,6 +467,139 @@ describe('buildMealStoryFoods', () => {
       matched: { count: 3, counts: { fiberG: 2 } },
     });
     expect(file.foods.wheat?.matched?.counts).toEqual({ fiberG: 2 });
+  });
+
+  // 제품을 견주는 편(마트에서 고르기) — 가공식품 전체판에서 분류와 포장 무게로 묶고, 낮은·높은 쪽 값을 뽑는다.
+  const product = (i: number, over: Partial<FoodRow> = {}): FoodRow => ({
+    code: 'P108-000000001-0000',
+    name: `라면 ${i}`,
+    category: '면류',
+    rep: '라면',
+    sub: '유탕면',
+    basis: '100g',
+    // 나트륨 1,000~1,490(10씩), 열량은 거꾸로 — 영양소마다 줄 세운 차례가 다르다.
+    per100: { kcal: 500 - i, sodiumMg: 1000 + i * 10 },
+    servingG: 120,
+    serving: '120g',
+    ...over,
+  });
+  const shelf = (): FoodRow[] => [
+    ...Array.from({ length: 50 }, (_, i) => product(i)),
+    // 같은 대표식품명이어도 소분류·무게가 다르면 다른 묶음이다.
+    product(900, { name: '생라면', sub: '생면', per100: { kcal: 200, sodiumMg: 300 } }),
+    product(901, { name: '작은 컵라면', servingG: 65, per100: { kcal: 450, sodiumMg: 2500 } }),
+    product(902, { name: '라면 다섯 개 묶음', servingG: 600, per100: { kcal: 450, sodiumMg: 1500 } }),
+    product(903, { name: '무게를 안 적은 라면', servingG: null, per100: { kcal: 450, sodiumMg: 9000 } }),
+    product(904, { name: '라면 과자', rep: '스낵과자', sub: '과자', per100: { kcal: 480, sodiumMg: 700 } }),
+  ];
+  const ramen = { db: 'processed-full', rep: '라면', sub: '유탕면', weight: { min: 100, max: 140 } } as const;
+
+  it('묶음을 분류(대표식품명·소분류)와 포장 무게로 고른다 — 출처 글에 묶음의 포장 무게와 한 번 먹는 양을 붙인다', () => {
+    const script = base({ foods: [{ id: 'ramen', label: '라면', group: ramen }] });
+    const { file, problems } = buildMealStoryFoods(script, { 'processed-full': shelf() });
+    expect(problems).toEqual([]);
+    expect(file.foods.ramen).toMatchObject({
+      // 50개의 중앙값 — 나트륨 (1,240 + 1,250) / 2, 열량 (475 + 476) / 2.
+      per100: { kcal: 475.5, sodiumMg: 1245 },
+      provenance: "식약처 가공식품 DB 전체판 '라면 > 유탕면 · 포장 100~140g' 제품 50개의 중앙값 · 포장 무게 중앙값 120g · 1회 섭취참고량 120g",
+      source: 'mfds-processed-full',
+      matched: { count: 50 },
+    });
+    expect(file.foods.ramen?.matched).not.toHaveProperty('pick');
+    // 이름 없이 분류만으로 고를 수 있다. 둘 다 없으면 형식 오류.
+    expect(() => base({ foods: [{ id: 'x', label: 'x', group: { db: 'processed-full', sub: '유탕면' } }] })).toThrow(/이름\(all\)이나 대표식품명\(rep\)/);
+    expect(() => base({ foods: [{ id: 'x', label: 'x', group: { db: 'processed-full', rep: '라면', weight: {} } }] })).toThrow(/min·max/);
+  });
+
+  it('낮은·높은 쪽 값(pick) — 그 영양소 순으로 세운 10%째·90%째, 다른 영양소는 비운다. 제품이 서른 개보다 적으면 내지 않는다', () => {
+    const script = base({
+      foods: [
+        { id: 'low', label: '라면(낮은 제품)', group: { ...ramen, pick: { by: 'sodiumMg', at: 'low' } } },
+        { id: 'high', label: '라면(높은 제품)', group: { ...ramen, pick: { by: 'sodiumMg', at: 'high' } } },
+      ],
+    });
+    const { file, problems } = buildMealStoryFoods(script, { 'processed-full': shelf() });
+    expect(problems).toEqual([]);
+    // 50개 — 아래에서 10%째 = 여섯째(1,050), 위에서 10%째 = 마흔여섯째(1,450).
+    expect(file.foods.low?.per100).toEqual({ kcal: null, carbG: null, proteinG: null, fatG: null, sugarG: null, fiberG: null, sodiumMg: 1050, potassiumMg: null, calciumMg: null, vitaminCMg: null });
+    expect(file.foods.high?.per100.sodiumMg).toBe(1450);
+    expect(file.foods.low?.provenance).toContain('제품 50개를 나트륨 순으로 세운 아래에서 10%째 값');
+    expect(file.foods.high?.provenance).toContain('위에서 10%째 값');
+    expect(file.foods.low?.matched?.pick).toBe('low');
+
+    const few = buildMealStoryFoods(script, { 'processed-full': shelf().slice(0, 29) });
+    expect(few.problems).toEqual([expect.stringContaining('low: 낮은·높은 쪽 값(pick)은 나트륨 값을 적은 제품이 30개 이상일 때만 낸다(29개)'), expect.stringContaining('high:')]);
+    expect(few.file.foods.low).toBeUndefined();
+  });
+
+  it('원고가 읽는 표준데이터만 고른다 — 이 컴퓨터에 없는 파일은 이름으로 알린다(전체판은 따로 만들어야 한다)', () => {
+    const script = base({
+      foods: [
+        { id: 'noodle', label: '국수', ref: { db: 'raw', code: 'R101-000000001-0000' } },
+        { id: 'ramen', label: '라면', group: ramen },
+        { id: 'herb', label: '허브', manual: { per100: { kcal: 30 }, source: 'my-book' } },
+      ],
+    });
+    expect(foodDbsOf(script)).toEqual(['raw', 'processed-full']);
+    expect(missingFoodFiles(script, { raw: [] })).toEqual(['mfds-processed-full.csv']);
+    expect(missingFoodFiles(script, { raw: [], 'processed-full': [] })).toEqual([]);
+    expect(buildMealStoryFoods(script, { raw: [] }).problems).toEqual(expect.arrayContaining([expect.stringContaining('ramen: mfds-processed-full.csv 이 없다')]));
+  });
+
+  it('표준데이터 읽기 — 가공식품의 분류(대표식품명·소분류)와 포장 무게(kg·L 은 g·ml 로), 1회 섭취참고량', () => {
+    const csv = [
+      '식품코드,식품명,식품대분류명,대표식품명,식품소분류명,영양성분함량기준량,나트륨(mg),1회 섭취참고량,식품중량',
+      'P108-000000001-0001,봉지 라면,면류,라면,유탕면,100g,1500,"생·숙면 200g, 건면 100g",120g',
+      'P114-000000001-0002,포기김치,절임류 또는 조림류,배추김치,김치,100g,600,40g,"1,000g"',
+      'P114-000000001-0003,포기김치 대용량,절임류 또는 조림류,배추김치,김치,100g,620,40g,1.2kg',
+      'P110-000000001-0004,양조간장,장류,간장,해당없음,100ml,6000,5ml,1.8L',
+    ].join('\n');
+    expect(foodRowsFromCsv(csv).map((r) => [r.name, r.rep, r.sub, r.servingG, r.serving])).toEqual([
+      ['봉지 라면', '라면', '유탕면', 120, '생·숙면 200g, 건면 100g'],
+      ['포기김치', '배추김치', '김치', 1000, '40g'],
+      ['포기김치 대용량', '배추김치', '김치', 1200, '40g'],
+      ['양조간장', '간장', '해당없음', 1800, '5ml'],
+    ]);
+  });
+
+  it('화면 덧말 — 값을 적은 제품이 눈에 띄게 적을 때만 밝히고(열에 아홉 아래), 낮은·높은 쪽 값이면 중앙값이라 하지 않는다', () => {
+    const script = base({
+      foods: [
+        { id: 'box', label: '도시락', group: { db: 'processed-full', rep: '도시락' } },
+        { id: 'low', label: '라면(낮은 제품)', group: { ...ramen, pick: { by: 'sodiumMg', at: 'low' } } },
+      ],
+      recipe: undefined,
+      scenes: [
+        { type: 'cover', kicker: '시험', title: '시험 표지' },
+        {
+          type: 'bars',
+          title: '견주기',
+          bars: [
+            { label: '도시락 한 개', value: { food: 'box', nutrient: 'sodiumMg', grams: 400 } },
+            { label: '낮은 라면 한 봉', value: { food: 'low', nutrient: 'sodiumMg', grams: 100 } },
+            { label: '낮은 라면의 열량', value: { food: 'low', nutrient: 'kcal', grams: 100 } },
+          ],
+        },
+        { type: 'outro', title: '끝', actions: ['share'] },
+      ],
+    });
+    const file: MealStoryFoodsFileType = {
+      generatedBy: 'build:meal-stories',
+      foods: {
+        // 1,656개 중 1,655개가 나트륨을 적었다 — 덧말로 붙이지 않는다.
+        box: { per100: { sodiumMg: 305 }, basis: '100g', provenance: '도시락 1,656개', source: 'mfds-processed-full', matched: { count: 1656, names: [], counts: { sodiumMg: 1655 } } },
+        // 547개 중 300개만 — 밝힌다(고른 값).
+        low: { per100: { kcal: null, sodiumMg: 1028 }, basis: '100g', provenance: '라면 547개', source: 'mfds-processed-full', matched: { count: 547, names: [], counts: { sodiumMg: 300 }, pick: 'low' } },
+      },
+    };
+    const { story, issues } = resolveMealStory(script, file, imageUrl);
+    const bars = sceneOf(story.scenes, 'bars');
+    expect(bars.bars[0]!.figure).toMatchObject({ value: 1220, basis: '도시락 400g', detail: null, sources: ['mfds-processed-full'] });
+    expect(bars.bars[1]!.figure).toMatchObject({ value: 1028, detail: '라면(낮은 제품)의 나트륨 값은 표시한 제품 300개에서 고른 값이에요' });
+    // 낮은 쪽 값을 뽑은 묶음은 그 영양소만 값이 있다.
+    expect(bars.bars[2]!.figure.value).toBeNull();
+    expect(issues).toEqual(['장면 2(bars) 막대 3: 라면(낮은 제품) 의 열량 값이 없다']);
+    expect(story.sources.find((s) => s.id === 'mfds-processed-full')?.label).toContain('가공식품 전체판');
   });
 });
 

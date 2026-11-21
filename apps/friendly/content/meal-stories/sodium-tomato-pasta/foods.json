@@ -168,7 +168,7 @@
         "vitaminCMg": null
       },
       "basis": "100g",
-      "provenance": "식약처 가공식품 표준데이터 '토마토·소스 + 스파게티|파스타' 제품 12개의 중앙값",
+      "provenance": "식약처 가공식품 표준데이터 '토마토·소스 + 스파게티|파스타' 제품 12개의 중앙값 · 포장 무게 중앙값 600g",
       "source": "mfds-processed",
       "matched": {
         "count": 12,
@@ -200,7 +200,7 @@
         "vitaminCMg": null
       },
       "basis": "100g",
-      "provenance": "식약처 가공식품 표준데이터 '통밀 + 스파게티 (면류)' 제품 17개의 중앙값",
+      "provenance": "식약처 가공식품 표준데이터 '통밀 + 스파게티 (면류)' 제품 17개의 중앙값 · 포장 무게 중앙값 500g",
       "source": "mfds-processed",
       "matched": {
         "count": 17,

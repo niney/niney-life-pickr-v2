@@ -13,7 +13,7 @@ import sharp from 'sharp';
 import type { MealStoryFigureType, MealStoryType } from '@repo/api-contract';
 import { checkMealStory, kickerClashWarnings, type ImageInfo } from '../src/modules/meal-story/meal-story.check.js';
 import { formatAmount } from '../src/modules/meal-story/meal-story.defs.js';
-import { buildMealStoryFoods, loadFoodTables } from '../src/modules/meal-story/meal-story.foods.js';
+import { buildMealStoryFoods, foodDbsOf, loadFoodTables, missingFoodFiles } from '../src/modules/meal-story/meal-story.foods.js';
 import { MealStoryFoodsFile, type MealStoryFoodsFileType } from '../src/modules/meal-story/meal-story.script.js';
 import {
   MEAL_STORY_FOODS_FILE,
@@ -79,18 +79,26 @@ const main = async (): Promise<void> => {
     }
   }
   const slugs = allSlugs.filter((s) => !ONLY || s === ONLY);
-  const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT]);
-  const haveTables = !!paths.raw || !!paths.processed;
+  // 원고를 먼저 읽어, 점검할 편이 쓰는 표준데이터만 읽는다(가공식품 전체판은 60MB — 안 쓰는 편만 볼 때는 읽지 않는다).
+  const loadedBySlug = new Map<string, Awaited<ReturnType<typeof loadMealStoryDir>> | Error>();
+  for (const slug of slugs) {
+    try {
+      loadedBySlug.set(slug, await loadMealStoryDir(join(root, slug)));
+    } catch (e) {
+      loadedBySlug.set(slug, e instanceof Error ? e : new Error(String(e)));
+    }
+  }
+  const dbs = [...new Set([...loadedBySlug.values()].flatMap((l) => (l instanceof Error ? [] : foodDbsOf(l.script))))];
+  const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT], dbs);
+  const haveTables = Object.keys(paths).length > 0;
   let failed = false;
 
   for (const slug of slugs) {
     const dir = join(root, slug);
     console.log(`\n[${slug}]`);
-    let loaded;
-    try {
-      loaded = await loadMealStoryDir(dir);
-    } catch (e) {
-      console.log(`  ✗ ${e instanceof Error ? e.message : String(e)}`);
+    const loaded = loadedBySlug.get(slug)!;
+    if (loaded instanceof Error) {
+      console.log(`  ✗ ${loaded.message}`);
       failed = true;
       continue;
     }
@@ -102,7 +110,11 @@ const main = async (): Promise<void> => {
     }
     const result = checkMealStory(loaded, { images: await imagesOf(dir), foodsFile });
     result.warnings.push(...kickerClashWarnings(slug, kickers));
-    if (haveTables) {
+    const missing = missingFoodFiles(loaded.script, tables);
+    if (missing.length > 0 && haveTables) {
+      // 이 편이 쓰는 파일이 이 컴퓨터에 없다(전체판은 따로 만들어야 한다) — 맞춰 보지 못할 뿐 원고가 틀린 것은 아니다.
+      result.warnings.push(`data/open/food/ 에 ${missing.join('·')} 이 없어 foods.json 을 원본과 맞춰 보지 못했다`);
+    } else if (haveTables) {
       const rebuilt = buildMealStoryFoods(loaded.script, tables);
       const same = JSON.stringify(rebuilt.file) === JSON.stringify(foodsFile);
       if (!same) result.errors.push('foods.json 이 표준데이터·원고와 다르다 — pnpm --filter friendly build:meal-stories');

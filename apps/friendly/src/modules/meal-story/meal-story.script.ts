@@ -189,17 +189,32 @@ export const MealStoryFoodSpec = z
     // 한 식품 — raw = 원재료성 식품 표준데이터(15100065), processed = 가공식품 표준데이터(15100066),
     // dish = 음식 표준데이터(15100070)의 분석한 한 그릇(외식·가정식 — 급식·산출·간편조리세트는 빌더가 막는다).
     ref: z.object({ db: z.enum(['raw', 'processed', 'dish']), code: FoodCode }).strict().optional(),
-    // 여러 제품의 중앙값 — 식품명이 all 을 모두, any 중 하나를 품고 none 은 없는 행(category 는 식품대분류명).
+    // 여러 제품의 중앙값 — 식품명이 all 을 모두, any 중 하나를 품고 none 은 없는 행. 분류로도 고른다: category = 식품대분류명,
+    // rep = 대표식품명('라면'·'배추김치'), sub = 식품소분류명('유탕면'·'프레스햄'). 이름(all)이나 대표식품명(rep) 중 하나는 있어야 한다.
+    // processed-full = 가공식품 전체판(33만 행) — processed 는 5만 행에서 잘린 조각이라 제품을 견주는 편은 전체판으로 낸다.
+    // pick 을 주면 중앙값 대신 그 영양소 순으로 줄 세운 아래에서 10%째(low)·위에서 10%째(high) 값 — '같은 종류도 제품마다
+    // 다르다'를 보일 때. 그 영양소만 값이 있다(다른 영양소까지 따로따로 뽑으면 어느 제품의 값도 아닌 조합이 된다).
+    // weight = 포장 무게(g)로 고르기 — '한 봉짜리'(라면 100~140g). 무게를 적지 않은 제품은 빠진다.
     group: z
       .object({
-        db: z.enum(['raw', 'processed']),
-        all: z.array(text(20)).min(1).max(4),
+        db: z.enum(['raw', 'processed', 'processed-full']),
+        all: z.array(text(20)).max(4).optional(),
         any: z.array(text(20)).max(6).optional(),
         none: z.array(text(20)).max(8).optional(),
         category: text(30).optional(),
+        rep: text(30).optional(),
+        sub: text(30).optional(),
+        weight: z
+          .object({ min: z.number().positive().max(20000).optional(), max: z.number().positive().max(20000).optional() })
+          .strict()
+          .refine((w) => w.min !== undefined || w.max !== undefined, { message: 'weight 는 min·max 중 하나는 적는다' })
+          .refine((w) => w.min === undefined || w.max === undefined || w.min <= w.max, { message: 'weight 의 min 이 max 보다 크다' })
+          .optional(),
+        pick: z.object({ by: MealStoryNutrient, at: z.enum(['low', 'high']) }).strict().optional(),
         min: z.number().int().min(2).max(50).optional(),
       })
       .strict()
+      .refine((g) => (g.all?.length ?? 0) > 0 || !!g.rep, { message: '묶음은 이름(all)이나 대표식품명(rep) 중 하나로 고른다' })
       .optional(),
     // 표준데이터에 없는 식품 — 값과 출처를 직접 적는다(check 가 사람 확인 목록에 올린다).
     manual: z.object({ per100: MealStoryPer100, source: Id, note: text(80).optional() }).strict().optional(),
@@ -285,12 +300,13 @@ export const MealStoryFoodsFile = z
           // 음식 표준데이터의 한 그릇 무게(g) — { dish } 가리킴이 100g당 값에 곱한다.
           servingG: z.number().positive().optional(),
           // 묶음 중앙값이면 고른 제품 수와 이름 몇 개. counts — 값을 적은 제품이 묶음보다 적은 영양소만(식이섬유는 라벨에
-          // 없는 제품이 많다). 화면이 'N개 제품의 중앙값'이라고 밝힌다.
+          // 없는 제품이 많다). 화면이 'N개 제품의 중앙값'이라고 밝힌다. pick — 중앙값이 아니라 낮은·높은 쪽 값을 뽑은 묶음.
           matched: z
             .object({
               count: z.number().int().positive(),
               names: z.array(z.string()).max(10),
               counts: MealStoryPer100Counts.optional(),
+              pick: z.enum(['low', 'high']).optional(),
             })
             .strict()
             .optional(),

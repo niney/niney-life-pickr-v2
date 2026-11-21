@@ -2,12 +2,14 @@
 //
 // 실행: pnpm --filter friendly build:meal-stories [--slug=<slug>]
 //   1) foods.json — 원고 foods 의 식품코드(ref)·제품 묶음(group)을 식약처 표준데이터(data/open/food/ 의 15100065·15100066
-//      CSV, git 밖)에서 풀어 100g당 값을 쓴다. 원고에는 숫자를 옮겨 적지 않는다.
+//      CSV, git 밖)에서 풀어 100g당 값을 쓴다. 원고에는 숫자를 옮겨 적지 않는다. 가공식품 전체판(processed-full)을 읽는 편은
+//      먼저 pnpm --filter friendly build:processed-food-csv 로 mfds-processed-full.csv 를 만든다.
 //   2) 사진 — originals/ 의 사진(git 밖)을 긴 변 1440px JPEG 로 줄여 images/<같은 이름>.jpg 로 쓴다. 회전은 EXIF 대로
 //      바로잡고 위치·기기 정보(EXIF)는 지운다. 원본이 결과보다 새것일 때만 다시 만든다.
 // 식품코드 찾기: pnpm --filter friendly build:meal-stories --find=스파게티[,파마산] — 두 표준데이터에서 이름에 그 말이 든 식품의
 //   코드·이름·분류·100g당 열량·나트륨을 보여 주고 끝난다(원고 foods 의 ref.code 로 쓴다). 음식 표준데이터(dish)는 한 그릇으로
-//   쓸 수 있는 행(분석한 한 그릇)만, 한 그릇 무게와 한 그릇 열량·나트륨을 함께 보인다.
+//   쓸 수 있는 행(분석한 한 그릇)만, 한 그릇 무게와 한 그릇 열량·나트륨을 함께 보인다. --full 을 더하면 가공식품 전체판에서
+//   분류(대표식품명 > 식품소분류명)별 제품 수·나트륨(10%째·중앙·90%째)·포장 무게를 보인다 — 묶음의 rep·sub 를 고를 때.
 // 이어서 pnpm --filter friendly check:meal-stories 로 점검한다. 절차 전체는 docs/meal-story-authoring.md.
 
 /* eslint-disable no-console */
@@ -18,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { MEAL_STORY_IMAGE_PATTERN } from '@repo/api-contract';
 import { MEAL_STORY_NUTRIENTS } from '../src/modules/meal-story/meal-story.defs.js';
-import { buildMealStoryFoods, dishProblem, loadFoodTables } from '../src/modules/meal-story/meal-story.foods.js';
+import { buildMealStoryFoods, dishProblem, foodDbsOf, loadFoodTables, type FoodRow } from '../src/modules/meal-story/meal-story.foods.js';
 import { MealStoryScript } from '../src/modules/meal-story/meal-story.script.js';
 import {
   MEAL_STORY_FILE,
@@ -80,9 +82,44 @@ const buildImages = async (dir: string): Promise<number> => {
 const FIND = arg('find');
 const FIND_LIMIT = 40;
 
+const FULL = process.argv.includes('--full');
+
+const sorted = (xs: number[]): number[] => [...xs].sort((a, b) => a - b);
+const at = (s: number[], q: number): string => (s.length === 0 ? '—' : String(s[Math.min(s.length - 1, Math.floor(q * s.length))]));
+
+/** 가공식품 전체판 — 이름이나 분류에 그 말이 든 제품을 분류(대표식품명 > 식품소분류명)로 묶어 보인다. 묶음의 rep·sub 를 고르는 용도. */
+const findFull = (words: string[]): void => {
+  const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT], ['processed-full']);
+  const rows = tables['processed-full'];
+  if (!rows) {
+    console.log('[processed-full] 가공식품 전체판 없음 — pnpm --filter friendly build:processed-food-csv');
+    return;
+  }
+  const groups = new Map<string, FoodRow[]>();
+  for (const r of rows) {
+    if (!words.some((w) => r.name.includes(w) || (r.rep ?? '').includes(w) || (r.sub ?? '').includes(w))) continue;
+    const key = `${r.rep ?? '—'} > ${r.sub ?? '—'}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+  const list = [...groups].sort((a, b) => b[1].length - a[1].length);
+  console.log(`\n[processed-full] ${paths['processed-full']} — 분류 ${list.length}가지${list.length > FIND_LIMIT ? ` (앞 ${FIND_LIMIT}가지)` : ''}`);
+  for (const [key, hits] of list.slice(0, FIND_LIMIT)) {
+    const sodium = sorted(hits.map((h) => h.per100.sodiumMg).filter((v): v is number => typeof v === 'number'));
+    const weight = sorted(hits.map((h) => h.servingG).filter((v): v is number => typeof v === 'number'));
+    console.log(
+      `  ${key} | 제품 ${hits.length.toLocaleString('ko-KR')} | 100g당 나트륨 ${at(sodium, 0.1)} · ${at(sodium, 0.5)} · ${at(sodium, 0.9)} | 포장 무게 ${at(weight, 0.1)} · ${at(weight, 0.5)} · ${at(weight, 0.9)} | 예: ${hits.slice(0, 2).map((h) => h.name).join(', ')}`,
+    );
+  }
+};
+
 /** 식품코드 찾기 — 원고를 쓸 때 ref.code 를 고르는 용도. */
 const find = (words: string[]): void => {
-  const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT]);
+  if (FULL) {
+    findFull(words);
+    return;
+  }
+  const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT], ['raw', 'processed', 'dish']);
   for (const db of ['raw', 'processed'] as const) {
     const rows = tables[db];
     if (!rows) {
@@ -124,13 +161,19 @@ const main = async (): Promise<void> => {
     console.log(`스토리가 없다(${root}${ONLY ? `, --slug=${ONLY}` : ''})`);
     return;
   }
-  const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT]);
-  console.log(`표준데이터: 원재료 ${paths.raw ?? '없음'} · 가공식품 ${paths.processed ?? '없음'} · 음식 ${paths.dish ?? '없음'}`);
+  // 원고를 먼저 읽어 쓰는 표준데이터만 읽는다(가공식품 전체판은 60MB).
+  const scripts = new Map<string, ReturnType<typeof MealStoryScript.safeParse>>();
+  for (const slug of slugs) scripts.set(slug, MealStoryScript.safeParse(JSON.parse(await readFile(join(root, slug, MEAL_STORY_FILE), 'utf8'))));
+  const dbs = [...new Set([...scripts.values()].flatMap((p) => (p.success ? foodDbsOf(p.data) : [])))];
+  const { tables, paths } = loadFoodTables([process.cwd(), REPO_ROOT], dbs);
+  console.log(
+    `표준데이터: 원재료 ${paths.raw ?? '—'} · 가공식품 ${paths.processed ?? '—'} · 음식 ${paths.dish ?? '—'} · 가공식품 전체판 ${paths['processed-full'] ?? '—'}`,
+  );
 
   for (const slug of slugs) {
     const dir = join(root, slug);
     console.log(`\n[${slug}]`);
-    const parsed = MealStoryScript.safeParse(JSON.parse(await readFile(join(dir, MEAL_STORY_FILE), 'utf8')));
+    const parsed = scripts.get(slug)!;
     if (!parsed.success) {
       for (const i of parsed.error.issues.slice(0, 10)) console.log(`  형식 오류 ${i.path.join('.') || '(전체)'}: ${i.message}`);
       process.exitCode = 1;

@@ -40,8 +40,8 @@ interface FoodValues {
   label: string;
   per100: MealStoryPer100Type;
   source: string;
-  /** 묶음 중앙값이면 — 제품 수와, 값을 적은 제품이 그보다 적은 영양소의 수. */
-  group?: { count: number; counts: MealStoryPer100CountsType };
+  /** 묶음 중앙값이면 — 제품 수와, 값을 적은 제품이 그보다 적은 영양소의 수. pick = 중앙값이 아니라 낮은·높은 쪽 값. */
+  group?: { count: number; counts: MealStoryPer100CountsType; pick?: 'low' | 'high' };
   /** 음식 표준데이터의 한 그릇 무게(g). */
   servingG?: number;
 }
@@ -67,14 +67,19 @@ export const resolveMealStory = (
     const built = foodsFile?.foods[spec.id];
     if (!built) {
       issues.push(`식품 ${spec.id}: foods.json 에 값이 없다 — pnpm --filter friendly build:meal-stories 를 돌린다`);
-      foods.set(spec.id, { label: spec.label, per100: {}, source: spec.ref?.db === 'processed' || spec.group?.db === 'processed' ? 'mfds-processed' : 'mfds-raw' });
+      const db = spec.ref?.db ?? spec.group?.db;
+      foods.set(spec.id, {
+        label: spec.label,
+        per100: {},
+        source: db === 'processed-full' ? 'mfds-processed-full' : db === 'processed' ? 'mfds-processed' : db === 'dish' ? 'mfds-dish' : 'mfds-raw',
+      });
       continue;
     }
     foods.set(spec.id, {
       label: spec.label,
       per100: built.per100,
       source: built.source,
-      group: built.matched ? { count: built.matched.count, counts: built.matched.counts ?? {} } : undefined,
+      group: built.matched ? { count: built.matched.count, counts: built.matched.counts ?? {}, pick: built.matched.pick } : undefined,
       servingG: built.servingG,
     });
   }
@@ -134,11 +139,12 @@ export const resolveMealStory = (
     });
   };
 
-  // 묶음 중 일부 제품만 그 영양소를 적었으면 밝힌다(통밀 파스타 식이섬유 — 라벨에 없는 제품이 많다).
+  // 묶음 중 일부 제품만 그 영양소를 적었으면 밝힌다(통밀 파스타 식이섬유 — 라벨에 없는 제품이 많다). 거의 다 적었으면
+  // (열에 아홉 넘게) 밝히지 않는다 — 천 개 넘는 묶음에서 한두 개가 빈 것까지 화면에 덧말로 붙으면 소음이다.
   const partialNote = (food: FoodValues, n: MealStoryNutrientType): string | null => {
     const c = food.group?.counts[n];
-    return food.group && c !== undefined && c < food.group.count
-      ? `${food.label}의 ${MEAL_STORY_NUTRIENTS[n].label} 값은 표시한 제품 ${c}개의 중앙값이에요`
+    return food.group && c !== undefined && c < food.group.count * 0.9
+      ? `${food.label}의 ${MEAL_STORY_NUTRIENTS[n].label} 값은 표시한 제품 ${c}개${food.group.pick ? '에서 고른 값' : '의 중앙값'}이에요`
       : null;
   };
 
