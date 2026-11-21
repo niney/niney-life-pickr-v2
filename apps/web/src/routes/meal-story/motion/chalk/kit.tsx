@@ -173,6 +173,37 @@ export const ChalkBowl = ({ f, p, salt = false }: { f: number; p: number; salt?:
   );
 };
 
+/**
+ * 빨대 꽂힌 컵과 각설탕(선 그림) — 음료 편(당류)의 표지와 마무리. 그릇과 같은 자리·크기(가운데 540, 위 1196 ~ 아래 1706)에
+ * 그려 부르는 쪽이 그릇처럼 옮기고 줄인다. 방울이 컵 안에서 올라온다.
+ */
+export const ChalkCup = ({ f, p }: { f: number; p: number }) => {
+  const o = clamp01(p);
+  const bubble = (i: number) => 1660 - ((f * 1.4 + i * 61) % 240);
+  // 각설탕 — 앞면 네모, 윗면과 옆면의 비스듬한 선.
+  const cube = (x: number, y: number, s: number) =>
+    `M ${x} ${y} h ${s} v ${s} h ${-s} Z M ${x} ${y} l 14 -14 h ${s} l -14 14 M ${x + s + 14} ${y - 14} v ${s} l -14 14`;
+  return (
+    <g data-art="cup" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx={540} cy={1300} rx={150} ry={26} stroke={CHALK.white} strokeWidth={8} {...draw(p)} />
+      <path d="M 390 1300 L 432 1676 C 436 1706, 644 1706, 648 1676 L 690 1300" stroke={CHALK.white} strokeWidth={8} {...draw(p)} />
+      <path d="M 404 1420 C 436 1398, 468 1442, 500 1420 C 532 1398, 564 1442, 596 1420 C 624 1402, 652 1432, 676 1420" stroke={CHALK.yellow} strokeWidth={7} {...draw(p)} />
+      <path d="M 604 1640 L 676 1230 L 790 1196" stroke={CHALK.pink} strokeWidth={10} {...draw(p)} />
+      <rect x={452} y={1470} width={62} height={62} rx={9} stroke={CHALK.faint} strokeWidth={6} transform="rotate(-14 483 1501)" opacity={o} />
+      <rect x={530} y={1560} width={56} height={56} rx={9} stroke={CHALK.faint} strokeWidth={6} transform="rotate(16 558 1588)" opacity={o} />
+      {[0, 1, 2, 3].map((i) => (
+        <circle key={i} cx={470 + i * 44} cy={bubble(i)} r={6 + (i % 2) * 3} stroke={CHALK.white} strokeWidth={4} opacity={o * 0.8} />
+      ))}
+      <path d={`${cube(196, 1644, 60)} ${cube(272, 1650, 54)} ${cube(230, 1580, 56)}`} stroke={CHALK.white} strokeWidth={6} opacity={o} />
+      <path d="M 314 1556 l 14 -20 M 334 1578 l 24 -8 M 204 1556 l -12 -18" stroke={CHALK.yellow} strokeWidth={5} opacity={o} />
+    </g>
+  );
+};
+
+/** 표지·마무리의 선 그림을 주제에 맞춰 — 당류(음료 편)는 컵과 각설탕, 그 밖은 김 나는 그릇(salt 를 켜면 나트륨 편에 소금통). */
+export const ChalkArt = ({ f, p, topic, salt = false }: { f: number; p: number; topic: string | null; salt?: boolean }) =>
+  topic === 'sugar' ? <ChalkCup f={f} p={p} /> : <ChalkBowl f={f} p={p} salt={salt && topic === 'sodium'} />;
+
 /** 분필 별 하나. */
 export const ChalkStar = ({ x, y, color, p }: { x: number; y: number; color: string; p: number }) => (
   <path

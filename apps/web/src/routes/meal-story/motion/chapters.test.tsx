@@ -389,6 +389,20 @@ describe('칠판 메뉴판 그림체(look: chalk)', () => {
     expect(last({ ...cover, image: null } as MealStorySceneType)).not.toContain('<img');
   });
 
+  it('표지·마무리의 선 그림은 주제에 맞춘다 — 당류(음료 편)는 컵과 각설탕, 그 밖은 김 나는 그릇', () => {
+    const sugar = { ...variantChalkStory, topic: { nutrient: 'sugar', direction: 'reduce' } } as typeof variantChalkStory;
+    const cover = { ...scenes[0]!, image: null } as MealStorySceneType;
+    const end = chapterFrames(sugar, cover) - 1;
+    expect(draw(cover, VIEWERS[0]!, end, 'c0', sugar)).toContain('data-art="cup"');
+    expect(draw(cover, VIEWERS[0]!, end, 'c0', variantChalkStory)).not.toContain('data-art="cup"');
+    // 컵 안의 방울이 움직여도 어느 프레임에서나 숫자가 깨지지 않는다(표지·마무리).
+    for (const scene of [cover, scenes[scenes.length - 1]!]) {
+      for (const frame of [0, 31, 78, 140, chapterFrames(sugar, scene) - 1]) {
+        expect(draw(scene, VIEWERS[0]!, frame, 'c0', sugar), `${scene.type} · ${frame}`).not.toMatch(/NaN|undefined|Infinity/);
+      }
+    }
+  });
+
   it('칠판이 못 그리는 장면(레시피)이 섞여 오면 그 장면만 종이 오리기로 그린다', () => {
     const step = variantStory.scenes.find((s) => s.type === 'step')!;
     const markup = draw(step, VIEWERS[0]!, 60, 'c0', variantChalkStory);

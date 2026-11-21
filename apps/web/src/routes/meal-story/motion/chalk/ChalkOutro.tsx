@@ -5,7 +5,7 @@ import { HAND } from '../theme';
 import { OUTRO } from '../timeline';
 import type { ChapterContext } from '../types';
 import { CHALK, chalkTitle, draw, writeOn } from './chalkLayout';
-import { ChalkBoard, ChalkBowl, ChalkStar, ChalkSvg } from './kit';
+import { ChalkArt, ChalkBoard, ChalkStar, ChalkSvg } from './kit';
 
 type OutroScene = Extract<MealStorySceneType, { type: 'outro' }>;
 
@@ -14,7 +14,7 @@ const ART_BOTTOM = 1234;
 const BOWL_H = 254;
 
 /** 마무리(칠판) — 큰 손글씨 제목과 노란 물결 밑줄, 글, 그 아래 김 나는 그릇. 아래쪽은 단추 자리로 비운다. */
-export const ChalkOutro = ({ scene }: { scene: OutroScene; ctx: ChapterContext }) => {
+export const ChalkOutro = ({ scene, ctx }: { scene: OutroScene; ctx: ChapterContext }) => {
   const f = useClock();
   const t = chalkTitle(scene.title, 900);
   const top = 300;
@@ -33,7 +33,7 @@ export const ChalkOutro = ({ scene }: { scene: OutroScene; ctx: ChapterContext }
         {/* 글이 길어 그릇 자리가 모자라면 그리지 않는다(단추 자리를 침범하지 않게). */}
         {bowlTop + BOWL_H <= ART_BOTTOM ? (
           <g transform={`translate(540 ${bowlTop}) scale(0.5) translate(-540 -1196)`}>
-            <ChalkBowl f={f} p={art} />
+            <ChalkArt f={f} p={art} topic={ctx.story.topic?.nutrient ?? null} />
           </g>
         ) : null}
       </ChalkSvg>

@@ -1,6 +1,6 @@
 import { AbsoluteFill } from 'remotion';
 import { CHALK, wobble } from '../../../apps/web/src/routes/meal-story/motion/chalk/chalkLayout';
-import { ChalkBowl, ChalkGrain, ChalkStar, ChalkTag } from '../../../apps/web/src/routes/meal-story/motion/chalk/kit';
+import { ChalkArt, ChalkGrain, ChalkStar, ChalkTag } from '../../../apps/web/src/routes/meal-story/motion/chalk/kit';
 import { titleLines } from '../../../apps/web/src/routes/meal-story/motion/layout';
 import { Icon } from '../../../apps/web/src/routes/meal-story/motion/paper/Icon';
 import { Grain, Note, Paper, Patterns } from '../../../apps/web/src/routes/meal-story/motion/paper/kit';
@@ -26,7 +26,7 @@ const fitTitle = (title: string, width: number, sizes: readonly number[]) => {
   return { size, lines: titleLines(title, size, width).map((l) => l.join(' ')) };
 };
 
-const ChalkPoster = ({ kicker, title, salt }: { kicker: string; title: string; salt: boolean }) => {
+const ChalkPoster = ({ kicker, title, topic }: { kicker: string; title: string; topic: string | null }) => {
   const t = fitTitle(title, 500, [80, 72, 64, 56]);
   const lineH = Math.round(t.size * 1.12);
   const top = 190;
@@ -54,9 +54,9 @@ const ChalkPoster = ({ kicker, title, salt }: { kicker: string; title: string; s
         <ChalkStar x={716} y={112} color={CHALK.pink} p={1} />
         <ChalkStar x={980} y={150} color={CHALK.yellow} p={1} />
         <path d={wave} stroke={CHALK.yellow} strokeWidth={6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        {/* 김 나는 그릇 — 영상 표지의 그림을 줄여서 */}
+        {/* 김 나는 그릇(당류 편은 컵) — 영상 표지의 그림을 줄여서 */}
         <g transform="translate(850 384) scale(0.46) translate(-540 -1440)">
-          <ChalkBowl f={30} p={1} salt={salt} />
+          <ChalkArt f={30} p={1} topic={topic} salt />
         </g>
       </svg>
       <ChalkTag text={kicker} x={224} y={90} p={1} />
@@ -145,7 +145,7 @@ export const Poster = ({ story }: StoryVideoProps) => {
   const kicker = cover?.type === 'cover' ? cover.kicker : story.title;
   const title = cover?.type === 'cover' ? cover.title : story.title;
   return story.look === 'chalk' ? (
-    <ChalkPoster kicker={kicker} title={title} salt={story.topic?.nutrient === 'sodium'} />
+    <ChalkPoster kicker={kicker} title={title} topic={story.topic?.nutrient ?? null} />
   ) : (
     <PaperPoster story={story} kicker={kicker} title={title} />
   );
