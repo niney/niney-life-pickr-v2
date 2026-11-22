@@ -115,6 +115,13 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // 개발 서버가 내주는 파일의 범위. 기본은 모노레포 뿌리 전체라, 밖에서 접속할 수 있게 열어 둔 서버(host: true)에서
+    // `/@fs/<절대경로>` 로 apps/friendly 의 DB(data/*.db — 운영 사본 포함)·서버 소스·배포 스크립트·문서까지 내려받을 수 있었다
+    // (2026-11-23 실측. 기본 차단 목록은 .env·인증서·.git 뿐이다). 웹이 실제로 읽는 세 곳으로 좁힌다 — 이 앱, 공유 패키지,
+    // 끌어올린 의존성(Vite 클라이언트도 여기 있다). 다른 곳의 파일을 import 하게 되면 여기에 더한다.
+    fs: {
+      allow: ['.', '../../packages', '../../node_modules'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
