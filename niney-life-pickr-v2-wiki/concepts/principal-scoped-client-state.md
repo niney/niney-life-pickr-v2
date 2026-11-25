@@ -1,7 +1,7 @@
 ---
 concept: 클라이언트 정체성 경계 — 요청 토큰 == 현재 토큰일 때만 401 이 세션을 끊고, 로컬 상태는 principal 로 격리한다
-last_compiled: 2026-08-30
-topics_connected: [shared, web, mobile, meal, friendly]
+last_compiled: 2026-11-15
+topics_connected: [shared, web, mobile, meal, friendly, meal-story]
 status: active
 ---
 
@@ -20,6 +20,7 @@ status: active
 
 ## Instances
 
+- **2026-11-09** in [meal-story](../topics/meal-story.md) / [shared](../topics/shared.md) (`e3c6f6e5`, 32차): **주체가 아니라 역할로 가르는 쿼리 키.** 건강식단 스토리는 어드민에게만 초안이 보인다. 그래서 shared `useMealStory` 의 목록·상세 쿼리 키에 `audience`(admin/public)를 넣었다 — 사용자 id 가 아니라 "무엇을 볼 수 있는 역할인가" 가 응답을 가르는 축이라, 로그인·로그아웃 뒤에도 초안이 공개 캐시에 섞이지 않는다. 서버 쪽 공유 미리보기도 초안·없는 스토리는 기본 미리보기로 내 초안 제목이 링크로 새지 않게 한다.
 - **2026-08-23** in [shared](../topics/shared.md) (`client.ts` + `client.test.ts` + `hooks/useAuth.ts`, `fd371d9`·`9f39d53`): 규칙 1·2 의 본체 — 요청 단위 config 스냅샷, `handleUnauthorizedForCurrentSession`, 로그인 시 `removeQueries()` 전체. 테스트가 "옛 토큰 401 무시" 를 고정.
 - **2026-08-23** in [shared](../topics/shared.md) / [meal](../topics/meal.md) (`stores/mealDraftStore.ts` + `hooks/useMeal.ts`): 규칙 3·4 — principal 스코프 물리 키·동기 경계·세대 id·파일 어댑터 주입 포트(`setMealDraftLocalFileAdapter`), `expectedPrincipalId` 가드. settlementDraft(placeId 정체성, v1→v6)와 달리 **정체성 축이 사용자**다.
 - **2026-08-23** in [mobile](../topics/mobile.md) (`src/lib/api-setup.ts`·`queryClient.ts`·`mealDraftPhotos.ts`·`mealPhotoCache.ts`·`mealReminders.ts`): 앱의 로컬 상태 4종이 principal 네임스페이스, `mobileQueryClient` 싱글턴화, 부팅 시 JWT `userId` → `setMealDraftPrincipal` 선세팅, 401 가드 주입. 알림 handler 는 루트 단일 + 응답 라우팅 allowlist.
@@ -34,6 +35,7 @@ status: active
 
 ## Sources
 
+- [packages/shared/src/hooks/useMealStory.ts](../../packages/shared/src/hooks/useMealStory.ts) — 32차 `audience` 쿼리 키
 - [shared](../topics/shared.md)
 - [web](../topics/web.md)
 - [mobile](../topics/mobile.md)

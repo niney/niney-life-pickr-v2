@@ -1,12 +1,22 @@
 ---
 topic: web
-last_compiled: 2026-10-31
-sources_count: 461
+last_compiled: 2026-11-15
+sources_count: 513
 status: active
-aliases: [vite, react, web-app, frontend-web, embed-mode, embed-1, lp:embed, isEmbedMode, lib-embed, embedBridge, __LP_EMBED__, ReactNativeWebView, postLpEmbedMessage, readLpEmbedInit, isLpEmbedded, webview-embed, app-webview, useGuestKeyStore, guest-key-v1, TarotPage, TarotSharedPage, MyTarotPage, SajuPage, SajuSharedPage, MySajuPage, SajuGPage, HousingPage, housingPrefsStore, lp:housing-prefs, LifeGoToBox-extraSections, complex-search, AdminQuotasPage, admin-quotas, usage-quota-tab, settings-quotas, ai-purpose-8, font-serif-kr, noto-serif-kr, three-chunk, r3f, react-three-fiber, detectTarotRender, lite-fallback, home-entry-cards, nav-order-11, nav-11, MenuKcalChip, kcal-chip, reviewThumbnailUrl, decoding-async, ImgWithFallback-size, web-tests-120, AirQualityPage, air-quality-page, WeatherPage, weather-page, LifeMapPage, life-map-page, MealPage, meal-page, MealRecommendTab, MealPreferenceTab, MealPhotoImg, AccountMenu, account-menu, MyLocationChip, my-location-chip, top-bar-width-budget, 폭예산, nav-order, sidebar-account, useMapSheets, map-sheets, sheet-pattern, map-sheet-shell, useMediaQuery, useIsDesktopXl, map-bottom-inset, flyTo-bottomInset, fixedScale, marker-style-cache, AdminFoodPage, admin-food, admin-restaurant-search, ai-purpose-5, meal-photo, meal-recommend, compareReviewRecencyDesc, visitedAt-desc, handleUnauthorizedForCurrentSession, 401-current-session, lifeMapPrefsStore, lifeMapRecentStore, LifeGoToBox, LifeLayerBar, LifeNearbyList, LifeDetailCard, LifeMapView, AirNearbySection, AirStationsMap, AirHourStrip, AirHistoryChart, AirPrimitives, WeatherMeteogram, WeatherDailyStrip, WeatherNowHero, air-series-token, weather-temp-token, web-tests-77, matchMedia-mock, MapCanvas-mock, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle, home-ranking-link, lightbox-portal, createPortal, sticky-stacking-context-trap, lightbox-backdrop-close, my-location-guide, geolocation-permission-change, insecure-context-http, code-splitting, route-lazy, AdminRoutes, manualChunks, codeSplitting-groups, vite8, rolldown, react-memo, interaction-hot-path, setQueryData-batch-merge, lightbox-promoted, eslint-web, react-compiler-lint, s-token-route, og-proxy, dark-mode-web, theme-store, lp-theme, MapLayerControl, midnight-layer, satellite-layer, vworld-dark, MyLocationButton, soft-tonal-variant, tonal-button, tonal-badge, detail-CategoryTree, insight-tip-filter, menu-filter, lightbox-thumbnail, card-borderless-tab, review-photo-fullwidth, card-click-flyto, card-doubleclick-zoom, flyToZoomIn, SubwayPage, subway-web, subway-station-search, subway-arrival-panel, subway-path-panel, subway-timetable, subway-congestion, SubwayLineBadge, SubwayStationsMap, SubwayNearbyBusSection, TransitTabs, transit-unified, TransitFavoritesSection, CrossSearchSection, TransitCrossToggleChip, transitFavExpandStore, transitCrossShowStore, transitMapViewport, ol-map-pooling, poolKey, overlayMarkers, tsconfig-noEmit, stale-js-emit, admin-scheduler-ui, ScheduleSection, cron-preset, schedule-sse, admin-category-tree-collapsed, AskTab, review-qa, review-ask, ReviewAskToaster, ResummarizeToaster, global-toaster, sonner, ClusterTopics, review-clusters, aspect-summary, InsightsTab, ModelPickerPopup, model-picker, AdminReviewSearchPage, review-search, rag-ops, AdminLogsPage, AdminLogRunDetailPage, AdminLogSettingsPage, operation-runs, joblog, log-retention, AdminTablingPage, AdminTablingTestPage, tabling, AdminTelegramPage, telegram-config, AdminAiUsagePage, LlmUsagePanel, llm-telemetry, ai-usage, RegionStatsPanel, RegionStatsMap, choropleth, sigungu-geo, region-stats, RandomCrawlSection, random-crawl, share-url-r, seo-preview, ask-tab, admin-test-accordion, BusPage, bus-web, bus-station-search, bus-nearby-mode, near-param, bus-favorites, bus-arrival-panel, bus-route-tracking, bus-vehicle-marker, map-marker-icon, VehicleMarker, follow-vehicle, MenuTab-groups, menuGroups, representative-menu-preview, review-noise-aspect, cluster-noise-fallback, travel, /travel/jeju, /travel/plan, TravelInsightsPage, TravelPlanPage, 여행, 여행로그화면, TourFilterBar, 지역칩, 권역칩, TOUR_REGION_GROUPS, tourFormat, TourRegionSection, TourLodgingSection, TourSourceNote, TourTab, 여행자탭, TourSummaryBadge, TourMatchBadge, StoreInfoBadges, 폐업의심배지, AdminTourPage, 시드콘솔, TourEvidencePanel, 여행자근거, LifeCrimeCard, LifeTourCard, 배경레이어, overlay, lifeMapAreas, useSigunguGeo, tourDensityGeo, 여행자밀도, 범죄통계, SajuAsk, SajuThemes, SajuPairPanel, sajuPanelTabs, presetOptions, 코스추천프리필, SeaPage, sea-page, /sea, 바다, 바다페이지, SeaMap, SeaSpotDetail, seaFormat, rankSeaSpots, seaSlotFor, seaSlotSummary, 7일지수띠, 물때, 이안류, ParkingPage, parking-page, /parking, 주차, 주차페이지, ParkingMapView, ParkingTabBar, ParkingLists, ParkingLotList, EvList, AirportList, ParkingDetails, ParkingLotDetailCard, EvStationDetailCard, AirportDetailCard, PatternChart, 평소혼잡도, 예상요금, ParkingFooter, parkingMarkers, parseParkingMarkerId, parkingFormat, naverCarDirections, parkingPrefsStore, useParkingPrefsStore, lp:parking-prefs, ParkingSection, ParkingNearbySection, ParkingSummaryLine, 가는법주차, 주차한줄요약, nav-14, nav-order-14, poolKey-sea, poolKey-parking, 침수흔적, housing-flood, FloodGlyph, 물방울배지, flood-droplet-badge, AdminRestaurantDetailPage, admin-restaurant-detail-tabs, restaurant-detail/, AdminDetailHeader, AdminLocationAside, AdminRawInfo, AdminReviewItem, AdminReviewsTab, ADMIN_DETAIL_TABS, PUBLIC_TABS_IN_ADMIN, AdminDetailTabKey, availableTabs, 출처행, SourceRow, 재수집, review-match, useRestaurantReviewMatch, useRestaurantCanonicalSummaryEvents, useInvalidateRestaurantDetailCaches, ReviewAnalysisDetails, SatisfactionChip, VideoPlayerModal, AdminVisitorReview, 출처통합리뷰, web-tests-149, 29파일149건, MealEntryFormPage, MealNewPage, MealEditPage, MealDetailPage, MealItemInputRow, MealNutritionTab, mealLayout, MEAL_PAGE_CLASS, MEAL_SPLIT_CLASS, MEAL_MAIN_CLASS, MEAL_SIDE_CLASS, useIsDesktopLg, useMealDraftReady, meal-page, scrollbar-gutter, /me/meals/new, /me/meals/:id, /me/meals/:id/edit, meal-tab-url, 식단입력, 식단상세, 식단수정, 빠른추가칩, 같은메뉴로새기록, 최근추천, 지난추천보는중, 추천삭제, 영양탭, 영양제조언, meal-supplement, meal-nutrition-advice, ai-purpose-9, 식단두단, 데스크톱두단, ParticipationChips, ParticipationToggles, ParticipationBadges, 긍정형토글칩, uncategorizedNote, SETTLEMENT_CATEGORY_LABEL, 기타설명, 기타(모두나눔), useSajuSession, useTarotSession, session-hook-lift, web-tests-173, 32파일173건, perf-web, web-perf, 웹성능, 첫로드, first-load-516kB, firstLoadGuard, lp:first-load-guard, vite-config-js-stale, --config-vite.config.ts, sideEffects-false, api-contract-constants, isErrorResponse, icons-chunk, minShareCount, react-vendor-zustand, AdminSectionFallback, admin-per-page-lazy, 어드민27페이지lazy, RegionStatsMap-lazy, retry-4xx, useCurrentUser-staleTime, mapMarkerSync, syncMarkerFeatures, MARKER_PROP, mapIconRaster, markerIcon, ICON_RASTER_MAX, perMarker, MAP_POOL_MAX, map-pool-lru-3, BottomSheet-single-tree, RestaurantDetailWarmup, useInViewOnce, fallbackSrc, fetchPriority, lightbox-window-2, INITIAL_AREA_WAIT_MS, keepPrevious, placeholderData-same-subject, viewportQueryAbort, query-signal-abort, VIEWPORT_GC_MS, waitingSaved, 저장위치대기, useMealPhotoUrl-cache, MealPhotoImg-near, prepareReceiptImage, RECEIPT_MAX_UPLOAD_BYTES, useDeleteSettlements, useSettlementDraftHydrate-enabled, 수정모드덮어쓰기, FrameDriver, frameloop-demand, STAGE_IDLE_FPS, STAGE_SETTLE_S, sparkles, TAROT_IMAGE_SIZES-112-224, TarotCardImage-sizes, crawlBatchMerge, mergePersistedBatch, useDebouncedDraft, lazyDetail, llm-telemetry-shared-eventsource, VOTE_VOTERS_FULL_MESSAGE_PREFIX, 투표자상한409, ParkingNearbySection-no-coords, useCrawlJobStream-fallback, crawl-job-single-get, nginx-gzip, sigungu-geo-cache, web-tests-426, 90파일426건, 29차, HikingPage, hiking-page, /hiking, 등산, components/hiking, HikingList, HikingListHeader, HikingMountainList, HikingFooter, HikingMap, MountainDetail, CourseDetail, ParkCourseBox, CourseConditions, 산행 조건, CourseAround, 가는 법·주변, ElevationProfile, 고도 그래프, HikingRecommend, 등산 추천, KnpsLinks, 산행 전 확인, 탐방로 통제정보, 입산 가능 시각, HIKING_KNPS_CLOSURE_URL, hikingFormat, hikingFormat-shared, rankMountains, pointAtDistance, HIKING_LIST_PAGE, SEOUL_CITY_HALL, DIFFICULTY_CHIP_CLASS, hikingDefaultPick, public.hiking, poolKey-hiking, nav-15, GPX 받기, hiking-gpx-download, Routes.Hiking.gpx, park-reversed, 반대 방향 기준, elevationFrom-terrain, SRTM, trail-wms, lt_l_frstclimb, EPSG:900913, labelZoom, compactScale, marker-zIndex, wmsOverlay, fitToCoords-bottomInset, AdminMenuBoardPage, admin-menu-board, /admin/menu-board, 메뉴판 읽기, ReadTab, EvalTab, ZoomableImage, AdminSmartlyTestPage, smartly-test, smartly-api, MenuBoardSection, 메뉴판 사진, boardPriceByName, AdminMenuBoardSection, menu-board-read, ai-purpose-10, ScanText, MealPhotoSection, useMealPhotoIntake, mealPhotoFile, parseExifTakenAt, prepareMealPhoto, MEAL_PHOTO_UPLOAD_LIMIT_BYTES, MealPhotoLightbox, useMealPhotoUrls, exifJpeg, 식단 사진 인식, 다른 후보, photoTokens-edit, Lightbox-loading, MealNutritionGapSection, 열량 빈 식단 이름, ios-input-zoom, unlayered-16px, web-tests-467, 96파일467건, 30차, 31차, TourPlaceInfo, 운영 정보, 이용 시간, 쉬는 날, startDow, ymdDow, closedThatDay, infoNote, TOUR_INFO_NOTE, 관광공사, kto, web-tests-468, 96파일468건]
+aliases: [vite, react, web-app, frontend-web, embed-mode, embed-1, lp:embed, isEmbedMode, lib-embed, embedBridge, __LP_EMBED__, ReactNativeWebView, postLpEmbedMessage, readLpEmbedInit, isLpEmbedded, webview-embed, app-webview, useGuestKeyStore, guest-key-v1, TarotPage, TarotSharedPage, MyTarotPage, SajuPage, SajuSharedPage, MySajuPage, SajuGPage, HousingPage, housingPrefsStore, lp:housing-prefs, LifeGoToBox-extraSections, complex-search, AdminQuotasPage, admin-quotas, usage-quota-tab, settings-quotas, ai-purpose-8, font-serif-kr, noto-serif-kr, three-chunk, r3f, react-three-fiber, detectTarotRender, lite-fallback, home-entry-cards, nav-order-11, nav-11, MenuKcalChip, kcal-chip, reviewThumbnailUrl, decoding-async, ImgWithFallback-size, web-tests-120, AirQualityPage, air-quality-page, WeatherPage, weather-page, LifeMapPage, life-map-page, MealPage, meal-page, MealRecommendTab, MealPreferenceTab, MealPhotoImg, AccountMenu, account-menu, MyLocationChip, my-location-chip, top-bar-width-budget, 폭예산, nav-order, sidebar-account, useMapSheets, map-sheets, sheet-pattern, map-sheet-shell, useMediaQuery, useIsDesktopXl, map-bottom-inset, flyTo-bottomInset, fixedScale, marker-style-cache, AdminFoodPage, admin-food, admin-restaurant-search, ai-purpose-5, meal-photo, meal-recommend, compareReviewRecencyDesc, visitedAt-desc, handleUnauthorizedForCurrentSession, 401-current-session, lifeMapPrefsStore, lifeMapRecentStore, LifeGoToBox, LifeLayerBar, LifeNearbyList, LifeDetailCard, LifeMapView, AirNearbySection, AirStationsMap, AirHourStrip, AirHistoryChart, AirPrimitives, WeatherMeteogram, WeatherDailyStrip, WeatherNowHero, air-series-token, weather-temp-token, web-tests-77, matchMedia-mock, MapCanvas-mock, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle, home-ranking-link, lightbox-portal, createPortal, sticky-stacking-context-trap, lightbox-backdrop-close, my-location-guide, geolocation-permission-change, insecure-context-http, code-splitting, route-lazy, AdminRoutes, manualChunks, codeSplitting-groups, vite8, rolldown, react-memo, interaction-hot-path, setQueryData-batch-merge, lightbox-promoted, eslint-web, react-compiler-lint, s-token-route, og-proxy, dark-mode-web, theme-store, lp-theme, MapLayerControl, midnight-layer, satellite-layer, vworld-dark, MyLocationButton, soft-tonal-variant, tonal-button, tonal-badge, detail-CategoryTree, insight-tip-filter, menu-filter, lightbox-thumbnail, card-borderless-tab, review-photo-fullwidth, card-click-flyto, card-doubleclick-zoom, flyToZoomIn, SubwayPage, subway-web, subway-station-search, subway-arrival-panel, subway-path-panel, subway-timetable, subway-congestion, SubwayLineBadge, SubwayStationsMap, SubwayNearbyBusSection, TransitTabs, transit-unified, TransitFavoritesSection, CrossSearchSection, TransitCrossToggleChip, transitFavExpandStore, transitCrossShowStore, transitMapViewport, ol-map-pooling, poolKey, overlayMarkers, tsconfig-noEmit, stale-js-emit, admin-scheduler-ui, ScheduleSection, cron-preset, schedule-sse, admin-category-tree-collapsed, AskTab, review-qa, review-ask, ReviewAskToaster, ResummarizeToaster, global-toaster, sonner, ClusterTopics, review-clusters, aspect-summary, InsightsTab, ModelPickerPopup, model-picker, AdminReviewSearchPage, review-search, rag-ops, AdminLogsPage, AdminLogRunDetailPage, AdminLogSettingsPage, operation-runs, joblog, log-retention, AdminTablingPage, AdminTablingTestPage, tabling, AdminTelegramPage, telegram-config, AdminAiUsagePage, LlmUsagePanel, llm-telemetry, ai-usage, RegionStatsPanel, RegionStatsMap, choropleth, sigungu-geo, region-stats, RandomCrawlSection, random-crawl, share-url-r, seo-preview, ask-tab, admin-test-accordion, BusPage, bus-web, bus-station-search, bus-nearby-mode, near-param, bus-favorites, bus-arrival-panel, bus-route-tracking, bus-vehicle-marker, map-marker-icon, VehicleMarker, follow-vehicle, MenuTab-groups, menuGroups, representative-menu-preview, review-noise-aspect, cluster-noise-fallback, travel, /travel/jeju, /travel/plan, TravelInsightsPage, TravelPlanPage, 여행, 여행로그화면, TourFilterBar, 지역칩, 권역칩, TOUR_REGION_GROUPS, tourFormat, TourRegionSection, TourLodgingSection, TourSourceNote, TourTab, 여행자탭, TourSummaryBadge, TourMatchBadge, StoreInfoBadges, 폐업의심배지, AdminTourPage, 시드콘솔, TourEvidencePanel, 여행자근거, LifeCrimeCard, LifeTourCard, 배경레이어, overlay, lifeMapAreas, useSigunguGeo, tourDensityGeo, 여행자밀도, 범죄통계, SajuAsk, SajuThemes, SajuPairPanel, sajuPanelTabs, presetOptions, 코스추천프리필, SeaPage, sea-page, /sea, 바다, 바다페이지, SeaMap, SeaSpotDetail, seaFormat, rankSeaSpots, seaSlotFor, seaSlotSummary, 7일지수띠, 물때, 이안류, ParkingPage, parking-page, /parking, 주차, 주차페이지, ParkingMapView, ParkingTabBar, ParkingLists, ParkingLotList, EvList, AirportList, ParkingDetails, ParkingLotDetailCard, EvStationDetailCard, AirportDetailCard, PatternChart, 평소혼잡도, 예상요금, ParkingFooter, parkingMarkers, parseParkingMarkerId, parkingFormat, naverCarDirections, parkingPrefsStore, useParkingPrefsStore, lp:parking-prefs, ParkingSection, ParkingNearbySection, ParkingSummaryLine, 가는법주차, 주차한줄요약, nav-14, nav-order-14, poolKey-sea, poolKey-parking, 침수흔적, housing-flood, FloodGlyph, 물방울배지, flood-droplet-badge, AdminRestaurantDetailPage, admin-restaurant-detail-tabs, restaurant-detail/, AdminDetailHeader, AdminLocationAside, AdminRawInfo, AdminReviewItem, AdminReviewsTab, ADMIN_DETAIL_TABS, PUBLIC_TABS_IN_ADMIN, AdminDetailTabKey, availableTabs, 출처행, SourceRow, 재수집, review-match, useRestaurantReviewMatch, useRestaurantCanonicalSummaryEvents, useInvalidateRestaurantDetailCaches, ReviewAnalysisDetails, SatisfactionChip, VideoPlayerModal, AdminVisitorReview, 출처통합리뷰, web-tests-149, 29파일149건, MealEntryFormPage, MealNewPage, MealEditPage, MealDetailPage, MealItemInputRow, MealNutritionTab, mealLayout, MEAL_PAGE_CLASS, MEAL_SPLIT_CLASS, MEAL_MAIN_CLASS, MEAL_SIDE_CLASS, useIsDesktopLg, useMealDraftReady, meal-page, scrollbar-gutter, /me/meals/new, /me/meals/:id, /me/meals/:id/edit, meal-tab-url, 식단입력, 식단상세, 식단수정, 빠른추가칩, 같은메뉴로새기록, 최근추천, 지난추천보는중, 추천삭제, 영양탭, 영양제조언, meal-supplement, meal-nutrition-advice, ai-purpose-9, 식단두단, 데스크톱두단, ParticipationChips, ParticipationToggles, ParticipationBadges, 긍정형토글칩, uncategorizedNote, SETTLEMENT_CATEGORY_LABEL, 기타설명, 기타(모두나눔), useSajuSession, useTarotSession, session-hook-lift, web-tests-173, 32파일173건, perf-web, web-perf, 웹성능, 첫로드, first-load-516kB, firstLoadGuard, lp:first-load-guard, vite-config-js-stale, --config-vite.config.ts, sideEffects-false, api-contract-constants, isErrorResponse, icons-chunk, minShareCount, react-vendor-zustand, AdminSectionFallback, admin-per-page-lazy, 어드민27페이지lazy, RegionStatsMap-lazy, retry-4xx, useCurrentUser-staleTime, mapMarkerSync, syncMarkerFeatures, MARKER_PROP, mapIconRaster, markerIcon, ICON_RASTER_MAX, perMarker, MAP_POOL_MAX, map-pool-lru-3, BottomSheet-single-tree, RestaurantDetailWarmup, useInViewOnce, fallbackSrc, fetchPriority, lightbox-window-2, INITIAL_AREA_WAIT_MS, keepPrevious, placeholderData-same-subject, viewportQueryAbort, query-signal-abort, VIEWPORT_GC_MS, waitingSaved, 저장위치대기, useMealPhotoUrl-cache, MealPhotoImg-near, prepareReceiptImage, RECEIPT_MAX_UPLOAD_BYTES, useDeleteSettlements, useSettlementDraftHydrate-enabled, 수정모드덮어쓰기, FrameDriver, frameloop-demand, STAGE_IDLE_FPS, STAGE_SETTLE_S, sparkles, TAROT_IMAGE_SIZES-112-224, TarotCardImage-sizes, crawlBatchMerge, mergePersistedBatch, useDebouncedDraft, lazyDetail, llm-telemetry-shared-eventsource, VOTE_VOTERS_FULL_MESSAGE_PREFIX, 투표자상한409, ParkingNearbySection-no-coords, useCrawlJobStream-fallback, crawl-job-single-get, nginx-gzip, sigungu-geo-cache, web-tests-426, 90파일426건, 29차, HikingPage, hiking-page, /hiking, 등산, components/hiking, HikingList, HikingListHeader, HikingMountainList, HikingFooter, HikingMap, MountainDetail, CourseDetail, ParkCourseBox, CourseConditions, 산행 조건, CourseAround, 가는 법·주변, ElevationProfile, 고도 그래프, HikingRecommend, 등산 추천, KnpsLinks, 산행 전 확인, 탐방로 통제정보, 입산 가능 시각, HIKING_KNPS_CLOSURE_URL, hikingFormat, hikingFormat-shared, rankMountains, pointAtDistance, HIKING_LIST_PAGE, SEOUL_CITY_HALL, DIFFICULTY_CHIP_CLASS, hikingDefaultPick, public.hiking, poolKey-hiking, nav-15, GPX 받기, hiking-gpx-download, Routes.Hiking.gpx, park-reversed, 반대 방향 기준, elevationFrom-terrain, SRTM, trail-wms, lt_l_frstclimb, EPSG:900913, labelZoom, compactScale, marker-zIndex, wmsOverlay, fitToCoords-bottomInset, AdminMenuBoardPage, admin-menu-board, /admin/menu-board, 메뉴판 읽기, ReadTab, EvalTab, ZoomableImage, AdminSmartlyTestPage, smartly-test, smartly-api, MenuBoardSection, 메뉴판 사진, boardPriceByName, AdminMenuBoardSection, menu-board-read, ai-purpose-10, ScanText, MealPhotoSection, useMealPhotoIntake, mealPhotoFile, parseExifTakenAt, prepareMealPhoto, MEAL_PHOTO_UPLOAD_LIMIT_BYTES, MealPhotoLightbox, useMealPhotoUrls, exifJpeg, 식단 사진 인식, 다른 후보, photoTokens-edit, Lightbox-loading, MealNutritionGapSection, 열량 빈 식단 이름, ios-input-zoom, unlayered-16px, web-tests-467, 96파일467건, 30차, 31차, TourPlaceInfo, 운영 정보, 이용 시간, 쉬는 날, startDow, ymdDow, closedThatDay, infoNote, TOUR_INFO_NOTE, 관광공사, kto, web-tests-468, 96파일468건, 32차, meal-subsite, 식단 하위 사이트, MealApp, MealShell, MealEntry, LegacyMealRedirect, legacyMealPath, mealPaths, MEAL_PATH, MEAL_STORY_PATH, mealPanel, mealBackground, MealSurface, MealLink, useMealOpen, useMealLeave, runMealViewTransition, MealHomePage, MealPageHeader, mealTheme, meal-app, 영양정보 라벨, 원티드 산스, useMealFont, MealFoodSheet, 음식 찾기 시트, MealPhotoDrop, mealPhotoHandoff, mealDraftStart, prepareMealEntry, MealSkip, MealSkipNudge, MealSkipReview, MealDaySkips, MealMissedDaysLink, 안 먹음, MealStatsNutrients, MealGroupBars, MealBarSummary, MealNutrientLine, mealNutrientChange, comparableNutrientChange, MealPlaceSection, useMealNearbyPlaces, MealPlaceMenus, MealPlaceMenuChooser, mealPlaceMenu, mealPlaceLink, MealHereButton, 먹었어요, MealStoryLink, mealStoryMatch, 건강식단, guestTo, safeNextPath, login-next, NutrientRefSection, remotion, web-tests-628, 106파일628건]
 ---
 
 # web — Vite + React 웹 앱
+
+**2026-11-06~11-14 변경 흡수 (32차) — 웹 식단을 전용 셸의 하위 사이트 `/meal` 로 다시 짓고(`cfeb0119`·`3750d1ef` 2026-11-08) 그 안에 끼니 '안 먹음'·통계 영양 4종·식당에서 먹은 기록·건강식단 스토리를 얹다 + 어드민 '영양 기준 음식'·추론 설정 세 번째 용도 + 웹 테스트 96파일 468건 → 106파일 628건**: 범위 `1d198269..98bae95d` 133커밋 중 `apps/web` 을 고친 것은 34커밋(식단 화면 15·건강식단 13·어드민/공용 6 — `1ba0381a` 는 영양 탭 출처 문구도). 사실은 HEAD 코드와 [PLAN-meal-web-redesign](../../docs/PLAN-meal-web-redesign.md)(사용자 결정 2026-11-08 표·구조·단계별 검증)로 확인했다. 도메인 규칙(안 먹음 판정·통계 계산·식당 메뉴 해석·스토리 원고)은 [meal](meal.md)·[meal-nutrition](meal-nutrition.md)·[food](food.md)·[meal-story](meal-story.md) 몫이고 여기는 화면 구조·라우팅·컴포넌트·상태·테스트만.
+- **(1) 식단 하위 사이트(`cfeb0119` 1~3단계, `3750d1ef` 4단계)** — `App.tsx` 의 `/me/meals` 4라우트(`PublicLayout` + `RequireUser`, lazy 4개·청크 3개)를 걷고 `/meal/*` → [MealEntry](../../apps/web/src/routes/meal/MealEntry.tsx)(정적 import 들머리) → lazy [MealApp](../../apps/web/src/routes/meal/MealApp.tsx)(어드민처럼 한 덩어리, 안에서 홈만 정적·나머지 화면 lazy) 하나로. 옛 주소 `/me/meals/*` 는 `LegacyMealRedirect`([mealPaths.ts](../../apps/web/src/routes/meal/mealPaths.ts) `legacyMealPath` — `?tab=list|calendar|stats|recommend|nutrition|preference` → `/meal/records|calendar|stats|recommend|nutrition|settings`, 다른 쿼리는 그대로, `replace`). 공통 상단바 대신 [MealShell](../../apps/web/src/routes/meal/MealShell.tsx)(1280px~ 사이드 메뉴 240px · 768~1279px 아이콘 줄 · 휴대폰 상단바 + 하단 탭 5칸 홈·기록·＋·추천·분석, 사이트 전체 메뉴는 상단바 '메뉴'가 공용 `PublicSidebar` 서랍), 테마는 A '영양정보 라벨'([mealTheme.css](../../apps/web/src/routes/meal/mealTheme.css) — `html:has(.meal-app)` 에서 shadcn 토큰을 다시 정함, 원티드 산스 분할판). 홈 대시보드([MealHomePage](../../apps/web/src/routes/meal/MealHomePage.tsx) — 새 API 없음), 데스크톱(1024px~) **겹침 패널**(상세 640px 비모달·수정/새 기록 880px 모달 — [mealPanel.ts](../../apps/web/src/routes/meal/mealPanel.ts) 가 배경 위치를 `history.state.mealBackground` 에 싣는다), 휴대폰 상세·입력의 자체 상단바 + View Transitions 전환([MealSurface](../../apps/web/src/routes/meal/MealSurface.tsx)), 767px 이하 **음식 찾기 시트**([MealFoodSheet](../../apps/web/src/routes/meal/MealFoodSheet.tsx)), 처음 쓰는 사람 '식단 시작하기', 식단 어디서든 사진을 끌어다 놓거나 붙여넣어 기록 시작([MealPhotoDrop](../../apps/web/src/routes/meal/MealPhotoDrop.tsx) + [mealPhotoHandoff.ts](../../apps/web/src/routes/meal/mealPhotoHandoff.ts)), 휴대폰 기록 찾기의 '조건 N' 접기. 빌드 실측(PLAN 3단계): `MealApp` JS 24kB + CSS 29kB(gzip 5.5kB)·상세 9kB·입력 31kB, 첫 로드 가드 경고 없음.
+- **(2) 끼니 '안 먹음'(`f3994f00` 11-08 → `d772e4bb`·`79f11f5c` 11-09)** — [MealSkip.tsx](../../apps/web/src/routes/meal/MealSkip.tsx) 한 파일에 네 자리: 홈 어제 묻기(`MealSkipNudge` — 한 끼만 적혀 평균에서 빠진 날만, 남은 끼니를 다 채울 때까지), 기록 목록 날짜별 표시·묻기(`MealDaySkips`), 영양 탭 '빠진 날 정리' 체크 목록(`MealSkipReview` — 빈 끼니를 모두 체크해 두고 아닌 것만 풀어 한 번에, 되돌리기는 방금 표시한 칸만, `?skips=open` 이면 펼친 채), 홈 '한 번에 정리' 한 줄(`MealMissedDaysLink` — 지난 2주에 그런 날이 둘 이상일 때만). 하루짜리는 남은 끼니가 둘 이상이면 [남은 끼니 모두 안 먹음]. 평균에 드는 규칙(utils `isCountedMealDay`)은 [meal](meal.md).
+- **(3) 통계(11-08~11-09, PLAN '추가' 두 항목 — 사용자 제안·검토 반영)** — 분포 막대 기준 끼니 수/열량/나트륨 + 막대에 올리거나 누르면 그 묶음 영양 카드(`ab136cf1` [MealGroupBars](../../apps/web/src/routes/meal/MealGroupBars.tsx)), 카드의 '열량 구성' 막대(이 묶음 / 내 평균)·열량·나트륨 막대 위 판정 한 줄(`80534c7b` [MealBarSummary](../../apps/web/src/routes/meal/MealBarSummary.tsx)), 영양소 카드(`bfae13c6` [MealStatsNutrients](../../apps/web/src/routes/meal/MealStatsNutrients.tsx) — 영양 탭 줄을 공용 [MealNutrientLine](../../apps/web/src/routes/meal/MealNutrientLine.tsx) 로 떼어 두 화면이 같이 씀), 직전 같은 길이 기간 대비(`34b47c6f` → `504bd68c` 11-11 에 [mealNutrientChange.ts](../../apps/web/src/routes/meal/mealNutrientChange.ts) 로 떼어 통계·홈 건강식단 줄·이야기가 같이 쓰고 "두 기간 기록량이 비슷할 때만"). 통계 차례는 영양소 → 분포 → 자주 먹은 음식 → 인사이트, 추천 반응 숫자 칸 넷은 추천 탭 한 줄로 옮기고 날짜별 끼니 수 막대는 뺐다(`f3994f00`). 서버 계산은 [meal-nutrition](meal-nutrition.md).
+- **(4) 식당에서 먹은 기록(`a5b26ebe`·`6a663108` 11-14)** — 입력 화면 맨 위 '어디서 먹었나요'([MealPlaceSection](../../apps/web/src/routes/meal/MealPlaceSection.tsx) — 등록 식당 검색 콤보박스·이름만 적기·근처 식당 칩 [useMealNearbyPlaces](../../apps/web/src/routes/meal/useMealNearbyPlaces.ts): 사진 EXIF GPS 먼저, 없으면 [근처 식당] 버튼, 반경 150m(오차만큼 500m 까지)·가까운 순 5곳, 오차 400m 넘으면 후보 없음), '먹은 음식' 위 그 집 메뉴([MealPlaceMenus](../../apps/web/src/routes/meal/MealPlaceMenus.tsx) — 표준명 줄로 들어가고 메뉴명·가격은 항목에 남음, 10개 넘으면 찾기 칸), 코스·세트는 구성으로·택1 은 [MealPlaceMenuChooser](../../apps/web/src/routes/meal/MealPlaceMenuChooser.tsx) 로 골라야 [넣기], 넣은 줄의 '이걸로 바꾸기' 칩, 사진에서 찾은 음식을 그 집 메뉴에 잇기([mealPlaceLink.ts](../../apps/web/src/routes/meal/mealPlaceLink.ts) — LLM 재호출 없음, 하나도 안 맞을 때만 [이 집 메뉴로 다시 인식]), 공개 식당 상세 헤더의 [먹었어요] 버튼([MealHereButton](../../apps/web/src/routes/meal/MealHereButton.tsx)). 결정(표준명 유지·코스는 조금·택1 미리 안 고름)과 서버는 [meal](meal.md)·[food](food.md).
+- **(5) 건강식단 스토리(웹 13커밋 11-09~11-13 — 세부는 [meal-story](meal-story.md))** — `routes/meal-story/` 59파일(재생기·Remotion 영상·그림체 둘·소품). 여기선 연결만: 11-09 `c6132034` 는 사이트 NAV 에 '건강식단' 항목 + `App` 에 셸 밖 `/meal/stories/*` 라우트였다가 **11-10 `6fb948c3` 에 번복** — '건강식단' 메뉴를 지우고 '식단' 하나(로그인 전엔 `guestTo: '/meal/stories'`), `/meal/*` 은 모두 `MealEntry` 가 가른다(로그인 → `MealApp` 셸 안 목록·이야기·레시피, 로그인 전 → `MealStoryApp` 공개 목록·전체 화면 재생기·레시피만, 그 밖은 `/login`). 식단 안의 입구는 홈 건강식단 줄·영양 탭/통계 '줄이는 법·채우는 법 보기'·기록 상세 '건강식단 레시피 — 이야기 보기'(잇는 규칙은 [mealStoryMatch.ts](../../apps/web/src/routes/meal/mealStoryMatch.ts) 한곳, 링크 부품 [MealStoryLink](../../apps/web/src/routes/meal/MealStoryLink.tsx)). 로그인 화면은 `?next=`(`safeNextPath` — 사이트 안 경로만)로 돌아온다. Remotion(`remotion`·`@remotion/player`·`@remotion/transitions` 4.0.541 고정)은 재생기 안 `lazy(() => import('./MealStoryMotion'))` 로만 닿아 첫 로드에 없다(`281318cc` 본문: 나눠 받는 조각 143kB gzip).
+- **(6) 어드민·공용** — [AdminFoodPage](../../apps/web/src/routes/admin/AdminFoodPage.tsx) 에 '영양 기준 음식' [NutrientRefSection](../../apps/web/src/routes/admin/NutrientRefSection.tsx)(`1ba0381a` 11-07, AI 가 확신 없이 고른 후보 '이걸로' `40eb16a4`), [AdminAiKeysPage](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) `meal-recommend` 에 `thinking: true`(사주(C)·영양제 조언에 이어 세 번째)·단계 라벨을 실측 대기 시간으로(`54e4c4f3`), 어드민 메뉴판 사진 '읽기 실패 N회'(`23c24858`), 리뷰 최신순 정렬을 utils `sortReviewsByRecencyDesc`(방문일을 리뷰마다 한 번만 해석)로(`63438a7c`), `Card`·`CardTitle` 에 `data-slot`(식단 테마가 카드 그림자를 끄는 손잡이), [test/setup.ts](../../apps/web/src/test/setup.ts) 에 `window.scrollTo` no-op, [exifJpeg.ts](../../apps/web/src/test/fixtures/exifJpeg.ts) 에 GPS.
+- **(7) 휴대폰 다듬기(11-14)** — 추천 카드 '파는 곳 보기'가 390~480px 에서 카드 밖으로 넘치던 것(`009ce276`), 식단 자체 입력 클래스(`.meal-input` 15px·`.meal-input-sm` 13px·`.meal-place-search input`)에서 iOS 포커스 확대가 다시 나던 것(`ff25ab3d` — 30차 `global.css` 16px 규칙은 공용 입력에만 닿았다).
+- **운영 반영** — 웹 쪽 마이그레이션은 없다. 화면이 부르는 새 API(`/meals/skips`·`/meals/skips/batch`·`/meals/stats/nutrition`·`/meals/stats/nutrients`·`/meals/place-menus`·`/meal-stories`·`/admin/food/nutrient-refs`)와 그 마이그레이션은 friendly 가 먼저 나가야 한다(각 토픽). Remotion 3개는 `deploy.sh` 의 `pnpm install --frozen-lockfile` 이 받는다. 실화면 확인은 커밋마다 Aside·헤드리스로 일부(데스크톱 패널·휴대폰 기록·음식 찾기 등, PLAN 검증 줄), iOS 확대가 실제로 사라졌는지는 **실기기 미확인**(`ff25ab3d` 본문).
 
 **2026-10-24~10-29 변경 흡수 (31차) — 웹은 여행 코스(`/travel/plan`) 한 화면만: 한국관광공사 관광정보와 맞춘 장소의 이용 시간·쉬는 날·요금·주차를 접힌 한 줄로, 출발일의 요일(`startDow`)을 보내 매주 쉬는 곳을 그날 일정에서 빼고, 쉬는 날에 남은 꼭 갈 곳·출처 한 줄을 표시 + 테스트 96파일 467 → 468건(`a382e01c`, 4파일 +143/−10)**: 범위 `e86b02d0..HEAD` 6커밋 중 `apps/web` 을 고친 것은 여행로그 15차 하나다 — 나머지 다섯은 앱(식단 1~3단계·기록 머리글·메뉴판 사진)이고, 앱 메뉴판 사진(`51596020`)은 웹 `ee70bc2d` 의 메뉴판 섹션을 앱으로 옮긴 것이라 웹 코드는 그대로다. (1) **[TourItinerary.tsx](../../apps/web/src/components/tour/TourItinerary.tsx)** 에 `TourPlaceInfo`(새 export) — `<details>` 의 `<summary>` 가 "이용 … · 쉬는 날 …"(둘 다 없으면 있는 항목 하나)를 시계 아이콘과 한 줄 `truncate` 로 보이고, 펴면 `<dl>` 로 이용·쉬는 날·요금·주차 네 줄(값 있는 것만). 일정 장소 줄(`StopRow`)에서 `stop.info` 가 있으면 붙이고, `stop.closedThatDay` 면 호박색 한 줄 "이날은 쉬는 요일로 나와 있습니다 — 꼭 갈 곳이라 넣었습니다."(이름 줄의 배지는 좁은 화면에서 이름을 밀어내고 말풍선은 손가락으로 못 보므로 따로 한 줄 — 주석). (2) **[tourFormat.ts](../../apps/web/src/components/tour/tourFormat.ts)** `ymdDow(ymd)` — `YYYY-MM-DD` 의 요일 0~6(UTC 달력 계산, 모양이 아니면 null). (3) **[TravelPlanPage.tsx](../../apps/web/src/routes/TravelPlanPage.tsx)** — 요청 본문에 출발일이 있을 때만 `startDow`(예보가 닿지 않는 40일 뒤도 보낸다 — 예보와 무관), 추천 목록 카드에도 `TourPlaceInfo`, 일정표 위 "출발일의 요일에 맞춰, 매주 그 요일에 쉬는 것으로 나와 있는 곳은 그날 일정에서 뺐습니다."(요청에 `startDow` 가 있었고 응답 `infoNote` 가 있을 때만), 결과 맨 아래 `infoNote` 를 `TourSourceNote` 위에. 서버는 날짜를 받지 않는다 — 12차 `wetDays` 처럼 화면이 날짜에서 뽑은 값만 간다. (4) **[TravelPlanPage.test.tsx](../../apps/web/src/routes/TravelPlanPage.test.tsx)** 10 → 11건 — 기존 출발일 테스트 둘의 요청 본문 기대값에 `startDow` 추가 + 새 ⑫⑬ 1건(첫 월요일 출발 → `startDow: 1`, 접힌 한 줄·펼친 요금·주차만 있는 곳의 한 줄·쉬는 날 경고·목록에도 같은 줄·출처, 출발일을 지우면 `startDow` 없이). 2026-10-31 이 파일만 다시 돌려 11건 통과. 도메인(맞추기·쉬는 요일 읽기·합성)은 [tour](tour.md), 응답 필드는 [api-contract](api-contract.md). 30차가 "작업 트리, 커밋 전"이라 적은 등산 9차 보강·10차(GPX 받기·`KnpsLinks`·`hikingFormat` 다시 내보내기)는 `39dd1abb`(2026-10-27)로 커밋됐다.
 
@@ -120,7 +130,7 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
 공개 맛집 v2 (`/restaurants-v2` + BottomSheet) + 위치 기반 첫 진입 + 공개 리뷰
 페이지네이션 분리 + 공개 사이드바/탑바.
 
-## Purpose [coverage: high — 28 sources]
+## Purpose [coverage: high — 30 sources]
 
 `apps/web/`는 Life Pickr 서비스의 브라우저용 SPA다. 세 가지 사용 흐름을 한
 번들 안에 담는다.
@@ -158,6 +168,12 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
     데스크톱(lg+)은 "왼쪽 본문 | 오른쪽 맥락·동작 패널" 두 단(`b09e0a4`)
     → 2026-10-23(`49cb17f0`)부터 **사진 넣기·인식도 웹에서**(새 기록·수정 모두, 끌어다 놓기·붙여넣기, EXIF 촬영 시각), 사진을 누르면 크게(`62b2e6b3`).
     웹에 남은 앱 전용은 "지난번대로"(사진 복제)뿐
+    → **2026-11-08(`cfeb0119`) `/meal/*` 하위 사이트로 이사** — 공통 상단바·`PublicLayout` 밖, 전용 셸(사이드 메뉴·하단 탭)과 자체 테마. 주소
+    `/meal`(홈 대시보드)·`/meal/records`·`/calendar`·`/stats`·`/nutrition`·`/recommend`·`/settings`·`/new`·`/:id`·`/:id/edit`(앱 expo-router `/meal` 과 같은 뿌리),
+    `/me/meals…` 는 새 주소로 넘김. 가드는 `RequireUser` 대신 `MealEntry` 가 `token` 으로 직접 가른다. 이어서 끼니 '안 먹음'·통계 영양 4종(11-08~09)·
+    식당에서 먹은 기록(11-14)이 이 안에 붙었다
+    → **2026-11-10(`6fb948c3`) 건강식단 스토리 `/meal/stories[/:slug[/recipe]]`** 도 같은 들머리 — 로그인하면 식단 셸 안, **로그인 전에는 이것만**
+    셸 없이 누구나(공유 링크로 들어온다). 그래서 '식단' NAV 는 이제 로그인 전에도 보이고 `/meal/stories` 로 간다([meal-story](meal-story.md))
   - **`/me/tarot[/:id]`** — 회원 타로 기록 목록·상세(서버 자동 저장분, 삭제) — [tarot](tarot.md). 계정 메뉴 "내 타로 기록"
   - **`/me/saju-c[/:id]`** — 회원 사주(C) 기록 — [saju-c](saju-c.md). **`/me/saju-g[/:id]`·`/me/saju-g/profiles`** — 사주(G) 기록·프로필([saju-g](saju-g.md); App 에서 `RequireUser` 로 감싸지 않음 — Gotchas)
   - `/s/:token` — 공유 토큰 read-only (인증 X, PublicLayout 밖)
@@ -184,7 +200,7 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
 대상 — 디자인은 Pretendard + 네이버 지도 톤. 어드민은 운영 도구 — shadcn
 디폴트 + system-ui.
 
-## Architecture [coverage: high — 305 sources]
+## Architecture [coverage: high — 350 sources]
 
 ### 빌드 / 런타임
 
@@ -250,6 +266,14 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
 - [28차 `b5bfe77`] **`MealNewPage`**·**`MealEditPage`**·**`MealDetailPage`** — 앞의 둘은 같은 모듈
   `routes/meal/MealEntryFormPage` 의 명명 export 두 개를 각각 `lazy(...then((m) => ({ default: m.MealNewPage })))` 로
   감싼 것이라 번들 청크는 하나다(입력·수정이 같은 폼 컴포넌트를 공유).
+  → **32차(`cfeb0119`·`6fb948c3`) 식단 lazy 4개(`MealPage`·`MealNewPage`·`MealEditPage`·`MealDetailPage`)는 App 에서 사라졌다** — App 은
+  [MealEntry](../../apps/web/src/routes/meal/MealEntry.tsx) 를 **정적** import 하고(들머리 21줄: `useAuthStore` 의 `token` + `mealPaths` 상수뿐이라 엔트리에 싣는 값이
+  작다), 그 안에서 `lazy(() => import('./MealApp'))`(default export — 명명 export 형태가 아님) 와 `lazy(() => import('../meal-story/MealStoryApp'))` 를 고른다.
+  [MealApp](../../apps/web/src/routes/meal/MealApp.tsx) 은 셸·홈을 정적으로 들고 기록·달력·통계(`MealPage` 의 명명 export 셋)·영양·추천·설정·건강식단
+  목록/이야기/레시피·입력/수정·상세를 다시 각자 lazy 로 — 어드민(`AdminRoutes` → 페이지별 lazy)과 같은 두 겹. 식단에 들어오면 `requestIdleCallback`(없으면
+  1.5초 타이머)으로 `MealDetailPage`·`MealEntryFormPage` 조각을 미리 받는다(`usePrefetchEntryScreens`). 건강식단 재생기는 영상 쪽(`MealStoryMotion` — Remotion)을
+  한 번 더 lazy 로 떼고 스토리 응답을 기다리는 동안 미리 받기 시작한다. `vite.config.ts` 는 이번에 바뀌지 않았다 — Remotion 은 vendor 그룹 정규식 어디에도 안
+  걸려 자동 분할 조각으로 떨어지고, `firstLoadGuard` 는 three·zod 만 본다(Gotchas).
 - 어드민 — App 은 여전히 `lazy(() => import('./routes/admin/AdminRoutes'))` 한 번이지만, 29차(`da755684`)부터
   [AdminRoutes.tsx](../../apps/web/src/routes/admin/AdminRoutes.tsx) 에는 셸(`AdminLayout`)과 라우트 표만 남고 **27개 페이지가
   각자 `lazy`**(같은 명명 export 형태)다. 전엔 전부 정적 import 라 어느 어드민 URL 이든 어드민 전체 + `ol` 을 받았다(2026-10 실측
@@ -325,10 +349,12 @@ three 를 정적으로 끌어온다. 빌드 후 `dist/index.html` 의 moduleprel
 | **`/me/saju-c`** / **`/me/saju-c/:id`** | `MySajuPage` / `MySajuReadingPage` [25차] | `PublicLayout` + `RequireUser` |
 | **`/saju-g`** / **`/saju-g/pair`** / **`/saju-g/s/:token`** | `SajuGPage` / `SajuGPairPage` / `SajuGSharedPage` [25차, 다른 세션] | `PublicLayout` |
 | **`/me/saju-g`** / **`/me/saju-g/:id`** / **`/me/saju-g/profiles`** | `SajuGHistoryPage` (둘 다) / `SajuGProfilesPage` [25차] | `PublicLayout` (**`RequireUser` 없음**) |
-| **`/me/meals`** | `MealPage` (내 식단 — 기록/달력/통계/추천/**영양**/설정 6탭, 28차부터 `?tab=`, lazy) | `PublicLayout` + `RequireUser` |
-| **`/me/meals/new`** | `MealNewPage` (손으로 적는 새 기록 — draft 복원 뒤에만 열림, lazy) [28차 `b5bfe77`] | `PublicLayout` + `RequireUser` |
-| **`/me/meals/:id`** | `MealDetailPage` (한 끼 상세 — 수정·같은 메뉴로 새 기록·삭제, lazy) [28차] | `PublicLayout` + `RequireUser` |
-| **`/me/meals/:id/edit`** | `MealEditPage` (기존 기록 수정 — 사진은 읽기 전용, lazy) [28차] | `PublicLayout` + `RequireUser` |
+| **`/meal/*`** | `MealEntry`(정적) → 로그인: lazy `MealApp`(전용 셸 `MealShell` + 홈·기록·달력·통계·영양·추천·설정·건강식단·입력·상세·수정, 아래 식단 하위 사이트 절) / 로그인 전: `/meal/stories…` 만 lazy `MealStoryApp`, 그 밖은 `/login` [32차 `cfeb0119`·`6fb948c3`] | (단독 — `PublicLayout`·`RequireUser` 밖) |
+| **`/me/meals/*`** | `LegacyMealRedirect` → `legacyMealPath`(`?tab=` → 구역 주소, `/me/meals/:id[/edit]`·`/new` → `/meal/…`, `replace`) [32차] | (단독) |
+| **`/me/meals`** | `MealPage` (내 식단 — 기록/달력/통계/추천/**영양**/설정 6탭, 28차부터 `?tab=`, lazy) ⚠️ 2026-11-08 `cfeb0119` 부터 위 `/meal/*` 로 넘어감 | `PublicLayout` + `RequireUser` |
+| **`/me/meals/new`** | `MealNewPage` (손으로 적는 새 기록 — draft 복원 뒤에만 열림, lazy) [28차 `b5bfe77`] ⚠️ 32차부터 `/meal/new`·`/meal/:id`·`/meal/:id/edit` | `PublicLayout` + `RequireUser` |
+| **`/me/meals/:id`** | `MealDetailPage` (한 끼 상세 — 수정·같은 메뉴로 새 기록·삭제, lazy) [28차] ⚠️ 32차부터 `/meal/new`·`/meal/:id`·`/meal/:id/edit` | `PublicLayout` + `RequireUser` |
+| **`/me/meals/:id/edit`** | `MealEditPage` (기존 기록 수정 — 사진은 읽기 전용, lazy) [28차] ⚠️ 32차부터 `/meal/new`·`/meal/:id`·`/meal/:id/edit` | `PublicLayout` + `RequireUser` |
 | `/me/settlements` | `SettlementHistoryPage` (lazy) | `PublicLayout` + `RequireUser` |
 | `/me/contacts` | `ContactsPage` (단골 관리, lazy) | `PublicLayout` + `RequireUser` |
 | `/restaurants/:placeId/settle/new` | `SettlementNewPage` (4-step, N차, lazy) | `RequireUser` (단독) |
@@ -342,6 +368,9 @@ three 를 정적으로 끌어온다. 빌드 후 `dist/index.html` 의 moduleprel
 
 `RequireUser` 는 token 만 보고 role 검사 X (정산은 USER 도 사용). `RequireAdmin` 은
 역할까지 검증. 두 가드 모두 [App.tsx](../../apps/web/src/App.tsx) 안에 정의.
+→ 32차 `/meal/*` 는 `RequireUser` 를 쓰지 않는다 — [MealEntry](../../apps/web/src/routes/meal/MealEntry.tsx) 가 같은 판정(`useAuthStore` 의 `token`)을 직접
+해서, 로그인 전이면 `/meal/stories`·`/meal/stories/…` 만 `MealStoryApp` 으로 열고 나머지는 `<Navigate to="/login" replace />`(**`?next=` 없이** — Gotchas).
+`/me/meals/*` 의 `LegacyMealRedirect` 도 가드 밖이라 비로그인은 새 주소 → `MealEntry` → 로그인 순으로 두 번 넘어간다.
 
 > **공유 토큰 SPA 경로가 `/share/settlements/:token` → `/s/:token` 으로 짧아졌다.**
 > `/share/settlements/*` 는 이제 SPA 라우트가 아니라 **OG 미리보기 / 정산표 PNG**
@@ -1100,12 +1129,15 @@ objectURL(언마운트 해제)(정산 영수증 미리보기와 같은 함정). 
 200px 안에 왔을 때만(`enabled: near` — 한 쪽 30줄의 안 보이는 사진까지 인증 fetch 를 걸지 않게). 테스트 `test/useMealPhotoUrl.test.tsx` 6건. 테스트 [MealPage.test](../../apps/web/src/routes/meal/MealPage.test.tsx)
 11건(탭별 요청 계약 + cursor 유지 + 썸네일 인증 fetch + 추천 force/피드백/즉시 반영 + 설정 PUT/
 프리셋). 도메인은 [meal](meal.md). *(24차 기준 서술 — "조회 전용·5탭·로컬 state" 는 28차에 바뀌었다. 아래 절.)*
+→ 32차(`f3994f00`) 통계의 "추천 반응" 칸은 추천 탭 한 줄로 옮겨지고 "날짜별 끼니" 막대는 빠졌다. 주소·셸은 아래 **식단 하위 사이트 `/meal`** 절.
 
 ### 식단 화면 확장 — 입력·상세·수정 라우트 · 영양 탭 · 데스크톱 두 단 공통 틀 [28차]
 
 `routes/meal/` 이 5파일(MealPage·MealRecommendTab·MealPreferenceTab·MealPhotoImg + 테스트)에서 **13파일**로 — 신규
 `MealEntryFormPage`(+test)·`MealDetailPage`(+test)·`MealItemInputRow`·`MealNutritionTab`·`mealLayout`·`useMealDraftReady`.
 도메인(draft·1인분 환산·추천 점수·영양 기준)은 [meal](meal.md)/[food](food.md), 여기선 라우트·레이아웃·컴포넌트 구조만.
+⚠️ 32차(2026-11-08 `cfeb0119`): 이 절의 `MealPage`(6탭·`?tab=`)·`/me/meals*` 경로·`MEAL_PAGE_CLASS`·`PublicLayout` 안 배치는 아래 **식단 하위 사이트 `/meal`** 절로 바뀌었다
+(입력·상세·영양·추천 탭의 내용은 대부분 그대로 셸 안으로 옮겨졌다).
 
 **[MealPage](../../apps/web/src/routes/meal/MealPage.tsx)** (615→752줄) — 머리 문구가 "여기서는 직접 적어 남기고, 사진 기록은 앱에서
 해요." + 헤더 "기록하기"(`/me/meals/new`). 탭 `Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'nutrition' | 'preference'` 는
@@ -1201,6 +1233,126 @@ CSS(lg:)가 하고 이 훅은 **데스크톱에서만 부르는 요청·기본 �
 - 테스트: `MealEntryFormPage` 9→16(인식·후보·저장 / EXIF / 붙여넣기·끌어다 놓기 / 실패·사진 아닌 파일 / 올리는 중 저장 막기·취소 시 삭제 / 수정 사진 교체 /
   크게 보기와 빼기 분리), [mealPhotoFile.test](../../apps/web/src/routes/meal/mealPhotoFile.test.ts) 6(EXIF 파싱·축소 — 픽스처
   [exifJpeg.ts](../../apps/web/src/test/fixtures/exifJpeg.ts) 가 EXIF 든 JPEG 바이트를 만든다), `MealDetailPage` 5→6, `useMealPhotoUrl` 6→7(여러 장 훅이 고른 장만 받기).
+
+### 식단 하위 사이트 `/meal` — 전용 셸 · 겹침 패널 · 홈 대시보드 · 음식 찾기 [신규 — 32차]
+
+웹 식단을 "Life Pickr 안의 주 사이트"로 다시 지었다(`cfeb0119`·`3750d1ef` 2026-11-08, 계획·결정·검증은 [PLAN-meal-web-redesign](../../docs/PLAN-meal-web-redesign.md)).
+사용자 결정(2026-11-08): 시각 방향 A '영양정보 라벨'(포장 식품 영양정보 표 말투 — 흰 종이 `#FFFFFF`·바탕 `#EEF0EC`·먹 `#000000`, 색은 상태에만, 다크는
+반전; B '식판'·크림+세리프 안은 버림), 글꼴 원티드 산스(Black Han Sans 는 너무 굵어 바꿈), 이름은 '식단' 그대로, 주소는 앱(expo-router)과 같은 `/meal`
+뿌리. 1단계(셸·주소 — 기존 화면은 내용 그대로 셸 안으로, 토큰만 새 테마) → 2단계(홈) → 3단계(화면별 — 패널·음식 찾기) → 4단계(다듬기·대비)를
+한 커밋(`cfeb0119`, 31파일 +4,913/−1,095)과 다듬기 커밋(`3750d1ef`)으로 냈다. 앱은 다음 단계([mobile](mobile.md)). `routes/meal/` 은 31차 끝(`1d198269`)
+18파일 → **HEAD 56파일**(테스트 4 → 10, `mealTheme.css` 1,005줄). 도메인은 [meal](meal.md)·[meal-nutrition](meal-nutrition.md).
+
+| 파일 | 역할 |
+| --- | --- |
+| [MealEntry.tsx](../../apps/web/src/routes/meal/MealEntry.tsx) | `/meal/*` 들머리(App 이 정적 import). `token` 있으면 lazy `MealApp`, 없으면 경로가 `/meal/stories` 이거나 그 아래일 때만 lazy `MealStoryApp`(셸 없는 공개 건강식단), 그 밖은 `/login` |
+| [MealApp.tsx](../../apps/web/src/routes/meal/MealApp.tsx) | default export. `<div className="meal-app meal-page">` 바깥 틀(테마·스크롤바 자리 표식) 안에 `<Routes location={background ?? location}>` 로 셸 + 구역 화면 13경로(`index`·`records`·`calendar`·`stats`·`nutrition`·`recommend`·`settings`·`stories`·`stories/:slug`·`stories/:slug/recipe`·`new`·`:id`·`:id/edit`, 나머지 `*` → `/meal`)를 그리고, 배경 위치가 있으면 **두 번째 `<Routes>`** 로 `new`·`:id/edit`(form)·`:id`(detail) 패널을 따로 그린다(form 이면 셸 쪽 `inert`). `useMealScroll` — BrowserRouter 라 스크롤 복원이 없어 `history.scrollRestoration = 'manual'` 로 끄고, 모듈 `scrollMemory: Map<location.key, y>` 에 스크롤·누르기(capture) 때 적어 POP 이면 그 자리로·새 화면이면 맨 위·패널 열고 닫을 땐 그대로. `usePrefetchEntryScreens`(한가할 때 상세·입력 조각). 맨 끝에 `<MealPhotoDrop/>` |
+| [MealShell.tsx](../../apps/web/src/routes/meal/MealShell.tsx) | `md:` 이상 왼쪽 `.meal-side`(브랜드 '식단' · [기록하기](`MealLink` → `/meal/new`) · `SIDE_NAV` 6 = 홈(`also: ['/meal/stories']` — 건강식단 목록·이야기에서도 켜짐)·기록·달력·통계·영양·추천 · 아래 설정·'Life Pickr로'(`/`)·`ThemeToggle`; 768~1279px 는 아이콘만, `xl:` 에서 글자), 휴대폰은 `.meal-topbar`(메뉴 → 공용 [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx) 서랍 · 브랜드 · 테마 · 설정)와 `.meal-tabbar`(`TABS` 4 + 가운데 ＋ — 기록 탭은 목록·달력, 분석 탭은 통계·영양에서 켜짐). 상단바·하단 탭은 `MEAL_SECTION_PATHS` 의 구역 화면에서만(입력·상세·수정·이야기는 숨김). 본문 `md:ml-[4.5rem] xl:ml-60` + `max-w-[1240px]` **왼쪽 정렬**(넓은 화면에서 오른쪽 빈자리에 패널이 뜨게). `import './mealTheme.css'` |
+| [mealPaths.ts](../../apps/web/src/routes/meal/mealPaths.ts) | `MEAL_PATH`(home·records·calendar·stats·nutrition·recommend·settings·new·`entry(id)`·`edit(id)`), `MEAL_STORY_PATH`(list·`story(slug)`·`recipe(slug)`), `MEAL_SECTION_PATHS`(하단 탭이 보이는 8곳 — 건강식단 목록 포함), `mealPanelKindOf`(`/meal/:seg[/edit]` → detail/form, `SECTION_SEGMENTS` 7개(`stories` 포함 — 기록 id 로 읽지 않게)는 null), `mealEntryIdOf`, `legacyMealPath` |
+| [mealPanel.ts](../../apps/web/src/routes/meal/mealPanel.ts) | 데스크톱(`useIsDesktopLg` 1024px~) 패널 상태 — `MealPanelState { mealBackground: Location; mealSiblings? }` 를 `location.state` 에(react-router 7 의 `mask` 는 데이터 라우터 전용이라 공식 modal 예제 방식). `MealFrameContext`(page/panel)·`MealPanelEnvContext`(`panelsOn`·`background`·`openEntryId`). `useMealLink` — 이미 패널이 떠 있으면 **같은 배경을 물려줘** 패널 하나에 쌓고(달력 → 기록 → 수정), `swap` 이면 `replace`(옆 목록·↑↓ 로 바꿔도 뒤로 = 닫기). `runMealViewTransition(direction, go)` — `document.startViewTransition` 안에서 `go()` 후 `MealApp` 의 레이아웃 효과가 `notifyMealLocationCommitted()` 를 부를 때까지(최대 `COMMIT_WAIT_MS` 900) 기다린다(BrowserRouter 가 위치 바꿈을 `startTransition` 으로 그려 `flushSync` 가 안 듦), `html[data-meal-nav=forward|back]`, 움직임 줄이기·미지원이면 그냥 이동. `useMealLeave(fallback)` — `location.key !== 'default'` 면 `navigate(-1)`, 아니면 배경 주소 또는 fallback 으로 `replace`. `useMealOpen` |
+| [MealSurface.tsx](../../apps/web/src/routes/meal/MealSurface.tsx) | 상세·입력의 틀 — 패널이면 머리(제목·↑↓·✕)·몸통(`@container`)·발(동작 줄), Esc·↑↓(`aria-keyshortcuts`)·바깥 누르기(모달)·포커스 들여보내기/돌려주기(기록 줄 `data-meal-entry`)·모달이면 `aria-modal` + 문서 `overflow: hidden`. 다른 `role=dialog/alertdialog` 가 떠 있으면 키를 그쪽에 맡긴다. 화면이면 휴대폰 자체 상단바(← 뒤로 / 주소로 바로 열었으면 fallback 이름) + 아래 고정 동작 줄. 안쪽 두 단은 컨테이너 쿼리 48rem(640px 상세 패널은 한 단, 880px 입력 패널·데스크톱 화면은 두 단). 확인 창은 `overlay` 로 `@container` 밖에(컨테이너가 fixed 자식의 기준 상자가 될 수 있어서) |
+| [MealLink.tsx](../../apps/web/src/routes/meal/MealLink.tsx) | 상세·수정·새 기록 링크 — 진짜 `<a href>`(새 탭·주소 복사는 한 화면으로 열림). 데스크톱은 `state`(배경)를 싣고, 좁은 화면은 일반 클릭만 막고 `runMealViewTransition('forward')`. `entryId` 면 `data-meal-entry` + 패널에 열린 줄 `aria-current="true"` |
+| [MealPageHeader.tsx](../../apps/web/src/routes/meal/MealPageHeader.tsx) | 구역 화면 큰 제목 + 휴대폰에서만 묶음 전환(`group: 'records'` 목록·달력 / `'analysis'` 통계·영양) |
+| [MealHomePage.tsx](../../apps/web/src/routes/meal/MealHomePage.tsx) | 홈 — 제목(오늘 날짜) → `StartGuide`(최근 90일 기록 0이면: 첫 기록·성별/출생연도·추천 세 단계, `3750d1ef`) → `MealSkipNudge`(어제) → `MealMissedDaysLink` → `HomeStory`(건강식단 한 줄) → `.meal-dash`: `Today`(끼니 4칸 — 야식은 간식 칸, 열량/필요량, 영양소는 판정하지 않음) · `Recommendation`(다음 끼니 + 곁들임) · `NutritionLabel`(최근 14일 하루 평균, 많음 → 부족 → 기록 더 필요, `MAX_FLAGGED` 7, 충분·판단 보류는 개수만) · `Week`(최근 7일 kcal 막대·필요량 점선·연속) · `Insight`(30일 통계 첫 인사이트) · `QuickAdd`(이 끼니 자주 먹은 음식). 새 API 없이 `useMealEntries(오늘)`·`useMealNutrition(14)`·`useMealRecommendationContext`·`useMealCalendar` ×1~2(주가 두 달에 걸칠 때만 둘째)·`useMealStats(30일)`·`useFrequentMealItems(slot)` — PLAN 실측 홈 요청 6~7개 병렬 |
+| [mealDraftStart.ts](../../apps/web/src/routes/meal/mealDraftStart.ts) | `prepareMealEntry({ slot?, quick?, date? })` — 입력 화면 밖(홈 빈 끼니 칸·자주 먹은 음식·어제 빈 끼니·사진 끌어다 놓기·식당 상세 [먹었어요])에서 새 기록 draft 를 준비(이동은 호출자). 지금 끼니면 지금 시각, 다른 끼니면 `MEAL_SLOT_DEFAULT_TIME`(저녁 칸을 오후 3시에 눌러도 19:00), 다른 날이면 그날 그 끼니. 쓰다 둔 새 기록이 있으면 새로 만들지 않고 끼니·날짜만 옮기고 음식은 더한다. `emptyMealItem`·`isMealDraftChanged`(수정 패널 닫기 확인) |
+| [MealFoodSheet.tsx](../../apps/web/src/routes/meal/MealFoodSheet.tsx) | 휴대폰(입력 화면의 `useMediaQuery('(max-width: 47.99rem)')`) 음식 찾기 — 화면 전체, 검색칸·완료는 **위**(키보드), 높이는 `visualViewport`. 모드 `add`/`replace`. 치기 전: 그 집 메뉴(최대 `MENUS_BEFORE_SEARCH` 15, 11-14 추가) → 이 끼니 자주 먹은 음식 → 최근 끼니 5개 통째로. 치는 중(200ms 디바운스·끝 낱자모 제거): '그대로 넣기' → 내 기록(`/meals/items/frequent?q=`, 1자부터) → 음식 목록(`/food/search`, 2자부터 — 내가 먹은 음식 먼저·1인분 열량). 줄을 누르면 넣고 다시 누르면 뺌(`toggleQuickItem` — 빠른 추가 칩과 같은 값), 김치·나물은 반찬으로(`MEAL_SIDE_DEFAULT_DISH_TYPES`) |
+| [MealPhotoDrop.tsx](../../apps/web/src/routes/meal/MealPhotoDrop.tsx) · [mealPhotoHandoff.ts](../../apps/web/src/routes/meal/mealPhotoHandoff.ts) | 식단 어디서든 사진 끌어다 놓기·붙여넣기(`3750d1ef`) — `window` drag 이벤트(깊이를 세어 자식 요소를 지날 때 깜빡이지 않게)·`document` paste. 입력 화면이 떠 있으면(모듈 변수 `receiver` — `receiveMealPhotos` 로 등록) 그 기록에, 아니면 `prepareMealEntry()` + `pending` 에 맡기고 `useMealOpen()(MEAL_PATH.new)` — 입력 화면이 마운트되며 받는다. 사진 칸 위의 drop·입력 화면의 paste 는 그 칸이 먼저(`defaultPrevented`). draft 복원 전이면 받지 않음. 끄는 동안 `.meal-drop` 전체 안내("놓으면 새 기록을 시작해요" / "이 기록에 넣어요") |
+| [mealTheme.css](../../apps/web/src/routes/meal/mealTheme.css) | ① 레이어 밖 `html:has(.meal-app)`·`html.dark:has(.meal-app)` 에서 shadcn 변수(`--background`·`--card`·`--input`·`--radius: 0.25rem` …)와 `--meal-ok/short/over/faint`·`--meal-line(-heavy)`·`--meal-macro-carb/protein/fat` 을 다시 정함 — 셸 클래스가 아니라 html 에 거는 건 body 로 빼서 그리는 창(Lightbox 포털·서랍)까지 같은 색을 받게, 레이어 밖은 tailwind.css 의 `:root`/`.dark` 가 레이어 밖이라. ② 부품 클래스는 `@layer components`(레이어 밖이면 `md:hidden` 같은 유틸리티를 이겨 휴대폰 바가 데스크톱에 떴다 — 시안에서 겪음). ③ 레이어 밖 끝에 View Transitions 키프레임과 `.meal-app [data-slot='card']`(공용 `Card` 의 그림자 끄기 — `card.tsx` 가 `data-slot` 을 단 이유). 대비 점검(4단계): 글자 4.5:1·`--input` 3:1 |
+| [mealFont.ts](../../apps/web/src/routes/meal/mealFont.ts) | 원티드 산스 가변 분할판(jsDelivr `wanted-sans@v1.0.3`) `<link>` 를 head 에 한 번 — `ensureFontStylesheet`·`useMealFont`(외부라 effect). `c6132034` 이 셸 안에서 꺼내 건강식단 화면과 공유 |
+| [mealLayout.ts](../../apps/web/src/routes/meal/mealLayout.ts) | 28차 상수 4개 중 `MEAL_PAGE_CLASS` 가 빠지고 셋만(바깥 폭·여백은 셸이, `meal-page` 표식은 `MealApp` 이). `MEAL_SIDE_CLASS` 가 `lg:top-[4.5rem]` → `lg:top-8`(셸엔 데스크톱 상단바가 없다). 쓰는 곳은 기록·달력뿐 — 상세·입력은 `@container` 로 접는다 |
+
+**기존 화면이 바뀐 점**(`cfeb0119`):
+- [MealPage.tsx](../../apps/web/src/routes/meal/MealPage.tsx) — `MealPage`(6탭 `?tab=`)가 사라지고 명명 export `MealRecordsPage`·`MealCalendarPage`·`MealStatsPage` 셋(영양·추천·설정은 `MealApp` 의
+  작은 래퍼가 `MealPageHeader` + 기존 탭 컴포넌트). 기록 = 날짜 먹줄 + 끼니 줄(넓으면 한 줄, 좁으면 두 줄, 패널에 열린 줄 표시, 줄마다 `siblings` 로 ↑↓ 순서), 달력 칸 =
+  날짜·끼니 점·열량·사진 표시(접근 이름 '11월 5일, 2끼, 약 1,252kcal' — `3750d1ef`), 통계 = 큰 숫자 줄·먹색 막대. 휴대폰 기록 찾기는 검색칸만 두고 날짜·끼니·방식은
+  '조건 N' 단추 뒤로(`3750d1ef` — CSS 는 `max-width: 63.99rem` 에서 접으므로 태블릿도 접힘).
+- [MealDetailPage.tsx](../../apps/web/src/routes/meal/MealDetailPage.tsx) — `MealSurface` 안. 이 끼니 '영양정보' 라벨(식품 등의 표시기준 1일 영양성분 기준치 대비 %,
+  값 있는 항목만 더한 합계와 반영 개수), 패널이면 ↑↓(`mealSiblings`). → `a5b26ebe` 식당 메뉴에서 넣은 줄은 **그 집 메뉴명을 앞세우고** 아랫줄에 기록 이름(표준명)·가격,
+  → `2d701405` 음식 줄 아래 `RecipeStoryLink`(건강식단 레시피로 적은 음식이면 그 이야기로).
+- [MealEntryFormPage.tsx](../../apps/web/src/routes/meal/MealEntryFormPage.tsx) — `MealSurface` 안. 닫기(✕·Esc·바깥·←)는 **새 기록이면 쓰던 것을 남겨 두고**(다시 열면
+  "쓰다 둔 기록을 이어서 열었어요 · [새로 쓰기]" — 방금 채워 넘어온 draft 는 알리지 않음), **수정이면 고친 내용이 있을 때 버릴지 묻는다**(`isMealDraftChanged` — BrowserRouter 라
+  `useBlocker` 대신 패널·← 단추에서). 저장 뒤 새 기록은 `open(MEAL_PATH.entry(id), { replace: true })`(패널이면 같은 배경 위 상세 패널). 휴대폰은 이름 칸을 누르면
+  음식 찾기 시트(빈 줄 = '찾기', 이름 있는 줄 = '바꾸기'), `receiveMealPhotos` 로 끌어다 놓은 사진을 받는다. → `a5b26ebe` 맨 위 '어디서 먹었나요'·그 집 메뉴(아래 식당 절).
+- [MealRecommendTab.tsx](../../apps/web/src/routes/meal/MealRecommendTab.tsx) — `7fa6e64d`(11-08) 추천 카드 요약 아래 "곁들이면 좋아요 · 파프리카(비타민 C) · … · [영양 보기]"(`rec.sides ?? []` — 예전 응답도 견딤,
+  서버가 정함), `f3994f00` '최근 추천' 카드 아래 "최근 30일 — 고른 추천 N건 · 기록까지 N건(N%) · 평가 N건"(통계 화면에서 옮김, `useMealStats(30일).recommendation`),
+  `009ce276` '파는 곳 보기' 단추와 펼친 식당 목록을 버튼 줄의 따로 된 항목으로(목록은 늘 줄 아래 카드 폭 전체, 좋아요·별로예요는 한 덩어리 — 320~1280px 12폭 넘침 0).
+- [MealNutritionTab.tsx](../../apps/web/src/routes/meal/MealNutritionTab.tsx) — `1ba0381a`·`f4cec51d`(11-07) 바닥 출처 문구(`MEAL_NUTRIENT_DATA_SOURCES`)·지난 조언(`latest.data.stale`)이면
+  안내 한 줄 + 옛 조언 `opacity-60`·성별/출생연도 안내 옆 설정 링크(`MEAL_PATH.settings`), 영양소 줄을 공용 `MealNutrientLine` 으로(`bfae13c6`), '빠진 날 정리'(`MealSkipReview`,
+  `?skips=open`), 많음/부족 줄의 `NutrientStoryLink`(건강식단). 판정 칩 '기록 더 필요'는 점선(`MealNutrientChip` — 열량을 필요량만큼 채우면 기준에 닿는 부족, [meal-nutrition](meal-nutrition.md)).
+
+**끼니 '안 먹음' 화면**([MealSkip.tsx](../../apps/web/src/routes/meal/MealSkip.tsx), 488줄 — `f3994f00`→`d772e4bb`→`79f11f5c`): 묻는 곳을 "한 끼만 적혀 평균에서 빠지는 지난날"로
+좁혔다(아침을 늘 거르는 사람에게 매일 묻지 않게). 날짜 계산 공용 훅 `useOneMealDays(from, last, minDays)` — 달력(최대 두 달)에서 한 끼 기록 날을 고른 뒤 그날들이
+`minDays` 이상일 때만 `useMealSkips` 를 부른다. 끼니 줄 부품 `SkipSlotRows`([기록하기] → 그날 그 끼니로 `prepareMealEntry({ slot, date })` / [안 먹음] / 표시한 끼니는 [취소] /
+남은 끼니 둘 이상이면 [남은 끼니 모두 안 먹음] → `useBatchMealSkips`)를 홈 묻기·영양 탭 정리가 같이 쓴다. 표시 뒤 평균에 들어도 **이 화면에서 바꾼 날은 남긴다**
+(`touched` — 실수를 바로 고칠 자리; 다시 열면 평균에 든 날이라 묻지 않음). 영양 탭 체크 목록은 "고르는 것이 곧 확인"이라 확인창 없이 [선택한 K칸을 '안 먹음'으로 표시 (N일)] +
+[되돌리기](방금 표시한 칸만 — `lastAdded`), 오늘은 아직 지나지 않은 끼니가 있어 뺀다. 기록 목록은 불러온 기간(최대 `SKIP_RANGE_DAYS` 365, 필터 없을 때만)의 '안 먹음'을
+한 번에 받아 날짜 묶음 아래 `MealDaySkips` 로.
+
+**통계 화면**(`MealStatsPage` — `ab136cf1`·`80534c7b`·`bfae13c6`·`34b47c6f`·`504bd68c`): 기간 1주/1달(기본)/3달, 큰 숫자 줄 → 영양소 카드 → 분포 → 자주 먹은 음식 → 인사이트.
+요청은 `useMealStats`·`useMealStatsNutrition`(묶음 몫 — 통계를 열 때 함께 받아 막대에 올리자마자 뜸)·`useMealStatsNutrients`(이 기간)·`useMealStatsNutrients`(직전 같은 길이 기간)
+넷. 영양 탭이 "최근 14일 판정·조언", 통계가 "고른 기간의 양·흐름·출처"로 역할을 나눴고 판정은 같은 함수(같은 기간이면 숫자·판정이 같다 — 라우트 테스트로 대조).
+- [MealGroupBars](../../apps/web/src/routes/meal/MealGroupBars.tsx) — 기준 `MEAL_BAR_METRICS`(`count`·`kcal`·`sodium`, [mealBarMetrics.ts](../../apps/web/src/routes/meal/mealBarMetrics.ts)), 막대 줄이 단추. `hover`/`pinned`
+  두 상태 — 마우스·키보드 포커스로 뜨고, 누르면 고정, 고정은 바깥 누르기·떠 있는 카드는 Esc 로 닫음(문서 이벤트라 effect). 넓은 화면은 옆 칸 위에 겹쳐(건너는 틈은 카드의
+  투명 여백), 휴대폰은 줄 아래. 카드 = 묶음이 채운 몫(열량·탄수화물·단백질·지방·나트륨 + 많이 채운 비타민·무기질 3 + 많이 먹은 음식), 열량 몫보다 1.2배 넘게 채운 영양소는
+  굵게, 점검과 잇는 문장(이 기간 '많음' 영양소를 크게 채웠거나 부족 영양소를 20% 넘게), '열량 구성' 두 줄(이 묶음 / 내 평균 — `composition` 은 셋을 다 아는 기록만, 4·4·9kcal,
+  조각 색 파랑·자홍·보라 + '탄·단·지 %' 글자·범례).
+- [MealBarSummary](../../apps/web/src/routes/meal/MealBarSummary.tsx) — 열량·나트륨 기준일 때 막대 위 한 줄(막대는 '어디서 왔나' 몫이라 많고 적음을 못 보여 줌 — 사용자 "영양은
+  나트륨 많음인데 통계엔 안 높다"). 처음(`80534c7b`)엔 최근 14일 점검 값이었다가 `bfae13c6` 부터 **이 기간** 값(14일 점검 호출을 통계에서 뺌). 여는 법 안내는 `pointer-coarse:`
+  (손가락 기기 — 화면 폭 무관) '막대를 누르면' / 마우스 '막대에 올리거나 누르면', CSS 로 한쪽만 보이고 읽힘. 문장 상자는 `basis-80`(20rem) `grow` — `flex-1` 은 바탕 폭 0 이라 토글 옆 한 칸 폭까지 좁아졌다(휴대폰에선 토글이 아래로).
+- [MealStatsNutrients](../../apps/web/src/routes/meal/MealStatsNutrients.tsx) — 흰 카드 둘: 왼쪽 '영양소 · 1달' 목록(위 묶음 열량·탄수화물(당류)·단백질·지방(포화지방)·나트륨·콜레스테롤
+  고정 차례, 아래 묶음 식이섬유·비타민·무기질은 판정 순이고 많음·부족·조금 부족만 펼침 — '나머지 N가지 더 보기 · 기록 더 필요 4 · 충분 2'), 넓은 화면 오른쪽은 고른 줄의 흐름
+  카드(1주·1달 날마다, 3달·비타민·무기질은 주마다, 한 끼만 기록한 날은 흐리게, 표로 보기)와 많이 준 음식, 좁은 화면은 그 줄 아래. 기준량이 있는 줄은 기준 대비 막대(`.meal-meter`,
+  0~150%), 열량 비율 줄(탄수화물·지방·당류·포화지방)은 모양이 다른 범위 막대(`.meal-range` — 적정 범위 띠, 0~100%)로 갈라 '열량 중 %'를 '기준의 %'로 읽지 않게. 정보 90%
+  아래는 '정보 N%', 60% 미만·콜레스테롤은 막대 없음. 줄 맨 아래 직전 기간 대비 한 줄.
+- [MealNutrientLine](../../apps/web/src/routes/meal/MealNutrientLine.tsx) — 영양 탭 '영양소 점검' 줄을 떼어 낸 공용 부품(이름·`MealNutrientChip`·"양 / 기준 (N%)"·`MealNutrientMeter`).
+  통계가 줄 전체를 단추로 감싸므로 **모두 `span`**(단추 안에 둘 수 있는 요소). `label` 로 칩 글자만 바꿀 수 있다(건강식단 '기준 안').
+  문구는 [mealNutrientTone.ts](../../apps/web/src/routes/meal/mealNutrientTone.ts) `nutrientVsRefText`·`flaggedNutrients`(많음·부족·조금 부족만, `insufficient` 면 비움).
+- [mealNutrientChange.ts](../../apps/web/src/routes/meal/mealNutrientChange.ts) — `NUTRIENT_CHANGE_MIN` 0.1(5% 로는 실데이터에서 단백질 5%·지방 8% 잡음까지 '줄었어요'),
+  `ENERGY_CHANGE_MAX` 0.15, `comparableNutrientChange`(① 두 기간 하루 평균 열량이 15% 안쪽 ② 어느 쪽도 '기록 더 필요'가 아닐 때만 — 실제 계정 1,495 → 1,047kcal 에서 나트륨·식이섬유가
+  55%·58% '줄었어요'로 나와 `504bd68c` 가 더함; 열량 줄 자체는 그대로 말함), `nutrientChangeText`·`nutrientChangeShort`(영상 쪽지), `periodAndPrevious(days)`. 통계·홈 건강식단 줄·
+  건강식단 이야기의 내 값이 같은 문턱·문구. 두 기간 모두 판정이 나왔을 때(평균에 든 날 4일 이상)만 부르는 쪽이 견준다.
+
+**식당에서 먹은 기록**(`a5b26ebe`·`6a663108` 11-14 — 웹에 식당을 고르는 화면이 처음 생겼다; 전엔 저장된 값을 보여 주고 지우기만):
+- [MealPlaceSection](../../apps/web/src/routes/meal/MealPlaceSection.tsx) — 입력 화면 맨 위(식당을 먼저 알아야 그 집 메뉴에서 고르고, 휴대폰 키보드에 목록이 덜 가린다).
+  공개 맛집 목록(`useRestaurantsPublic`)을 이름·주소로 찾는 콤보박스(디바운스·끝 낱자모 제거, 찾으려고 누른 엔터로는 이름이 굳지 않음), 목록에 없으면 이름만, 바꾸기·지우기.
+  식당을 고르면 `linkRecognizedToPlaceMenus` 를 부른다.
+- [useMealNearbyPlaces](../../apps/web/src/routes/meal/useMealNearbyPlaces.ts) — 상태 `idle|locating|ready|denied|unavailable|coarse`. 사진 위치(`useMealPhotoIntake` 가 올리기 전에
+  [mealPhotoFile.ts](../../apps/web/src/routes/meal/mealPhotoFile.ts) `readPhotoLocation` 으로 GPS IFD 를 읽음, (0,0) 버림)가 있으면 그것, 없으면 [근처 식당]을 눌러 지금 위치.
+  `BASE_RADIUS_M` 150 / 기기 측위는 오차 + 100m(최대 `MAX_RADIUS_M` 500), `COARSE_ACCURACY_M` 400 넘으면 후보 없이 알림(데스크톱 WiFi·IP 측위), bbox(반경 × 1.2)로 목록 60개를 받아
+  하버사인으로 다시 재고 가까운 `MAX_PLACES` 5곳. **권한 창을 열자마자 띄우지 않는다** — `navigator.permissions.query` 가 `granted` 일 때만, 그것도 "지금 먹은 새 기록"(새 기록·식당 없음·
+  먹은 시각이 지금에서 `NEARBY_AUTO_WINDOW_MS` 2시간 안쪽)을 처음 열 때만 조용히(`run(true)` — 실패해도 알리지 않음). 좌표는 조회에만, 기록엔 고른 식당만.
+- [MealPlaceMenus](../../apps/web/src/routes/meal/MealPlaceMenus.tsx) · [MealPlaceMenuChooser](../../apps/web/src/routes/meal/MealPlaceMenuChooser.tsx) · [mealPlaceMenu.ts](../../apps/web/src/routes/meal/mealPlaceMenu.ts) —
+  draft 의 `placeId` 로 shared `useMealPlaceMenus`(`/meals/place-menus?placeId=`, 응답 `pending` 이면 정해진 횟수까지 다시 조회 — 그동안 머리에 "코스·세트 구성을 읽는 중…").
+  줄 = 메뉴명 · 가격·대표·"김치찌개로 기록"(기록 이름이 다를 때만)·구성("(짜장면·짬뽕 중 하나)", 코스는 조금씩) · 열량(`placeMenuKcal` — 정해진 구성 합 + 고르는 묶음마다
+  최저~최고, "741~1,014kcal", 일부만 알면 "열량은 5가지 중 4가지만"). 누르면 `toggleMenuItem`(같은 음식 줄이 있으면 새 줄 대신 그 줄에 메뉴를 잇는다). 고르는 묶음이 있으면 줄
+  아래 `MealPlaceMenuChooser` — **미리 골라 두지 않고** 묶음마다 하나 또는 '안 먹었어요'를 눌러야 [넣기]. 넣은 줄의 '이걸로 바꾸기' 칩은 `placeMenuSwapOptions`(메뉴 연결·양 유지).
+  `FILTER_FROM` 10개 넘으면 '메뉴 찾기'(`placeMenuMatches` — 띄어쓰기·대소문자 무시). 휴대폰 시트도 같은 묶음·같은 칸.
+- [mealPlaceLink.ts](../../apps/web/src/routes/meal/mealPlaceLink.ts) — 사진 인식 결과를 그 집 메뉴에 잇기. 식당을 고른 직후와 인식이 끝난 직후 **양쪽에서** 불러 어느 쪽이 먼저든
+  같은 결과, 메뉴는 화면과 같은 캐시(`queryClient.fetchQuery(mealPlaceMenusQuery)`), 받는 사이 draft·식당이 바뀌었으면 아무것도 안 함. 하나도 안 맞을 때만 [이 집 메뉴로 다시
+  인식](이때만 인식 한도를 씀).
+- [MealHereButton](../../apps/web/src/routes/meal/MealHereButton.tsx) — 공개 식당 상세([PublicRestaurantDetail](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx)) 헤더의
+  [먹었어요](`Utensils`, 폭 `sm` 아래는 아이콘만): `prepareMealEntry()` + `setPlace({ placeId, placeName })` 후 `/meal/new`. 식단 셸 밖이라 `useMealDraftReady()` 전엔 비활성,
+  비로그인은 `/login`(정산 버튼과 같게 — `next` 없음).
+
+**건강식단 연결**(`c6132034`·`6fb948c3`·`2d701405`·`504bd68c`·`c2164a40` — 화면 자체는 [meal-story](meal-story.md)): 식단 쪽에 남은 파일은 [mealStoryMatch.ts](../../apps/web/src/routes/meal/mealStoryMatch.ts)
+(`storyDirectionFor` — high → reduce, low·borderline → increase, 나머지는 잇지 않음; `findStoryFor`·`storyForFood`(서버가 목록에 실은 `recipeFoodId` 와 항목 `foodId` 가 같을 때만 — 이름으로
+잇지 않음))와 [MealStoryLink.tsx](../../apps/web/src/routes/meal/MealStoryLink.tsx)(`NutrientStoryLink` — 영양 탭·통계 흐름, `RecipeStoryLink` — 기록 상세). 홈 `HomeStory` 는 늘 있는 자리 —
+내 14일 판정에 맞는 이야기(라벨과 같은 차례)를 먼저, 없으면 가장 새 이야기(게시 `NEW_STORY_DAYS` 30일 안이면 '새 이야기'), 맞는 이야기가 여럿이면 '모두 보기'가 '맞는 이야기
+N편 더'(`c2164a40`), 이을 이야기가 있을 때만 직전 2주 조회로 변화 한 줄(`504bd68c`). **초안**은 서버가 관리자에게만 주고 화면은 받은 대로 '(초안)' 표시 — 메뉴 항목이 없어진 뒤
+관리자가 게시 전 초안에 들어갈 길이 이 연결뿐이라서(`6fb948c3`). 로그인 상태의 이야기·레시피는 `MealApp` 의 `stories/:slug(/recipe)` 경로라 셸 안(넓은 화면은 사이드 메뉴 옆
+본문 카드, 휴대폰은 화면 가득 `.meal-story-inshell`), 하단 탭은 없고 홈이 켜진다.
+
+**상태·effect 규율** — 파생값은 렌더 중 계산(홈의 주간 막대·라벨 정렬·맞는 이야기, 통계 `flags`, 근처 식당 거리·정렬, 메뉴 열량 범위). effect 는 외부 시스템에만 주석과 함께:
+`window`/`document` 이벤트(사진 끌기·붙여넣기, 통계 카드 Esc·바깥 누르기, 패널 키·포커스), `history.scrollRestoration`·스크롤 기억, head 의 글꼴 `<link>`, `navigator.permissions`,
+타이머(기록 검색 250ms 디바운스), 모듈 변수 창구(`receiveMealPhotos`), draft 외부 저장소 초기화(새 기록 시작·수정 채우기). 최신 콜백은 "매 렌더 ref 대입" effect(`MealPhotoDrop` 의
+`latest`, 입력 화면 `addPhotosRef`)로 읽어 리스너를 다시 달지 않는다.
+
+**어드민(32차)** — [NutrientRefSection](../../apps/web/src/routes/admin/NutrientRefSection.tsx)(`1ba0381a` 11-07): `AdminFoodPage` 의 `MealNutritionGapSection` 바로 뒤 '영양 기준 음식' —
+비타민·무기질이 없는 이름(외식 어휘·레시피·카탈로그 밖 식단 이름)이 어느 표준 음식의 영양 구성으로 계산되는지 목록·바꾸기(후보 검색 `useNutrientRefCandidates`)·없음으로·다시 묻기·
+해제(`useNutrientRefs`·`useSetNutrientRef`·`useClearNutrientRef`·`useRelinkNutrientRefs` → `/admin/food/nutrient-refs[/link|/candidates]`). → `40eb16a4` '없음' 행에 "AI 후보: 마라탕
+(확신 보통)" + [이걸로](PUT 후보 id). 연결 규칙은 [food](food.md)·[meal-nutrition](meal-nutrition.md). [AdminAiKeysPage](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) `meal-recommend` 에
+`thinking: true`(`54e4c4f3` — 아래 25차 어드민 절의 추론 select 가 이제 사주(C)·영양제 조언·식단 추천 셋), 단계 라벨을 kimi-k3.1-pro 실측(끔 9~20s → 보통 22~50s → 최대 63~74s)으로
+"보통 — 응답 2~3배 느림"·"높음 — 3~4배"·"최대 — 1분 넘게"로 바꿨다([ai](ai.md)).
 
 ### 지도 + 바텀시트 화면 골격 공유 — `sheet/` · `useMapSheets` · `useMediaQuery` [신규 — 24차]
 
@@ -1523,6 +1675,10 @@ CSS(lg:)가 하고 이 훅은 **데스크톱에서만 부르는 요청·기본 �
   kimi-k3", placeholder `kimi-k3`, **`thinking: true`**). `PurposeMeta.thinking` 주석도 "지금은 사주(C)" → "사주(C)·영양제 조언" — 추론
   select 는 kimi 계열 모델일 때만 보인다. 같은 커밋이 [AdminLogsPage](../../apps/web/src/routes/admin/AdminLogsPage.tsx) `FEATURE_LABEL`
   에 `'meal-nutrition-advice': '영양제 조언'` 을 더했다(`Record<OperationFeatureType>` 이라 역시 typecheck 가 강제).
+  → 32차(`54e4c4f3`, 2026-11-07) `meal-recommend` 도 **`thinking: true`**(세 번째 — 주석 "사주(C)·영양제 조언·식단 추천", 설명에 "기본 끔 — 이유 문장만 받는다"). 단계 라벨이
+  출력 예산 배수("보통 — 출력 예산 2배" 등)에서 실측 대기 시간으로 — `medium` "응답 2~3배 느림"·`high` "문장이 더 구체적, 응답 3~4배 느림"·`max` "가장 오래 생각, 1분 넘게 걸림",
+  경고 문구도 "최대 5배·120초" → "최대 단계는 1분 넘게 걸림". 근거 주석: kimi-k3.1-pro 실측(2026-11-07) 끔 9~20s → 낮음 11~21s · 보통 22~50s · 높음 41~49s · 최대 63~74s
+  (예산·대기는 utils `thinkMaxTokens`·`thinkTimeoutMs`, [ai](ai.md)).
 - [WeatherPage.test](../../apps/web/src/routes/WeatherPage.test.tsx) 503 문구가 `KMA_API_KEY` →
   `DATA_GO_KR_API_KEY`(`3d9dfed` 키 통일 — [weather](weather.md)).
 
@@ -1555,6 +1711,12 @@ CSS(lg:)가 하고 이 훅은 **데스크톱에서만 부르는 요청·기본 �
   끼어 그 주석이 주차 라우트 위에 붙은 모양이 됐다(Gotchas).
 - → **30차 NAV 15(`72c9982e`)** — `{ to: '/hiking', label: '등산' }`(드로어 `Mountain`)을 일상지도 바로 뒤에, 라우트도 `/life-map` 다음에
   (역시 주석 없음). 상단바 폭 예산 주석은 여전히 "NAV 7개"(Gotchas). 지도 풀 키는 `hiking`(`HikingMap` 고정값)이 더해져 **8종**, 상한 3 그대로.
+- → **32차 '식단' 항목(`cfeb0119`·`c6132034`·`6fb948c3`)** — 11-08 `to` 가 `/me/meals` → `/meal`. 11-09 `c6132034` 이 `{ to: '/meal/stories', label: '건강식단' }`(드로어
+  `Apple`)을 식단 앞에 넣어 **16개**로 하고, '식단'엔 `not: ['/meal/stories']`(그 아래에선 안 켜짐)를 달았다. 11-10 `6fb948c3` 에 번복 — '건강식단'·`not` 을 지우고 '식단'을
+  `{ to: '/meal', guestTo: '/meal/stories', match: ['/meal'] }` 로: **`requiresAuth` 를 떼어 로그인 전에도 보이고** 그때는 건강식단 목록으로 간다(`NavLink to={user ? to :
+  (guestTo ?? to)}`). 그래서 다시 **15개, 로그인 여부와 무관**(30차의 "비로그인·게스트 14"는 끝). `requiresAuth` 필드·필터는 두 파일에 남았지만 쓰는 항목이 없다. 활성 판정은
+  `under(p)`(같거나 `p/` 로 시작) 헬퍼로 정리. 상단바 쪽 `match: ['/meal']` 은 사실상 쓰이지 않는다 — `/meal/*` 은 `PublicLayout` 밖이라 상단바가 그려지지 않고, 같은 NAV 를
+  쓰는 서랍(`PublicSidebar`)만 식단 셸 안에서 열린다. 테스트 `PublicSidebar.test`·`PublicTopBar.test` 3→4(로그인 전 `/meal/stories` · 로그인 뒤 `/meal`).
 - **OL 지도 풀 키가 7개로** — [MapCanvas](../../apps/web/src/components/restaurant/MapCanvas.tsx) `mapPool` 을 쓰는 키가 `transit-desktop`·
   `transit-mobile`(07-07 `4128d6b`) → `air`(`AirStationsMap` 고정값)·`life`·`housing`(`LifeMapView`·`HousingMapView` 의 prop 기본값)
   → 27차 `sea`(`SeaMap`)·`parking`(`ParkingMapView`) 고정값. 풀엔 상한·축출이 없어(`mapPool.set` — 같은 키가
@@ -1767,6 +1929,8 @@ context 는 `{ setSubBar: noop, headerHeight: 56 }`, `MapCanvas` 목이 뷰포�
   `filterReviewsByTipMenu` 규칙)으로 거르고 필터 칩(해제 버튼 · 매칭 수)을 위에 띄운다. 페이지는 20건씩 "N개 더 보기" — 필터 조합을
   서명 문자열로 들고 **렌더 중 비교**해 바뀌면 1페이지로(effect 없음). 단건 재요약은 `useResummarizeReview(placeId, canonicalId)` +
   `ModelPickerPopup`(재분류 전 sentiment 를 넘겨 완료 토스트가 "부정→긍정" 델타를 그린다).
+  → 32차(`63438a7c`, 2026-11-07) 방문일 최신순은 utils `sortReviewsByRecencyDesc(list)`(방문일을 리뷰마다 한 번만 해석해 정렬 — 비교 함수는
+  비교마다 다시 해석)로 일찍 반환하고 `switch` 의 `visitedAt-desc` 갈래는 지웠다.
 - **[AdminReviewItem](../../apps/web/src/components/admin/restaurant-detail/AdminReviewItem.tsx)** — 분석 표현은 공개 `ReviewCard` 부품
   재사용(`SatisfactionChip`·`ReviewAnalysisDetails`·`SourceBadge`), 운영용으로 출처 배지(섞였을 때)·테이블링 "방문 인증" 칩·별점·요약
   상태 줄(실패면 `errorMessage ?? errorCode`)·재요약 버튼·140자 넘는 본문 3줄 접기·**64px 썸네일**(`reviewThumbnailUrl(u, 200)`, 수백 건을 훑는
@@ -1900,6 +2064,31 @@ MSW 는 산 목록·산·코스·산행 조건·추천·가는 법과 지도 키
   정확도 리포트 없음/있음) · [AdminMenuBoardSection.test](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.test.tsx) 3 ·
   [MenuBoardSection.test](../../apps/web/src/components/restaurant/detail/MenuBoardSection.test.tsx) 3(날짜 범위·더 보기·AI 안내·라이트박스, 카드의 최신 사진 가격).
   헤드리스로 실제 kimi-k3 읽기(김진목삼 24개, 8.6초)와 분지로 3661×7205 확대·끌기·전체 화면(`9e4c598c`).
+- → **32차(`23c24858`, 2026-11-07)** — 서버가 같은 가게 자동 읽기를 한 줄로 세우고 같은 프롬프트로 세 번 실패한 사진은 더 읽지 않게 되면서(→ [menu-board](menu-board.md)),
+  `AdminMenuBoardSection` 의 안 읽은 사진 칸이 `image.failure` 가 있으면 "읽기 실패 N회"(마우스를 올리면 `failure.lastError`), 없으면 그대로 "안 읽음". 실패 기록은 안 읽은 사진에만
+  보인다. 테스트 3→4.
+
+### 웹 테스트 인프라 현황 — 106파일 628건 [갱신 — 32차]
+
+**32차(2026-11-06~11-14) — 106파일 628건**(HEAD 의 `apps/web/src` `*.test.ts(x)` 106개에서 줄 머리 `it(` 628개 — 31차와 같은 셈법, 기준선 `1d198269` 96/468 이 이 셈으로도 맞는다).
+커밋 본문·PLAN 수치: 100파일 488건(`cfeb0119`) → 101파일 492건(`3750d1ef`, PLAN 4단계 검증) — 그 뒤 커밋들은 건수를 따로 적지 않았다.
+- **새 10파일(+128)** — 식단 [MealApp.test](../../apps/web/src/routes/meal/MealApp.test.tsx) 22(옛 주소 넘기기·`prepareMealEntry`·홈 대시보드·시작 안내·건강식단 줄 7·어제 묻기/한 번에 정리/
+  '안 먹음' 5·하단 탭 규칙 2) · [MealPanel.test](../../apps/web/src/routes/meal/MealPanel.test.tsx) 5(목록 위 상세·줄 바꾸기·↑↓·Esc·수정 모달 inert·고친 내용 확인·저장 뒤 같은 배경 상세·주소로 바로 열면
+  한 화면) · [MealFoodSheet.test](../../apps/web/src/routes/meal/MealFoodSheet.test.tsx) 5 · [MealPhotoDrop.test](../../apps/web/src/routes/meal/MealPhotoDrop.test.tsx) 2 ·
+  [mealNutrientChange.test](../../apps/web/src/routes/meal/mealNutrientChange.test.ts) 9 · [mealPlaceMenu.test](../../apps/web/src/routes/meal/mealPlaceMenu.test.ts) 7 · 어드민
+  [NutrientRefSection.test](../../apps/web/src/routes/admin/NutrientRefSection.test.tsx) 1(목록·없음 고정·바꾸기·다시 묻기·AI 후보 '이걸로'가 보내는 값을 한 시나리오로) · 건강식단
+  [MealStory.test](../../apps/web/src/routes/meal-story/MealStory.test.tsx) 38 · [chapters.test](../../apps/web/src/routes/meal-story/motion/chapters.test.tsx) 25 ·
+  [timeline.test](../../apps/web/src/routes/meal-story/motion/timeline.test.ts) 14(건강식단 77건의 내용은 [meal-story](meal-story.md)).
+- **늘어난 기존 파일(+32)** — `MealPage` 27→39(통계 묶음 카드·열량 구성·막대 위 한 줄·영양소 카드·직전 기간 대비·기록 목록 '안 먹음'·영양 탭 빠진 날 정리·지난 조언·건강식단 링크;
+  탭 클릭 대신 **주소로 열기**로 옮김) · `MealEntryFormPage` 16→29(`a5b26ebe` 식당·메뉴 4·근처 식당 4·메뉴에 잇기 3, `6a663108` 구성·택1) · `MealDetailPage` 6→8 · `mealPhotoFile` 6→8
+  (EXIF 위치) · `PublicSidebar` 3→4 · `PublicTopBar` 3→4 · `AdminMenuBoardSection` 3→4.
+- **러너·setup** — [test/setup.ts](../../apps/web/src/test/setup.ts) 끝에 `window.scrollTo = () => undefined`(jsdom 미구현 경고 'Not implemented' 가 화면을 바꿀 때마다 스크롤을 맞추는
+  식단 테스트 출력을 덮었다). MSW `onUnhandledRequest: 'error'` 그대로 — 영양 탭 테스트는 달력·'안 먹음' 기본 핸들러를 깐다(`d772e4bb`). 픽스처 [exifJpeg.ts](../../apps/web/src/test/fixtures/exifJpeg.ts)
+  에 GPS IFD 쓰기.
+- **기법 메모** — (1) 식단 데스크톱 경로는 `window.matchMedia` 목으로 연다(`MealPanel.test`·`MealFoodSheet.test` — `useIsDesktopLg`·`useMediaQuery` 폴백이 `false` 라 아무것도 안 하면
+  좁은 화면 경로만 돈다; 28차 기법 메모 그대로). (2) 건강식단 재생기는 `ResizeObserver` 가 없으면 글로 보기라 jsdom 기본은 텍스트 경로이고, 영상 경로는 `setWindow('ResizeObserver'|
+  'matchMedia')` 와 가짜 재생기로 본다. (3) View Transitions(`document.startViewTransition`)는 jsdom 에 없어 `runMealViewTransition` 이 바로 이동하는 갈래만 돈다 — 전환 대기
+  (`COMMIT_WAIT_MS`) 자체는 테스트가 없다. (4) `504bd68c` 본문: 컴퓨터가 바쁠 때 재생기 테스트가 조각 첫 로드(1초 넘음)에 흔들려 그 파일의 기다림 한도를 늘렸다.
 
 ### 웹 테스트 인프라 현황 — 96파일 468건 [갱신 — 31차]
 
@@ -1991,7 +2180,21 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 [이전 컴파일 본 참고]. (어드민 라우트 등록만 `AdminRoutes.tsx` 로 이전 — 위 코드
 스플리팅 참조.)
 
-## Talks To [coverage: high — 82 sources]
+## Talks To [coverage: high — 90 sources]
+
+- **(32차) 식단 화면이 새로 부르는 friendly API(전부 shared 훅 경유 — 웹에 직접 fetch 없음)** — '안 먹음' `useMealSkips(from, to, enabled)`·`useSetMealSkip`·`useClearMealSkip`·
+  `useBatchMealSkips` → `GET|PUT|DELETE /api/v1/meals/skips`·`POST /meals/skips/batch`; 통계 `useMealStatsNutrition` → `GET /meals/stats/nutrition`(묶음별 몫)·`useMealStatsNutrients` →
+  `GET /meals/stats/nutrients`(이 기간 + 직전 같은 길이 기간으로 두 번, 홈은 이을 이야기가 있을 때만 직전 2주); 식당 메뉴 `useMealPlaceMenus(placeId)` → `GET /meals/place-menus?placeId=`
+  (`pending` 이면 짧게 다시 조회)·이벤트 안에선 `queryClient.fetchQuery(mealPlaceMenusQuery)` 로 같은 캐시; 근처 식당·식당 찾기는 기존 공개 목록 `useRestaurantsPublic`(bbox·`limit: 60`
+  / 이름 검색)을 재사용 — 근처 식당 전용 API 는 없다; 음식 찾기 시트 `useFrequentMealItems(slot, searching, term)` → `/meals/items/frequent?q=`·`useFoodSearch(term, { limit: 12 })` → `/food/search`·최근 끼니 `useMealEntries({ limit: 12 })`(서버가 내가 먹은 음식
+  먼저·1인분 열량 `servingKcal`·`myCount`); 건강식단 `useMealStories`·`useMealStory` → `/meal-stories`·`/meal-stories/:slug`(+ 이미지·레시피 음식 — [meal-story](meal-story.md)); 어드민
+  `/admin/food/nutrient-refs`(+`/link`·`/candidates`). 홈 대시보드는 새 API 없이 기존 6~7개를 병렬로. 계약은 [api-contract](api-contract.md), 훅은 [shared](shared.md), 서버는
+  [meal](meal.md)·[meal-nutrition](meal-nutrition.md)·[food](food.md).
+- **(32차) 브라우저 API** — `navigator.geolocation` + `navigator.permissions.query({ name: 'geolocation' })`(이미 허용된 경우에만 조용히), `document.startViewTransition`(좁은 화면 전환),
+  `window.visualViewport`(음식 찾기 시트 높이), `history.scrollRestoration`, drag·paste 이벤트, `requestIdleCallback`. 외부 CDN 은 jsDelivr 원티드 산스 분할판(`mealFont.ts`, 건강식단은
+  손글씨 제목 글꼴까지 미리 받기 — [meal-story](meal-story.md)).
+- **(32차) 공개 식당 상세 → 식단** — `PublicRestaurantDetail` 이 `~/routes/meal/MealHereButton` 을 정적 import 해 식당 상세 청크가 식단 draft 스토어(`useMealDraftStore`)·
+  `mealDraftStart` 를 함께 싣는다(components → routes 방향 의존 — Gotchas).
 
 - **(31차) 여행 코스 → friendly `POST /api/v1/tour/public/plan`** — shared `useTourPlan`(변경 없음)으로 부르고, 요청 본문에 15차 `startDow?`(출발일이 있을 때만), 응답에서 `places[].info`·`stops[].info`·`stops[].closedThatDay`·`infoNote` 를 새로 읽는다(타입 `TourPlanPlaceInfoType` 은 `@repo/api-contract`). 한국관광공사 관광정보(TourAPI)는 웹도 서버 요청 경로도 부르지 않는다 — friendly 스크립트 `sync:tour-kto` 가 받아 둔 표를 서버가 읽을 뿐([friendly](friendly.md)·[tour](tour.md)).
 
@@ -2214,7 +2417,7 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 도메인 의미 / 분배 알고리즘은 [settlement.md](settlement.md), 크롤/SSE/분석은
 [shared.md](shared.md), [crawl.md](crawl.md), [analytics.md](analytics.md) 참조.
 
-## API Surface [coverage: high — 76 sources]
+## API Surface [coverage: high — 82 sources]
 
 웹 앱은 HTTP 엔드포인트가 아닌 **브라우저 URL** + 재사용 컴포넌트 노출.
 
@@ -2236,6 +2439,14 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   (기본값은 생략) — 산·코스 이동만 push, 나머지 `replace`. 코스 상세 "가는 법·주변"이 `/bus?near=&stId=`·`/subway?near=&stn=`·`/parking?ll=&z=17&sel=`·`/r/:placeId` 로
   딥링크, GPX 받기는 API 경로 `/api/v1/hiking/courses/:id/gpx` 직링크(작업 트리)) [30차]
 - **`/travel/jeju`**(`?region=`·`ageGrp`·`gender`·`accompany`·`month`·`nights`) · **`/travel/plan`** — 여행로그(26차, 목록 누락 보정)
+- **`/meal`** 식단 하위 사이트 [32차 `cfeb0119`] — 구역: `/meal`(홈)·`/meal/records`·`/meal/calendar`·`/meal/stats`·`/meal/nutrition`(`?skips=open` — 빠진 날 정리를 펼친 채,
+  홈 '한 번에 정리'가 연다)·`/meal/recommend`·`/meal/settings`·`/meal/stories`(건강식단 목록); 화면/패널: `/meal/new`·`/meal/:id`·`/meal/:id/edit`·`/meal/stories/:slug`(`?s=N` 장면 ·
+  `?view=text|motion`)·`/meal/stories/:slug/recipe`. 데스크톱(1024px~)에서 앱 안 링크로 연 상세·입력은 같은 주소에 `location.state.mealBackground`(+`mealSiblings`)를 실어 **패널**로,
+  주소를 직접 열거나 새 탭이면 한 화면. 로그인 전에는 `/meal/stories…` 만 열리고 나머지는 `/login`. 식단 안 구역(기록 목록/달력·통계/영양)은 이제 **경로**라 28차의
+  `?tab=` 규칙은 끝났다. 공개 식당 상세의 [먹었어요]는 식당을 채운 draft 로 `/meal/new`.
+- **`/me/meals`**, `/me/meals/:id[/edit]`, `/me/meals/new` — 32차부터 `LegacyMealRedirect` 만(북마크·열려 있던 탭용, `replace`).
+- **`/login?next=<경로>`** [32차 `c6132034`] — 로그인·가입 성공 뒤 그 경로로(`safeNextPath` — `/` 로 시작하고 `//`·`/\` 로 시작하지 않는 것만, 아니면 `/`). 지금 붙이는 곳은
+  건강식단(이 레시피로 기록·내 평균 장면·목록의 '로그인하고 식단 기록하기')뿐.
 - **`/me/meals`** — 내 식단 조회 (`RequireUser`; 탭은 로컬 state, URL 없음) → 28차 `?tab=calendar|stats|recommend|nutrition|preference`
   (기록 `list` 는 키 없음, `replace`). 데스크톱 기록 탭의 최근 7일 요약이 `/me/meals?tab=stats` 링크로 통계 탭을 연다
 - **`/me/meals/new`** · **`/me/meals/:id`** · **`/me/meals/:id/edit`** — 식단 새 기록·상세·수정(`RequireUser`) [28차 `b5bfe77`]. 새 기록 저장 뒤
@@ -2381,7 +2592,21 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   `MapCanvas.flyToZoomIn` imperative, `PublicRestaurantCard.onZoom`(더블클릭 확대).
 - 그 외 모든 컴포넌트는 직전 라운드와 동일.
 
-## Data [coverage: high — 44 sources]
+## Data [coverage: high — 50 sources]
+
+- **(32차) 식단 하위 사이트의 상태 자리** — 서버 상태는 그대로 TanStack Query(shared 훅). 새로 생긴 자리:
+  - **`history.state`(react-router `location.state`)** — 데스크톱 패널의 `mealBackground: Location`·`mealSiblings: string[]`([mealPanel.ts](../../apps/web/src/routes/meal/mealPanel.ts)).
+    기록 상태라 새로고침해도 남고 뒤로 = 닫기. 배경이 없으면(주소 직접) 한 화면.
+  - **모듈 변수** — `MealApp` 의 `scrollMemory: Map<location.key, scrollY>`(세션 동안 지우지 않음), [mealPhotoHandoff.ts](../../apps/web/src/routes/meal/mealPhotoHandoff.ts) 의
+    `receiver`(지금 떠 있는 입력 화면 하나)·`pending: File[]`(입력 화면이 열리기 전 맡아 둔 사진), [mealPanel.ts](../../apps/web/src/routes/meal/mealPanel.ts) 의 `resolvePendingCommit`
+    (전환 대기). React 밖 값이라 effect·ref 로만 만진다.
+  - **`useMealDraftStore`(shared, 웹은 sessionStorage — 28차)** — 새 쓰임: `prepareMealEntry`(입력 화면 밖에서 끼니·날짜·음식을 정해 시작), `setPlace({ placeId, placeName })`
+    (식당 고르기·[먹었어요]), `toggleMenuItem`(그 집 메뉴), `toggleQuickItem`(음식 찾기 시트·빠른 추가 칩 같은 값). 새 기록 draft 는 닫아도 남고(이어 쓰기), 수정 draft 는
+    `isMealDraftChanged(store, 서버 기록)` 로 고친 내용을 판정. 식당 상세의 [먹었어요]처럼 셸 밖에서 쓰는 곳은 `useMealDraftReady()` 를 본다(복원 전에 쓴 값은 사라진다).
+  - **URL** — 구역은 경로(28차 `?tab=` 대체), 영양 탭 `?skips=open`, 건강식단 `?s=`·`?view=`, 로그인 `?next=`. 기록 찾기 조건·통계 기간·막대 기준·고른 영양소 줄·
+    '안 먹음' 체크 해제·근처 식당 상태는 로컬 state(공유 가치 없음).
+  - **문서** — `html:has(.meal-app)` 로 테마 토큰이 식단 틀이 떠 있는 동안만 바뀌고(라우트를 떠나면 원래대로 — PLAN 실화면: 사이트 홈에 식단 테마가 새지 않음),
+    `html[data-meal-nav]`(전환 방향), head 의 `#meal-font-wanted-sans` `<link>`(한 번 붙으면 떼지 않음).
 
 - 로컬 DB 없음. 상태 갈래:
   - **서버 상태** — TanStack Query 캐시.
@@ -2404,7 +2629,8 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
     직접 맞춤), **AdminRestaurantsPage** `q`(+ `page` 리셋). 공유 가치가 낮은 선택(차트 항목·
     전국 비교 항목·중기전망 범위·식단 탭·목록 탭)은 로컬 state. → [28차 `b5bfe77`] **식단 탭은 `?tab=`** 로 옮겼다 — 공유 가치가 아니라
     "상세(`/me/meals/:id`)에서 뒤로 오면 보던 탭"을 위해서다(탭 이동은 `replace`라 history 를 쌓지 않음). 기록 탭의 검색·기간·끼니 필터, 달력의
-    월·고른 날, 영양 기간은 여전히 로컬 state. [27차] **SeaPage**(`a`/`d`/`p`/`sel` — `d` 는 응답 `dates` 안의 값만
+    월·고른 날, 영양 기간은 여전히 로컬 state. → 32차(`cfeb0119`) 식단 탭은 **경로**(`/meal/records|calendar|stats|nutrition|recommend|settings`)로 — 옛 `?tab=` 은
+    `legacyMealPath` 가 경로로 바꿔 준다. [27차] **SeaPage**(`a`/`d`/`p`/`sel` — `d` 는 응답 `dates` 안의 값만
     유효, `p` 기본은 시계 파생), **ParkingPage**(`t`/`ll`/`z`/`sel` — 뷰포트는 사용자 이동만, 필터는 스토어), **AdminRestaurantDetailPage**
     `tab`(공개 상세처럼 **push** — 탭 이동이 history 에 쌓인다; 리뷰 탭 필터 6종·페이지 수는 로컬 state, 팁/메뉴 필터는 탭 간 이동을 위해
     페이지 state `reviewFilter` 로 끌어올림). [30차] **HikingPage**(`m`/`c`/`q`/`r`/`s` + 추천 `rec`/`rd`/`rt`/`rh`/`rl`/`rm`/`ro` — 뷰포트는 URL 에
@@ -2484,7 +2710,44 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   `onUnauthorized: clearSession`. 게스트 키는 shared `useGuestKeyStore` 가 `X-Guest-Key` 로 붙인다
   (한도 소비 기능 — [usage-quota](usage-quota.md)).
 
-## Key Decisions [coverage: high — 134 sources]
+## Key Decisions [coverage: high — 143 sources]
+
+- **2026-11-14 휴대폰 입력 확대는 "폭 또는 터치"로 막고 데스크톱 크기는 그대로(`ff25ab3d`)** — 식단은 공용 `Input` 대신 자체 클래스(`.meal-input` 15px·`.meal-input-sm` 13px·
+  `.meal-place-search input` 15px)라 30차 `global.css` 의 16px 규칙 밖이었다. 조건을 `@media (max-width: 47.99rem), (pointer: coarse)` 로 — 폭만 보면 가로로 눕힌 휴대폰(844px 안팎)에서
+  다시 확대된다. 커진 글자만큼 날짜·시각 칸 옆 여백을 줄여 360px 에서 [날짜][시각][지금] 한 줄 유지, 기록 기간 두 칸은 `min-width: 8.25rem`(132px 아래면 끝자리가 잘림) + 345px 이하
+  두 줄. 규칙 주석: "식단 화면에 글자 입력 칸을 새로 만들면 같은 조건으로 16px". 320~1180px 폭은 쟀고 확대가 실제로 사라졌는지는 iPhone 실기기 몫(미확인).
+- **2026-11-14 식당 기록은 "고르게 하고 정해 주지 않는다"(`a5b26ebe`·`6a663108`)** — 근처 식당은 후보 칩 5곳까지(한 건물에 식당이 여럿이고 위치는 틀릴 수 있다), 오차 400m 넘으면
+  후보를 내지 않음, 권한 창은 [근처 식당]을 누를 때만(이미 허용된 브라우저에서 "지금 먹은 새 기록"을 열 때만 조용히 찾아봄 — 지난 끼니를 적거나 고칠 땐 지금 위치가 먹은 곳이
+  아니다), 좌표는 조회에만 쓰고 저장하지 않는다. 메뉴는 기록 이름을 통계가 묶는 표준명으로 두고 메뉴명·가격은 항목에 따로(상세는 메뉴명을 앞세움), 코스 구성은 '조금', 택1 은
+  **미리 골라 두지 않는다**(틀린 기본값이 그대로 기록된다 — 묶음마다 고르거나 '안 먹었어요'를 눌러야 [넣기]). 사진 인식을 메뉴에 잇는 건 LLM 없이, 다시 인식은 하나도 안 맞을 때만
+  (그때만 인식 한도 소비). 도메인 결정은 [meal](meal.md).
+- **2026-11-11 영양소 하나의 변화는 두 기간의 기록량이 비슷할 때만 말한다(`504bd68c`)** — 실제 계정에서 하루 열량이 1,495 → 1,047kcal(30%)로 달랐던 두 기간에 나트륨·식이섬유가 55%·58%
+  '줄었어요'로 나왔다 — 식단이 아니라 덜 적은 것. `comparableNutrientChange`: 하루 평균 열량 차 15% 안쪽 + 어느 쪽도 '기록 더 필요' 아님. 열량 줄은 달라진 대로 말하고(그것이 기록량이
+  달라졌다는 사실), 통계는 "직전 1달은 기록한 양이 달라(하루 열량 1,780kcal → 1,168kcal) 열량 말고는 견주지 않았어요"로 알린다. 통계(`34b47c6f`)에 있던 규칙을 모듈로 떼어 홈 줄·
+  건강식단 이야기가 같은 문턱(10%)·문구.
+- **2026-11-10 건강식단은 별도 메뉴가 아니라 식단 안에서 맥락으로(`6fb948c3`, 전날 `c6132034` 번복)** — 사이트 NAV '건강식단'·식단 사이드 메뉴 '건강식단'·App 의 셸 밖
+  `/meal/stories/*` 라우트를 모두 걷었다. 들어오는 길은 홈 건강식단 줄(늘 있는 자리 — 전엔 게시 30일 안에만)·영양/통계 링크·기록 상세. 로그인 전에는 '식단' 메뉴 자체가 건강식단
+  목록으로 간다("식단의 공개 얼굴") — 24차 "`requiresAuth` 로 식단 숨김"이 끝났다. 로그인하면 이야기도 셸 안(사이드 메뉴가 남아 식단을 떠나지 않음), 나가기는 '← 뒤로' 하나(따로 있던
+  목록 링크·✕ 삭제). 초안은 받은 대로 '초안' 표시 — 처음엔 게시본에만 걸어 첫 편이 초안이고 메뉴도 없앤 뒤 관리자가 들어갈 길이 없었다(커밋 본문). [meal-story](meal-story.md).
+- **2026-11-09 여러 날 '안 먹음'은 설정이 아니라 체크 목록 한 번(`79f11f5c`)** — "아침은 늘 안 먹음" 같은 설정 대신, 영양 탭 '빠진 날 정리'에서 빈 끼니를 **모두 체크해 둔 채** 먹은
+  끼니·기억나지 않는 날만 풀어 한 번에 표시. 고르는 것이 곧 확인이라 확인창은 없고 [되돌리기]는 방금 표시한 칸만. 하루짜리는 [남은 끼니 모두 안 먹음], 홈은 그런 날이 둘 이상일 때만
+  '한 번에 정리' 한 줄(하루뿐이면 '안 먹음' 조회도 부르지 않는다).
+- **2026-11-08 '안 먹음'은 평균에서 빠지는 날에만 묻는다(`f3994f00` → `d772e4bb`)** — 한 끼만 적힌 날은 영양 평균에서 빠지고(나머지를 안 적었을 공산), 남은 끼니를 모두 '안 먹음'으로
+  채워야 평균에 든다(11-09 부터 하나만으론 안 든다 — utils `isCountedMealDay`). 그래서 묻는 곳을 그런 지난날로 좁혀 아침을 늘 거르는 사람에게 매일 묻지 않고, 하나를 표시해도 남은
+  끼니를 계속 묻는다. 홈은 어제만, 기록 목록은 날마다, 오늘은 묻지 않는다.
+- **2026-11-08 통계와 영양 탭의 역할을 가르고 판정 함수는 하나로(`bfae13c6`·`80534c7b`·`ab136cf1`)** — 사용자 "영양 탭이 영양제 조언용이면 통계에서 영양별 통계를 제대로" → 영양 탭 =
+  최근 14일 판정·조언, 통계 = 고른 기간의 양·흐름·출처(같은 기간이면 숫자·판정이 같다). 모양은 사용자 "영양에서 나왔던 디자인처럼" 에 따라 라벨 표를 걷고 영양 탭 줄을 공용
+  `MealNutrientLine` 으로 떼어 같이 쓴다(홈의 '영양정보' 라벨은 한 장 요약으로 남김). 분포 막대를 영양소마다 다른 색으로 칠하는 안(사용자 "영양소별로 막대 색")은 이름이 이미 있어
+  장식이고 치우침 표시를 덮으며 상태 색과 부딪혀 버리고, 대신 '열량 구성' 세 조각만 상태 색 밖의 파랑·자홍·보라(색각 검사 통과 순서). 열량 비율 줄은 기준 대비 막대와 **모양이 다른**
+  범위 막대로 — 두 비율을 한 축에 섞지 않는다. 막대 위 판정 한 줄은 처음 최근 14일이었다가 이 기간 값으로(한 화면 안에서 기간 한 가지).
+- **2026-11-08 데스크톱은 본문 위 겹침 패널, 휴대폰은 화면 + 전환(`cfeb0119`)** — 3열 나눔은 폭이 모자라 상세 640px 비모달(옆 목록을 눌러 교체·↑↓)·수정/새 기록 880px 모달(뒤 어둡게,
+  입력 두 단 그대로)을 오른쪽에 겹친다. 본문을 사이드 옆 왼쪽 정렬로 둬 넓은 화면에선 빈 오른쪽에 뜬다. 휴대폰은 오버레이를 쓰지 않는다 — iOS Safari 고정 오버레이 안 긴 폼은 키보드에
+  불안정. 주소는 같고 배경만 `history.state` 에 — 선언형 `BrowserRouter` 를 데이터 라우터로 바꾸지 않고(그러면 `mask`·`useBlocker`·`ScrollRestoration` 을 쓸 수 있었다) react-router modal 예제
+  방식을 택했고, 그 대가로 스크롤 복원·닫기 확인·전환 대기를 손으로 만들었다(`useMealScroll`·`isMealDraftChanged`·`notifyMealLocationCommitted`).
+- **2026-11-08 식단은 사이트 안의 '하위 사이트' — 시각 A '영양정보 라벨'·원티드 산스·`/meal`(`cfeb0119`)** — 사용자 결정(PLAN 결정 표): 다른 메뉴(공통 shadcn 중립)와 별개의 모습,
+  왼쪽 사이드 메뉴, 간단명료한 홈. 시안 0단계에서 A·B 홈과 휴대폰 음식 찾기를 실데이터로 비교, 글꼴 4종(지금·원티드·IBM 플렉스·SUIT) 중 원티드(시안 코드는 1단계로 옮긴 뒤 지움). 주소는
+  앱 expo-router 의 `/meal` 과 같은 뿌리, 이름은 '식단' 그대로. 테마는 토큰 재정의(레이어 밖 `html:has(.meal-app)`) + 부품 클래스(`@layer components`) — 공용 컴포넌트를 갈아엎지 않고
+  같은 shadcn 변수만 바꿔 식단 안에서만 다른 모습. 홈은 새 API 없이 기존 조회 조합, 오늘 칸은 영양소를 판정하지 않는다(하루 중간엔 늘 '부족').
 
 - **2026-10-24 코스의 쉬는 요일은 서버가 판단하고, 화면은 첫날 요일 번호만 보낸다(`a382e01c`, 여행로그 15차)** — 12차 `wetDays`(날짜 대신 비 오는 일차 번호)와 같은 원칙: 서버(`TourPlanService`)는 날짜도 관광정보 API 도 부르지 않고 받아 둔 표만 읽어 결정적이다. 화면이 `startDow`(0~6)를 계산해 보내고, 일차별 요일·쉬는 곳 제외·꼭 갈 곳 옮기기는 합성기가 한다. 그래서 웹에는 "쉬는 날 문구 → 요일" 해석기가 없다(`parseKtoClosedDays` 는 friendly 에만).
 - **2026-10-24 운영 정보는 접힌 한 줄 + `<details>`, 원문을 다듬지 않는다(`a382e01c`)** — 관광정보 문구는 길이·형식이 제각각("09:00~18:00 / 입장 마감 17:30")이라 장소 카드 높이를 지키려고 이용·쉬는 날만 한 줄로 접고 나머지는 펼쳐 보게 했다. 쉬는 날 경고는 이름 옆 배지가 아니라 별도 줄 — 좁은 화면에서 이름을 밀어내고, 설명을 말풍선에 숨기면 손가락으로 볼 수 없다(컴포넌트 주석).
@@ -2585,6 +2848,7 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   촬영·인식·첨부는 계속 앱(1단계). 라우트는 탭이 아니라 **별도 경로**(`/me/meals/new`·`/:id`·`/:id/edit`)로 — 상세는 링크로 열리고 공유·뒤로가기가
   자연스럽다. draft 는 앱과 같은 shared 스토어(변환 3종을 앱 화면에서 shared 로 올림, 앱 동작 무변경). 웹 수정은 `photoTokens` 를 보내지 않는다
   (보내면 서버가 사진 연결을 전량 교체 — 기존 사진은 읽기 전용).
+  → 2026-11-08(`cfeb0119`) 별도 경로 원칙은 유지하되 주소가 `/meal/new`·`/meal/:id`·`/meal/:id/edit` 로, 데스크톱은 같은 주소를 패널로 연다(위 32차 결정).
 - **2026-09-29 정산 참여 표시는 긍정형으로, 저장값은 그대로(`237acd5`·`f1422fd`·`d7f4ac1`)** — "안 함" 체크(체크 = 빠짐)를 토글 칩(켜짐 = 분담)으로
   뒤집되 `exclude*` 필드·서버·DB 는 두고 화면에서만 `!exclude`. 긍정 배지("술")는 "마셨다"고 말하므로 틀림이 더 눈에 띄어, 배지를 차수 특이사항·
   불참까지 반영하는 shared 판정으로 옮기고 웹 컴포넌트는 축을 받아 그리기만 한다(앱과 판정 공유). 분류 이름은 화면마다 사본을 두다 "미분류"/"기타"로
@@ -2959,6 +3223,7 @@ SettlementShareDialog 자동 POST 멱등)는 그대로 유지. 이번 라운드 
   웹은 즉시 업로드/조회만 — [platform-ui-split](../concepts/platform-ui-split.md) 의 meal
   인스턴스를 라우트 수준에서 그대로 따른다. 추천 노출 이벤트는 `platform: 'web'` 으로 구분.
   → **2026-09-29(`b5bfe77`) 번복** — 손으로 적는 기록·상세·수정·삭제는 웹에서도(위 28차 결정). 사진 촬영·인식·첨부만 여전히 앱 소유.
+  → 2026-10-23(`49cb17f0`) 사진 넣기·인식도 웹에서(30차) → 2026-11-08(`cfeb0119`) 웹 식단이 앱보다 먼저 하위 사이트로 재구성됐다(앱은 PLAN 다음 단계 — 이제 화면 구조는 웹이 앞선다).
 - **(2026-08-22, 24차) AI 용도는 `Record<enum>` 로 강제** — `AdminAiKeysPage` 의 `PURPOSE_META`
   가 `Record<LlmProviderPurposeType, …>` 이라 계약 enum 에 `meal-photo`/`meal-recommend` 가 늘자
   typecheck 가 페이지 갱신을 강제했다. `PURPOSE_ORDER` 도 전부 적는다 — 빠지면 그 용도의 모델을
@@ -3002,7 +3267,44 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 정산 Stepper 점프 게이팅 = "산출물 존재" 기준 (이번 라운드도 `participantsCount>0`/
 `rounds.every(source!=null)`/`itemsCount>0` 으로 유지).
 
-## Gotchas [coverage: high — 124 sources]
+## Gotchas [coverage: high — 133 sources]
+
+- **(32차) 기록 상세의 메뉴명 비교 정규식이 공백이 아니라 글자 's' 를 지운다** — [MealDetailPage.tsx](../../apps/web/src/routes/meal/MealDetailPage.tsx) `FoodRow` 의
+  `label.replace(/s+/g, '') !== item.name.replace(/s+/g, '')`(`a5b26ebe`)는 `\s` 의 역슬래시가 빠졌다. 의도는 "메뉴명과 기록 이름이 띄어쓰기만 다르면 아랫줄에 기록 이름을 또 쓰지
+  않기"인데, 지금은 띄어쓰기만 다른 경우("김치 찌개" 메뉴 / "김치찌개" 기록)에도 아랫줄에 기록 이름이 한 번 더 나온다(한글 이름엔 's' 가 거의 없어 다른 오작동은 없다 — 영향은
+  코드 추론). 리포 전체에서 이 한 곳뿐(`git grep "replace(/s+/"`).
+- **(32차) `mealPaths.ts` 의 `MEAL_STORY_PATH` 주석이 11-09 구조 그대로다** — "이야기 한 편과 레시피는 … 식단 셸 밖에서 띄운다(App 의 `/meal/stories/:slug/*` 가 `/meal/*` 보다 먼저
+  잡힌다)"라고 적혀 있지만 `6fb948c3`(11-10)이 그 App 라우트를 지웠고, 로그인하면 이야기·레시피도 `MealApp` 셸 안이다(로그인 전만 셸 밖 `MealStoryApp`). 주석을 믿고 App 에
+  라우트를 찾으면 없다.
+- **(32차) 식단의 로그인 리다이렉트는 돌아올 곳을 잃는다** — `MealEntry` 는 로그인 전 `/meal/records` 같은 주소를 `<Navigate to="/login" replace />` 로, 식당 상세의
+  `MealHereButton` 은 `navigate('/login')` 로 보낸다 — 둘 다 `?next=` 가 없어 로그인 뒤 사이트 홈(`/`)에 떨어지고, [먹었어요]로 고른 식당도 draft 에 담기지 않는다. `LoginPage` 는
+  이제 `?next=` 를 읽으므로(건강식단만 붙임) 붙이기만 하면 되는 자리다.
+- **(32차) Remotion 은 첫 로드 가드가 보지 않는다** — `firstLoadGuard` 는 엔트리 closure 의 `node_modules/three`(error)·`zod`(warn)만 검사한다. Remotion 이 첫 로드에 없는 건
+  `MealEntry`(정적) → lazy `MealApp`/`MealStoryApp` → `MealStoryPlayer` → lazy `MealStoryMotion` 사슬 덕이다. 이 사슬 밖(예: `mealStoryMine.ts` 같은 공용 모듈, 또는 정적 import 되는
+  `MealEntry`·`mealPaths`)에서 `remotion` 을 import 하면 경고 없이 식단 청크나 엔트리에 실린다. vendor 그룹에도 없어서 자동 분할 조각으로만 떨어진다(`281318cc` 본문: 143kB gzip).
+- **(32차) 구역 화면을 새로 만들면 두 목록에 넣어야 한다** — `MEAL_SECTION_PATHS`(하단 탭·상단바를 보일 곳)와 `SECTION_SEGMENTS`(`/meal/:seg` 를 기록 id 로 읽지 않을 곳). 하나만
+  넣으면 그 화면이 **기록 상세 패널로 열리거나**(`mealPanelKindOf` 가 detail 로 판정) 하단 탭이 사라진다 — `stories` 가 실제로 두 곳 모두에 들어간 예(`6fb948c3`). `MealApp` 의
+  `<Route path=":id">` 는 구역 경로 뒤에 있어 라우팅은 맞지만 패널 판정은 이 목록이 한다.
+- **(32차) 식단의 화면 폭 경계가 여섯 개다** — 셸 `md:`(768px — 사이드 아이콘 줄)·`xl:`(1280px — 사이드 글자), 패널 `useIsDesktopLg`(1024px), 음식 찾기 시트 `max-width: 47.99rem`,
+  기록 찾기 조건 접기 `max-width: 63.99rem`, 상세·입력 안쪽 두 단은 컨테이너 48rem, 입력 16px 은 `47.99rem` 또는 `pointer: coarse`. 그래서 768~1023px 태블릿은 사이드 메뉴가 있는데 상세는
+  패널이 아니라 화면 전환이고 기록 조건은 접혀 있다. jsdom 은 `useIsDesktopLg`·`useMediaQuery` 폴백이 `false` 라 테스트 기본은 좁은 화면이다.
+- **(32차) 끌어다 놓은 사진은 모듈 변수에 맡겨진다** — `mealPhotoHandoff` 의 `pending` 은 입력 화면이 `receiveMealPhotos` 로 받을 때까지 남는다. 새 기록을 열었는데 화면이 뜨기 전에
+  다른 곳으로 가면(조각 로드 실패·빠른 이동) 맡아 둔 사진이 **다음에 열리는 입력 화면(수정 포함)** 에 들어간다(코드 추론). draft 복원 전(새로고침 직후)의 drop·붙여넣기는 안내 없이
+  버려진다(`MealPhotoDrop` 의 `draftReady` 검사).
+- **(32차) `MealHereButton` 은 `routes/meal` 에 있고 `components/restaurant/detail/PublicRestaurantDetail` 이 import 한다** — components → routes 방향 의존이라 식당 상세 청크가 식단 draft
+  스토어·`mealDraftStart` 를 함께 싣는다. `PublicRestaurantDetail` 을 쓰는 어드민 발견 페이지(`AdminDiscoverPage`)에도 [먹었어요]가 보이고 누르면 어드민을 떠나 `/meal/new` 로 간다
+  (코드 추론 — 실화면 미확인).
+- **(32차) 패널 경로는 진짜 위치와 배경 위치 두 벌로 그려진다** — `MealApp` 은 셸을 `background ?? location` 으로, 패널을 진짜 위치로 그린다. 그래서 패널 안에서 `useLocation()` 은
+  패널 주소, 뒤 화면 안에서는 배경 주소다(`useMealLink` 주석). 패널 안 컴포넌트가 뒤 화면의 쿼리(`?skips=` 등)를 읽으려 하면 안 보인다. 배경 위치는 `history.state` 라 다른 탭에
+  주소만 복사하면 한 화면으로 열린다(의도).
+- **(32차) 스크롤 기억은 손으로 한다** — BrowserRouter 라 `ScrollRestoration` 이 없어 `MealApp` 이 `history.scrollRestoration = 'manual'` 로 바꾸고(언마운트 때 되돌림) 위치 키별
+  `scrollMemory` 에 적는다. 보던 자리는 **스크롤할 때와 누르기 직전(capture)** 에 적는다 — 화면이 바뀐 뒤에 읽으면 짧아진 화면에 잘린 값이다. 맵은 세션 동안 지우지 않는다. 식단 밖
+  화면은 이 규칙을 받지 않는다.
+- **(32차) 상단바 NAV 의 `match: ['/meal']` 과 `requiresAuth` 필터는 지금 아무 일도 안 한다** — `/meal/*` 은 `PublicLayout` 밖이라 `PublicTopBar` 가 그려지지 않고(서랍 `PublicSidebar` 만
+  식단 셸 안에서 열린다), `requiresAuth` 를 단 NAV 항목이 두 파일 모두 하나도 없다. 지워도 되지만 남아 있다.
+- **(32차) 식단 테마는 `html` 에 걸린다** — `html:has(.meal-app)` 라 식단 셸이 떠 있는 동안 body 로 빼서 그리는 공용 창(사이드 서랍·Lightbox·Radix 대화상자)도 식단 색·모서리
+  (`--radius: 0.25rem`)를 받는다(의도). 공용 `Card` 의 그림자는 `.meal-app [data-slot='card']` 로 끄므로 `card.tsx` 의 `data-slot` 을 지우면 식단 카드에 그림자가 돌아온다. 테마 CSS 는
+  lazy 청크에 실려 식단을 떠나도 남지만 `:has(.meal-app)`·`.meal-*` 로만 걸려 다른 화면엔 새지 않는다(PLAN 실화면 확인).
 
 - **(31차) 출발일을 안 넣으면 "쉬는 날 매주 월요일" 이라고 보이는 곳이 월요일 일정에 그대로 들어갈 수 있다** — 쉬는 요일 제외는 `startDow` 가 있을 때만 서버가 한다. 출발일 없이 짠 코스도 운영 정보 한 줄은 보이므로, 사용자가 실제 요일에 맞춰 보려면 출발일을 넣어야 한다 — 화면은 이 점을 따로 안내하지 않는다(안내 문구는 출발일을 넣었을 때만 나온다).
 - **(31차) "매주 그 요일에 쉬는 곳은 그날 일정에서 뺐습니다" 는 실제로 뺀 곳이 없어도 나온다** — 조건은 `asked.startDow !== undefined && r.infoNote` 뿐이고 응답에 "요일 때문에 뺀 수" 필드가 없다(계약 `TourPlanResult` 에 `excludedClosed` 는 폐업 수). 문구가 "뺐습니다" 로 끝나 늘 뭔가 뺀 것처럼 읽힌다.
@@ -3037,6 +3339,10 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - **(2026-10-23, 30차) 폰 16px 규칙은 클래스 이름에 묶여 있다** — unlayered 규칙은 `:is(input, textarea, select):is(.text-xs, .text-sm)` 뿐이라, 입력칸에
   `text-[13px]` 같은 **임의 값 유틸리티**를 직접 달면 base 규칙을 이기고 이 규칙엔 안 걸려 iOS 확대가 다시 난다(크기 클래스 없이 부모 글씨를 물려받는 입력칸은
   base 규칙이 맡아 괜찮다). 30차 시점 입력칸에 임의 값 크기를 단 곳은 찾지 못했다(대략 grep) — 새 입력칸은 `text-xs`/`text-sm` 로.
+  → **32차 실제로 샜다(`ff25ab3d`)** — 식단 리뉴얼(`cfeb0119`)이 유틸리티가 아닌 **자체 CSS 클래스**(`.meal-input` 15px·`.meal-input-sm` 13px·`.meal-place-search input` 15px)로
+  글자 크기를 정해 이 규칙의 선택자에 안 걸렸다(입력 화면 식당 찾기·날짜·시각·메모·메뉴 찾기, 기록 검색·기간, 추천 '한 마디'). 고친 규칙은 `mealTheme.css` 안 —
+  `@media (max-width: 47.99rem), (pointer: coarse)` 에서 16px. 규칙이 두 곳(`global.css` 클래스 이름 / `mealTheme.css` 식단 클래스)에 갈라져 있어, 자체 클래스로 크기를 정하는
+  화면을 또 만들면 같은 일이 난다.
 
 - **(2026-10-05, 29차) 배포는 서버·웹·앱을 함께** — PLAN-perf-2 배포 체크리스트 1번: 정산 임시저장 **목록** 응답이 메타만(`SettlementDraftMetaType` —
   웹 `SettlementHistoryPage` 가 `622bfca2` 에서 타입을 바꿨다)으로 바뀌어 구 앱은 목록 payload 로 복원하던 경로가 깨지고, 공개 질문은 게스트 키
@@ -3089,6 +3395,7 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
   기존 사진을 못 싣고 열리면(초기화 전 저장 등) 저장이 사진을 **지운다**. 테스트는 "수정 사진 교체" 를 단언한다.
 - **(2026-09-29, 28차) 목록 카드 = 링크라 안에 링크를 두지 않는다** — `MealEntryRow` 전체가 `<Link to=/me/meals/:id>` 라 예전 카드 안의 식당 링크
   (`/restaurants-v2/:placeId`)는 상세 화면으로 옮겼다. 카드에 버튼·링크를 다시 넣으려면 카드 구조부터 바꿔야 한다(`<a>` 중첩은 HTML 무효·클릭 대상 모호).
+  → 32차 기록 줄은 `MealLink`(`/meal/:id`, 데스크톱은 패널 state)로 바뀌었고 같은 제약이 그대로다 — '안 먹음' 단추(`MealDaySkips`)는 줄 안이 아니라 날짜 묶음 아래에 따로 둔다.
 - **(2026-10-04, 28차) 두 단은 DOM 순서를 바꾼다** — `MEAL_SPLIT_CLASS` 는 자식이 본문·패널 둘뿐이라, 좁은 화면에선 패널 내용이 본문 **뒤**에 쌓인다.
   그 탓에 상세의 식당 카드는 음식·사진 뒤로, 입력의 사진 카드는 먹은 음식 바로 뒤로 자리가 바뀌었다(작업 기록 — 의도된 대가). 패널 sticky 오프셋
   `lg:top-[4.5rem]`·높이 `calc(100dvh-5.5rem)` 은 상단바 56px 를 하드코딩한 값이고(`usePublicLayout().headerHeight` 를 쓰지 않음), 입력 화면만
@@ -3354,7 +3661,7 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
   돌려주므로 호출자는 반드시 브라우저 대안(`navigator.share` → 클립보드)을 뒤에 둔다 — 순서를 바꾸면
   WebView 안에서 `navigator.share` 가 없어 조용히 실패한다.
 - **(2026-09-06, 25차) `/me/saju-g*` 라우트는 App 에서 `RequireUser` 로 감싸지 않았다** — `/me/tarot*`·
-  `/me/saju-c*`·`/me/meals` 는 가드가 있는데 사주(G) 의 `/me/saju-g`·`/me/saju-g/:id`·`/me/saju-g/profiles`
+  `/me/saju-c*`·`/me/meals`(→ 32차엔 `/meal/*` 의 `MealEntry` 가 직접 판정) 는 가드가 있는데 사주(G) 의 `/me/saju-g`·`/me/saju-g/:id`·`/me/saju-g/profiles`
   는 `PublicLayout` 바로 아래다(다른 세션 구현). 페이지 안에서 로그인을 요구하는지는 이 라운드에 확인하지
   않았다 — [saju-g](saju-g.md). `/me/*` = 로그인 전제라는 가정으로 링크를 만들지 말 것.
 - **(2026-09-06, 25차) `AccountMenu` 의 "내 타로 기록"은 `md+` 상단바에만** — 드로어 하단 계정 블록
@@ -3433,6 +3740,9 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - **(2026-08-22, 24차) NAV `requiresAuth` 는 게스트도 숨긴다** — 필터가 `!!user` 라 게스트
   (`isGuest`, `user: null`)에겐 "식단" 메뉴가 없다(`/me/meals` 는 `RequireUser` 라 직접 진입도
   로그인으로). 게스트 전용 화면이 필요하면 별도 플래그.
+  → 32차(`6fb948c3`) 그 "별도 플래그"가 `guestTo` 다 — 식단은 `requiresAuth` 를 떼고 로그인 전엔 `/meal/stories` 로 간다. 판정 기준이 둘이라는 점은 남는다: NAV 는
+  `useAuthStore.user`(캐시된 사용자), `MealEntry` 는 `token` 으로 가른다. 토큰은 있는데 `user` 가 아직 비었으면 NAV 는 `/meal/stories` 를 가리키고 들어가면 셸 안 목록이 열린다(해는 없음,
+  코드 추론).
 - **(2026-08-21, 24차) 칩의 대기 세그먼트 없음 ≠ 오류** — 측정소가 없거나(`items: []`) 등급이
   없으면(`measure: null`) 세그먼트가 빠진다. "칩에 공기질이 안 보인다"는 우선 `title` 툴팁
   ("대기 자료 없음 — 가장 가까운 측정소 …")을 보라. 날씨 세그먼트는 실황이 없으면 수치만
@@ -3467,6 +3777,8 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - **(2026-08-17, 24차) 배치 머지 정렬은 서버 비교자 그대로** — 머지 뒤 `.sort(compareReviewRecencyDesc)`
   를 빼면 배치 경계에서 최신 리뷰가 아래로 간다. 어댑터 "수집 순 = 최신순" 가정은 더 이상
   유효하지 않다(`0d72380` 이 고친 누락의 원인 — [crawl](crawl.md)).
+  → 32차(`63438a7c`) [crawlBatchMerge.ts](../../apps/web/src/components/restaurant/crawlBatchMerge.ts) 의 새 행 정렬은 `sortReviewsByRecencyDesc(fresh)`(새 배열 `sortedFresh`)로 바뀌었지만
+  자리 찾기(이분 탐색)는 여전히 `compareReviewRecencyDesc` — 두 함수가 같은 순서를 내야 머지가 맞다(utils 의 짝, [utils](utils.md)).
 - **(2026-08-23, 24차) 401 콜백은 `requestToken` 을 받는다** — `configureApi.onUnauthorized` 시그니처가
   `(requestToken) => void`. 인자를 무시하고 무조건 `clearSession` 하면 계정 전환 직후 이전
   계정의 늦은 401 이 새 세션을 지운다(수정 전 동작). 반드시 `handleUnauthorizedForCurrentSession`
@@ -3483,7 +3795,52 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
   groupIndex<0 분기, 영수증 미리보기 = JWT 필요 → `<img src>` 직접 X, 그 외
   이전 라운드 다수.
 
-## Sources [coverage: high — 461 sources]
+## Sources [coverage: high — 513 sources]
+
+### 32차 신규 — 2026-11-06~11-14 (`apps/web` 34커밋, 웹 테스트 96파일 468 → 106파일 628건; 이미 아래에 있는 파일(App·NAV·식단 기존 화면·어드민)도 32차 변경을 여기 모아 적는다)
+- [docs/PLAN-meal-web-redesign.md](../../docs/PLAN-meal-web-redesign.md) — *NEW: 웹 식단 리뉴얼 — 사용자 결정 표(2026-11-08)·구조·0~4단계 + 통계 '추가' 두 항목(묶음별 영양·통계 영양정보)·단계별 검증(테스트 수·빌드 크기·Aside 실화면)*
+- [docs/PLAN-meal-story.md](../../docs/PLAN-meal-story.md) — *건강식단 결정(Remotion 개인 사용 무료 라이선스·식단 안으로 9번) — 웹 연결 근거, 세부는 [meal-story](meal-story.md)*
+- [apps/web/src/App.tsx](../../apps/web/src/App.tsx) — *32차 `cfeb0119`: `/me/meals` 4라우트·식단 lazy 4개 삭제, `LegacyMealRedirect`, `/meal/*`; `c6132034` 셸 밖 `/meal/stories/*`(lazy `MealStoryApp`) → `6fb948c3` 삭제하고 정적 `MealEntry` 하나*
+- [apps/web/src/components/PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx) · [PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx) (+[test](../../apps/web/src/components/PublicSidebar.test.tsx) 4 · [test](../../apps/web/src/components/PublicTopBar.test.tsx) 4) — *32차: '식단' `/meal` → (`c6132034` '건강식단' 16번째·`not`) → `6fb948c3` `guestTo: '/meal/stories'`·`match: ['/meal']`·`requiresAuth` 뗌, `under()` 활성 판정*
+- [apps/web/src/routes/LoginPage.tsx](../../apps/web/src/routes/LoginPage.tsx) — *32차 `c6132034`: `?next=` + `safeNextPath`(사이트 안 경로만)*
+- [apps/web/package.json](../../apps/web/package.json) — *32차 `281318cc`: `remotion`·`@remotion/player`·`@remotion/transitions` 4.0.541 고정*
+- [apps/web/vite.config.ts](../../apps/web/vite.config.ts) — *32차 변경 없음 — Remotion 이 vendor 그룹·`firstLoadGuard` 밖이라는 근거*
+- [apps/web/src/routes/meal/MealEntry.tsx](../../apps/web/src/routes/meal/MealEntry.tsx) — *NEW(`6fb948c3`): `/meal/*` 들머리 — `token` → lazy `MealApp`, 아니면 `/meal/stories…` 만 lazy `MealStoryApp`, 그 밖 `/login`*
+- [apps/web/src/routes/meal/MealApp.tsx](../../apps/web/src/routes/meal/MealApp.tsx) (+[test](../../apps/web/src/routes/meal/MealApp.test.tsx) 22) — *NEW(`cfeb0119`): 셸 라우트 13 + 배경 위치 패널 `<Routes>`·`inert`·`useMealScroll`·`usePrefetchEntryScreens`·`MealPhotoDrop`; `6fb948c3` stories 3경로*
+- [apps/web/src/routes/meal/MealShell.tsx](../../apps/web/src/routes/meal/MealShell.tsx) — *NEW(`cfeb0119`): 사이드 메뉴·아이콘 줄·휴대폰 상단바·하단 탭·서랍, 본문 왼쪽 정렬; `c6132034` 글꼴 훅 분리·'건강식단' 항목 → `6fb948c3` 삭제·홈 `also`*
+- [apps/web/src/routes/meal/mealPaths.ts](../../apps/web/src/routes/meal/mealPaths.ts) — *NEW(`cfeb0119`): `MEAL_PATH`·`MEAL_SECTION_PATHS`·`mealPanelKindOf`·`mealEntryIdOf`·`legacyMealPath`; `c6132034` `MEAL_STORY_PATH`(주석은 11-09 구조 그대로 — Gotchas)*
+- [apps/web/src/routes/meal/mealPanel.ts](../../apps/web/src/routes/meal/mealPanel.ts) (+[MealPanel.test](../../apps/web/src/routes/meal/MealPanel.test.tsx) 5) — *NEW(`cfeb0119`): `history.state.mealBackground`·`useMealLink`·`runMealViewTransition`·`useMealLeave`·`useMealOpen`*
+- [apps/web/src/routes/meal/MealSurface.tsx](../../apps/web/src/routes/meal/MealSurface.tsx) · [MealLink.tsx](../../apps/web/src/routes/meal/MealLink.tsx) · [MealPageHeader.tsx](../../apps/web/src/routes/meal/MealPageHeader.tsx) — *NEW(`cfeb0119`): 패널/화면 틀(Esc·↑↓·포커스·`@container`), 패널 링크(`data-meal-entry`), 구역 머리 + 휴대폰 묶음 전환*
+- [apps/web/src/routes/meal/MealHomePage.tsx](../../apps/web/src/routes/meal/MealHomePage.tsx) — *NEW(`cfeb0119`): 홈 대시보드; `3750d1ef` 시작 안내; `f3994f00`·`79f11f5c` 어제 묻기·한 번에 정리; `c6132034`→`6fb948c3`→`504bd68c`→`c2164a40` 건강식단 줄*
+- [apps/web/src/routes/meal/mealDraftStart.ts](../../apps/web/src/routes/meal/mealDraftStart.ts) — *NEW(`cfeb0119`): `prepareMealEntry`·`isMealDraftChanged`; `f3994f00` `date`(어제 그 끼니)*
+- [apps/web/src/routes/meal/MealFoodSheet.tsx](../../apps/web/src/routes/meal/MealFoodSheet.tsx) (+[test](../../apps/web/src/routes/meal/MealFoodSheet.test.tsx) 5) — *NEW(`cfeb0119`): 휴대폰 음식 찾기 시트; `a5b26ebe` 그 집 메뉴 묶음; `6a663108` 택1 칸*
+- [apps/web/src/routes/meal/MealPhotoDrop.tsx](../../apps/web/src/routes/meal/MealPhotoDrop.tsx) (+[test](../../apps/web/src/routes/meal/MealPhotoDrop.test.tsx) 2) · [mealPhotoHandoff.ts](../../apps/web/src/routes/meal/mealPhotoHandoff.ts) — *NEW(`3750d1ef`): 식단 어디서든 사진 끌어다 놓기·붙여넣기 → 새 기록/떠 있는 입력 화면*
+- [apps/web/src/routes/meal/mealTheme.css](../../apps/web/src/routes/meal/mealTheme.css) · [mealFont.ts](../../apps/web/src/routes/meal/mealFont.ts) — *NEW(`cfeb0119`·`c6132034`): A '영양정보 라벨' 토큰(`html:has(.meal-app)`)·부품 레이어·View Transitions·`[data-slot=card]`, 원티드 산스 `<link>`; `ff25ab3d` 휴대폰·터치 16px*
+- [apps/web/src/components/ui/card.tsx](../../apps/web/src/components/ui/card.tsx) — *32차 `cfeb0119`: `Card`·`CardTitle` 에 `data-slot`(식단 테마가 그림자·제목 굵기를 바꾸는 손잡이)*
+- [apps/web/src/routes/meal/MealSkip.tsx](../../apps/web/src/routes/meal/MealSkip.tsx) — *NEW(`f3994f00`→`d772e4bb`→`79f11f5c`): '안 먹음' — `MealSkipNudge`·`MealMissedDaysLink`·`MealSkipReview`·`MealDaySkips`·`useOneMealDays`*
+- [apps/web/src/routes/meal/MealStatsNutrients.tsx](../../apps/web/src/routes/meal/MealStatsNutrients.tsx) · [MealNutrientLine.tsx](../../apps/web/src/routes/meal/MealNutrientLine.tsx) · [mealNutrientTone.ts](../../apps/web/src/routes/meal/mealNutrientTone.ts) — *NEW(`ab136cf1`·`bfae13c6`): 통계 영양소 카드·공용 영양소 줄·판정 말투; `34b47c6f`·`504bd68c` 직전 기간 대비*
+- [apps/web/src/routes/meal/MealGroupBars.tsx](../../apps/web/src/routes/meal/MealGroupBars.tsx) · [MealBarSummary.tsx](../../apps/web/src/routes/meal/MealBarSummary.tsx) · [mealBarMetrics.ts](../../apps/web/src/routes/meal/mealBarMetrics.ts) — *NEW(`ab136cf1`·`80534c7b`): 분포 막대 기준·묶음 영양 카드·열량 구성·막대 위 판정 한 줄*
+- [apps/web/src/routes/meal/mealNutrientChange.ts](../../apps/web/src/routes/meal/mealNutrientChange.ts) (+[test](../../apps/web/src/routes/meal/mealNutrientChange.test.ts) 9) — *NEW(`504bd68c`): 10% 문턱·기록량 15% 비교·문구 — 통계·홈·건강식단 공용*
+- [apps/web/src/routes/meal/MealPlaceSection.tsx](../../apps/web/src/routes/meal/MealPlaceSection.tsx) · [useMealNearbyPlaces.ts](../../apps/web/src/routes/meal/useMealNearbyPlaces.ts) · [mealPlaceLink.ts](../../apps/web/src/routes/meal/mealPlaceLink.ts) — *NEW(`a5b26ebe`): 어디서 먹었나요·근처 식당 후보(사진 GPS/기기 측위)·인식 결과를 메뉴에 잇기*
+- [apps/web/src/routes/meal/MealPlaceMenus.tsx](../../apps/web/src/routes/meal/MealPlaceMenus.tsx) · [MealPlaceMenuChooser.tsx](../../apps/web/src/routes/meal/MealPlaceMenuChooser.tsx) · [mealPlaceMenu.ts](../../apps/web/src/routes/meal/mealPlaceMenu.ts) (+[test](../../apps/web/src/routes/meal/mealPlaceMenu.test.ts) 7) — *NEW(`a5b26ebe`·`6a663108`): 그 집 메뉴·구성·열량 범위·택1 고르기·바꾸기 후보*
+- [apps/web/src/routes/meal/MealHereButton.tsx](../../apps/web/src/routes/meal/MealHereButton.tsx) · [components/restaurant/detail/PublicRestaurantDetail.tsx](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx) — *NEW/수정(`a5b26ebe`): 식당 상세 [먹었어요] → 식당 채운 새 기록*
+- [apps/web/src/routes/meal/MealStoryLink.tsx](../../apps/web/src/routes/meal/MealStoryLink.tsx) · [mealStoryMatch.ts](../../apps/web/src/routes/meal/mealStoryMatch.ts) — *NEW(`6fb948c3`·`2d701405`): 판정 → 건강식단 이야기 잇기, 영양/통계/기록 상세 링크*
+- [apps/web/src/routes/meal/MealPage.tsx](../../apps/web/src/routes/meal/MealPage.tsx) (+[test](../../apps/web/src/routes/meal/MealPage.test.tsx) 27→39) — *32차: `MealRecordsPage`·`MealCalendarPage`·`MealStatsPage` 명명 export, 기록 날짜 먹줄·'조건 N'·'안 먹음', 달력 칸 이름, 통계 차례·4조회; `ff25ab3d` `.meal-filter-range`*
+- [apps/web/src/routes/meal/MealEntryFormPage.tsx](../../apps/web/src/routes/meal/MealEntryFormPage.tsx) (+[test](../../apps/web/src/routes/meal/MealEntryFormPage.test.tsx) 16→29) · [MealItemInputRow.tsx](../../apps/web/src/routes/meal/MealItemInputRow.tsx) — *32차: `MealSurface`·닫기 확인·이어 쓰기 안내·시트·`receiveMealPhotos`; `a5b26ebe` 식당·메뉴·근처; `6a663108` '이걸로 바꾸기'*
+- [apps/web/src/routes/meal/MealDetailPage.tsx](../../apps/web/src/routes/meal/MealDetailPage.tsx) (+[test](../../apps/web/src/routes/meal/MealDetailPage.test.tsx) 6→8) — *32차: 이 끼니 영양정보 라벨·↑↓; `a5b26ebe` 메뉴명 앞세우기(정규식 `/s+/` 오타 — Gotchas); `2d701405` `RecipeStoryLink`*
+- [apps/web/src/routes/meal/MealNutritionTab.tsx](../../apps/web/src/routes/meal/MealNutritionTab.tsx) · [MealRecommendTab.tsx](../../apps/web/src/routes/meal/MealRecommendTab.tsx) · [mealLayout.ts](../../apps/web/src/routes/meal/mealLayout.ts) — *32차: 영양 탭 출처·지난 조언·설정 링크·빠진 날 정리·건강식단 링크 / 추천 곁들임(`7fa6e64d`)·반응 한 줄·'파는 곳 보기' 넘침(`009ce276`) / 상수 3개(`MEAL_PAGE_CLASS` 삭제, sticky `top-8`)*
+- [apps/web/src/routes/meal/useMealPhotoIntake.ts](../../apps/web/src/routes/meal/useMealPhotoIntake.ts) · [mealPhotoFile.ts](../../apps/web/src/routes/meal/mealPhotoFile.ts) (+[test](../../apps/web/src/routes/meal/mealPhotoFile.test.ts) 6→8) · [test/fixtures/exifJpeg.ts](../../apps/web/src/test/fixtures/exifJpeg.ts) — *32차 `a5b26ebe`: EXIF GPS(`parseExifLocation`·`readPhotoLocation`)·`photoLocation`·인식 뒤 메뉴 잇기*
+- [apps/web/src/test/setup.ts](../../apps/web/src/test/setup.ts) — *32차 `cfeb0119`: `window.scrollTo` no-op*
+- [apps/web/src/routes/meal-story/MealStoryApp.tsx](../../apps/web/src/routes/meal-story/MealStoryApp.tsx) · [MealStoriesPage.tsx](../../apps/web/src/routes/meal-story/MealStoriesPage.tsx) · [MealStoryPlayer.tsx](../../apps/web/src/routes/meal-story/MealStoryPlayer.tsx) · [MealStoryMotion.tsx](../../apps/web/src/routes/meal-story/MealStoryMotion.tsx) — *NEW(11-09~11-13): 로그인 전 공개 앱·셸 안 목록·재생기(영상 조각 lazy)·Remotion 재생기 — 웹 연결 관점만, 세부 [meal-story](meal-story.md)*
+- [apps/web/src/routes/meal-story/MealStory.test.tsx](../../apps/web/src/routes/meal-story/MealStory.test.tsx) 38 · [motion/chapters.test.tsx](../../apps/web/src/routes/meal-story/motion/chapters.test.tsx) 25 · [motion/timeline.test.ts](../../apps/web/src/routes/meal-story/motion/timeline.test.ts) 14 — *NEW: 건강식단 테스트 77건(셸·로그인 가름·나가기 포함)*
+- [apps/web/src/routes/admin/NutrientRefSection.tsx](../../apps/web/src/routes/admin/NutrientRefSection.tsx) (+[test](../../apps/web/src/routes/admin/NutrientRefSection.test.tsx) 1) · [AdminFoodPage.tsx](../../apps/web/src/routes/admin/AdminFoodPage.tsx) — *NEW(`1ba0381a`): '영양 기준 음식' 목록·바꾸기·없음으로·다시 묻기·해제; `40eb16a4` AI 후보 '이걸로'*
+- [apps/web/src/routes/admin/AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) — *32차 `54e4c4f3`: `meal-recommend` `thinking: true`(세 번째)·단계 라벨 실측 대기 시간*
+- [apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.tsx) (+[test](../../apps/web/src/components/admin/restaurant-detail/AdminMenuBoardSection.test.tsx) 4) — *32차 `23c24858`: '읽기 실패 N회'(`failure.count`·`lastError`)*
+- [apps/web/src/components/admin/restaurant-detail/AdminReviewsTab.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminReviewsTab.tsx) · [components/restaurant/crawlBatchMerge.ts](../../apps/web/src/components/restaurant/crawlBatchMerge.ts) — *32차 `63438a7c`: `sortReviewsByRecencyDesc`(자리 찾기는 비교 함수 그대로)*
+- [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — *외부(계약): `Meal.skips`·`skipsBatch`·`statsNutrition`·`statsNutrients`·`placeMenus`, `MealStory.*`, 어드민 `nutrient-refs` — 웹이 부르는 경로*
+- [packages/shared/src/hooks/useMeal.ts](../../packages/shared/src/hooks/useMeal.ts) · [packages/shared/src/api/meal.api.ts](../../packages/shared/src/api/meal.api.ts) — *외부(shared): '안 먹음'·통계·`useMealPlaceMenus`(`pending` 재조회)·`mealPlaceMenusQuery` 훅/API*
+- [packages/utils/src/mealSlot.ts](../../packages/utils/src/mealSlot.ts) — *외부(utils): `isCountedMealDay` — '안 먹음' 화면이 묻는 날의 기준*
+- [deploy.sh](../../deploy.sh) — *외부: `pnpm install --frozen-lockfile` 이 Remotion 의존성을 받는다(운영 반영 근거)*
 
 ### 31차 신규 — 2026-10-24~10-29 (`a382e01c` 웹 4파일 +143/−10, 웹 테스트 467 → 468건; `tourFormat.ts`·`TravelPlanPage.tsx` 는 아래 기존 줄에도 31차 표시)
 - [apps/web/src/components/tour/TourItinerary.tsx](../../apps/web/src/components/tour/TourItinerary.tsx) — 코스 일정표(10~14차) + 31차 `TourPlaceInfo`(접힌 운영 정보)·`closedThatDay` 경고 줄

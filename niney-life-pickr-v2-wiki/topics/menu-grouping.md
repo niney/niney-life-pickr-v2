@@ -1,12 +1,14 @@
 ---
 topic: menu-grouping
-last_compiled: 2026-10-10
-sources_count: 39
+last_compiled: 2026-11-15
+sources_count: 40
 status: active
-aliases: [groupingInFlight, 그룹핑 진행 중 합류, placeIds 상한, 형제 글로벌 집계 GROUP BY, getRestaurantsStatus GROUP BY, useDebouncedText, DebouncedInput, perf-2, 메뉴 정규화, 메뉴 그룹핑, menu-grouping, MenuCanonical, menu_canonicals, canonicalName, canonicalNorm, MENU_GROUPING_VERSION, MENU_GROUPING_CHUNK_SIZE, packBySimilarity, jamoBigramDice, toJamo, pickCanonicalName, callChunkWithSplit, callIndexGroups, groupingJobRegistry, grouping-jobs, restaurant_menu_groups, restaurant_menus, replaceRestaurantMenuGroups, mergeMenuGroups, menusGroup, menusRanking, MenuRankingResult, restaurantsStatus, buildLlmProviderEnv, naver-place, naver-baemin, placeMenus, PlaceMenuCategory, 대표메뉴, 추천 메뉴, uncategorized, 원본 메뉴 그룹, 메뉴판, 가게 단위 통째 교체, updateNaverMenus, backfill:naver-menus, 메뉴 0건 보호, sourceMenus, menu_catalog, MenuRankingSection, useGroupForRestaurant, 분류하기, filterReviewsByTipMenu, review-match]
+aliases: [groupingInFlight, 그룹핑 진행 중 합류, placeIds 상한, 형제 글로벌 집계 GROUP BY, getRestaurantsStatus GROUP BY, useDebouncedText, DebouncedInput, perf-2, 메뉴 정규화, 메뉴 그룹핑, menu-grouping, MenuCanonical, menu_canonicals, canonicalName, canonicalNorm, MENU_GROUPING_VERSION, MENU_GROUPING_CHUNK_SIZE, packBySimilarity, jamoBigramDice, toJamo, pickCanonicalName, callChunkWithSplit, callIndexGroups, groupingJobRegistry, grouping-jobs, restaurant_menu_groups, restaurant_menus, replaceRestaurantMenuGroups, mergeMenuGroups, menusGroup, menusRanking, MenuRankingResult, restaurantsStatus, buildLlmProviderEnv, naver-place, naver-baemin, placeMenus, PlaceMenuCategory, 대표메뉴, 추천 메뉴, uncategorized, 원본 메뉴 그룹, 메뉴판, 가게 단위 통째 교체, updateNaverMenus, backfill:naver-menus, 메뉴 0건 보호, sourceMenus, menu_catalog, MenuRankingSection, useGroupForRestaurant, 분류하기, filterReviewsByTipMenu, review-match, globalAggCache, GLOBAL_AGG_TTL_MS, GLOBAL_AGG_CACHE_MAX, 전역 비교 통계 캐시, 순위 전역 통계 60초, getPublicRestaurantBase, buckets.done, 분석 완료 수 공유, COUNT(DISTINCT nameNorm), 메뉴명 개수 SQL]
 ---
 
 # menu-grouping — 식당 단위 메뉴 표기 LLM 정규화(canonical 그룹) + 원본 메뉴 그룹 영속
+
+**2026-11-06~11-14 변경 흡수 (32차) — 어드민 순위의 전역 비교 통계 60초(`fa121230`)·분석 맛집 상태의 분석 완료 수를 공개 목록 캐시에서(`8dc1615d`)·메뉴명 개수를 SQL 이 가게별로(`c2859dbd`), 셋 다 2026-11-07 어드민 API 성능 실측 묶음**: 정규화 로직·`MENU_GROUPING_VERSION`(2)·계약·스키마는 그대로이고, 두 어드민 읽기 경로만 빨라졌다(전부 2026-11 운영 DB 사본 실측, 응답은 전후 동일). (1) **순위의 전역 비교 통계(`fa121230`)** — `getRanking`(어드민 `GET …/menus/ranking`)은 이 가게에 링크된 전역 메뉴(운영 큰 가게 96개)마다 같은 전역에 링크된 전국 가게의 언급을 10-05 의 GROUP BY 한 번으로 합산했는데, 인기 메뉴는 수백 가게에 걸쳐 순위 한 번에 ~93ms 였다(쿼리 계획은 정상). [menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts) 의 인스턴스 필드 `globalAggCache = new LRUCache<globalId, { agg: GlobalAgg | null }>({ max: GLOBAL_AGG_CACHE_MAX 50,000, ttl: GLOBAL_AGG_TTL_MS 60초 })` 가 전역마다 `{ totalMentions, positive, negative, restaurantCount }` 를 들고, 없는 전역만 `IN (missingGlobalIds)` 로 센다. 언급이 없는 전역(행 없음)도 `{ agg: null }` 로 기억해 아래 '0 채움' 분기는 그대로 간다. 다른 가게 순위가 같은 전역을 공유하므로 효과가 가게를 넘는다. 81~105ms → 11~12ms(가게 60곳 × 정렬 2종 순위 동일). 언급은 요약이 끝날 때마다 늘어 최대 60초 늦을 수 있다. (2) **분석 완료 수(`8dc1615d`)** — 분석 맛집 상태(`GET /admin/analytics/restaurants` = `getRestaurantsStatus`)의 done 수 `visitorReview.groupBy`(10-05 A-V2 판)는 Prisma 가 요약의 id 열까지 확인하느라 커버링 인덱스를 못 타고 큰 요약 행(운영 19.8만)을 다 읽어 ~220ms 였다. 이제 [restaurant-public-base.ts](../../apps/friendly/src/modules/restaurant/restaurant-public-base.ts) 의 `getPublicRestaurantBase(prisma).buckets.get(id)?.done` — 공개 목록 캐시가 30초마다 전 가게(출처 무관)를 한 번에 센 요약 집계를 함께 쓴다(어드민 맛집 목록 `16c1a4c2` 와 같은 방식, [canonical](canonical.md)). 숫자는 최대 30초 늦을 수 있고 크롤 저장·삭제·병합은 캐시를 비운다. 247 → 143~154ms. (3) **메뉴명 개수(`c2859dbd`)** — 같은 상태의 "서로 다른 메뉴명 수"·"매핑된 메뉴명 수" 를 `(restaurantId, nameNorm)` 쌍 groupBy 로 다 가져와(운영 4만 쌍) JS 에서 세던 것(~110ms)을 원시 SQL 두 개로: `SELECT restaurantId, COUNT(DISTINCT nameNorm) FROM menu_mentions WHERE restaurantId IN (SELECT id FROM restaurants WHERE source='naver') GROUP BY restaurantId`, 정규 메뉴는 `(restaurantId, nameNorm)` 이 `@@unique` 라 `COUNT(*)`. 대상이 목록과 같은 네이버 가게 전부라 IN 목록 대신 하위 질의. 143~154 → 41~48ms(이 묶음 전 247ms). 남은 시간은 `latestCanonical` groupBy·`_count.visitorReviews`. 테스트: [menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts) +2(같은 서비스는 지난 전역 통계·새 서비스는 새 통계, 공개 목록 캐시 무효화 전엔 지난 숫자·뒤엔 새 숫자). 매일 03:00 스케줄의 대상 수집(`collectTargets` → `getRestaurantsStatus({ attention: true })`)은 미분류 수·버전만 보므로 30초 지연과 무관하다. 관련 컨셉: [bounded-byte-caches](../concepts/bounded-byte-caches.md)(이 캐시는 개수 상한 — 값이 4숫자로 크기가 고정이라 개수로 충분).
 
 **2026-10-05 변경 흡수 — 같은 가게 정규화 진행 중 합류·잡 입력 상한(`ab7dad28`, A-6) + 순위 형제 글로벌 집계 N+1 → GROUP BY 1쿼리(`ab7dad28`, A-V3) + 상태 집계 GROUP BY(`12bc6ac5`, A-V2) + 분석 화면 입력 디바운스(`c5052742`)**: (1) **진행 중 합류** — [menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts) 모듈 스코프 `groupingInFlight: Map<placeId, Promise<MenuGroupRunResultType>>`. `groupForRestaurant(placeId, opts)` 가 같은 placeId 가 진행 중이면 그 Promise 를 그대로 돌려주고(LLM 재호출 없음), 아니면 `runGroupForRestaurant`(예전 본문 — 계측 포함)를 시작해 `finally` 에서 지운다. 모듈 스코프라 서비스 인스턴스가 달라도(라우트 벌크 잡·단일 식당 동기 라우트·매일 03:00 스케줄 — [schedule](schedule.md)) 공유된다. 결과는 어차피 통째 교체(delete + createMany)라 예전엔 "마지막 쓰기가 이김" + LLM 비용 두 배였다(데이터는 안 깨짐). 합류한 호출은 OperationRun 을 새로 만들지 않는다. (2) **잡 입력** — `POST …/grouping-jobs` 가 `Array.from(new Set(placeIds))` 로 중복을 빼고, 계약 [menu-grouping.ts](../../packages/api-contract/src/schemas/menu-grouping.ts) `MenuGroupingJobInput.placeIds` = `z.array(z.string().min(1).max(64)).min(1).max(5000)`(예전엔 상한 없음 — "처리 필요 전체"(전 네이버 가게)도 한 번에 들어가게 넉넉히). findings 가 함께 권한 actor 당 1잡 가드는 넣지 않았다(Gotchas). (3) **형제 글로벌 집계(A-V3)** — `getRanking` 의 `items[].global` 이 형제 식당마다 `menuMention.findMany` 를 한 번씩 순차 await 하던 것(N+1 — 매일 글로벌 머지가 공기밥·아메리카노 같은 흔한 메뉴를 잇는 운영에선 N ≈ 그룹핑된 가게 수)을 `$queryRaw` 한 번으로: `global_menu_canonical_links l JOIN menu_canonicals mc ON mc.id = l.menuCanonicalId JOIN menu_mentions m ON (m.restaurantId, m.nameNorm) = (mc.restaurantId, mc.nameNorm) WHERE l.globalCanonicalId IN (…) GROUP BY l.globalCanonicalId` → total·positive·negative·`COUNT(DISTINCT m.restaurantId)`. `(restaurantId, nameNorm)` 이 `menu_canonicals` 에서 유일하고 링크가 canonical 당 하나라 멘션 1건이 정확히 한 글로벌에만 잡힌다(주석). `globalKey`/`displayName` 은 이제 집계가 아니라 우리 식당 canonical 의 `globalLink.global` 에서. 실측(커밋 본문): 형제 50곳 순위 60쿼리 → 7쿼리. (4) **상태 집계(A-V2, `12bc6ac5`)** — `getRestaurantsStatus` 의 "분석 done 수" 가 done 요약 행 전부를 관계 select 로 읽어 JS 로 세던 것을 `visitorReview.groupBy({ by: ['restaurantId'], where: { summary: { is: { status: 'done' } } } })` 로. 어드민 메뉴 정규화 화면과 **매일 03:00 정규화 → 머지 스케줄의 대상 수집** 경로라 요약 수에 비례해 느려지던 것(findings: 네이버 23곳·done 6,136건 104.5ms, SQL GROUP BY 면 6.3ms). (5) **화면(`c5052742`)** — [AdminAnalyticsPage.tsx](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx)(메뉴 정규화 + 전역 메뉴 통계 + 자동 발굴 카드)의 식당 이름·전역 메뉴 검색·카테고리 입력이 `useDebouncedText`(치는 글자는 즉시, URL 에는 300ms 멈춘 값만 — 올린 값이 돌아온 건지 바깥 변화인지 렌더 중에 가른다)로, 목록은 화면 폭에 맞는 한 벌만(`useIsDesktopXl`), 섹션 memo. 고친 버그: URL 동기화 effect 가 입력 중인 값을 덮던 것, 카테고리 클릭이 category 외 파라미터까지 건드리던 것. 테스트: [menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts) +2(형제 수와 무관하게 한 쿼리, 같은 가게 진행 중 합류), 웹 `AdminAnalyticsPage.test.tsx`. `MENU_GROUPING_VERSION` 2 그대로, DB 스키마 변경 없음. 원문: [PLAN-perf-2-findings.md](../../docs/PLAN-perf-2-findings.md) A-6·A-V2·A-V3.
 
@@ -26,7 +28,7 @@ aliases: [groupingInFlight, 그룹핑 진행 중 합류, placeIds 상한, 형제
 
 **원본 메뉴 그룹 계층(인입)의 역할(2026-09-25 기준)**: 가게가 네이버에 올린 메뉴판을 그룹째(대표메뉴·사장님 카테고리·전체 목록) 보존해 공개 상세 메뉴 탭·홈 대표메뉴 미리보기에 그대로 보여 주고, 정규화 행(`restaurant_menus`)은 음식 역검색의 "메뉴판에 있다" 근거와 칼로리 표시율 측정 스크립트가 읽는다. 2026-09-25 전까지는 배민 연동 가게만 이 계층이 채워졌고, 네이버 개편 대응(`43d7e69`) 뒤 일반 가게도 `naver-place` 그룹으로 들어온다. 이 계층은 LLM 을 쓰지 않으며 canonical 그룹핑(리뷰 멘션)과 여전히 조인되지 않는다 — 두 계층은 어드민 상세 '메뉴' 탭에 **나란히 보일 뿐**이다(`420a6be`).
 
-## Architecture [coverage: high — 15 sources]
+## Architecture [coverage: high — 16 sources]
 
 코어는 `MenuGroupingService` 한 클래스. 두 개의 진입점이 있다.
 
@@ -45,7 +47,7 @@ batch 측은 `groupingJobRegistry` (in-memory, actorId 격리, item 단위 start
 이 설계로 v1 의 "같은 청크 안에서만 묶인다" 제약이 사라졌다 — 청크가 분리한 쌍을 대표 머지가 회복하므로 유사도 패킹 임계값이 그룹핑 recall 을 깎지 않는다(게이트가 아니라 배치 휴리스틱).
 
 Key files:
-- [apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts) -- `groupForRestaurant`(2026-10-05 부터 같은 placeId 진행 중 합류 래퍼 — 모듈 스코프 `groupingInFlight`) / `runGroupForRestaurant`(계측 래퍼) / `doGroupForRestaurant`(본문) / `callChunkWithSplit` / `callIndexGroups` / `getRanking` / `getRestaurantsStatus`. `pickCanonicalName` export. `summary.service` 의 `normalizeTerm` / `extractFirstJsonObject` 재사용.
+- [apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts) -- `groupForRestaurant`(2026-10-05 부터 같은 placeId 진행 중 합류 래퍼 — 모듈 스코프 `groupingInFlight`) / `runGroupForRestaurant`(계측 래퍼) / `doGroupForRestaurant`(본문) / `callChunkWithSplit` / `callIndexGroups` / `getRanking` / `getRestaurantsStatus`. `pickCanonicalName` export. `summary.service` 의 `normalizeTerm` / `extractFirstJsonObject` 재사용. → 2026-11-07: 인스턴스 필드 `globalAggCache`(전역 비교 통계 60초, `fa121230`), `getRestaurantsStatus` 의 done 수는 `getPublicRestaurantBase().buckets`(`8dc1615d`)·메뉴명 수는 원시 SQL `COUNT(DISTINCT nameNorm)`/`COUNT(*)`(`c2859dbd`). 서비스 인스턴스는 셋이다 — [restaurant.route.ts](../../apps/friendly/src/modules/restaurant/restaurant.route.ts)(단일 식당 동기·순위), [menu-grouping.route.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts)(상태·벌크 잡), [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts). 순위 라우트는 restaurant 라우트 인스턴스 하나만 쓰므로 인스턴스 캐시로 충분하다.
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts) -- 시스템 프롬프트(인덱스-그룹 계약) + few-shot 3개 + `MENU_GROUPING_VERSION=2` + `MENU_GROUPING_JSON_SCHEMA`(groups: integer 배열의 배열) + `MENU_GROUPING_CHUNK_SIZE=30` / `MENU_GROUPING_MERGE_CHUNK_SIZE=60` + `buildGroupingUserPrompt`.
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.ts) -- **(신규)** `toJamo` / `jamoBigramDice` / `packBySimilarity`. 한글 음절을 초·중·종성 자모로 분해 후 bigram Dice. 유사 블록 union-find → maxChunk 크기로 결정적 패킹.
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts) -- admin batch + SSE. `runJob` 가 placeId 한 개씩 순차 처리, `groupForRestaurant({ jobId, trigger: 'manual' })` 로 OperationRun 연계. 2026-10-05 부터 잡 생성 시 placeIds 중복 제거.
@@ -68,7 +70,7 @@ Key files:
 
 `callIndexGroups` 가 `provider.complete` 를 부를 때: `TEMPERATURE=1.0`(v1 의 0.1 은 reasoning 반복 루프로 토큰을 태우는 보조 원인이었다), `MAX_TOKENS=2000`(출력이 수십 토큰뿐이라 나머지는 reasoning 여유분 — thinking 토큰도 `num_predict` 에 합산된다), `NUM_CTX=8192`, `format: MENU_GROUPING_JSON_SCHEMA`, 그리고 모델명에 `gpt-oss` 가 들어가면 `think: 'low'`(thinking 을 못 끄고 기본 medium 이라 low 로 줄여 토큰 예산을 지킨다; 다른 모델은 think 미지원일 수 있어 미전달).
 
-## Talks To [coverage: high — 15 sources]
+## Talks To [coverage: high — 16 sources]
 
 - **ai** (in-process: `AiConfigService.getResolved('ollama-cloud', 'chat')` + `adapterCache`) -- LLM provider/model 해석. 미설정이면 `MenuGroupingError('no_provider')` 던지고 라우트가 422 로 변환. `AiConfigService` 는 라우트·schedule 플러그인 모두 `buildLlmProviderEnv()`(2026-08-22)로 조립.
 - **crawl → 원본 메뉴 그룹** (DB write via RestaurantService) -- **(신규/2026-06-27, 원본 메뉴 그룹 계층 한정)** [crawl](crawl.md) 어댑터가 `/menu/list` 에서 `extractBaeminMenuGroups` 로 뽑은 `MenuGroup[]` 이 `restaurant_menu_groups`/`restaurant_menus` 적재의 입력. canonical(멘션) 그룹핑과는 무관 — 같은 도메인 이름을 쓰지만 데이터 경로가 다름. **2026-09-25**: 입력은 홈 Apollo 의 `resolveMenuGroups`(배민 그룹 → `placeMenus` 카테고리, `/menu/list` 는 홈이 모자랄 때만) 결과이고, 크롤 외에 `backfill:naver-menus` 스크립트(`fetchNaverPlaceMenusWithPlaywright` → `updateNaverMenus`)도 같은 적재 함수를 탄다.
@@ -78,10 +80,11 @@ Key files:
 - **summary** (in-process: `normalizeTerm`, `extractFirstJsonObject`) -- canonicalNorm 정규화 규칙을 멘션과 일치시켜야 GROUP BY 키가 맞춰진다.
 - **logs** (in-process: `OperationLogService`) -- **(신규/v2)** 식당별 그룹핑 1회 = OperationRun 1개. `startRun`/`log`(stage: load/resolve_provider/plan/chunk/merge/save)/`finishRun`. 미주입이면 계측 없이 기존 흐름 그대로(테스트 호환). 자세한 계측 모델은 [logs](logs.md) 및 [operation-log-instrumentation](../concepts/operation-log-instrumentation.md).
 - **restaurant** (HTTP: `/menus/group`, `/menus/ranking`) -- 단일 식당 동기 진입점이 restaurant 라우트 안에 있다 (placeId 기반).
-- **analytics → `GlobalMenuCanonicalLink`** (DB read) -- `getRanking` 의 `items[].global` 필드. 글로벌 머지를 돌렸을 때만 채워지고, 안 돌렸으면 null. 이 모듈이 글로벌 링크를 만드는 게 아니라 읽기만 한다. 2026-10-05 부터 형제 집계는 `global_menu_canonical_links ⨝ menu_canonicals ⨝ menu_mentions` GROUP BY 한 번(raw SQL)이다. [analytics](analytics.md).
+- **analytics → `GlobalMenuCanonicalLink`** (DB read) -- `getRanking` 의 `items[].global` 필드. 글로벌 머지를 돌렸을 때만 채워지고, 안 돌렸으면 null. 이 모듈이 글로벌 링크를 만드는 게 아니라 읽기만 한다. 2026-10-05 부터 형제 집계는 `global_menu_canonical_links ⨝ menu_canonicals ⨝ menu_mentions` GROUP BY 한 번(raw SQL)이다. [analytics](analytics.md). → 2026-11-07(`fa121230`): 그 결과를 전역 id 마다 60초 기억해(`globalAggCache`) 들고 있지 않은 전역만 센다 — 글로벌 머지가 링크를 다시 써도 이 캐시는 비우지 않는다(Gotchas).
+- **restaurant 공개 베이스 → 분석 완료 수** (2026-11-07, `8dc1615d`) -- `getRestaurantsStatus` 가 [restaurant-public-base.ts](../../apps/friendly/src/modules/restaurant/restaurant-public-base.ts) 의 `getPublicRestaurantBase` 를 import 해 `buckets`(전 가게 요약 집계 — `16c1a4c2` 가 베이스에 담음)의 `done` 을 읽는다. menu-grouping → restaurant 방향 import 가 하나 생겼다. 무효화 지점(크롤 upsert·삭제·canonical 병합)과 SWR 동작은 [canonical](canonical.md).
 - **prisma / SQLite** (DB: `menu_canonicals` 테이블 소유 + `menu_mentions` 읽기) -- delete + createMany 트랜잭션으로 idempotent 재실행. 그룹핑·순위는 `restaurant.findUnique({ where: { placeId } })` 로 찾은 **네이버 행 하나**의 멘션만 본다 — `MenuMention.restaurantId` 는 요약 파이프라인이 리뷰의 `restaurantId` 로 채우므로([summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts)) 다이닝코드·테이블링 리뷰의 멘션은 각자 행(placeId null)에 쌓이고 이 모듈의 그룹핑 대상이 아니다.
 
-## API Surface [coverage: high — 6 sources]
+## API Surface [coverage: high — 7 sources]
 
 **2026-09-24~26 라운드: 라우트 변경 없음.** 이 모듈의 라우트는 전부 어드민(`/api/v1/admin/restaurants/place/:placeId/menus/{group,ranking}`, `/api/v1/admin/analytics/…`)이라 `1b621c4` 의 외부 API 문서(`docs/api/` — 어드민 제외)·CORS 개방 대상이 아니다([api-docs](api-docs.md)). 원본 메뉴 그룹은 전용 라우트 없이 공개 상세 응답 `RestaurantPublicDetail.menuGroups`(`mergeMenuGroups`)로만 나가며 계약 `MenuGroup.source` 는 `z.string()` 이라 `naver-place` 추가에 계약 변경이 없었다. 어드민 상세 '메뉴' 탭(`420a6be`)이 아래 `menusRanking`·`menusGroup` 을 `MenuRankingSection` 으로 부르고, 메뉴 클릭은 어드민 `GET Routes.Restaurant.reviewMatch(placeId)`(`…/review-match?menu=`) — 매칭 규칙은 Talks To 의 `filterReviewsByTipMenu`.
 
@@ -92,10 +95,11 @@ Key files:
   결과 객체: `{ ok, placeId, inputCount, groupCount, mappedCount, model, version }`.
 - `GET Routes.Restaurant.menusRanking(:placeId)?sort&minMentions` → `MenuRankingResult`.
   `sort`: `mentions`(기본) | `positive` | `negative` | `positiveRatio`. `minMentions` 기본 1.
+  2026-11-07~ `items[].global` 의 전역 통계는 서버가 전역마다 60초 기억한 값(응답 모양 동일).
 
 Batch (`menu-grouping.route.ts`):
 
-- `GET Routes.Analytics.restaurantsStatus` → `{ currentVersion, items: MenuGroupingRestaurantStatus[] }` — 관리자 페이지 메인 테이블. distinct/mapped/unmapped + lastGroupedAt + storedVersion + attentionCount(전체 기준). `currentVersion = MENU_GROUPING_VERSION`(현재 2).
+- `GET Routes.Analytics.restaurantsStatus` → `{ currentVersion, items: MenuGroupingRestaurantStatus[] }` — 관리자 페이지 메인 테이블. distinct/mapped/unmapped + lastGroupedAt + storedVersion + attentionCount(전체 기준). `currentVersion = MENU_GROUPING_VERSION`(현재 2). 2026-11-07~ `analyzedReviews` 는 공개 목록 캐시의 `buckets.done`(최대 30초 늦음), distinct/mapped 는 SQL 가게별 집계 — 응답 모양 동일.
 - `POST Routes.Analytics.groupingJobs` body=`{ placeIds: [...] }` → `MenuGroupingJobSnapshot`. 빈 배열 거부 (전체 정규화도 명시 placeIds 로만). 2026-10-05 부터 placeIds 는 1~5000개·각 1~64자(넘으면 400), 서버가 중복 제거 후 잡 생성. actor 당 잡 개수 제한은 없다.
 - `GET Routes.Analytics.groupingJob(:id)` → `MenuGroupingJobSnapshot` (재접속 시 현재 진행 상태 polling).
 - `GET Routes.Analytics.groupingJobEvents(:id)?token=...` → SSE: `snapshot`, `item`, `done`. 15초 heartbeat.
@@ -165,8 +169,11 @@ rawJson          String?
 
 **행 모양 메모(2026-09-25)** — `naver-place` 는 recommend 카테고리가 다른 카테고리와 겹치고, 흔한 "추천 + 전체(uncategorized)" 구조에선 전체 그룹이 모든 메뉴를 담으므로 추천 메뉴가 `restaurant_menus` 에 **두 행**(대표메뉴 그룹·메뉴 그룹)으로 들어간다(`sourceMenuId` 같음 — unique 아님이 이 경우를 위한 것). `isRepresentative` 는 그룹과 무관하게 항목 `badges` 에 `'repr'` 가 있으면 true. 가격은 숫자 문자열("13000") 또는 원문("무료"), `imageUrlsJson` 은 메뉴 이미지(최대 6) 또는 썸네일 1장. 이 테이블을 읽는 쪽(음식 역검색·측정 스크립트)은 식당 id 집합으로 세므로 중복 행이 수치를 부풀리지 않는다.
 
-## Key Decisions [coverage: high — 21 sources]
+## Key Decisions [coverage: high — 24 sources]
 
+- **2026-11-07: 순위의 전역 통계는 전역 단위로 60초 — 가게 단위가 아니라** (`fa121230`) -- 비싼 부분은 "같은 전역에 링크된 전국 가게의 언급 합" 이라 가게가 달라도 전역이 같으면 값이 같다. 그래서 키를 가게가 아니라 전역 id 로 잡아, 한 가게의 순위가 채운 값을 다른 가게 순위가 그대로 쓴다. 언급 없음(행 없음)도 기억한다 — 안 그러면 언급 없는 전역은 매번 다시 센다. 무효화 없이 TTL 만 둔 것은 어드민 비교 위젯이 60초 늦어도 되는 숫자라서다.
+- **2026-11-07: 분석 완료 수는 새로 세지 않고 공개 목록 캐시를 빌린다** (`8dc1615d`) -- 10-05 의 GROUP BY 판도 Prisma 가 요약 id 까지 확인하는 바람에 커버링 인덱스(`review_summaries_agg_idx`)를 못 탔다. 같은 숫자를 공개 베이스가 `INDEXED BY` 원시 SQL 로 30초마다 이미 세고 있어, 쿼리를 고치는 대신 그 결과를 쓰기로 했다(어드민 맛집 목록과 같은 결정 — [canonical](canonical.md)).
+- **2026-11-07: 개수는 DB 가 센다 — 쌍을 끌어와 JS 로 세지 않는다** (`c2859dbd`) -- 10-05 "상태·순위 집계는 DB 에서 GROUP BY" 의 남은 조각. 대상이 "네이버 가게 전부" 라 수천 개 IN 목록 대신 하위 질의로 같은 집합을 고른다.
 - **2026-10-05: 같은 가게 정규화는 진행 중 결과에 합류 — 잡 단위 가드 대신 가게 단위** (`ab7dad28`, A-6) -- 낭비의 실체는 "같은 가게를 두 번 LLM 에 태우는 것" 이라(데이터는 통째 교체라 안 깨짐), 벌크 잡·스케줄·단일 동기 라우트 어디서 겹치든 막히도록 모듈 스코프 Map 하나로 가게 단위 합류를 택했다. findings 가 함께 권한 actor 당 1잡 409 는 넣지 않았다 — 겹치는 가게는 합류로 비용이 0 이고, 겹치지 않는 가게를 동시에 돌리는 것은 정상 사용이라.
 - **2026-10-05: 잡 placeIds 상한 5000** -- 잡 레지스트리·응답 크기 보호용이되, 운영자가 "처리 필요 전체"(전 네이버 가게)를 한 번에 보내는 정상 흐름은 막지 않게 넉넉히(계약 주석).
 - **2026-10-05: 상태·순위 집계는 DB 에서 GROUP BY** (`12bc6ac5`·`ab7dad28`, A-V2·A-V3) -- 관계 select 로 행을 다 끌어와 JS 로 세는 패턴이 매일 03:00 스케줄 경로(상태)와 글로벌 머지가 넓힌 형제 수(순위)에서 행 수에 비례해 커졌다. perf-2 1차의 "공개 맛집 경로 SQL 집계" 와 같은 처방을 어드민 경로에도.
@@ -191,8 +198,10 @@ rawJson          String?
 - **glob 비교는 식당 단위 N+1** *(2026-10-05 `ab7dad28` 에 GROUP BY 1쿼리로 대체 — 아래는 원 결정)* -- `getRanking` 이 targetGlobalIds 모은 뒤 sibling 식당별로 한 쿼리씩 (식당당 1쿼리). 한 globalKey 에 1~10 식당이 일반적이라 OK. raw SQL 단일 쿼리화는 더 빨라야 할 때. → 운영은 매일 글로벌 머지가 흔한 메뉴를 많은 가게에 잇기 때문에 "1~10 식당" 가정이 깨졌고(findings A-V3: 형제 17곳 가게 26쿼리, 커밋 실측 형제 50곳 60쿼리), 예고한 대로 raw SQL 단일 쿼리로 바꿨다(인덱스 추가 없이 `menu_mentions(restaurantId, nameNorm)` 사용).
 - **batch in-memory only** -- 서버 재시작 시 in-flight 잡 사라짐. LLM 비용은 다시 들지만 결과는 idempotent — 사용자가 재실행 하면 됨. [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
-## Gotchas [coverage: high — 18 sources]
+## Gotchas [coverage: high — 20 sources]
 
+- **순위의 전역 통계는 글로벌 머지·정규화 뒤에도 최대 60초 옛 값** (2026-11-07) -- `globalAggCache` 는 TTL 만 있고 무효화가 없다. 03:00 글로벌 머지가 링크를 전량 다시 쓰거나(같은 전역에 붙은 가게가 바뀜), 어떤 가게를 다시 정규화해도 60초 동안은 지난 합계가 나온다. 사라진 전역은 이 가게 canonical 의 `globalLink` 에서 먼저 빠지므로 조회되지 않는다. 캐시는 서비스 **인스턴스 필드**라 restaurant 라우트 인스턴스의 순위만 쓰고, 테스트에서 새 서비스를 만들면 새 통계가 나온다(테스트가 이 점을 고정).
+- **분석 완료 수는 공개 목록 캐시를 따라간다 — 만료 뒤 첫 요청은 얼마나 오래된 값이든** (2026-11-07) -- `getPublicRestaurantBase` 는 만료된 베이스를 버리지 않고 돌려준 뒤 뒤에서 갱신한다(TTL 은 최대 지연이 아니다 — [canonical](canonical.md) Gotchas). 공개 목록 요청이 한동안 없었다면 어드민 분석 맛집 표의 '분석' 열·`analyzed` 정렬이 그만큼 옛 값이다(두 번째 요청부터 새 값). 요약 진행은 이 캐시를 비우지 않는다. `attentionCount`·스케줄 대상 수집은 이 숫자를 쓰지 않아 영향 없다.
 - **합류한 호출은 자기 옵션을 잃는다** (2026-10-05) -- `groupForRestaurant` 가 진행 중 Promise 를 돌려줄 때 두 번째 호출의 `opts`(벌크 잡 `jobId`·`trigger`·스케줄 `parentRunId`)는 쓰이지 않는다 — OperationRun 은 먼저 시작한 쪽 하나뿐이라, 어드민 로그에서 벌크 잡 jobId 로 묶어 보면 합류한 가게의 run 이 빠져 있을 수 있다(스케줄 run 밑에 있음). 결과 객체는 같다. 또 합류는 **진행 중일 때만** — 끝난 직후 다시 부르면 LLM 을 다시 돈다(결과 캐시 아님).
 - **벌크 잡은 actor 당 여러 개 만들 수 있다** -- 테이블링·다이닝코드 일괄 저장과 달리 409 가드가 없다(2026-10-05 결정). 같은 가게는 합류로 LLM 중복이 없지만, 서로 다른 가게 목록으로 잡을 여러 개 띄우면 그만큼 LLM 호출이 병렬로 늘어난다(실동시성은 어댑터 계정 게이트가 조절).
 
@@ -216,7 +225,7 @@ rawJson          String?
 - **dev.db 잔재로 테스트 입력 카운트 변동** -- analytics 와 공유하던 패턴(analytics 는 2026-08-22 부터 `useIsolatedDatabase()` 로 격리 — [analytics](analytics.md)). menu-grouping 테스트는 여전히 `.env` 의 DB 위에서 placeId prefix(`mg-`)로 격리하고 afterEach 청소, 단언은 절대값 대신 부분 매치/하한 비교. 전량 삭제하는 테스트를 새로 쓰면 격리부터.
 - **`think` 는 gpt-oss 에만 보낸다 — `thinkOptionForModel` 미적용** -- `callIndexGroups` 는 모델명에 `gpt-oss` 가 있을 때만 `think: 'low'`, 그 외엔 필드를 아예 안 보낸다. 2026-08-22 실측으로 qwen3.5 계열은 `think` 미지정 시 출력 토큰을 사고에 다 써 content 가 빈 문자열로 온다는 것이 확인됐고 다른 JSON 호출들은 `thinkOptionForModel`(gpt-oss `'low'`/그 외 `false`)로 바뀌었다([ai](ai.md)). chat 기본 모델을 qwen3.5 류로 바꾸면 이 모듈은 `parse_failed` 로 되돌아갈 수 있다 — 그때 같은 헬퍼로 맞출 것.
 
-## Sources [coverage: high — 39 sources]
+## Sources [coverage: high — 40 sources]
 
 - [apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts) (2026-09-25 — placeMenus → '대표메뉴'/'메뉴'/사장님 그룹 매핑·완결성 테스트)
 - [apps/friendly/src/modules/restaurant/restaurant.test.ts](../../apps/friendly/src/modules/restaurant/restaurant.test.ts) (2026-09-25 — 0건 재크롤 메뉴 보존·`updateNaverMenus`)
@@ -232,11 +241,12 @@ rawJson          String?
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) (`menusGroup`·`menusRanking`·`reviewMatch` — 전부 `/admin/…`)
 - [apps/friendly/src/modules/ai/llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 라우트·플러그인 env 조립, 2026-08-22)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts)
-- [apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts) (2026-10-05 — `groupingInFlight` 합류·형제 글로벌 GROUP BY(`ab7dad28`)·상태 done 수 `groupBy`(`12bc6ac5`))
+- [apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts) (2026-10-05 — `groupingInFlight` 합류·형제 글로벌 GROUP BY(`ab7dad28`)·상태 done 수 `groupBy`(`12bc6ac5`); 2026-11-07 — `globalAggCache` 60초(`fa121230`)·done 수는 공개 베이스 `buckets`(`8dc1615d`)·메뉴명 수 원시 SQL(`c2859dbd`))
+- [apps/friendly/src/modules/restaurant/restaurant-public-base.ts](../../apps/friendly/src/modules/restaurant/restaurant-public-base.ts) (2026-11-07 — `PublicRestaurantBase.buckets`, 분석 맛집 상태의 done 수 출처)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.ts)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts) (2026-08-22 — `buildLlmProviderEnv()`; 2026-10-05 — placeIds 중복 제거)
 - [apps/friendly/src/modules/menu-grouping/grouping-job-registry.ts](../../apps/friendly/src/modules/menu-grouping/grouping-job-registry.ts)
-- [apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처; 2026-10-05 — 형제 수 무관 1쿼리·진행 중 합류)
+- [apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처; 2026-10-05 — 형제 수 무관 1쿼리·진행 중 합류; 2026-11-07 — 전역 통계 캐시(같은 서비스 지난 값·새 서비스 새 값)·공개 목록 캐시 무효화 전후 done 수)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.test.ts)
 - [apps/friendly/src/modules/restaurant/restaurant.route.ts](../../apps/friendly/src/modules/restaurant/restaurant.route.ts)
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma)

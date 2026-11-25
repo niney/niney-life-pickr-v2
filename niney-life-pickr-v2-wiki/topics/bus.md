@@ -1,15 +1,17 @@
 ---
 topic: bus
 type: codebase
-last_compiled: 2026-10-26
+last_compiled: 2026-11-15
 sources_count: 70
 status: active
-aliases: [BUS_QUOTA_LIMITS, BusQuotaBucket, 버스-쿼터-버킷, search-60, arrivals-510, positions-240, route-90, BUS_ROUTE_NOT_FOUND_TTL_MS, BusRouteNotFoundError, routeNotFound, routeInflight, 노선-없음-네거티브-캐시, upstream-guard, UpstreamCooldown, 실패-쿨다운, stationinfo, buspos, busRouteInfo, recordFailure, cooldownError, UPSTREAM_REQUEST_BUDGET_MS, BUS_DEBOUNCE_MS, useSettledBusQuery, TRAILING_JAMO, 낱자모-대기, EMPTY_VEHICLES, followStation, BusPage.test, 한-벌-마운트, seoul-bus, seoul-bus-api, ws-bus-go-kr, DATA_GO_KR_API_KEY, data-go-kr-key, 공공데이터포털-인증키, bus-station-search, getStationByName, getStationByPos, getStationByUid, getBusPosByRouteSt, getBusPosByRtid, getRoutePath, getStaionByRoute, getRouteInfo, bus-arrivals, bus-positions, bus-route-detail, bus-route-shape, bus-nearby-cell, nearby-cell-cache, bus-favorites, favorite-hybrid, toLatLng, serviceKey-encoding, service-key-double-encoding, bus-vehicle-pill, vehicle-marker, vehicle-interpolation, route-path-follow, bus-follow-toggle, busRouteTypeColor, daily-upstream-quota, negative-caching, virtual-station, arsId-zero, tmX-tmY-wgs84, transit-unified, transit-favorites, unified-favorites, transit-cross-search, subway-cross-section, cross-station-overlay, overlay-markers, x-subway-deeplink, transit-cross-show, transit-map-viewport, map-instance-pool, poolKey, transit-desktop-mobile, vehicle-pill-shared, transit-tabs, bus-list-sheet, bus-detail-sheet, BottomSheet, useMapSheets, sheet-pattern, 시트-골격, subBar, map-bottom-inset, 일부만-표시, truncated-inline, 등산 소비자, 들머리 정류장, 15067528, 전국 버스정류장 미도입]
+aliases: [BUS_QUOTA_LIMITS, BusQuotaBucket, 버스-쿼터-버킷, search-60, arrivals-510, positions-240, route-90, BUS_ROUTE_NOT_FOUND_TTL_MS, BusRouteNotFoundError, routeNotFound, routeInflight, 노선-없음-네거티브-캐시, upstream-guard, UpstreamCooldown, 실패-쿨다운, stationinfo, buspos, busRouteInfo, recordFailure, cooldownError, UPSTREAM_REQUEST_BUDGET_MS, BUS_DEBOUNCE_MS, useSettledBusQuery, TRAILING_JAMO, 낱자모-대기, EMPTY_VEHICLES, followStation, BusPage.test, 한-벌-마운트, seoul-bus, seoul-bus-api, ws-bus-go-kr, DATA_GO_KR_API_KEY, data-go-kr-key, 공공데이터포털-인증키, bus-station-search, getStationByName, getStationByPos, getStationByUid, getBusPosByRouteSt, getBusPosByRtid, getRoutePath, getStaionByRoute, getRouteInfo, bus-arrivals, bus-positions, bus-route-detail, bus-route-shape, bus-nearby-cell, nearby-cell-cache, bus-favorites, favorite-hybrid, toLatLng, serviceKey-encoding, service-key-double-encoding, bus-vehicle-pill, vehicle-marker, vehicle-interpolation, route-path-follow, bus-follow-toggle, busRouteTypeColor, daily-upstream-quota, negative-caching, virtual-station, arsId-zero, tmX-tmY-wgs84, transit-unified, transit-favorites, unified-favorites, transit-cross-search, subway-cross-section, cross-station-overlay, overlay-markers, x-subway-deeplink, transit-cross-show, transit-map-viewport, map-instance-pool, poolKey, transit-desktop-mobile, vehicle-pill-shared, transit-tabs, bus-list-sheet, bus-detail-sheet, BottomSheet, useMapSheets, sheet-pattern, 시트-골격, subBar, map-bottom-inset, 일부만-표시, truncated-inline, 등산 소비자, 들머리 정류장, 15067528, 전국 버스정류장 미도입, recordFailure, 실패 시각 쿨다운, failedAtMs]
 ---
 
 # bus — 서울시 버스 정보 API 프록시 + 웹 정류장·도착·노선·실시간 차량 화면
 
 서울시 버스 정보 API(`ws.bus.go.kr`)를 friendly 가 프록시하고, **웹**(`apps/web`)이 정류장 검색·실시간 도착정보·노선 보기·실시간 차량 추적을 그리는 도메인. ~~앱에는 버스 화면이 없다~~ → 2026-07 이후 **앱(`apps/mobile`)에도 대중교통 화면**(버스·지하철 통합)이 있다 — [transit](transit.md)/[mobile](mobile.md) 참조.
+
+**2026-11-06~11-14 변경 흡수 (32차) — 실패 쿨다운을 조회 시작이 아니라 실패한 시각부터 잰다(`9b7beef0`, 2026-11-07)**: [bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts) 의 `recordFailure(upstream, key, e)` 가 시각 인자를 받지 않고 실패를 기록하는 순간 `deps.now()`(없으면 `new Date()`)를 읽어 `cooldown.failure(…, failedAtMs, …)` 한다. 세 호출처 — 정류장 검색(`stationinfo`), 실시간 도착·위치(`loadRealtime` — 쿨다운 서비스 `stationinfo`/`buspos`), 노선 상세(`busRouteInfo`) — 모두 예전엔 조회 시작 때 잡은 `now`/`nowMs` 를 넘겨, 업스트림이 오래 매달리다 실패하면 기록하는 순간 쿨다운(30초→5분)이 이미 지나 있었다(40초 매달린 실패 → 끝난 직후 바로 다시 호출·쿼터 소비). 29차가 남긴 "쿨다운 ≈22초" Gotcha(아래)가 이것이다. 같은 커밋이 대기·지하철·날씨·AWS·바다도 고쳤고 등산 산불 예보가 전날(`bec2e294`) 같은 방식으로 먼저 바뀌었다([transit](transit.md)·[hiking](hiking.md)). 쿨다운 값·키·버킷·stale 폴백은 그대로, 계약·웹 변경 없음. 테스트 [bus.test.ts](../../apps/friendly/src/modules/bus/bus.test.ts) 52 → 53건("40초 매달린 실패 뒤 30초는 다시 부르지 않는다" — 예전 코드에서 실패). PLAN-perf-2 "리뷰 반영 → 남긴 것" 항목의 해소(문서 표기는 그대로). 운영 반영은 코드 배포만. ⚠️ 버스위치 API(15000332) 2026-12-27 만료 예정은 그대로다(아래).
 
 **2026-10-10~10-26 변경 흡수 — 버스 코드는 그대로, `BusStation` 표의 새 소비자 등산(`ffd2d827`·`bff8ca7c`)**: [hiking](hiking.md) 이 정류장 마스터를 **읽기만**(업스트림 0콜) 한다 — 코스 "가는 법·주변"의 들머리(편도면 날머리도) 500m 안 정류장(이름·`정류소 <arsId>`, 등산 지점의 교통과 20m 안이면 하나로), "오늘 어느 산" 추천의 대중교통 접근 색인(들머리 500m), 적재 때 봉우리 코스 들머리 이름 후보(300m). 버스 DB 가 서울(수도권)만이라 실측(4차)으로 100대 명산 들머리 1km 안 정류장이 있는 산은 4/100 — 그래서 대중교통 안내는 등산 지점의 교통 POI(정류장 이름 628곳, 노선·시간표 없음)가 주이고 수도권만 버스·지하철을 더한다. 전국 버스정류장(data.go.kr 15067528)은 사용자 결정으로 넣지 않았다(PLAN-hiking 5~8차).
 
@@ -232,7 +234,9 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 | `quota` (`DailyQuota`) | `search`·`arrivals`·`positions`·`route` | KST 자정 리셋(2026-10-05 — 그전 `{dateKey, count}` 하나) |
 | `cooldown` (`UpstreamCooldown`) | `stationinfo|search:…` 등 키 LRU 5,000 + 서비스 3개 | 키 30초→5분 백오프 / 서비스 5분→1시간, 성공 시 리셋(2026-10-05) |
 
-## Key Decisions [coverage: high — 10 sources]
+## Key Decisions [coverage: high — 11 sources]
+
+- **2026-11-07(`9b7beef0`): 쿨다운 기록 시각은 호출측이 넘기지 않고 `recordFailure` 가 직접 읽는다.** 시작 시각을 인자로 받는 모양이 곧 버그의 원인이었으므로(호출처마다 함수 첫머리 `nowMs` 를 넘김) 인자를 없앴다 — 같은 서비스의 다른 판정(stale 상한·네거티브 캐시 만료)은 여전히 시작 시각 기준. 지하철도 같은 모양으로 고쳤다([subway](subway.md)).
 
 - **2026-10-05(`fd957320`): 쿼터 900 은 총량 그대로 두고 오퍼레이션별 버킷으로 쪼갠다 — 남용한 기능만 멈추게.** 단일 카운터에선 레이트 프리셋조차 없던 노선 상세·검색을 무인증으로 300~900회 부르면 실시간 도착·위치까지 하루 정지했다(E-1). 프리셋(60/분)만으로는 5분이면 되는 공격이라 부족하고, IP 예산은 CORS `*`·IP 분산에 약하다 — 핵심은 카운터 분리였다(발견 원문의 수정안 (2)). 배분(검색 60·도착 510·위치 240·노선 90)은 화면 호출 모형 기준이고, 업스트림 실한도가 data.go.kr 서비스별이라 서비스 합계(stationinfo 570)도 그 안에 둔다. 같은 가짜 id 반복은 버킷보다 앞에서 24시간 네거티브 캐시로 0쿼터, 서로 다른 가짜 id 순회는 `route` 버킷 90 에서 멈춘다. 실패 쿨다운의 서비스 단위도 활용신청 단위(정류소정보·버스위치·노선정보)로 잡아 인증 오류가 버스위치까지 막지 않게 했다. 구조는 [transit](transit.md), 배분 결정은 PLAN 6차 "결정 필요: 서비스별 쿼터 배분 수치" 의 답.
 - **2026-09-02(`3d9dfed`): 키 이름을 `DATA_GO_KR_API_KEY` 하나로 — 도메인별 키 + `BUS_API_KEY` 폴백 체인 폐기.** data.go.kr 는 계정당 키가 1개고 데이터셋별로 활용신청만 추가하는 구조라, 도메인마다 env 항목을 두고 "비우면 버스 키로 폴백" 하는 방식은 항목 5개가 전부 같은 값이거나 비어 있는 상태를 낳았다(집값이 세 데이터셋을 더 붙이면서 한계). 이름 하나로 접고 어디에 쓰이는지(데이터셋 번호·쿼터·프로브 명령)는 `env.ts`·`.env.example` 주석 한 곳에 목록화했다. 코드 변경은 이름 치환뿐(어댑터·캐시·쿼터 로직 무변경). 대가는 운영 `.env` 의 이름 변경이 필수라는 것.
@@ -250,7 +254,7 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - **크로스 검색 — 검색 모드 한정, 로컬 DB 라 제출 게이트 불필요(15차).** 버스 검색 결과 하단에 `SubwayCrossSection`(제출 q 로 지하철역 자동 크로스). 지하철 검색은 로컬 DB(쿼터 0)라 타이핑 발화를 막을 필요가 없어 **제출된 q 를 그대로 자동 조회**한다(반대로 지하철 탭의 버스 크로스는 서울시 API 라 제출 게이트 — 대칭 아님). 리스트는 `crossSearchContent` 슬롯으로 결과 목록/빈 상태 뒤에 렌더하고, 주변/초기/선택 화면엔 미표시(`!nearMode && hasQ` 에서만 넘긴다).
 - **탭 전환 지도 이어보기 — 뷰포트(A안) + 인스턴스 풀링(D안).** 버스↔지하철 탭 전환은 라우트 언마운트라 지도가 재생성돼 뷰가 리셋·타일이 플래시했다. `BusStationsMap` 이 `transitMapViewport` 싱글턴에서 초기 뷰를 복원하고 `moveend` 마다 저장(A안, 검색/선택 fit·flyTo 규칙 무변경)하고, `MapCanvas.poolKey` 로 OL Map 인스턴스 자체를 풀에 보관·재사용(D안, 타일 플래시 제거)한다. 도입 땐 데스크톱·모바일 지도 래퍼가 CSS 숨김으로 **동시 마운트**라 한 풀 키를 공유하면 한쪽만 재사용돼 키를 `transit-desktop`/`transit-mobile` 로 나눴고, 2026-10-05 한 벌 마운트 뒤에도 레이아웃별 키는 유지(`poolKey={isDesktop ? … : …}` — 같은 레이아웃끼리 이어받기). 풀링 메커니즘 상세는 [map](map.md), 한 벌 마운트 근거는 [transit](transit.md).
 
-## Gotchas [coverage: high — 11 sources]
+## Gotchas [coverage: high — 12 sources]
 
 - **`.env` 의 `BUS_API_KEY` 는 2026-09-02 부터 무시된다(`3d9dfed`).** `env.ts` 스키마에서 항목이 사라져 zod 가 조용히 버리고 `DATA_GO_KR_API_KEY` 기본 `''` 로 떨어진다 — 증상은 "키가 있는데 버스 라우트 전부 503(`DATA_GO_KR_API_KEY 가 설정되지 않아…`)". 운영·로컬 `.env` 이름을 바꿔야 하고, 테스트의 `vi.hoisted` 주입·라이브 스모크 `runnable` 판정도 새 이름을 본다(플레이스홀더 `'test-bus-key'` 는 그대로).
 - **인증 실패가 두 형태로 온다.** (1) `OpenAPI_ServiceResponse > cmmMsgHeader > returnReasonCode`, (2) `ServiceResult headerCd=7`("Key인증실패: … [인증모듈 에러코드(NN)]"). 어댑터가 둘 다 `BusApiAuthError`(503)로 분류하고, (2)는 `headerMsg` 에서 NN 을 정규식으로 뽑아 reasonCode 로 쓴다. '결과 없음'은 `headerCd=4`("결과가 없습니다.") — 에러 아니라 빈 목록.
@@ -264,7 +268,7 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - **폴링 × 일 1,000건이 최대 운영 리스크.** 도착 30초 + 위치 15초 동시 폴링이면 사용자 1명이 시간당 수백 건(15초 마이크로캐시가 같은 키 동시 사용자를 흡수할 뿐). 2026-10-05 부터는 도착 510·위치 240 버킷이 따로라 위치 추적이 많은 날 위치만 먼저 503(캐시 있으면 10분 stale)이 되고 도착은 산다. 탭 비활성 중단은 필수고, 운영 전 트래픽 증설 신청 검토.
 - **`search` 버킷은 하루 60 — 처음 보는 키워드 60개면 그날 검색이 멈춘다(2026-10-05~).** 버스 탭 제출 검색·`force` 갱신·지하철 탭의 버스 크로스 검색(`BusCrossSection`)·일상지도 옴니박스(웹 450ms·앱 250ms 디바운스)가 전부 이 60 을 나눠 쓴다. 30일 DB 캐시에 있는 키워드는 0콜이고, 소진 뒤엔 캐시된 키워드는 stale 로, 새 키워드는 503 "일일 호출 한도를 소진해…" — 옴니박스에선 빈 결과로만 보인다. 도착·위치는 영향 없음. 서비스 주석이 "운영 호출 수가 쌓이면 비율 보정" 을 남겼으니 검색 503 이 운영 로그에 보이면 배분을 다시 볼 자리다.
 - **옴니박스 디바운스 검색은 제출 게이트를 우회한다(2026-08-21).** 일상지도 지역 이동 검색이 `useBusStationSearch` 를 디바운스 타이핑으로 부른다 — 훅의 `enabled`(2~50자)·`staleTime 24h`·서버 30일 캐시·in-flight 합류는 그대로지만, 캐시 미스마다 서울시 1콜이라 "한 글자씩 멈추며 치는" 입력은 키워드 수만큼 쿼터를 쓴다. 웹은 2026-10-05 부터 버스만 450ms + 조합 중 낱자모 대기로 중간 접두어("강ㄴ")를 덜 보내지만, 앱 `LifeGoToModal` 은 250ms·낱자모 대기 없음 그대로다.
-- **실패 쿨다운 30초는 실제로는 ≈22초일 수 있다.** 쿨다운 기록이 조회 시작 시각 기준이라 8초 예산을 다 쓰고 실패하면 그만큼 짧다(6개 서비스 공통, 리뷰가 남긴 후속 — 세부는 [transit](transit.md) 의 Gotchas 절).
+- **실패 쿨다운 30초는 실제로는 ≈22초일 수 있다.** 쿨다운 기록이 조회 시작 시각 기준이라 8초 예산을 다 쓰고 실패하면 그만큼 짧다(6개 서비스 공통, 리뷰가 남긴 후속 — 세부는 [transit](transit.md) 의 Gotchas 절). → 2026-11-07 해소(`9b7beef0`) — `recordFailure` 가 실패한 시각을 직접 읽는다.
 - **개발 환경 함정(HANDOFF).** 포트 3000 이중 바인딩(다른 dev 서버가 잡으면 엉뚱한 404), 브랜치 전환/rebase 후 `prisma generate` 필수(client 스키마 불일치면 `prisma.busStation` undefined), dev DB 에 vworld 키 미등록이면 지도는 placeholder(설계된 폴백, 리스트는 동작).
 - **(~2026-10-05) 데스크톱·모바일 지도 동시 마운트 — 풀 키 분리의 원래 이유.** BusPage 는 데스크톱(`hidden xl:flex`)·모바일(`xl:hidden`) 지도 래퍼를 CSS 로만 숨겨 `MapCanvas` 를 페이지당 2개 살렸고, 풀 키가 하나면 `take` 시맨틱상 한쪽만 재사용돼 `transit-desktop`/`transit-mobile` 로 분리했다. 2026-10-05 `useIsDesktopXl` 한 벌 마운트로 지도는 하나뿐이고 키 분리는 레이아웃별 이어받기 단위로 남았다. 마운트된 채 창 폭이 xl 을 넘으면 지도는 살아남지만 처음 키로 반납된다([transit](transit.md) 의 Gotchas 절).
 - **겸표시는 표시만 토글, 조회는 항상.** 주변 모드 && 비집중이면 토글 off 여도 `useSubwayNearbyStations` 는 계속 돈다(로컬 DB, 쿼터 0 이라 안전 — 켤 때 즉시 표시). 2026-07-13 부터는 버스 nearby 도 로컬 마스터(쿼터 0)라 지하철 탭의 버스 겸표시와 비용 특성이 같다(그전엔 셀 DB 캐시 + 미스 시 서울시 1콜).
@@ -281,11 +285,11 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 
 **백엔드 (friendly)**
 - [apps/friendly/src/modules/bus/bus-api.adapter.ts](../../apps/friendly/src/modules/bus/bus-api.adapter.ts) — *1콜 8초(`UPSTREAM_REQUEST_BUDGET_MS`, 2026-10-05)*
-- [apps/friendly/src/modules/bus/bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts) — *`BUS_QUOTA_LIMITS` 버킷·쿨다운·`routeNotFound` 24h·`routeInflight`(2026-10-05)*
+- [apps/friendly/src/modules/bus/bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts) — *`BUS_QUOTA_LIMITS` 버킷·쿨다운·`routeNotFound` 24h·`routeInflight`(2026-10-05)* · *2026-11-07 `recordFailure(upstream, key, e)` — 쿨다운을 실패 시각부터(`9b7beef0`)*
 - [apps/friendly/src/modules/bus/bus.route.ts](../../apps/friendly/src/modules/bus/bus.route.ts) — *검색·노선 상세에 `RATE.transitRealtime`, 노선 상세 description(2026-10-05)*
 - [apps/friendly/src/modules/bus/bus-favorite.service.ts](../../apps/friendly/src/modules/bus/bus-favorite.service.ts)
 - [apps/friendly/src/modules/bus/bus-favorite.route.ts](../../apps/friendly/src/modules/bus/bus-favorite.route.ts)
-- [apps/friendly/src/modules/bus/bus.test.ts](../../apps/friendly/src/modules/bus/bus.test.ts) — *52건(버킷 분리·가짜 노선 네거티브·노선 in-flight·쿨다운·서비스 차단 신설)*
+- [apps/friendly/src/modules/bus/bus.test.ts](../../apps/friendly/src/modules/bus/bus.test.ts) — *52건(버킷 분리·가짜 노선 네거티브·노선 in-flight·쿨다운·서비스 차단 신설)* → *2026-11-07 53건(40초 매달린 실패 쿨다운)*
 - [apps/friendly/src/lib/upstream-guard.ts](../../apps/friendly/src/lib/upstream-guard.ts) — *공용 DailyQuota·UpstreamCooldown·retryAfterSec·seoulDateKey(2026-10-05, 구조는 transit)*
 - [apps/friendly/src/lib/upstream-guard.test.ts](../../apps/friendly/src/lib/upstream-guard.test.ts) — *5건*
 - [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) — *`RATE.transitRealtime` 60/분*

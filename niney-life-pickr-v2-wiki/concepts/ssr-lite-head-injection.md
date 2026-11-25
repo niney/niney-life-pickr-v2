@@ -1,7 +1,7 @@
 ---
 concept: ssr-lite-head-injection
-last_compiled: 2026-09-07
-topics_connected: [friendly, settlement, web, tarot, saju-c, saju-g, vote]
+last_compiled: 2026-11-15
+topics_connected: [friendly, settlement, web, tarot, saju-c, saju-g, vote, meal-story]
 status: active
 ---
 
@@ -17,6 +17,7 @@ SPA 라우트를 백엔드가 가로채, 빌드된 `index.html` 의 `<head>` 에
 
 ## Instances
 
+- **2026-11-09** in [meal-story](../topics/meal-story.md) / [friendly](../topics/friendly.md) (`e3c6f6e5`, 32차): 건강식단 스토리 공유 링크(`/meal/stories[/:slug[/recipe]]`)의 SNS 미리보기 `meal-story-preview.ts` 가 타로 공유와 같은 방식이다 — 봇은 head 메타만 읽고 사람은 같은 HTML 위에서 SPA 가 부팅된다. `.route.ts` 가 아니라 autoload 대상이 아니어서 `app.ts` 에서 `registerMealStoryPreview` 로 등록한다. 초안·없는 스토리는 기본 미리보기(초안 제목 누출 방지). 운영 nginx 에 `location ^~ /meal/stories` 를 friendly 로 넘기는 블록이 있어야 미리보기가 산다 — 32차 점검 시점 `ops/nginx/niney_life_pickr_v2_projects` 에는 그 블록이 없다(없어도 화면은 정적 `index.html` 로 뜬다).
 - **2026-09-06~07 (25차)** in [saju-c](../topics/saju-c.md) / [saju-g](../topics/saju-g.md): 사주 두 구현이 각각 `saju-preview.ts`(`/saju-c/s/:token` + `/image.png?format=og|story`)·`saju-g-preview.ts`(`/saju-g/s/:token`)로 같은 골격. 사주(C) 공유 이미지는 satori 폰트(Plex)에 한자가 없어 `build:saju-glyphs` 로 만든 PNG 글리프를 인장 `<img>`·`graphemeImages` 로 넣는다 — SSR-lite 이미지 렌더의 첫 CJK 우회. 생년월일은 `shareBirth` 일 때만 노출, 아니면 마스킹.
 - **2026-09-05 (25차)** in [tarot](../topics/tarot.md) (`98df15a`): `tarot-preview.ts` — 토큰 공개 페이지 OG + satori/resvg 공유 이미지(OG 1200×630·세로 1080×1920). 게스트는 입력 재전송으로 행을 만들고 회원은 readingId 로 토큰. nginx `^~ /tarot/s/` 블록이 `.png` 정규식 캐시 location 보다 먼저 잡혀야 한다(운영 실측 `13b87e8`).
 - **2026-08-16 (21차)** in [vote](../topics/vote.md): `vote-preview.ts` — `/vote/<token>` 카톡 미리보기. 없어도 SPA 는 동작(메타만 빠짐).
@@ -45,6 +46,7 @@ SPA 라우트를 백엔드가 가로채, 빌드된 `index.html` 의 `<head>` 에
 
 ## Sources
 
+- [apps/friendly/src/modules/meal-story/meal-story-preview.ts](../../apps/friendly/src/modules/meal-story/meal-story-preview.ts) — 32차 스토리 OG
 - [../topics/settlement](../topics/settlement.md)
 - [../topics/friendly](../topics/friendly.md)
 - [../topics/web](../topics/web.md)

@@ -1,6 +1,6 @@
 ---
 concept: 도메인별 LLM 프롬프트/스키마 버전 상수
-last_compiled: 2026-10-26
+last_compiled: 2026-11-15
 topics_connected: [ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs, food, meal, tarot, saju-c, saju-g, meal-nutrition, menu-board]
 status: active
 ---
@@ -20,6 +20,8 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 
 ## Instances
 
+- **2026-11-08** in [food](../topics/food.md) (`cf06d9bc`, 32차): **버전을 올리되 옛 판정 일부를 살린다.** 메뉴 칼로리 LLM 매칭 `MENU_LLM_MATCH_VERSION` 1 → 2 는 후보를 좁히기만 했다(영양 없는 행·범주어 제외). 그래서 `menu-llm-match.service.ts` 는 `KEEP_OLD_KCAL_HITS_FROM = 1` 부터의 옛 판정 중 **지금도 열량 있는 행을 가리키는 것**은 그대로 쓰고("v2 로 물어도 같은 행을 골랐을 것"), 영양 없는 행을 골랐거나 매칭 없음이던 판정만 "아직 안 물어봄" 으로 두어 다시 묻는다 — 운영 사본 약 180건. 판 번호가 오르면 전부 버리는 기본값 대신, 바뀐 규칙이 영향을 주는 판정만 무효화했다. 같은 묶음의 영양 기준 음식(`FOOD_NUTRIENT_REF_VERSION = 1`)은 LLM·'없음' 판정만 다시 묻고 규칙·어드민 판정은 그대로 둔다.
+- **2026-11-07** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) / [menu-board](../topics/menu-board.md) (`cd17ebf3`·`1ba0381a`·`f4cec51d`·`23c24858`, 32차): 하루에 판이 세 번 올랐다 — 식단 추천 v5 → v6(영양 점검 한 줄), 영양제 조언 v1 → v2(마그네슘·아연·엽산) → v3(곁들임 후보 줄). 조언의 '지난 것' 판정이 **판 번호 + 판정 지문**으로 넓어졌다 — 프롬프트가 같아도 같은 기간을 오늘 다시 점검한 판정(영양소별 status·조언 대상·기록 더 필요)이 다르면 `stale: true`(숫자만 조금 달라진 건 무시; 11/3 조언 "모자란 영양소는 없어요" 가 10개 '부족' 점검 옆에 그대로 보였다). 메뉴판은 사진마다 실패 기록에 프롬프트 버전을 남겨, 같은 버전으로 3번 실패하면 건너뛰고 버전이 오르면 다시 센다 — 버전이 "결과 무효화" 뿐 아니라 "재시도 예산 초기화" 에도 쓰인 첫 사례.
 - **2026-10-10** in [menu-board](../topics/menu-board.md) (`faa12818`): 메뉴판 읽기 `MENU_BOARD_PROMPT_VERSION` 1 → 2(크기·인분별 가격을 첫 번째만 받던 규칙 → 크기마다 한 항목 "꽃게탕 (대)"). 네이버 메뉴판 사진의 읽기 결과에 `promptVersion` 을 남기고(없으면 1), **지금보다 낮은 버전만** 다음 크롤의 자동 읽기·`read:naver-menu-boards` 가 다시 읽는다(같은 주소·같은 버전은 건너뜀) — 버전 상수가 캐시 무효화가 아니라 **재처리 대상 선별 키**로 쓰였다. 원인 가게 한 곳만 바로 다시 읽고(27 → 37개) 나머지 22곳 73장은 v1 그대로 두었다가 다음 크롤에 맡겼다. 바꾸기 전후 검수 정답 F1(99.7 → 99.8%)을 같이 재 [golden-set-precision-gate](golden-set-precision-gate.md) 를 통과했다.
 - **2026-10-04** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) (`e3afe9c`·`2aaaa7e`·`7056244`·`3d067a0`): 식단 추천 `MEAL_RECOMMENDATION_VERSION` 이 **하루 사이 3 → 5**(v3 알레르기·"이번 추천의 중심" 문장, v4 반찬·안주·간식은 혼자 권하지 않기 — 후보가 흔한 한 끼 목록 먼저로 바뀐 뒤, v5 "안 드셨다" 근거를 2주 분포 전체와 후보 줄의 조리형태 개수로) — 버전 상수가 실험 단위로 쓰였다. 프로브 리포트가 버전별 틀린 주장 수(9/64 → 2/36)를 남겨 버전 번호가 곧 측정 기록의 키가 됐다. 영양제 조언 `MEAL_NUTRITION_ADVICE_VERSION = 1` 은 저장본(`MealNutritionAdvice`)에 `promptVersion`·`inputHash` 로 함께 남아 **재사용 판정**(같은 버전·같은 입력이면 LLM 을 다시 부르지 않고 한도도 쓰지 않음)에 쓰인다.
 - **tarot** in [tarot](../topics/tarot.md) (`apps/friendly/src/modules/tarot/tarot.prompts.ts`): `TAROT_PROMPT_VERSION = 2`. 캐시 키·저장 행(`promptVersion`)에 들어가고 메뉴 타로(v3a)는 카드 원소·무드로 후보를 고르고 LLM 은 이유만 쓴다.
@@ -56,8 +58,12 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 5. **summary 의 자동 재실행 vs grouping/global-merge 의 수동 재실행** 차이가 의미 있음. summary 는 행 단위가 작고(리뷰 1건) 비용이 낮아서 `analysisVersion < current` 를 자동 큐잉. grouping/global-merge 는 batch 단위가 크고 비용이 무거워서 명시적 job 생성을 요구. 같은 패턴 안에서도 "자동 흡수 vs 명시 트리거" 의 다이얼이 도메인 비용에 맞춰 조정된다.
 6. **버전의 세 번째 용도 — 비교 축** (2026-08, meal) — 재실행(summary/grouping)도, 무의미(extraction)도 아닌 제3의 자리: 인식 버전은 사용자 교정률을 버전별로 나눠 보는 필터가 되고, 추천 버전은 행동 이벤트의 `rankingVersion` 으로 흘러 funnel 을 버전별로 가른다. "프롬프트를 바꿨더니 좋아졌나" 를 데이터로 답하려면 재실행이 없는 도메인도 버전을 박아야 한다. 곁들여 food classify 의 "봤다 표식" 은 규칙 4 의 역방향 — 상수를 안 올리면 재질문이 영원히 안 일어나고, 추천의 `profileHash` 는 버전을 모르므로 bump 뒤 캐시가 옛 출력을 돌려준다. 버전 상수가 닿지 않는 캐시 키·게이트가 있는지가 새 체크 항목.
 
+7. **(32차) 무효화 범위는 "무엇이 바뀌었나" 에서 정한다.** 프롬프트 판을 올린다고 모든 저장 판정이 틀려지는 건 아니다. 바뀐 것이 후보 범위뿐이면, 새 범위 안에 든 옛 답은 새 판으로 물어도 같다 — 그 조건을 코드 상수(`KEEP_OLD_KCAL_HITS_FROM`)로 적어 두면 재질의 비용이 수천 건에서 수백 건으로 준다. 반대로 판정 기준 자체가 바뀌면 이 구제는 쓰면 안 된다.
+
 ## Sources
 
+- [apps/friendly/src/modules/food/menu-llm-match.service.ts](../../apps/friendly/src/modules/food/menu-llm-match.service.ts) — 32차 `KEEP_OLD_KCAL_HITS_FROM` 옛 판정 구제
+- [apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts) — 32차 판정 지문 stale
 - [menu-board](../topics/menu-board.md)
 - [summary in friendly](../topics/friendly.md)
 - [menu-grouping](../topics/menu-grouping.md)

@@ -1,7 +1,7 @@
 ---
 concept: WebGL 3D 무대 + Lite 폴백 — 연출은 선택, 기능은 항상
-last_compiled: 2026-10-10
-topics_connected: [tarot, saju-c, web, mobile, shared, saju-g]
+last_compiled: 2026-11-15
+topics_connected: [tarot, saju-c, web, mobile, shared, saju-g, meal-story]
 status: active
 ---
 
@@ -18,6 +18,7 @@ status: active
 
 ## Instances
 
+- **2026-11-10** in [meal-story](../topics/meal-story.md) / [web](../topics/web.md) (`281318cc`, 32차): WebGL 이 아니라 **영상(Remotion)** 무대에도 같은 원칙 — 건강식단 재생기는 '영상으로 보기'(기본, `MealStoryMotion` lazy 조각)와 '글로 보기' 두 보기를 갖고, `prefers-reduced-motion: reduce` 이거나 `ResizeObserver` 가 없는 환경(테스트 jsdom·낡은 브라우저)은 글로 본다. 연출은 선택이고 내용(장면의 숫자·문장)은 두 보기가 같은 서버 응답에서 나온다.
 - **2026-10-05** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [saju-g](../topics/saju-g.md) / [web](../topics/web.md) / [shared](../topics/shared.md) (`43a1f078`·`34274dd3`): **무대가 있어도 늘 그릴 필요는 없다** — 무대 비용의 두 번째 축. Lite 폴백이 "무대를 띄울지" 를 정했다면 이번 라운드는 "띄운 무대를 언제 그릴지" 를 정했다. 두 무대 Canvas 를 `frameloop="demand"` 로 두고 `stage/FrameDriver.tsx` 가 다음 프레임을 요청한다 — 연출 단계와 단계·시선·포인터가 바뀐 뒤 `STAGE_SETTLE_S` 2초는 매 프레임, 폼을 채우거나 풀이를 읽는 대기는 `STAGE_IDLE_FPS` 30. frameloop prop 을 always↔demand 로 바꾸지 않는 이유가 함정으로 남았다: R3F 는 frameloop 가 바뀔 때마다 clock 을 0 으로 되돌려, `elapsedTime` 으로 도는 별·파티클·무대 타임라인이 튄다. 같은 커밋이 무대에 보는 필드만 넘기고 memo 해 폼 입력이 무대를 다시 그리지 않게 했고(세션 훅 반환 참조 고정), 사주는 30Hz `setTick` 을 연출 중과 전환 뒤 2초에만 돌린다. 측정(헤드리스 Chromium + D3D11, 1280×800): 사주 대기 60fps·R3F 커밋 24회/초 → 31fps·0, 연출 중은 60fps 그대로. 카드 썸네일은 1024px 원본 대신 112·224px 변형(`34274dd3`).
 
 - **2026-09-06~07** in [saju-c](../topics/saju-c.md) (`0a7f637`, 5~7차): 원판·고리 다이얼·인장 낙하·일간/띠 카드·오행 구슬. 실측에서 `Seal` 의 `return null` 이 `useMemo` 앞에 있어 훅 순서 오류로 무대 전체가 흰 화면 → 훅 순서 수정 + 에러 바운더리 추가. 7차에 효과음(WebAudio 합성, 기본 꺼짐)도 무대 콜백에 얹음. 원격 실브라우저는 OS reduced-motion 이라 기본 Lite 로 떴다.
@@ -38,6 +39,7 @@ status: active
 
 ## Sources
 
+- [apps/web/src/routes/meal-story/MealStoryPlayer.tsx](../../apps/web/src/routes/meal-story/MealStoryPlayer.tsx) — 32차 `canPlayMotion`·reduced-motion
 - [../topics/tarot](../topics/tarot.md)
 - [../topics/saju-c](../topics/saju-c.md)
 - [../topics/web](../topics/web.md)

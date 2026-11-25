@@ -27,7 +27,7 @@
 
 2026-09-06 사주 범위 갱신: [saju-g](topics/saju-g.md) 추가, 현재 토픽 32개. 아래 수치는 마지막 전체 컴파일 당시 기록이다.
 
-Compiled: 2026-10-31 (31st) | Topics: 43 | Concepts: 43 | Sources: ~4,890 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1939) | Auto-updates on session start
+Compiled: 2026-11-15 (32nd) | Topics: 44 | Concepts: 46 | Sources: ~5,310 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 2107) | Auto-updates on session start
 
 ## Topic map at a glance
 
@@ -45,6 +45,7 @@ project-overview  (모노레포 전체 — 공개/어드민/소유자/토큰 권
 │   ├── food         (음식 카탈로그 — 다중 source 적재·관측/충돌 rebase·영양·식당 역검색·인식 품질 — 별도 토픽)
 │   ├── meal         (개인 식단 — 기록·인식 lineage·추천 event 학습·계정별 로컬 상태·backup/retention — 별도 토픽)
 │   ├── meal-nutrition (식단 영양소 점검 KDRI + kimi-k3 영양제 조언, 칸 단위 검사 — 별도 토픽)
+│   ├── meal-story   (건강식단 스토리 — 원고는 서버 파일·숫자는 서버 계산, 웹 장면 재생기·Remotion 영상, 렌더 도구 tools/meal-motion — 별도 토픽, 32차 신설)
 │   ├── bus          (서울시 버스 API 프록시 — 정류장 검색/주변 + 실시간 도착 + 노선 + 실시간 차량 위치·따라가기 + 즐겨찾기 — 별도 토픽; 앱은 mobile 대중교통 탭)
 │   ├── subway / transit (수도권 전철 + 버스↔지하철 통합 레이어 — 별도 토픽)
 │   ├── air-quality  (에어코리아 대기정보 프록시 + 내 위치 저장(날씨·일상지도·식단 공유) + 상단바/홈 글랜스 — 별도 토픽)

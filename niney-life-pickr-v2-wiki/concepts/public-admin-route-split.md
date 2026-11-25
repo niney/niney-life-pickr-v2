@@ -1,7 +1,7 @@
 ---
 concept: 공개/어드민 라우트 페어 분리
-last_compiled: 2026-09-26
-topics_connected: [friendly, api-contract, shared, web, map, project-overview, settlement, review-search, review-clustering, logs, tour, api-docs, canonical]
+last_compiled: 2026-11-15
+topics_connected: [friendly, api-contract, shared, web, map, project-overview, settlement, review-search, review-clustering, logs, tour, api-docs, canonical, menu-grouping]
 status: active
 ---
 
@@ -15,6 +15,7 @@ status: active
 
 ## Instances
 
+- **2026-11-07** in [canonical](../topics/canonical.md) / [menu-grouping](../topics/menu-grouping.md) (`16c1a4c2`·`8dc1615d`·`edc7d1be`, 32차): 페어가 **캐시에서는 반대 방향으로** 만났다. 어드민 맛집 목록(요약 19.8만 건을 열 때마다 다시 셈, 약 135ms)과 어드민 분석 맛집 상태(분석 완료 수 groupBy 약 220ms)가 공개 목록 캐시가 30초마다 전 가게를 한 번에 센 집계(`PublicRestaurantBase.buckets`)를 **빌려 쓴다** — 어드민 숫자가 최대 30초(만료 직후 한 번은 지난 값) 늦을 수 있다는 것을 사용자가 받아들였다(결정 2026-11-07; 분석 진행은 목록 화면이 SSE 로 따로 받고, 크롤 저장·삭제·병합은 캐시를 비운다). 반면 같은 날 생긴 가게 단위 공개 상세·인사이트 캐시는 **어드민 상세·인사이트·리뷰 매칭이 거치지 않는다** — 목록의 집계 숫자는 묵어도 되지만 편집 화면의 원본은 묵으면 안 된다는 구분이다. 원칙은 [freshness-matched-read-caches](freshness-matched-read-caches.md).
 - **2026-09-26**(`420a6be`) in [../topics/web](../topics/web.md) / [../topics/canonical](../topics/canonical.md) / [../topics/shared](../topics/shared.md): **페어를 한 화면에서 합성** — 어드민 맛집 상세(`/admin/restaurants/:placeId`)가 공개 상세의 탭 구성(홈·분석·여행자·메뉴·리뷰·질문·사진·정보 + 어드민 전용 로그, `?tab=`)을 그대로 따르면서, 한 페이지가 **두 표면을 동시에 부른다**: 어드민 라우트(`useRestaurantByPlaceId` — 운영 메타·canonical 전체 출처 리뷰 `AdminVisitorReview`·출처 행 `sources`)와 공개 라우트(`useRestaurantPublic`·`useRestaurantPublicInsights` — 사용자 화면 데이터 그대로). 홈·분석·질문·사진·정보·메뉴·여행자 탭은 공개 컴포넌트(`HomeTab`·`InsightsTab`·`AskTab`·`PhotosTab`·`InfoTab`·`MenuTab`·`TourTab`)에 **공개 응답을 그대로** 넣고, 어드민 몫(메뉴 순위·원시 값·출처 표·여행자 근거 `TourEvidenceSection`·출처 통합 리뷰 탭·크롤/요약 카드)만 옆에 덧붙인다. 공개 컴포넌트 쪽 변경은 **선택 prop 두 개뿐**(`HomeTab.availableTabs` — 어드민에 없는 '가는 법' 링크 숨김, `ParkingSummaryLine.onOpen`) — 생략하면 공개 동작 그대로. 서버에서도 경계 안쪽 코어를 공유한다: 어드민 `GET /admin/restaurants/place/:placeId/review-match` 가 공개 리뷰 목록과 **같은 팁·메뉴 매칭 함수**(`filterReviewsByTipMenu` 로 추출)를 쓴다. 즉 라우트·스키마·가드는 여전히 둘이고, 합쳐진 건 UI 조각과 서비스 내부 함수다.
 - **2026-09-24**(`1b621c4`) in [../topics/api-docs](../topics/api-docs.md) / [../topics/friendly](../topics/friendly.md) / [../topics/project-overview](../topics/project-overview.md): **prefix 가 곧 공개 정책의 술어** — "어드민 빼고 전부 연다" 는 사용자 결정(다른 프로젝트가 브라우저에서 직접 호출)이 `plugins/cors.ts` 한 곳의 판정으로 끝났다: `/api/v1/admin/**`(퍼센트 인코딩 경로도 어드민으로 판정) 는 `PUBLIC_ORIGIN` 만, 나머지는 `origin: '*'` + `credentials: false`. 같은 경계가 문서에도 그대로 쓰인다 — `export:openapi` 가 어드민 경로를 빼고 `docs/api/`(192개 = 공개 83·선택 인증 15·로그인 94)를 만들고, swagger transform 이 가드 훅에서 `x-auth`(public·optional·user·admin)를 자동으로 읽어 붙인다. 2026-05 부터 "`/api/v1/admin/*` prefix 가 가드의 유일한 신호" 로 지켜 온 규약이 CORS·외부 문서라는 **두 번째·세 번째 정책 축**을 비용 없이 받아낸 사례.
 - **2026-09-13**(여행로그 1~5차, `c777380`·`99991da`·`cfa276b`) in [../topics/tour](../topics/tour.md) / [../topics/api-contract](../topics/api-contract.md) / [../topics/web](../topics/web.md): **페어가 아니라 3층** — 같은 `Tour*` 표를 (1) 공개 집계 `GET /tour/public/*`·`/restaurants/public/:placeId/tour-stats`(집계값만, 여행자 5명·평가 3건 하한, 응답 스키마에 여행·방문·사진 식별자가 아예 없음 — 테스트가 키 스캔), (2) 어드민 운영 `/admin/tour/status·seeds·match/run·biz-status/run`(장소 단위 집계 + 매칭·폐업 상태, 관리자 가드), (3) **원본 열람** `/admin/tour/places/:id/{visits,spend,photos…}`·`/trips/:travelId`·`/photos/:photoId/:size` 로 갈랐다. 3층은 어드민 안에서 한 번 더 갈라진 **개인 승인 티어** — AI 허브 다운로드 승인을 받은 본인(`TOUR_RAW_USER_IDS`, user id 또는 이메일)만 통과하고 밖이면 403 이 아니라 **404**(존재를 숨김), onSend 로 `private, no-store`·`noindex`, 사진은 `?token=` 도 인증. 라이선스(원본 제3자 열람 불가·국외 반출 금지)가 권한 축을 하나 더 만든 첫 사례이며, 공개 층은 서면 회신 전 운영 노출 금지라는 **배포 게이트**까지 층마다 다르다. 계약도 층별 스키마(`Tour*Public*` 에는 식별자 없음 / `TourRaw*` 는 원문)로 분리.
@@ -55,6 +56,8 @@ status: active
 
 ## Sources
 
+- [apps/friendly/src/modules/restaurant/restaurant-public-base.ts](../../apps/friendly/src/modules/restaurant/restaurant-public-base.ts) — 32차 `buckets` 를 어드민이 빌려 씀
+- [menu-grouping](../topics/menu-grouping.md) · [freshness-matched-read-caches](freshness-matched-read-caches.md)
 - [../topics/api-docs](../topics/api-docs.md)
 - [../topics/canonical](../topics/canonical.md)
 - [../topics/friendly](../topics/friendly.md)

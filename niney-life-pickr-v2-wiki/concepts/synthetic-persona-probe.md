@@ -1,7 +1,7 @@
 ---
 concept: 가상 사용자 프로브 — 성향을 설계한 사람을 실제 경로에 태워 결정적 층과 LLM 층을 따로 판정한다
-last_compiled: 2026-10-04
-topics_connected: [meal, meal-nutrition, food, ai, friendly]
+last_compiled: 2026-11-15
+topics_connected: [meal, meal-nutrition, food, ai, friendly, meal-story]
 status: active
 ---
 
@@ -19,6 +19,7 @@ status: active
 
 ## Instances
 
+- **2026-11-07~14** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) / [food](../topics/food.md) / [meal-story](../topics/meal-story.md) (32차): 프로브가 다섯 개 늘었다. `probe:meal-recommend-nutrition`(`52202263` — 운영 사본 복제, LLM 2회씩: 고기·튀김 사용자 부족 영양소 보충 3 → 4, 대조군 0 → 3, 이유의 영양 언급 2~4, 근거 없는 주장 0), `probe:meal-recommend-variants`(`9cf139cb` — 보정 세기·최근 단골 재추천 변형 실험, **결과는 "바꾸지 않는다"**: 지금 세기가 보충 2.83 으로 센 변형과 같거나 낫고 부작용이 적으며, 단골 규칙은 8일 전 음식으로 쏠렸다 `fbd5d227`), `probe:meal-nutrition`·`probe:nutrition-coverage`(`1ba0381a` — 실제 계정 복제본에서 14·28일 판단 보류 10 → 0, coverage 는 읽기 전용), `probe:menu-composition`(`0d21d4d3` — 운영 메뉴 표본 160개 채점). 건강식단 스토리는 `export:meal-story --standard=`(기준이 다른 사람 — 65~74세 나트륨 2,100mg)·`--change`(기록한 뒤의 변화)로 가상 사용자의 화면을 만들어 검수한다.
 - **2026-10-04** in [meal](../topics/meal.md) (`3fd971b`, `probe:meal-recommend`): 수정 전 **통과 32·확인 15·실패 1** — 4명·세 끼 모두 거의 같은 "감자 / 시금치 / 가자미식해". 원인 다섯(생재료·반찬이 끼니 후보, 미경험 음식이 세 요소에서 만점이라 취향이 늘 짐, 👎 가 취향 감점뿐이라 안 먹어 본 음식엔 무효, 끼니 구분 없음, 인기 동률이면 가나다순)을 고쳐 **47·1·0**, LLM 층 128·0·0.
 - **2026-10-04** in [meal](../topics/meal.md) / [food](../topics/food.md) (`8e32a49`·`e3afe9c`·`f5ebf86`·`51dfa7d`, `probe:meal-settings`): E 한 명에 설정만 바꿔 가며 66·14·5 → 79·7·0. **알레르기가 걸러지지 않던 안전 결함**을 찾았다 — 서버는 재료·표시 근거가 있는 행만 거르는데 dev 카탈로그 1,266행 중 근거 있는 행 0, 그래서 새우 알레르기 + 좋아함 '깐풍새우'가 LLM 추천 1번. 이름 단서 `allergensInFoodName` 으로 후보에서 빼고 프롬프트 v3 에 알레르기 줄. 프리셋 '골고루' = '새로운 도전'(상위 10 이 100% 같음), 위치 없는 봄·가을의 날씨 가중치·dev 의 간편함은 "효과 없음"으로 확인(보류).
 - **2026-10-04** in [meal](../topics/meal.md) / [ai](../topics/ai.md) (`2aaaa7e`·`7056244`, `probe:meal-models`): gpt-oss:120b vs kimi-k3 를 같은 후보·같은 프롬프트로(18 시나리오 × 2) — 지연 p50 2.0s vs 5.7s, 틀린 주장 14% vs 21%, kimi 는 더 구체적이지만 단정·자기모순이 많아 gpt-oss 유지. 틀린 주장 대조로 프롬프트 v5 의 '안 드셨다' 근거를 고쳐 **9/64(14%) → 2/36(6%)**, 흔한 한 끼 목록(`common-meals.ts`) 도입으로 흔한 한 끼 비율 35% → 100%. `--from-raw` 로 저장한 원 응답에서 지표만 다시 낸다(판정 규칙을 고친 뒤 LLM 을 다시 부르지 않게).
@@ -34,8 +35,16 @@ status: active
 
 셋째, 이 패턴은 **dev 데이터의 빈곤을 드러내는 장치**이기도 하다. 인기도 0·재료 정보 0·알레르기 근거 0 인 dev 카탈로그에선 날씨·간편함·식사 방식이 구조적으로 "효과 없음"이고, `check:common-meals` 는 dev 에 제육덮밥·닭갈비가 없다는 것을 알려 준다 — 그래서 "운영에서 확인" 항목이 남는다(읽기 전용 점검만 운영에서 돌릴 수 있게 설계). 다음에 정답표가 없는 LLM 기능(예: 사주에 묻기·여행 코스)을 만들면, 기대를 가진 가상 사용자 3~5명과 두 층 판정, `--undo`·prod 거부를 먼저 세우는 것이 이 프로젝트의 표준 절차다.
 
+1. **(32차) 변형 실험의 결론이 "그대로 둔다" 여도 프로브와 결과 문서를 남긴다.** 추천 변형 프로브는 아무것도 바꾸지 않았지만, 같은 질문(보정을 더 세게? 단골을 다시?)이 돌아올 때 답과 근거가 이미 있다.
+
 ## Sources
 
+- [apps/friendly/scripts/probe-meal-recommend-nutrition.ts](../../apps/friendly/scripts/probe-meal-recommend-nutrition.ts) — 32차
+- [apps/friendly/scripts/probe-meal-recommend-variants.ts](../../apps/friendly/scripts/probe-meal-recommend-variants.ts) — 32차
+- [apps/friendly/scripts/probe-nutrition-coverage.ts](../../apps/friendly/scripts/probe-nutrition-coverage.ts) — 32차
+- [apps/friendly/scripts/probe-menu-composition.ts](../../apps/friendly/scripts/probe-menu-composition.ts) — 32차
+- [apps/friendly/scripts/export-meal-story.ts](../../apps/friendly/scripts/export-meal-story.ts) — 32차 `--standard`·`--change`
+- [meal-story](../topics/meal-story.md)
 - [../topics/meal](../topics/meal.md)
 - [../topics/meal-nutrition](../topics/meal-nutrition.md)
 - [../topics/food](../topics/food.md)

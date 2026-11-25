@@ -1,7 +1,7 @@
 ---
 concept: 캐시 상한은 개수가 아니라 바이트 — 엔트리 크기가 흔들리면 개수 상한은 메모리 상한이 아니다
-last_compiled: 2026-10-10
-topics_connected: [friendly, air-quality, weather, review-search, crawl, tarot, saju-c, saju-g, settlement, housing, life-map, parking, map, tour, canonical]
+last_compiled: 2026-11-15
+topics_connected: [friendly, air-quality, weather, review-search, crawl, tarot, saju-c, saju-g, settlement, housing, life-map, parking, map, tour, canonical, menu-grouping, meal]
 status: active
 ---
 
@@ -15,6 +15,7 @@ Redis 금지(CLAUDE.md) 아래에서 캐시는 전부 프로세스 안의 `lru-c
 
 ## Instances
 
+- **2026-11-07** in [friendly](../topics/friendly.md) / [canonical](../topics/canonical.md) / [parking](../topics/parking.md) / [review-search](../topics/review-search.md) (`edc7d1be`·`692b89b9`·`a00c3092`, 32차): 공용 `lib/keyed-cache.ts` `KeyedCache` 가 바이트 상한을 **기본값**으로 들였다 — 생성자에 `maxBytes` 가 필수고 값마다 `bytes` 추정(문자열은 길이 × 2)을 돌려줘야 담긴다. 맛집 공개 상세·리뷰 64MB·인사이트 8MB. 운영 사본에서 큰 가게 상세 화면에 10명이 몰리면 RSS 가 1.1GB(pm2 상한 1.5GB)까지 올랐다가 513MB 로. 식단 식당 메뉴 응답(10분·200곳 `26484e04`)과 메뉴 그룹핑 전역 통계(60초 `fa121230`)는 개수 상한·작은 값이라 별도 개수 상한 캐시다(LRU `max`·`Map`). 수명·신선도 규칙은 [freshness-matched-read-caches](freshness-matched-read-caches.md).
 - **2026-10-05** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [saju-g](../topics/saju-g.md) / [settlement](../topics/settlement.md) (`lib/share-render.ts` `SharePngCache`, `78cbb457`): 공유 PNG 캐시 5종을 `maxSize`(PNG 바이트) + TTL + 같은 키 렌더 합류로 — 개수 상한 시절 story PNG 100장이면 130MB 상주(F-3·X-4), 이제 다섯 캐시 합계 32MB 안팎. 타로 카드 텍스처도 같은 방식(`tarot-card-texture.ts` 6MB).
 - **2026-10-05** in [air-quality](../topics/air-quality.md) (`air-quality.service.ts`, `fd957320`): **서빙 형태 저장** — 측정소 시계열 캐시에 업스트림 원본(3MONTH ≈2,200행 ≈1.2~1.5MB) 대신 화면이 쓰는 형태(시간 24점 또는 일평균 ≤92점, ≈18KB 이하)만 둔다. 개수 상한 300 이 그대로 ≈5MB 상한이 된다(E-3).
 - **2026-10-05** in [weather](../topics/weather.md) (`weather.service.ts`, `fd957320`): 상한 없던 `Map` 을 `WEATHER_CACHE_MAX_BYTES` 32MB 바이트 LRU 로 — 엔트리 바이트는 넣을 때 한 번 잰다. 9,000격자 힙 +238 → +24MB(E-4).
@@ -32,6 +33,8 @@ Redis 금지(CLAUDE.md) 아래에서 캐시는 전부 프로세스 안의 `lru-c
 
 ## Sources
 
+- [apps/friendly/src/lib/keyed-cache.ts](../../apps/friendly/src/lib/keyed-cache.ts) — 32차 `maxBytes` 필수
+- [freshness-matched-read-caches](freshness-matched-read-caches.md)
 - [friendly](../topics/friendly.md)
 - [air-quality](../topics/air-quality.md)
 - [weather](../topics/weather.md)

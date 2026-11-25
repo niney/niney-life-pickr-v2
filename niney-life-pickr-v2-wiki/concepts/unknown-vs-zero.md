@@ -1,7 +1,7 @@
 ---
 concept: 모름과 없음을 계약에서 가른다 — null(관측 안 됨·범위 밖)·0(관측된 없음)·억제(말하지 않음)
-last_compiled: 2026-10-31
-topics_connected: [housing, parking, sea, tour, air-quality, api-contract, web, life-map, meal, meal-nutrition, mobile]
+last_compiled: 2026-11-15
+topics_connected: [housing, parking, sea, tour, air-quality, api-contract, web, life-map, meal, meal-nutrition, mobile, utils, hiking, meal-story]
 status: active
 ---
 
@@ -24,6 +24,9 @@ status: active
 
 ## Instances
 
+- **2026-11-08~09** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) / [utils](../topics/utils.md) (`90ccdff6`·`46134eb8`·`d772e4bb`·`e39b1366`, 32차): **사용자가 직접 "없음" 을 적게 했다** — 끼니 '안 먹음'(`meal_skips`, 사용자·날짜·끼니 유일). 예전엔 점심만 적은 날의 빈 아침·저녁이 "안 먹음" 인지 "안 적음" 인지 알 수 없어, 그런 날을 하루 평균에서 통째로 뺐다. 이제 '안 먹음' 은 관측된 없음이고 빈칸은 모름이다 — 평균에 넣는 날은 `isCountedMealDay` — 11-08 판(기록 + '안 먹음' 두 칸 이상)을 하루 만에 고쳐, 11-09 부터는 두 끼 이상 기록했거나 한 끼만 기록하고 **남은 아침·점심·저녁을 모두** '안 먹음' 으로 채운 날만이다. '안 먹음' 하나는 그 끼니의 모름만 없앨 뿐 다른 빈 끼니는 여전히 모름이라(아침을 늘 거르는 사람이 아침만 표시하면 먹고 안 적은 저녁이 빠진 채 평균에 들어 '부족' 이 거짓으로 나왔다), 하루 전체가 '안다' 가 될 때만 평균에 든다. 경계 규칙 셋: ① 아침·점심·저녁만(`MEAL_SKIPPABLE_SLOTS` — 간식·야식 빈칸은 누락이 아니라 원래 없을 수 있어 묻지 않는다) ② **기록이 이긴다**(기록을 만들거나 그 끼니로 옮기면 표시가 지워지고, 기록이 있는 칸에 '안 먹음' 을 쓰면 409) ③ 앞으로 올 날은 400. '안 먹음' 은 남은 끼니를 다 채울 때까지 묻고(한 끼만 표시하면 여전히 모름이 남는다), 사진 포함 백업에도 담는다. 같은 커밋 묶음의 [comparison-eligibility-gates](comparison-eligibility-gates.md) 가 이 판정을 비교의 입력으로 쓴다.
+- **2026-11-07** in [meal-nutrition](../topics/meal-nutrition.md) (`f4cec51d`·`1ba0381a`, 32차): 다섯 번째 인코딩 — **"부족" 과 "기록 부족" 을 가른다.** 열량을 필요량만큼 채웠다면 기준에 닿았을 부족은 판정을 바꾸지 않고 `recordGap`('기록 더 필요', 점선 주황)으로 표시한다(사용자 결정 A안). 그리고 조용히 빠지던 모름을 드러냈다 — 열량을 모르는 음식은 정보 비율 분모에도 안 들어가 점검에서 소리 없이 빠졌는데, 이제 notes 에 "열량을 모르는 음식 N개(…)는 점검에서 빠졌어요". 반대 방향으로는 판단 보류(정보 없음) 10 → 0 — 외식 어휘처럼 열량만 있는 이름을 영양 기준 음식에 이어 **모름을 추정으로 메우되 출처를 밝힌다**(추정 몫이 기록 열량의 20% 이상이면 notes, [provenance-tagged-fill](provenance-tagged-fill.md)). 당류·콜레스테롤은 기준치 원문 확인 전이라 판정을 두지 않는다(`937f2dd2` — 숫자는 주되 "많다·적다" 는 말하지 않음).
+- **2026-11-06~10** in [hiking](../topics/hiking.md) / [meal-story](../topics/meal-story.md) (`bec2e294`·`cdab9359`, 32차): 쿼터와 어림이 만든 모름. 등산 추천은 캐시에 없는 들머리 격자를 요청마다 3곳까지만 새로 받아, 나머지 항목은 `weather: null` 일 수 있다(계약·docs/api 설명에 적음 — "맑음" 이 아니라 "안 받음"). 건강식단 스토리의 '약 N분의 1' 은 실제 비와 15% 넘게 어긋나면 `null`(어림할 수 없음), 내 기록 소금 환산은 서버가 값을 모르므로 `value: null` + `per` 만 준다.
 - **2026-10-25** in [meal](../topics/meal.md) / [mobile](../topics/mobile.md) (`6ae0a4c5`): 앱 기록 목록의 고정 날짜 머리글 '3끼 · 2,148kcal' 은 **하한 표시 '+'** 라는 네 번째 인코딩을 들였다 — 열량을 보이는 기록(`mealNutritionLabel` 기준)만 더하고, 열량이 빠진 끼니가 있으면 `kcal+`, 다음 페이지에 같은 날이 더 있을 수 있는 마지막 날은 끼니 수에 `+`. 0 으로 채우지도 않고(열량 있는 기록이 하나도 없으면 열량 칸을 아예 안 씀) 합계를 숨기지도 않는다. 다만 하한이 새는 길이 둘 남았다 — ① 마지막 날의 '+' 는 끼니 수에만 붙어, 불러온 기록이 전부 열량을 가지면 다음 페이지 몫이 빠진 열량이 하한 표시 없이 나가고([app/meal/index.tsx](../../apps/mobile/app/meal/index.tsx) 479~493행) ② '+' 가 끼니 단위라 카드가 '일부 반영'인 끼니(항목 넷 중 셋만 값)는 모르는 항목을 뺀 채 '+' 없이 더해진다. 서버 달력 `days[].kcal`(값 있는 모든 항목 합)과도 규칙이 달라 같은 날 숫자가 어긋날 수 있다(코드 미수정, [meal](../topics/meal.md) Gotchas).
 - **2026-10-24** in [tour](../topics/tour.md) (`a382e01c`, 15차): 관광정보 쉬는 날 문구를 읽는 `parseKtoClosedDays` 가 세 값을 낸다 — `[]`(연중무휴 등 매주 쉬는 요일 없음) · `[요일…]` · `null`(읽지 못함: 시설마다 따로 적은 문구·격주·월 n회·철이 붙은 괄호). `null` 은 "쉬는 날 없음" 으로 다뤄지지 않고 일정에서 빼는 데만 안 쓰이며 **원문은 그대로 보여 준다**(받은 882건 중 요일 읽음 153 · 없음 647 · 읽지 않음 82). 공개 계약 `TourPlanPlaceInfo` 는 네 문구 각각 `null`(없는 항목)이고 넷 다 없으면 `info` 자체가 `null` — 관광정보와 못 맞춘 장소(맞추기 대상 2,649곳 중 903곳)도 `null` 이라 "정보 없음" 과 "운영 정보상 쉬는 날 없음" 이 응답에서 갈린다. 해석을 원문 저장 위에 얹은 덕분이다([raw-store-calibrate-on-read](raw-store-calibrate-on-read.md)).
 - **2026-10-04** in [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) / [api-contract](../topics/api-contract.md) (`186d2bc`·`3d067a0`): 식단 도메인으로 번졌다. 달력 `days[].kcal` 은 kcal 이 있는 항목만 더하고 하나도 없으면 `null`(0 으로 채우지 않음). 영양 점검은 영양소 상태에 `unknown` 을 두고(`MealNutrientStatus = low|borderline|ok|high|unknown`), 카탈로그에 그 영양소 값이 없으면 `notMeasured` 로 따로 보여 "부족"과 "모름"을 가른다. 기록이 적으면 판정 자체를 보류(`status: insufficient`) — 세 번째 종류인 **말하지 않음**이다. 음료·주류는 "0 으로 안다", 정보 없는 과일·채소는 "모른다"로 구분한다.
@@ -46,10 +49,16 @@ status: active
 
 6. **(31차) 합계가 일부만 셌다면 하한임을 밝힌다.** 화면 합계(하루 열량)처럼 모름이 섞인 값을 더할 때는 0 으로 채우거나 합계를 숨기는 대신 '+' 로 "이상" 을 밝힐 수 있다. 다만 하한이 되는 원인이 둘 이상(열량 빠진 끼니·아직 안 불러온 페이지)이면 표시 조건이 원인마다 맞물려야 한다 — 앱 식단은 한 원인에만 열량 '+' 를 걸었다. 그리고 해석기가 "읽지 못함" 을 따로 낼 수 있어야 한다 — 관광정보 쉬는 날처럼 못 읽은 문구를 `[]` 로 떨어뜨리면 쉬는 곳이 일정에 그대로 들어간다.
 
+7. **(32차) 사용자에게 "없음" 을 적게 할 수 있다면 그게 가장 강한 인코딩이다.** 식단의 빈 끼니는 추론으로는 모름과 없음을 가를 수 없어 평균에서 날을 통째로 뺐다. '안 먹음' 이라는 명시 표시를 두자 같은 날이 평균에 들어왔다. 다만 명시 표시는 실제 기록과 충돌할 수 있으니 우선순위(기록이 이긴다)와 범위(간식·야식은 묻지 않음)를 함께 정해야 한다. 그리고 "모름이 섞였다" 는 사실을 숫자 옆에 말하지 않으면(열량 모르는 음식이 점검에서 조용히 빠짐) 모름이 다시 0 처럼 읽힌다.
+
 관련: [open-data-master-load](open-data-master-load.md) — "미적재" 가 모름의 흔한 원인이고, 이력 행이 그 판정의 진실이다. [quantile-graded-overlay](quantile-graded-overlay.md) — 소셀 억제. [external-api-proxy-fixture](external-api-proxy-fixture.md) — 원천이 비운 필드를 어댑터가 0 으로 채우지 않는 것이 이 구분의 입력단이다.
 
 ## Sources
 
+- [meal-story](../topics/meal-story.md) · [hiking](../topics/hiking.md) · [utils](../topics/utils.md) — 32차
+- [apps/friendly/src/modules/meal/meal-skip.service.ts](../../apps/friendly/src/modules/meal/meal-skip.service.ts) — 32차 '안 먹음'(`skippedByDate`, 기록이 이긴다)
+- [packages/utils/src/mealSlot.ts](../../packages/utils/src/mealSlot.ts) — 32차 `isCountedMealDay`
+- [comparison-eligibility-gates](comparison-eligibility-gates.md) · [provenance-tagged-fill](provenance-tagged-fill.md)
 - [housing](../topics/housing.md)
 - [life-map](../topics/life-map.md)
 - [api-contract](../topics/api-contract.md)

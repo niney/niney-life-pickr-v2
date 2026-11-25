@@ -1,7 +1,7 @@
 ---
 concept: 채운 값에 출처 꼬리표 — 빈칸을 다른 원천으로 메울 때 "어디서 왔나"를 값과 함께 저장하고, 화면 문구는 꼬리표를 따라간다
-last_compiled: 2026-10-26
-topics_connected: [hiking, meal, food, menu-board, parking, api-contract, web, mobile]
+last_compiled: 2026-11-15
+topics_connected: [hiking, meal, food, menu-board, parking, api-contract, web, mobile, meal-nutrition]
 status: active
 ---
 
@@ -17,6 +17,8 @@ status: active
 
 ## Instances
 
+- **2026-11-07~09** in [food](../topics/food.md) / [meal-nutrition](../topics/meal-nutrition.md) / [web](../topics/web.md) (`1ba0381a`·`40eb16a4`·`ac3e0066`, 32차): **영양 기준 음식** `food_nutrient_refs`(이름 단위) — 비타민·무기질이 없는 이름(외식 어휘·레시피·카탈로그 밖 식단 이름, 운영 활성 4,812종 중 영양소 보유 약 1,260)을 다른 행의 100g당 값으로 잇되, **어떻게 이었는지**를 행에 남긴다(같은 이름 → 빌려온 원래 행 → 고정 동의 표·어휘 동의어·별칭 → 핵심어 → 계열 규칙 → LLM(high 만) / 어드민 지정 / 없음). 어드민 지정은 다시 돌려도 덮지 않고, LLM 이 고른 것이 high 가 아니면 채택하지 않고 `candidateFoodId` 로 **후보만** 남겨 어드민이 '이걸로' 한 번에 지정한다. 점검은 추정 몫이 기록 열량의 20% 이상이면 notes 에 밝힌다. 그리고 **꼬리표가 덮어쓰기 순위가 됐다** — 빌려 온 영양(`nutritionFrom`)이 있는 행에 직접 영양을 가진 시드가 오면 1인분·100g당 값을 통째로 시드 값으로 바꾸고 표시를 지운다(빈 칸만 채우던 탓에 운영 '토마토' 가 '연두부 토마토' 의 1인분 155g 110kcal 로 남아 있었다), 100g당 직접 값이 있는 행은 빌려 오지 않는다(원재료 '자두' 가 요리 '상큼하자두' 값을 빌려 직접 값을 덮었다).
+- **2026-11-13~14** in [meal](../topics/meal.md) / [food](../topics/food.md) (`d5fab013`·`0d21d4d3`, 32차): 식당에서 먹은 기록 — 영양은 표준명(카탈로그) 기준으로 두고, 항목에 그 집 메뉴명·가격을 따로 남긴다(마이그레이션 `20261113100000_meal_item_menu`). 코스·세트의 구성 음식은 LLM 이 메뉴 설명에서 읽되(`menu_llm_compositions`, 구성 없음도 저장) **숫자는 만들지 않는다** — 열량은 카탈로그·이름 추정에서 오고, 코스 구성은 양을 '조금'(portion small)으로 넣는다.
 - **2026-10-26** in [hiking](../topics/hiking.md) / [api-contract](../topics/api-contract.md) / [web](../topics/web.md) / [mobile](../topics/mobile.md) (9차 `0e38c4ee` + 9차 보강, 작업 트리): 국립공원 공식 탐방로 선에는 고도가 없다. 조립이 **근처(30m) GPX 선 점 → 지형 고도(SRTM 30m) → 없음** 순서로 채우고 그 결과를 코스 문구 JSON 의 `elevationFrom: 'nearby' | 'terrain'`(계약 `HikingParkCourse.elevationFrom`, 없으면 `null`)에 남긴다. 웹·앱 코스 상세는 이 값으로 안내를 바꾼다("근처 등산 기록에서 가져와 계산" / "지형 자료(SRTM 30m)로 계산 — 봉우리가 수십 m 낮게 나올 수 있다" / "고도 기록이 없어 계산하지 못했다"). 코스 자체에도 원천 꼬리표 `source: top100 | peak | network | park` 가 있어 "봉우리 자료(선·고도만)", "이어 만든 길(실제 안내와 다를 수 있음)" 을 붙이고, GPX 내보내기 metadata desc 도 같은 꼬리표로 출처 문장을 만든다. 같은 길 GPX 코스에 붙인 공식 문구가 코스 방향과 반대면 문구를 고치지 않고(공공누리 변경금지) `reversed` 꼬리표만 단다. 코스 지점의 시설도 `source: 'facility' | 'park'`(일상지도 화장실·공영 주차 / 국립공원공단).
 - **2026-10-23** in [meal](../topics/meal.md) / [food](../topics/food.md) (`92e79e9a`): 식단 항목 영양 근거 `MealNutritionBasis = direct | donor_estimate | typical_portion | missing`. 카탈로그에 없는 이름은 규칙 엔진 → LLM 매칭 캐시 → 웹 실측 캐시 순으로 채우되 **`basis: donor_estimate` + `foodId: null`** 로 저장해 카탈로그에서 빌린 값과 가른다. 화면은 "○○ 기준 추정" 으로 밝히고(`MealDetailPage`·`MealRecommendTab` 이 `nutritionBasis === 'donor_estimate'` 로 분기), 합계·영양 점검에는 넣는다(사용자 결정). 운영은 `backfill:meal-nutrition --estimate` 가 빈 이름만 다시 채운다.
 - **2026-10-10** in [menu-board](../topics/menu-board.md) (`0408f2f2`·`ee70bc2d`): 네이버 메뉴판 사진에서 읽은 메뉴를 등록 메뉴와 짝지어 **`origin: 'registered' | 'menu-board'`**(등록 메뉴와 같은 메뉴 / 사진에만 있는 메뉴)와 가격 대조 **`same | different | range | unknown`** 을 남긴다(`menu-board.naver-match.ts`). 공개 메뉴 탭(`MenuBoardSection`)은 등록 메뉴 아래 '메뉴판 사진' 섹션에 **사진에만 있는 메뉴**를 따로 보이며 "AI 가 읽은 결과라 실제와 다를 수 있으니 사진으로 확인" 안내와 사진 날짜를 붙이고, 등록 메뉴 카드에는 사진이 더 최신이고 가격이 다를 때만 "메뉴판 사진 14,000원 · 날짜" 한 줄을 단다. 읽기 결과에는 `promptVersion` 이 붙어 있어, 프롬프트 v2 가 들어오면 낮은 버전만 다음 크롤·읽기 스크립트에서 다시 읽는다([versioned-llm-prompts](versioned-llm-prompts.md)).
@@ -29,8 +31,14 @@ status: active
 3. **꼬리표가 문구의 정본이다.** 웹과 앱이 같은 enum 으로 분기하면 두 화면의 안내가 어긋나지 않는다. 대기 출처 표기가 웹·앱에서 갈린 것([license-shaped-surfaces](license-shaped-surfaces.md))은 반대로 꼬리표 없이 문자열을 각자 쓴 결과다.
 4. **저장 위치가 들쭉날쭉하다.** 열(`ParkingSource`·`nutritionBasis`)도 있고 JSON 안 필드(등산 `park.elevationFrom`·`reversed`)도 있다. JSON 안에 두면 마이그레이션은 없지만 SQL 로 "추정한 것만" 고르기 어렵다 — 다시 채우기를 SQL 로 해야 하는 꼬리표라면 열이 낫다.
 
+5. **(32차) 꼬리표는 표시만이 아니라 덮어쓰기 순위다.** 직접 값 > 빌린 값, 어드민 지정 > 규칙 > LLM(high) > 후보. 순위를 꼬리표에서 읽지 않고 "빈 칸만 채운다" 로 병합하면 먼저 들어온 추정이 나중에 온 실측을 영원히 막는다(운영 토마토). 확신이 낮은 자동 판단은 값으로 채택하지 말고 후보 꼬리표로 남겨 사람의 한 번 클릭으로 승격시키는 편이, 틀린 값을 조용히 채우는 것보다 싸다.
+
 ## Sources
 
+- [apps/friendly/src/modules/food/food-nutrient-ref.ts](../../apps/friendly/src/modules/food/food-nutrient-ref.ts) — 32차 영양 기준 음식 규칙 순서
+- [apps/friendly/src/modules/food/food-nutrient-ref.service.ts](../../apps/friendly/src/modules/food/food-nutrient-ref.service.ts) — 32차 `candidateFoodId`·어드민 지정 보존
+- [apps/friendly/src/modules/food/menu-composition.ts](../../apps/friendly/src/modules/food/menu-composition.ts) — 32차 구성 채택 규칙
+- [meal-nutrition](../topics/meal-nutrition.md)
 - [hiking](../topics/hiking.md)
 - [meal](../topics/meal.md)
 - [food](../topics/food.md)

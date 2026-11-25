@@ -1,12 +1,14 @@
 ---
 topic: review-search
-last_compiled: 2026-10-10
-sources_count: 36
+last_compiled: 2026-11-15
+sources_count: 41
 status: active
-aliases: [리뷰 문맥검색, 리뷰 RAG, review-search, ReviewSearchService, enrich, ENRICH_VERSION, embeddingJson, aspectsJson, contextLine, bge-m3, OLLAMA_EMBED_BASE_URL, OLLAMA_EMBED_MODEL, hybrid, BM25, RRF, rerank, RERANK_POOL, ASK_EVIDENCE, verifier, span-grounding, HyDE, reviewAskStore, AskTab, ReviewAskToaster, ReviewAskBanner, qa/ready, probe:review-search, probe:embed-health, buildLlmProviderEnv, review-ask, 리뷰 질문 한도, 답변 캐시, askCache, askInflight, normalizeAskQuery, ASK_CACHE_TTL_MS, ASK_CACHE_MAX, ASK_CHAT_CONCURRENCY, askChatGate, ConcurrencyGate, CORPUS_CACHE_MAX_BYTES, CORPUS_CACHE_TTL_MS, estimateCorpusBytes, corpusGeneration, corpusCacheStats, Float32Array, PublicAskOptions, admit, quotaDeniedAnswer, REVIEW_ASK_GUEST_KEY_HEADER, x-guest-key, getGuestKey]
+aliases: [리뷰 문맥검색, 리뷰 RAG, review-search, ReviewSearchService, enrich, ENRICH_VERSION, embeddingJson, aspectsJson, contextLine, bge-m3, OLLAMA_EMBED_BASE_URL, OLLAMA_EMBED_MODEL, hybrid, BM25, RRF, rerank, RERANK_POOL, ASK_EVIDENCE, verifier, span-grounding, HyDE, reviewAskStore, AskTab, ReviewAskToaster, ReviewAskBanner, qa/ready, probe:review-search, probe:embed-health, buildLlmProviderEnv, review-ask, 리뷰 질문 한도, 답변 캐시, askCache, askInflight, normalizeAskQuery, ASK_CACHE_TTL_MS, ASK_CACHE_MAX, ASK_CHAT_CONCURRENCY, askChatGate, ConcurrencyGate, CORPUS_CACHE_MAX_BYTES, CORPUS_CACHE_TTL_MS, estimateCorpusBytes, corpusGeneration, corpusCacheStats, Float32Array, PublicAskOptions, admit, quotaDeniedAnswer, REVIEW_ASK_GUEST_KEY_HEADER, x-guest-key, getGuestKey, enriched-counts, cachedEnrichedCounts, countEnrichedByRestaurant, invalidateEnrichedCounts, ENRICHED_COUNTS_TTL_MS, 검색 가능 리뷰 수 캐시, KeyedCache, ASK_LANE, chat:review-qa, 갈래, lane, 공용 어댑터, adapterCache]
 ---
 
 # review-search — 리뷰 문맥검색·RAG(enrich → 하이브리드 회수 → 리랭크 → 근거 생성 → 검증)
+
+**2026-11-06~11-14 변경 흡수 (32차) — 검색 가능 리뷰 수 30초 캐시(`a00c3092`)·리뷰 질문/enrich LLM 을 공용 어댑터로, 질문은 갈래 `chat:review-qa`(`784bda21`), 둘 다 2026-11-07 성능 묶음**: (1) **검색 가능 리뷰 수(`a00c3092`)** — 어드민 enrich 상태(`GET /status`)와 [review-clustering](review-clustering.md) 군집 상태가 각자 private `countEnrichedByRestaurant` 로 같은 `visitorReview.groupBy`(요약 `embeddingJson` not null)를 했다. 요약 행마다 큰 임베딩 열(~13KB)이 비었는지 보느라 운영 요약 19.8만 건을 다 읽어 DB 한 번에 ~200ms, 상태 목록이 240~340ms 였다(2026-11 운영 DB 사본). 새 [enriched-counts.ts](../../apps/friendly/src/modules/review-search/enriched-counts.ts) 로 합쳤다 — `countEnrichedByRestaurant(prisma, ids?)`(캐시 없음)와 `cachedEnrichedCounts(prisma)`(전 가게 집계를 공용 [KeyedCache](../../apps/friendly/src/lib/keyed-cache.ts) 의 키 `'all'` 한 칸에 `ENRICHED_COUNTS_TTL_MS` 30초, 상한 4MB, 크기 어림 200B + 가게당 120B). 상태 목록 두 개만 캐시를 쓰고, 일괄 작업(`enrich-pending`·군집 `cluster-pending`)이 "아직 안 된 가게" 를 고를 때는 늘 새로 센다. `ensureEnriched` 가 임베딩을 하나라도 썼으면 `finally` 에서 `invalidateEnrichedCounts()`(중간 실패해도 쓴 만큼 반영). 실측: 리뷰 검색 상태 336 → 19~23ms, 군집 상태 243 → 15ms(첫 호출은 캐시를 채우며 ~220ms), 출력은 전과 같음. (2) **공용 어댑터(`784bda21`)** — 리뷰 질문(리랭크·답변·검증)·enrich 관점 추출이 `/api/chat` 을 `fetchWithTimeout` 으로 직접 불러 계정 동시성 게이트·429 재시도·LLM 사용량 텔레메트리를 거치지 않았다(같은 계정의 요약·식단·타로와 합산 한도를 넘을 수 있었고 어드민 사용량 패널에 안 보였다 — 10-05 감사가 미룬 DEFERRED #8). 이제 `chatJsonUngated` 가 `adapterCache.get(resolved, { lane })` 의 `complete({ prompt, model, format? })` 를 부른다(요청 본문은 예전과 같음 — temperature·num_predict·think 를 안 보냄). [adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts) 에 **갈래(lane)** 가 생겼다: 같은 용도 설정(키·모델·한도)을 쓰되 용도 게이트·텔레메트리 라벨만 `'chat:review-qa'` 로 따로 둔다 — 공개 질문이 같은 chat 용도 대기열의 요약·enrich 뒤에 줄 서지 않고 계정 슬롯만 함께 다툰다. enrich 는 일괄 작업이라 갈래 없이 chat 용도 대기열에 선다. 질문 경로의 로컬 `askChatGate`(동시 4)는 그대로 남아 세 겹(로컬 4 → 갈래 용도 게이트 → 계정 게이트)이 됐다. 타임아웃은 어댑터 설정 `OLLAMA_CLOUD_TIMEOUT_MS`(기본 60초 — 예전 직접 호출과 같음). 같은 커밋이 [ollama-cloud.adapter.ts](../../apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.ts) 의 타이머를 본문을 다 읽을 때까지 두게 고쳤다(헤더에서 풀면 본문이 오다 멈출 때 undici 기본 300초까지 매달렸다 — 모든 LLM 호출, 소유 [ai](ai.md)). (3) **거부된 같은 질문의 합류(`784bda21`)** — 아래 Gotchas 의 "재확인이 얇다"(PLAN-perf-2 리뷰 잔여) 수정: `askByPlaceId` 가 `for (joined = askInflight.get(key); joined; joined = askInflight.get(key))` 로 돌며, 합류한 run 이 한도 거부로 끝나면 `askCache` 를 보고 그다음 진행 중 run 을 다시 찾아 합류한다(재현: 3명 → 파이프라인 3번 → 1번). 임베딩(`OLLAMA_EMBED_BASE_URL/api/embed`)은 여전히 `fetchWithTimeout` 직접 호출이다. 테스트: [enriched-counts.test.ts](../../apps/friendly/src/modules/review-search/enriched-counts.test.ts) 2건(캐시·비우기·일괄은 새로), [review-search.test.ts](../../apps/friendly/src/modules/review-search/review-search.test.ts) +2(거부 뒤 합류 파이프라인 1회, 질문은 `chat:review-qa` 갈래로 계정 한도·사용량), `adapter-cache.test.ts` 갈래 1건. 스키마·라우트·마이그레이션 변경 없음. 관련 컨셉: [bounded-byte-caches](../concepts/bounded-byte-caches.md)(KeyedCache 바이트 상한), [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)(계정 게이트는 프로세스에 하나 — 어댑터를 우회하면 그 게이트도 텔레메트리도 못 본다).
 
 **2026-10-05 변경 흡수 — 공개 질문 일일 한도 `review-ask`·답변 캐시 20분·진행 중 합류·질문 LLM 동시 4·코퍼스 캐시 48MB 바이트 상한(`ab7dad28`, 성능 감사 2차 B-4·B-8)**: (1) **일일 한도(B-4)** — 예전 방어는 IP 분당 15회(`RATE.publicAsk`)뿐이라 IP 하나로 하루 2.16만 건 = chat 6.48만 콜이 가능했다. 이제 [usage-quota](usage-quota.md) 에 기능 `'review-ask'`(마이그레이션 없음 — feature 는 문자열)를 더해 기본값 게스트 기기 30·IP 300·전역 3,000/일·`guestCutoffPct` 90·IP 분당 15. 라우트([review-search.route.ts](../../apps/friendly/src/modules/review-search/review-search.route.ts))는 `app.resolveOptionalUser`(선택 인증, `security: OPTIONAL_BEARER`) + `x-guest-key`(`REVIEW_ASK_GUEST_KEY_HEADER` = 타로와 같은 공용 게스트 키 헤더, `^[A-Za-z0-9_-]{8,64}$` 밖이면 없는 것으로) + `clientKey(req)` 로 actor 를 만들고, 분당 한도도 `app.usageQuota.getSetting('review-ask').ipPerMinute` 를 읽는 async `max` 로 바꿨다(어드민 "설정 > 사용량 한도" 에서 조정 — [AdminQuotasPage.tsx](../../apps/web/src/routes/admin/AdminQuotasPage.tsx) 라벨 '맛집 리뷰 질문'). **한도는 캐시 미스로 파이프라인을 실제로 돌릴 때만** 센다 — 서비스의 `askByPlaceId(placeId, query, { admit })` 가 답변 캐시 적중·같은 질문 합류·준비 안 됨(enrich 0건)에선 `admit` 을 부르지 않는다. 거부는 오류가 아니라 200 + `confidence:'none'` 안내문(`quotaDeniedAnswer` — disabled / 전역·게스트 컷오프 / 그 외 "오늘 질문할 수 있는 횟수를 모두 썼어요"), 기존 '준비 안 됨·일시 장애' 와 같은 계약이라 웹·앱 답변 카드가 그대로 보여 준다. 클라이언트는 shared `reviewSearchApi.publicAsk(placeId, query, guestKey)` 가 `getGuestKey()` 를 헤더로 보낸다(`useReviewAskPublic`·`reviewAskStore`). (2) **답변 캐시 + 합류** — 키 = (대표 `primaryId`, 검색가능 수 `ready`, enrich 세대 `corpusGeneration`, verify 여부, `normalizeAskQuery(query)` — NFC·trim·소문자·공백 축약·끝 `?!.~…？！。` 제거)를 `\u0000` 으로 이음. `askCache` LRU(`ASK_CACHE_MAX` 500, `ASK_CACHE_TTL_MS` 20분), `askInflight` 로 동시에 들어온 같은 질문은 진행 중 결과에 합류(실측: 같은 질문 동시 10건 LLM 30콜 → 3콜). 리뷰가 늘거나(ready↑) 재enrich 로 임베딩이 바뀌면(`ensureEnriched` 가 `enriched > 0` 일 때 세대 +1) 키가 달라져 자연 무효. 답변 생성·검증이 LLM 일시 실패로 빠진 결과는 캐시하지 않는다(`cacheable = parsed !== null && verified`). (3) **질문 경로 LLM 동시 4** — `chatJson` 이 ollama-cloud 어댑터의 계정 `ConcurrencyGate` 를 거치지 않아 몰리는 공개 질문이 요약·enrich 의 계정 동시성을 잠식할 수 있었다 → 리랭크·답변·검증 3콜을 로컬 `askChatGate = new ConcurrencyGate(ASK_CHAT_CONCURRENCY=4)` 안에서만(어드민 `ask` 도 같은 경로). enrich 는 자체 `ENRICH_CONCURRENCY` 로 따로 — 같이 묶으면 질문이 enrich 뒤에 줄 선다. (4) **코퍼스 캐시 바이트 상한(B-8)** — `max: 16`(개수) → `max: 64`(백스톱) + `maxSize: CORPUS_CACHE_MAX_BYTES` 48MB + `sizeCalculation: estimateCorpusBytes`(벡터 `byteLength` + 본문 글자 × 40(UTF-16 + BM25 trigram Map) + 항목당 400B, 1,032건 가게 실측으로 맞춘 계수) + `ttl` 30분·`updateAgeOnGet`. 코퍼스 벡터는 `Float32Array`(bge-m3 는 원래 float32 정밀도라 코사인 순위 사실상 동일, 메모리 절반) — [retrieval.ts](../../apps/friendly/src/modules/review-search/retrieval.ts) `cosine` 이 `ArrayLike<number>` 를 받는다. 예전엔 1,000건급 16곳 ≈ 190MB 가 TTL 없이 재시작까지 상주했다. 측정용 `corpusCacheStats()`. (5) **배선** — 랜덤 크롤 플러그인·자동 발견 라우트가 만들던 보조 `ReviewSearchService` 가 사라졌다(`app.crawl` 싱글톤, [crawl](crawl.md)) — 이제 인스턴스는 plugins/summaries 의 `app.reviewSearch` 하나라 enrich 중복 가드·코퍼스 무효화·enrich 완료 → 군집화가 모든 진입점에 먹는다. 아래 2026-08-22 문단의 "보조 인스턴스도 동일" 은 역사. 테스트: 신규 [review-search.test.ts](../../apps/friendly/src/modules/review-search/review-search.test.ts)(질문 정규화, 캐시 재사용 — 두 번째는 임베딩·LLM·한도 0, 동시 합류 1회, 한도 거부는 캐시 안 함, LLM 실패 결과 캐시 안 함, LLM 동시 ≤4, Float32·바이트 크기, enrich 0건은 한도 안 셈, 라우트 게스트 기기 한도 200+none), shared [review-search.api.test.ts](../../packages/shared/src/api/review-search.api.test.ts)(게스트 키 헤더 유무). 외부 API 문서(`docs/api`)의 공개 질문 summary·description 도 바뀌었다. 계획·원문: [PLAN-perf-2.md](../../docs/PLAN-perf-2.md) 7차·"모듈 묶음 → crawl", [PLAN-perf-2-findings.md](../../docs/PLAN-perf-2-findings.md) B-4·B-8. 관련 컨셉: [bounded-byte-caches](../concepts/bounded-byte-caches.md)(코퍼스 48MB)·[amplification-caps](../concepts/amplification-caps.md)(요청 하나 = 임베딩 1 + LLM 3)·[anonymous-usage-quota](../concepts/anonymous-usage-quota.md).
 
@@ -36,7 +38,7 @@ aliases: [리뷰 문맥검색, 리뷰 RAG, review-search, ReviewSearchService, e
 별도로 산다. enrich 가 채운 임베딩은 자매 토픽 [review-clustering](review-clustering.md)도
 그대로 읽어 군집화한다(같은 `embeddingJson` 컬럼).
 
-## Architecture [coverage: high — 11 sources]
+## Architecture [coverage: high — 12 sources]
 
 확정 파이프라인 (`research/review-search/README.md` §1):
 
@@ -66,6 +68,9 @@ aliases: [리뷰 문맥검색, 리뷰 RAG, review-search, ReviewSearchService, e
 - [review-search.route.ts](../../apps/friendly/src/modules/review-search/review-search.route.ts)
   — HTTP 레이어. 어드민 라우트는 `app.authenticate + app.requireAdmin` 가드, 공개 QA 2개는
   무가드, SSE 는 `?token=` 폴백 인증.
+- [enriched-counts.ts](../../apps/friendly/src/modules/review-search/enriched-counts.ts) (2026-11-07, `a00c3092`) —
+  가게별 검색 가능 리뷰 수. `countEnrichedByRestaurant`(GROUP BY, 캐시 없음)·`cachedEnrichedCounts`(모듈 스코프
+  `KeyedCache` 30초)·`invalidateEnrichedCounts`. review-clustering 도 import 한다(모듈 상태라 서비스 인스턴스와 무관하게 하나).
 
 **검색 모드** — `'dense'` | `'hybrid'` | `'rerank'`. ask() 는 항상 `'rerank'` 로 근거를
 회수한다. hybrid 는 dense/lex 두 랭킹을 RRF(`1/(K+denseRank) + 1/(K+lexRank)`)로 융합하고,
@@ -77,6 +82,8 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
 `corpusGeneration`(대표 키 → enrich 세대, 답변 캐시 키용 — 임베딩이 실제로 바뀐 enrich 만 +1),
 `askCache`(LRU 500·20분)·`askInflight`(같은 질문 합류)·`askChatGate`(질문 경로 LLM 동시 4),
 `enriching`(restaurantId→진행률 Map, 중복 트리거 가드 + 상태 뷰 + SSE), `enrichListeners`(SSE 구독자 Set).
+→ 2026-11-07: 생성자에 `deps: { cache?: AdapterCache }`(테스트가 격리 어댑터 캐시를 넣는다, 기본은 앱 공용 `adapterCache`)가
+붙었고, 검색 가능 수 캐시는 인스턴스가 아니라 `enriched-counts` 모듈 상태다.
 라우트·요약 종료 훅이 같은 인스턴스를 공유해야 하므로 [plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts)에서
 한 번 생성해 `app.reviewSearch` 로 decorate + `SummaryService` 에 주입한다(2026-10-05 부터 랜덤 크롤·자동 발견이
 따로 만들던 보조 인스턴스가 없어져 **진짜로** 하나다).
@@ -112,7 +119,7 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
   (웹, sonner 토스트), [ReviewAskBanner.tsx](../../apps/mobile/src/components/ReviewAskBanner.tsx)
   (앱, reanimated 하단 배너 — 앱엔 지속형 토스트 인프라가 없어 직접 만듦).
 
-## Talks To [coverage: high — 11 sources]
+## Talks To [coverage: high — 14 sources]
 
 - **[usage-quota](usage-quota.md)** (2026-10-05) — 공개 질문의 `admit` 이 `app.usageQuota.consume('review-ask',
   { userId, guestKey, ip })`, 분당 한도는 `getSetting('review-ask').ipPerMinute`. 기본값은
@@ -121,6 +128,13 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
   서비스 규칙대로 전역 예산 + 회원 기능별 일일 상한 `MEMBER_PER_DAY`(100 — `78cbb457`)를 본다.
 - **ai `ConcurrencyGate`** ([concurrency-gate.ts](../../apps/friendly/src/modules/ai/concurrency-gate.ts)) — 계정 게이트와
   같은 FIFO 클래스를 **로컬 인스턴스**로 써서 질문 경로 chat 3콜을 동시 4로 묶는다(어댑터 계정 게이트를 타는 것은 아님).
+  → 2026-11-07(`784bda21`): 이제 로컬 게이트 안에서 다시 어댑터의 갈래 용도 게이트·계정 게이트를 탄다(아래).
+- **ai `adapterCache`** (2026-11-07, `784bda21` — [adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts)) —
+  질문 경로는 `get(resolved, { lane: 'review-qa' })` → 용도 게이트·텔레메트리 라벨 `'chat:review-qa'`(계정 게이트는 chat 과
+  공유), enrich 관점 추출은 갈래 없이 `'chat'`. 어댑터가 429 를 재시도하고 `llmTelemetry.record(label, …)` 로 어드민 사용량
+  패널에 잡힌다. 실패(타임아웃·업스트림·파싱)는 `chatJsonUngated` 의 catch 가 예전처럼 `null` 로.
+- **lib `KeyedCache`** (2026-11-07, [keyed-cache.ts](../../apps/friendly/src/lib/keyed-cache.ts) — 공통 lib, 소유 [friendly](friendly.md)) —
+  `enriched-counts` 의 30초 집계 캐시(SWR·동시 합류·바이트 상한·세대 무효화).
 
 - **로컬 Ollama 임베딩 엔드포인트** — `${OLLAMA_EMBED_BASE_URL}/api/embed`(기본
   `http://localhost:11434`), model `bge-m3`. enrich 의 문서 임베딩 + **매 질문의 질의
@@ -129,7 +143,8 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
   로 baseUrl/apiKey/defaultModel 해석 — `AiConfigService` 는 plugins/summaries 가
   `buildLlmProviderEnv()` 로 조립). 관점/문맥 추출, listwise 리랭크, RAG 생성, 검증,
   HyDE(평가 하니스용)에 사용. `chatJson` 이 코드펜스 제거 + 첫 `[{...}]` 매칭으로 견고 파싱,
-  실패 시 null.
+  실패 시 null. → 2026-11-07(`784bda21`): 직접 `fetchWithTimeout(…/api/chat, 60_000)` 이 아니라 공용 어댑터 경유(위 `adapterCache`).
+  해석(`getResolved('ollama-cloud','chat')`)·견고 파싱은 그대로.
 - **Prisma / SQLite** — `ReviewSummary` 행(`embeddingJson`/`aspectsJson`/`contextLine`/
   `enrichVersion`)이 검색 코퍼스의 영속 소스. `Restaurant`/`ReviewSummary` 조인으로 로드.
 - **[restaurant](friendly.md) canonical-members** — `resolveCanonicalMembersBy*` /
@@ -154,7 +169,7 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
   `getGuestKey()` 를 `x-guest-key` 로 보낸다(스토어·`useReviewAskPublic` 둘 다). 같은 날 `d71fdb08` 이 게스트 키가
   스토리지에 한 번도 저장되지 않던 결함(웹 새로고침마다 새 키 → 기기 한도가 새로고침으로 풀림)을 고쳤다.
 
-## API Surface [coverage: high — 8 sources]
+## API Surface [coverage: high — 9 sources]
 
 경로 정의는 [routes.ts](../../packages/api-contract/src/routes.ts) `ReviewSearch` namespace,
 스키마는 [review-search.ts](../../packages/api-contract/src/schemas/review-search.ts).
@@ -167,7 +182,7 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
 | `GET /restaurants` | `listRestaurants` | 리뷰 있는 식당(많은 순, take 100) 드롭다운용 |
 | `POST /enrich` | `ensureEnriched(restaurantId)` | 동기 enrich → `{enriched, total, ms}` |
 | `POST /ask` | `ask(restaurantId, query)` | RAG → `ReviewAskResult` |
-| `GET /status` | `enrichStatus(query)` | 식당별 enrich 상태(canonical 집계, 페이지네이션) |
+| `GET /status` | `enrichStatus(query)` | 식당별 enrich 상태(canonical 집계, 페이지네이션). 2026-11-07~ 검색 가능 수는 30초 캐시(`cachedEnrichedCounts`) — 진행 중 enrich 는 SSE 로 |
 | `POST /enrich-bg` | `enrichInBackground` | 즉시 반환 `{started, inProgress}`, 상태는 폴링 |
 | `POST /enrich-pending` | `enrichAllPendingInBackground` | 검색가능 0 식당 전부 순차 큐잉 → `{queued}` |
 | `GET /enrich-events` | SSE | enrich 진행률 멀티플렉스. `?token=` 인증 |
@@ -192,7 +207,7 @@ citations: ReviewSearchHit[], verification: {applied, dropped: string[]}|null }`
 `bc2db00` 에 `RATE.publicAsk`(15/분) 프리셋으로, 2026-10-05 `ab7dad28` 에 위 두 겹으로.)* `GET /qa/ready` 는 LLM 호출이 없어
 제한 없음.
 
-## Data [coverage: medium — 4 sources]
+## Data [coverage: high — 5 sources]
 
 enrich 결과는 기존 `review_summaries` 테이블에 컬럼으로 얹는다 — 새 테이블 없음
 ([migration.sql](../../apps/friendly/prisma/migrations/20260621220422_add_review_search_enrichment/migration.sql),
@@ -214,14 +229,26 @@ enrich 결과는 기존 `review_summaries` 테이블에 컬럼으로 얹는다 �
 `CORPUS_CACHE_MAX_BYTES=48MB`·`CORPUS_CACHE_TTL_MS=30분`·`CORPUS_BYTES_PER_CHAR=40`·`CORPUS_ITEM_OVERHEAD_BYTES=400`,
 `ASK_CACHE_TTL_MS=20분`·`ASK_CACHE_MAX=500`, `ASK_CHAT_CONCURRENCY=4`. 한도 기본값(`review-ask`)은 DB `usage_quota_settings`
 행이 없을 때의 `USAGE_QUOTA_DEFAULTS` — 어드민에서 바꾸면 행이 생긴다. 서버 캐시·세대·합류 Map 은 전부 프로세스 메모리.
+2026-11-07 추가: `ENRICHED_COUNTS_TTL_MS=30초`(전 가게 집계 한 칸, 상한 4MB — [enriched-counts.ts](../../apps/friendly/src/modules/review-search/enriched-counts.ts)),
+`ASK_LANE='review-qa'`. DB 스키마 변경 없음.
 **클라 영속**(`reviewAskStore`): 식당별 마지막 `{query, result, answeredAt}` 만 `partialize`,
 `MAX_KEPT=20`(최근순 cap), 키 `review-ask-v1`(웹 localStorage / 앱 AsyncStorage 주입).
 
-## Key Decisions [coverage: high — 10 sources]
+## Key Decisions [coverage: high — 12 sources]
 
 연구 자산(`research/review-search/`)이 모든 결정을 측정으로 뒷받침한다. 판정은
 self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `claude -p`, API 키
 불필요)** 로 한다(생성기와 같은 gpt-oss 판정 시 faithfulness 100% 로 부풀려짐 — 실측 67~83%).
+
+**2026-11-07 성능 묶음(`a00c3092`·`784bda21`)**:
+
+- **2026-11-07: 상태 목록의 검색 가능 수만 30초 캐시 — 일괄 작업은 늘 새로** (`a00c3092`) — 상태 목록은 사람이 보는 표라 30초
+  늦어도 되고(진행 중 enrich 는 SSE 가 따로 보여 준다), "아직 안 된 가게" 를 고르는 `enrich-pending`·`cluster-pending` 은 늦은 값이면
+  같은 가게를 두 번 큐잉하거나 빠뜨린다. 그래서 함수를 둘로 나눴다. 무효화는 enrich 가 실제로 임베딩을 쓴 경우만(`enriched > 0`).
+- **2026-11-07: 리뷰 LLM 도 공용 어댑터로 — 공개 질문은 갈래로 분리** (`784bda21`) — 10-05 에 미룬 "계정 게이트 통일"(아래)을
+  했다. 그냥 chat 용도로 보내면 공개 질문이 요약·enrich 일괄 대기열 뒤에 줄 서므로, 어댑터 캐시 키에 갈래 라벨을 넣어 **용도 게이트만**
+  따로 두고 계정 게이트·한도·키는 같이 쓰게 했다(계정 합산 동시성은 늘지 않는다). 로컬 `askChatGate`(4)는 몰리는 공개 질문이 계정
+  슬롯을 다 차지해 요약·enrich 를 굶기지 않게 남겼다.
 
 **2026-10-05 성능 감사 2차(`ab7dad28`)**:
 
@@ -238,7 +265,7 @@ self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `cl
   않아 다음 질문이 다시 시도한다.
 - **2026-10-05: 질문 경로 LLM 은 로컬 게이트 4로 — 계정 게이트 통일은 미룸** — `chatJson` 을 어댑터 경유로 바꾸는 것(직전 감사
   DEFERRED #8)보다 작게, 로컬 세마포어로 공개 질문이 요약·enrich 의 계정 동시성을 잠식하지 않게만 묶었다. enrich 는 따로 둔다
-  (묶으면 질문이 enrich 뒤에 줄 선다).
+  (묶으면 질문이 enrich 뒤에 줄 선다). → 2026-11-07(`784bda21`): 미룬 통일을 했다 — 위 "공용 어댑터로" 항목.
 - **2026-10-05: 코퍼스 캐시는 개수가 아니라 바이트로, 벡터는 Float32** (B-8) — 가게마다 코퍼스 크기가 30건~3천 건으로 흔들려
   개수 16 은 메모리 상한이 아니었다([bounded-byte-caches](../concepts/bounded-byte-caches.md)). Float32 는 bge-m3 의 원래
   정밀도라 순위가 사실상 같고 메모리가 절반 — findings 의 "Float32 면 cosine 도 빨라짐" 은 실측으로 반박돼(동일 속도) 메모리
@@ -272,7 +299,7 @@ self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `cl
 - **rerank 풀 = dense∪hybrid 합집합** — rerank {56,78,44} vs baseline {67,44,67} 완전 겹침
   = 효과 0(rerank LLM 노이즈). 짧은 한국어 리뷰 임베딩 한계라 후보 추가로 안 풀림 → 되돌림.
 
-## Gotchas [coverage: high — 9 sources]
+## Gotchas [coverage: high — 11 sources]
 
 - **회원 한도 서술이 문서와 코드에서 다르다** (2026-10-05) — 라우트 description(그리고 거기서 생성된
   `docs/api/openapi.json`)은 "회원(Bearer)은 전역 일일 예산만 적용된다" 고 하지만, 같은 날 `78cbb457` 이
@@ -282,6 +309,17 @@ self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `cl
 - **한도에 거부된 요청에 합류한 사람은 다시 자기 한도로 돈다 — 그 사이 재확인이 얇다** — 합류한 요청이 거부 결과를 받으면
   `askCache` 를 한 번 보고 바로 새 `runPublicAsk` 를 시작한다. 그 사이 같은 키로 이미 다른 사람이 새로 돌고 있어도
   `askInflight` 를 다시 보지 않아 파이프라인이 겹칠 수 있다(PLAN-perf-2 "리뷰 반영 → 남긴 것" 의 낮음 항목 — 미수정).
+  → 2026-11-07(`784bda21`): 고쳤다 — 합류 루프가 `askInflight` 를 다시 보고 먼저 다시 돈 사람의 진행에 합류한다(재현 3명 → 1번).
+  끝난 run 은 대기자가 깨기 전에 지워져 같은 run 을 두 번 보지 않는다(코드 주석).
+- **상태 목록의 검색 가능 수는 최대 30초 늦고, 만료 직후엔 그보다 더 늦을 수 있다** (2026-11-07) — `KeyedCache` 는 만료 뒤 TTL 안
+  (적재 후 30~60초)이면 지난 값을 바로 내고 뒤에서 한 번 다시 센다. enrich 가 임베딩을 쓰면 비우지만, 요약 쪽에서 리뷰·요약 행이
+  지워지는 경로(재크롤 `clearReviewsAndSummaries`·가게 삭제)는 이 캐시를 비우지 않는다 — 다음 갱신까지 옛 수가 보인다(코드 추론).
+  일괄 작업은 캐시를 안 쓰므로 판정에는 영향 없다.
+- **임베딩은 여전히 어댑터 밖** (2026-11-07) — `784bda21` 은 chat 만 옮겼다. `/api/embed`(로컬 Ollama bge-m3)는 `fetchWithTimeout`
+  직접 호출이라 계정 게이트·텔레메트리와 무관하다(원래 다른 엔드포인트·계정이라 게이트 대상도 아니다).
+- **어댑터 경유로 대기 지점이 늘었다** (2026-11-07) — 질문 1건의 chat 콜은 로컬 `askChatGate`(4) → 갈래 용도 게이트
+  (`maxConcurrent`) → 계정 게이트 순으로 기다리고, 429 면 어댑터가 재시도한다. 요약이 계정 슬롯을 꽉 쓰는 동안엔 공개 질문이 예전보다
+  늦을 수 있다(대신 계정 한도를 넘지 않는다). enrich 의 관점 추출은 chat 용도 대기열에 요약과 함께 선다.
 - **답변 캐시·enrich 세대·합류는 프로세스 메모리** — 재시작하면 비고(첫 질문들은 다시 한도를 센다), 세대가 0 으로
   돌아가도 캐시도 함께 비어 오래된 답이 남지는 않는다. 다중 인스턴스라면 성립하지 않는 설계(CLAUDE.md 단일 인스턴스 전제).
 - **바이트 상한은 근사치** — `estimateCorpusBytes` 는 본문 글자 × 40 + 항목당 400B 로 BM25 trigram Map 을 근사한다(1,032건
@@ -316,9 +354,14 @@ self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `cl
   `createRequire(import.meta.url)` 로 require 해 default/named export 양쪽을 흡수한다(commit
   808c447). 번들·모듈 해석 차이로 named import 가 깨지는 걸 회피하는 ESM/CJS 상호운용 처리.
 
-## Sources [coverage: high — 36 sources]
+## Sources [coverage: high — 41 sources]
 
-- [apps/friendly/src/modules/review-search/review-search.test.ts](../../apps/friendly/src/modules/review-search/review-search.test.ts) (신규 2026-10-05 — 답변 캐시·합류·한도·LLM 동시 4·Float32·바이트 크기·라우트 게스트 한도)
+- [apps/friendly/src/modules/review-search/enriched-counts.ts](../../apps/friendly/src/modules/review-search/enriched-counts.ts) — *new 2026-11-07 (`a00c3092`): 검색 가능 리뷰 수 — `countEnrichedByRestaurant`·`cachedEnrichedCounts`(30초)·`invalidateEnrichedCounts`, 군집과 공용*
+- [apps/friendly/src/modules/review-search/enriched-counts.test.ts](../../apps/friendly/src/modules/review-search/enriched-counts.test.ts) — *new 2026-11-07: 캐시·비우기, 일괄 작업은 새로 2건*
+- [apps/friendly/src/lib/keyed-cache.ts](../../apps/friendly/src/lib/keyed-cache.ts) — *2026-11-07: 공용 `KeyedCache`(SWR·합류·바이트 상한 LRU·세대 무효화) — 검색 가능 수 캐시가 쓴다*
+- [apps/friendly/src/modules/ai/adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts) — *2026-11-07 (`784bda21`): `get(resolved, { lane })` — 갈래 용도 게이트·텔레메트리 라벨 `'chat:review-qa'`*
+- [apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.ts](../../apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.ts) — *2026-11-07: 타이머가 본문 읽기까지 덮음(모든 LLM 호출), 리뷰 질문·enrich 의 새 경로*
+- [apps/friendly/src/modules/review-search/review-search.test.ts](../../apps/friendly/src/modules/review-search/review-search.test.ts) (신규 2026-10-05 — 답변 캐시·합류·한도·LLM 동시 4·Float32·바이트 크기·라우트 게스트 한도; 2026-11-07 — 거부 뒤 합류 1회·`chat:review-qa` 갈래 사용량)
 - [packages/shared/src/api/review-search.api.test.ts](../../packages/shared/src/api/review-search.api.test.ts) (신규 2026-10-05 — `x-guest-key` 헤더)
 - [apps/friendly/src/modules/usage-quota/usage-quota.service.ts](../../apps/friendly/src/modules/usage-quota/usage-quota.service.ts) (`USAGE_QUOTA_DEFAULTS['review-ask']`·`consume`·`MEMBER_PER_DAY`)
 - [packages/api-contract/src/schemas/usage-quota.ts](../../packages/api-contract/src/schemas/usage-quota.ts) (`UsageQuotaFeature` 에 `'review-ask'`)
@@ -332,7 +375,7 @@ self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `cl
 - [docs/api/endpoints.md](../../docs/api/endpoints.md) (공개 질문 summary — 선택 인증·20분 캐시·일일 한도)
 - [apps/friendly/src/modules/ai/llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 플러그인·research probe 10종의 env 조립, 2026-08-22)
 - [apps/friendly/src/modules/review-search/retrieval.ts](../../apps/friendly/src/modules/review-search/retrieval.ts) (2026-10-05 — `cosine(ArrayLike)`)
-- [apps/friendly/src/modules/review-search/review-search.service.ts](../../apps/friendly/src/modules/review-search/review-search.service.ts) (2026-10-05 — 바이트 상한 코퍼스 캐시·답변 캐시·합류·`askChatGate`·`admit`)
+- [apps/friendly/src/modules/review-search/review-search.service.ts](../../apps/friendly/src/modules/review-search/review-search.service.ts) (2026-10-05 — 바이트 상한 코퍼스 캐시·답변 캐시·합류·`askChatGate`·`admit`; 2026-11-07 — 상태 목록 `cachedEnrichedCounts`·enrich 뒤 무효화, chat 을 공용 어댑터·`ASK_LANE`, 거부 뒤 재합류 루프)
 - [apps/friendly/src/modules/review-search/review-search.route.ts](../../apps/friendly/src/modules/review-search/review-search.route.ts) (2026-10-05 — `review-ask` 한도·선택 인증·`quotaDeniedAnswer`)
 - [apps/friendly/research/review-search/README.md](../../apps/friendly/research/review-search/README.md)
 - [apps/friendly/research/review-search/probe-rerank-value.ts](../../apps/friendly/research/review-search/probe-rerank-value.ts)

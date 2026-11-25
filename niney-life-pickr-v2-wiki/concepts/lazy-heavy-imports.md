@@ -1,7 +1,7 @@
 ---
 concept: 시작 비용은 모든 경로가 낸다 — 무거운 의존성은 쓰는 순간에 부르고, 새지 않게 가드한다
-last_compiled: 2026-10-10
-topics_connected: [friendly, web, api-contract, shared, utils, crawl, tarot, saju-c, settlement, meal, project-overview]
+last_compiled: 2026-11-15
+topics_connected: [friendly, web, api-contract, shared, utils, crawl, tarot, saju-c, settlement, meal, project-overview, menu-board, meal-story]
 status: active
 ---
 
@@ -15,6 +15,7 @@ status: active
 
 ## Instances
 
+- **2026-11-06~10** in [menu-board](../topics/menu-board.md) / [meal-story](../topics/meal-story.md) / [web](../topics/web.md) (`80e91e92`·`281318cc`, 32차): 30차 위키가 지적한 재유입 하나를 닫았다 — 메뉴판 서비스의 정적 `import sharp` 는 크롤 플러그인이 부팅 때 그 모듈을 불러 사진을 한 장도 읽지 않아도 기저 메모리(+10MB)·부팅 시간에 실렸다 → `loadSharp()`(처음 쓸 때, 다른 sharp 사용처와 같은 방식). 웹에서는 건강식단 영상의 Remotion(`remotion`·`@remotion/player`·`@remotion/transitions`)이 `MealStoryPlayer` 의 `lazy(() => import('./MealStoryMotion'))` 뒤에만 있어 '영상으로 보기' 를 누를 때 실린다(글꼴도 그때 미리 받기).
 - **2026-10-05** in [friendly](../topics/friendly.md) / [crawl](../topics/crawl.md) (`ab7dad28`): playwright 를 `(await import('playwright')).chromium.launch()` 로, 브라우저는 `adapters/lazy-browser.ts` 가 첫 사용 때 띄우고 `disconnected` 면 다시·idle 이면 닫는다. 부팅 RSS 329→290MB. 어댑터 파일에 남은 건 `import type` 뿐.
 - **2026-10-05** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [settlement](../topics/settlement.md) (`lib/share-render.ts`, `78cbb457`): satori·resvg 를 `loadSatori()`·`loadResvg()` 프로미스 싱글턴으로 — 첫 렌더 때 import, 실패하면 다음 호출에 재시도. 정적 import 면 부팅마다 외부 메모리 +16MB(yoga wasm 등)·import +0.1초. sharp 도 카드 모듈 안에서 `await import('sharp')`.
 - **2026-10-05** in [meal](../topics/meal.md) / [settlement](../topics/settlement.md) (`lib/heic-worker.ts`, `7b060ca4`·`0157da60`): 더 나아가 **무거운 모듈을 워커 안에서만** — heic-convert(libheif wasm)는 선형 메모리가 줄지 않아, 작업마다 새 `worker_threads` 워커에서 디코드하고 끝나면 종료해 wasm 메모리를 반환한다. "이 파일을 import 해도 기저 메모리가 늘지 않는다" 가 파일 머리 주석의 계약. 영수증 HEIC 는 이 워커 위 얇은 어댑터로 합쳐져 전역 동시 1건.
@@ -32,6 +33,8 @@ status: active
 
 ## Sources
 
+- [apps/friendly/src/modules/menu-board/menu-board.service.ts](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) — 32차 `loadSharp`
+- [apps/web/src/routes/meal-story/MealStoryPlayer.tsx](../../apps/web/src/routes/meal-story/MealStoryPlayer.tsx) — 32차 영상 지연 로드
 - [friendly](../topics/friendly.md)
 - [web](../topics/web.md)
 - [api-contract](../topics/api-contract.md)

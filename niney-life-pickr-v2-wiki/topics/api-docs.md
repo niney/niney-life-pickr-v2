@@ -1,12 +1,14 @@
 ---
 topic: api-docs
-last_compiled: 2026-10-31
-sources_count: 88
+last_compiled: 2026-11-15
+sources_count: 93
 status: active
-aliases: [api-docs, 외부 API 문서, 외부용 API 문서, API 문서, 외부 사용 가이드, docs/api, docs/api/README.md, endpoints.md, 엔드포인트 색인, openapi.json, OpenAPI, openapi, OpenAPI 3.0.3, Life Pickr API, export:openapi, export-openapi, export-openapi.ts, swagger, "@fastify/swagger", swagger-ui, /docs, SwaggerTransform, jsonSchemaTransform, x-auth, x-rate-limit, RouteAuth, authOf, rateLimitOf, OPTIONAL_BEARER, bearerAuth, 선택 인증, optional-auth, resolveOptionalUser, optionalUserId, 한국어 summary, route summary, CORS, cors, CORS 개방, CORS_ORIGIN, PUBLIC_ORIGIN, buildCorsPolicy, isAdminPath, delegator, credentials-false, preflight, access-control-max-age, exposedHeaders, x-ratelimit-remaining, retry-after, 보안 감사 #42, "#42 번복", "#44", fail-closed, error-handler, 에러 본문, 429, Too Many Requests, errorResponseBuilder, replyUpstreamError, app.cors.test, app.openapi.test, app.errors.test, "app.*.test.ts", plugins-test-ban, CLAUDE.md 6번 규칙, openapi-typescript, openapi-fetch, 다른 프로젝트, 1b621c4, 678ecc0, 199개, 엔드포인트 199, /meals/nutrition, /meals/nutrition/advice, 영양소 점검, 영양제 조언, mealNutrition, mealSupplement, MEAL_SUPPLEMENT_DAILY_LIMIT, /meals/items/frequent, 추천 삭제, texture.jpg, cardTexture, 타로 카드 텍스처, README 드리프트, 중간 드리프트, 200개, 엔드포인트 200, d07281f0, 7587b470, 성능 2차 계약 변경, perf-2, /settlement-drafts/by-place, 임시저장 단건, 리뷰 Q&A 선택 인증, review-ask, 회원 하루 100회, MEMBER_LIMIT_LABEL, 업스트림 쿨다운, 쿨다운 503, 업스트림 8초, 지하철 IP 하루 한도, 게스트 공유 하루 200, 동반 enum, accompany 400, 중기 화이트리스트 400, 대기 시계열 404, 물때 date 범위, 썸네일 버킷, 식단 복원 대기, 복원 재시도, Cache-Control, 라우트 로컬 한도, STATUS_RATE, RECEIPT_UPLOAD_RATE, RECEIPT_EXTRACT_RATE, 던진 503, 주차 절, KOTSA, 208개, 엔드포인트 208, 207개, hiking, 등산, hiking 태그, /hiking/recommend, /hiking/mountains, /hiking/courses, conditions, around, hikingRead, hikingRecommend, GPX, /gpx, application/gpx+xml, Content-Disposition, 산 사진 JPEG, 400 선언, 2천 곳 남짓, menuBoard, 메뉴판 사진, 공개 상세 menuBoard, /admin/menu-board, meal-nutrition-gaps, 어드민 제외 확인, startDow, infoNote, closedThatDay, TourPlanPlaceInfo, 운영 정보, 관광공사, TourAPI, /tour/public/plan]
+aliases: [api-docs, 외부 API 문서, 외부용 API 문서, API 문서, 외부 사용 가이드, docs/api, docs/api/README.md, endpoints.md, 엔드포인트 색인, openapi.json, OpenAPI, openapi, OpenAPI 3.0.3, Life Pickr API, export:openapi, export-openapi, export-openapi.ts, swagger, "@fastify/swagger", swagger-ui, /docs, SwaggerTransform, jsonSchemaTransform, x-auth, x-rate-limit, RouteAuth, authOf, rateLimitOf, OPTIONAL_BEARER, bearerAuth, 선택 인증, optional-auth, resolveOptionalUser, optionalUserId, 한국어 summary, route summary, CORS, cors, CORS 개방, CORS_ORIGIN, PUBLIC_ORIGIN, buildCorsPolicy, isAdminPath, delegator, credentials-false, preflight, access-control-max-age, exposedHeaders, x-ratelimit-remaining, retry-after, 보안 감사 #42, "#42 번복", "#44", fail-closed, error-handler, 에러 본문, 429, Too Many Requests, errorResponseBuilder, replyUpstreamError, app.cors.test, app.openapi.test, app.errors.test, "app.*.test.ts", plugins-test-ban, CLAUDE.md 6번 규칙, openapi-typescript, openapi-fetch, 다른 프로젝트, 1b621c4, 678ecc0, 199개, 엔드포인트 199, /meals/nutrition, /meals/nutrition/advice, 영양소 점검, 영양제 조언, mealNutrition, mealSupplement, MEAL_SUPPLEMENT_DAILY_LIMIT, /meals/items/frequent, 추천 삭제, texture.jpg, cardTexture, 타로 카드 텍스처, README 드리프트, 중간 드리프트, 200개, 엔드포인트 200, d07281f0, 7587b470, 성능 2차 계약 변경, perf-2, /settlement-drafts/by-place, 임시저장 단건, 리뷰 Q&A 선택 인증, review-ask, 회원 하루 100회, MEMBER_LIMIT_LABEL, 업스트림 쿨다운, 쿨다운 503, 업스트림 8초, 지하철 IP 하루 한도, 게스트 공유 하루 200, 동반 enum, accompany 400, 중기 화이트리스트 400, 대기 시계열 404, 물때 date 범위, 썸네일 버킷, 식단 복원 대기, 복원 재시도, Cache-Control, 라우트 로컬 한도, STATUS_RATE, RECEIPT_UPLOAD_RATE, RECEIPT_EXTRACT_RATE, 던진 503, 주차 절, KOTSA, 208개, 엔드포인트 208, 207개, hiking, 등산, hiking 태그, /hiking/recommend, /hiking/mountains, /hiking/courses, conditions, around, hikingRead, hikingRecommend, GPX, /gpx, application/gpx+xml, Content-Disposition, 산 사진 JPEG, 400 선언, 2천 곳 남짓, menuBoard, 메뉴판 사진, 공개 상세 menuBoard, /admin/menu-board, meal-nutrition-gaps, 어드민 제외 확인, startDow, infoNote, closedThatDay, TourPlanPlaceInfo, 운영 정보, 관광공사, TourAPI, /tour/public/plan, 219개, 엔드포인트 219, 209개, 214개, 218개, meal-story 태그, /meal-stories, /meal-stories/:slug, /meal-stories/:slug/images/:file, /meal-stories/:slug/food, mealStoryRead, mealStoryImage, 스토리 사진 공개, /meals/skips, /meals/skips/batch, 안 먹음, /meals/place-menus, 식당 메뉴에서 넣기, /meals/stats/nutrition, /meals/stats/nutrients, servingKcal, myCount, stale, sides, 중간 드리프트 7fa6e64d, DELETE 204 Default Response, meal-story-preview, 44커밋]
 ---
 
 # api-docs — 외부용 API 문서(docs/api)·OpenAPI 생성 파이프라인·어드민 외 CORS 개방
+
+**2026-11-06~11-14 변경 흡수 (32차) — 식단·건강식단 스토리의 새 라우트로 208 → 219개(공개 92·선택 18·로그인 109), 태그 28 → 29(`meal-story`), paths 173 → 182, 재생성 커밋 20회, 수기 README 는 그대로(`bec2e294`·`1ba0381a`·`f4cec51d`·`981dbfbd`·`9080097f`·`bc24caf4`·`937f2dd2`·`90ccdff6`·`46134eb8`·`e39b1366`·`e3c6f6e5`·`6a3f4b49`·`cdab9359`·`c01a1e31`·`650aea40`·`fd61e986`·`9ff7e2ee`·`82e02c3d`·`d5fab013`·`0d21d4d3`)**: (1) **+11 오퍼레이션**(전부 비-어드민, `openapi.json` 에서 메서드 수로 셈) — 로그인 `GET /meals/stats/nutrition`(`9080097f`, 209개 — 통계 묶음별 영양 몫, `RATE.mealNutrition` 30/분) → `GET /meals/stats/nutrients`(`937f2dd2`, 210 — 영양소별 하루 평균·흐름, 30/분) → `GET`·`PUT`·`DELETE /meals/skips`(`90ccdff6`, 213 — 끼니 '안 먹음', 한도 없음) → `POST /meals/skips/batch`(`e39b1366`, 214) → **새 태그 `meal-story` 4개**(`e3c6f6e5`, 218 — 선택 인증 `GET /meal-stories`·`GET /meal-stories/:slug`(`RATE.mealStoryRead` 120/분, 관리자면 초안 포함), **공개** `GET /meal-stories/:slug/images/:file`(`RATE.mealStoryImage` 300/분, 응답 스키마 없는 이미지 파일), 로그인 `POST /meal-stories/:slug/food`([이 레시피로 기록], 한도 없음)) → 로그인 `GET /meals/place-menus`(`d5fab013`, **219** — 식당 메뉴에서 넣기). 등급별로 공개 91 → 92(스토리 사진)·선택 16 → 18(스토리 목록·한 편)·로그인 101 → 109, `meal` 태그 34 → 41. 새 라우트 프리셋은 `mealStoryRead`·`mealStoryImage` 둘이고, 통계 둘은 기존 `mealNutrition` 을 같이 쓴다 — 한도 없는 op 113 → 119. 새 summary 는 전부 한국어("끼니 안 먹음 표시 — 그 날 그 끼니를 먹지 않았다고 남긴다(이미 있으면 그대로)" 등), 선택 인증 둘은 `security: OPTIONAL_BEARER`(CLAUDE.md 6번 그대로). description 있는 op 77 → 88. (2) **기존 op 19개 스키마·문구 변화** — 17개가 식단(`/meals`·`/meals/{id}`(항목 `menuName`·`menuPrice`), `/meals/recognize`(`menuName`), `/meals/items/frequent`(`q`·`kcal`), `/meals/nutrition`(영양소 enum 15종·`recordGap`·`sideSuggestions`), `/meals/nutrition/advice` GET·POST(`stale`), `/meals/recommendations*`(`sides`), `/meals/data*`(`skips`))와 `/food/search`(`servingKcal`·`myCount` — endpoints 설명도 "내가 먹은 음식 먼저 … 1인분 열량 포함"), 나머지 1개는 등산 `/hiking/recommend` description(`bec2e294`, 11-06 — "날씨 캐시에 없는 격자는 요청마다 3곳까지만 새로 받는다 — 나머지 항목은 weather 가 null 일 수 있다"). 응답 상태 코드 선언은 그대로(404 18·503 42·400 1·204 3)고, 2xx 스키마 없는 op 24 → 26(스토리 사진 + `DELETE /meals/skips` — 실제 204 인데 스펙엔 "200 Default Response", Gotchas). (3) **재생성 관례** — 20커밋이 각자 같은 커밋에서 `export:openapi` 를 돌렸다(`git log -- docs/api` 24 → **44커밋**). 한 번 빠졌다: `7fa6e64d`(11-08 01:04, 추천 `sides`)는 계약을 바꾸고 재생성하지 않아 그 사이 커밋된 스펙은 `sides` 가 없었고, 다음 기능 커밋 `981dbfbd`(같은 날 11:56)의 재생성이 흡수했다 — 28차 `9019cf5` 와 같은 "중간 드리프트"(HEAD 는 코드와 일치). 스토리 편 추가 커밋 7개(`6a3f4b49`~`82e02c3d`)는 op 수 없이 `MealStory` 응답 스키마(장면 9종·소품 enum 79·그림체)만 키웠다. 어드민 `/admin/food/nutrient-refs*`(`1ba0381a`·`40eb16a4`)는 제외 규칙대로 실리지 않았고, 스토리 공유 미리보기 HTML(`/meal/stories[/:slug[/recipe]]`, `meal-story-preview.ts` — `RATE.mealStoryRead` 를 같이 씀)도 `/api/v1/` 밖이라 문서 밖이다. (4) **README 는 손대지 않았다**(271줄 그대로) — 6절 "개인 기록" 의 식단 항목은 끼니 기록·달력·통계·선호만 말하고 '안 먹음'·식당 메뉴·통계 영양을 모르며, **건강식단 스토리 절이 없다**(공개·선택 인증 표면인데), 5절 대표 한도 표에 스토리 120/300 이 없고, 9절 이미지 응답 목록에 스토리 사진이 없다(Gotchas 3 의 드리프트가 늘었다). (5) 규모: endpoints.md 358 → **374줄**(태그 절 하나 + 식단 표 8줄), openapi.json 58,892 → **62,882줄**(git 저장본 2,147,436 → 2,314,430바이트 — 식단 응답이 라우트마다 인라인이라 줄 수가 크게 는다). 계약 쪽은 [api-contract](api-contract.md), 도메인은 [meal](meal.md)·[meal-nutrition](meal-nutrition.md)·[food](food.md)·[meal-story](meal-story.md).
 
 **2026-10-24~10-29 변경 흡수 (31차) — 여행로그 15차가 `POST /tour/public/plan` 한 op 의 스키마·설명만 바꿨다. 208개·endpoints.md·README 는 그대로(`a382e01c`)**: (1) **재생성** — 같은 기능 커밋에서 `export:openapi` 를 다시 돌렸다("기능 커밋 = 같은 커밋" 관례 유지). openapi.json 은 58,818 → **58,892줄**(+76/−2, git 저장본 2,143,160 → 2,147,436바이트)이다. 바뀐 것은 요청 본문 `startDow`(integer 0~6), 응답 `places[].info`·`itinerary.days[].stops[].info`(`hours`·`closed`·`parking`·`fee` — 각각 string nullable, `additionalProperties: false`, 객체 자체도 nullable), `stops[].closedThatDay`(boolean), 최상위 `infoNote`(string nullable)다. 넷 다 `required` 에 들어갔다(값은 null 일 수 있어도 키는 늘 온다). description 끝에는 "운영 정보(15차)" 문단이 붙었다 — 한국관광공사 관광정보(TourAPI)와 이름·위치로 맞춘 곳만 값이 있고, 원문을 한 줄로 줄인 것이며, 출처·주의는 `infoNote`(보여 줄 때 같이 표기)라는 것, `startDow` 를 주면 "매주 쉬는 요일" 로 읽힌 곳을 그날 일정·대안에서 뺀다는 것(격주·월 n회·계절별은 그대로), 꼭 갈 곳은 `closedThatDay`, 서버는 날짜를 받지 않는다는 것. summary 는 그대로라 endpoints.md(358줄)는 바뀌지 않았다. (2) **수·등급 무변경** — 엔드포인트 208, `tour` 태그 6개 전부 공개·120/분, description 있는 op 수도 그대로(plan 은 원래 description 이 있었다). `git log -- docs/api/` 는 **24커밋**이다(30차 기록 22 + 등산 `39dd1abb`(10-27 — 30차가 "작업 트리" 로 적은 분을 커밋) + 이것). (3) **README 는 손대지 않았다** — 6절 여행로그 항목과 7절 이용 조건은 "AI 허브 여행로그 — 집계만" 만 말한다. 응답에 한국관광공사 원천 문구가 섞였다는 것과 그 출처 표기(`infoNote`)는 openapi description 에만 있다(Gotchas 23). 도메인 설명은 [tour](tour.md), 계약은 [api-contract](api-contract.md).
 
@@ -18,15 +20,15 @@ aliases: [api-docs, 외부 API 문서, 외부용 API 문서, API 문서, 외부 
 
 **2026-09-24~09-26 변경 흡수 — 신규 토픽: 외부용 API 문서 자동 생성 + 어드민 외 CORS `*` 개방 + 429 본문 수정**: 사용자의 다른 프로젝트가 브라우저·서버에서 friendly API 를 직접 쓰도록 `1b621c4`(2026-09-24)가 (1) [plugins/cors.ts](../../apps/friendly/src/plugins/cors.ts) 를 "어드민(`/api/v1/admin/**`) 외 `origin:'*'` + `credentials:false`, 어드민은 `PUBLIC_ORIGIN` 만" 으로 바꿔 보안 감사 #42 의 prod fail-closed(`bc2db00`, 2026-07-13)를 **번복**하고, (2) [plugins/swagger.ts](../../apps/friendly/src/plugins/swagger.ts) 의 스펙 생성기를 전 환경에 등록하면서 transform 이 `x-auth`·`x-rate-limit`·bearer `security` 를 자동으로 싣게 했으며, (3) 비-어드민 라우트가 있는 route 파일 32개의 `schema` 에 한국어 `summary`(필요 시 `description`)를 달고(동작 변경 없음), (4) [scripts/export-openapi.ts](../../apps/friendly/scripts/export-openapi.ts)(`pnpm --filter friendly export:openapi`)로 `docs/api/openapi.json`·`endpoints.md` 를 뽑아 수기 가이드 `docs/api/README.md` 와 함께 커밋했다 — 그 시점 **183개(공개 74·선택 15·로그인 94)**. 같은 날 `678ecc0` 은 레이트리밋 429 본문에서 `error` 필드가 빠지던 전역 에러 핸들러 결함을 고쳐 README 가 약속한 공통 에러 본문 `{ statusCode, error, message }` 를 지켰다. 이튿날 `2ff2c31`(2026-09-25, 주차)이 문서를 재생성해 **192개(공개 83·선택 15·로그인 94)** 가 됐고, `420a6be`(2026-09-26)는 어드민 라우트만 건드려 재생성 변화가 없다. 작업 규칙은 `CLAUDE.md` 6번 "외부 API 문서(`docs/api/`)" 로 박혔다 — 비-어드민 라우트를 추가·변경하면 summary·선택 인증이면 `OPTIONAL_BEARER`·`export:openapi` 재생성, `src/plugins/` 에 `*.test.ts` 금지(앱 연결 테스트는 `src/app.*.test.ts`).
 
-## Purpose [coverage: high — 9 sources]
+## Purpose [coverage: high — 10 sources]
 
 `docs/api/` 는 **이 리포 밖의 소비자**(사용자의 다른 프로젝트)를 위한 friendly API 문서다. 리포 안의 웹·앱은 여전히 `@repo/api-contract`(zod)와 `@repo/shared` API 함수로 호출하고 이 문서를 읽지 않는다 — 외부 프로젝트만 `openapi.json` 을 기준으로 한다([README 8절](../../docs/api/README.md)).
 
 | 파일 | 내용 | 갱신 방식 | 규모(2026-10-26) |
 |---|---|---|---|
-| [docs/api/README.md](../../docs/api/README.md) | 공통 규칙 9절 — 기준 URL·CORS·인증·요청/응답 규약·한도·도메인 개요·데이터 출처/이용 조건·타입 쓰기·알려진 한계 | 수기 | HEAD 264줄(10-10 `36f07eb3` 뒤 커밋 변경 없음) → 작업 트리 271줄(2026-10-26 파일 표·5절 한도 표·6절 등산/`menuBoard`·7절 등산·9절 파일 응답, 커밋 전)(09-24 243줄 → 10-05 첫 개정 `d07281f0`·`007ac899`·`7587b470`) |
-| [docs/api/endpoints.md](../../docs/api/endpoints.md) | 태그 28개 절로 나눈 엔드포인트 색인 — 메서드·경로·인증·한도·입력·한 줄 설명 | 자동(`export:openapi`) | HEAD 357줄 · 207개 → 작업 트리 358줄 · **208개**(10-10 엔 345줄 · 200개, 10-04 엔 344줄 · 199개) |
-| [docs/api/openapi.json](../../docs/api/openapi.json) | OpenAPI 3.0.3 — 요청·응답 스키마 전체 | 자동 | HEAD 58,762줄 · 2,140,732바이트 → 작업 트리 58,818줄 · 2,143,160바이트(바이트는 LF 기준. 10-10 엔 55,971줄 — 그때 적은 2,095,016바이트는 CRLF 체크아웃 기준이고 LF 로는 2,039,045) |
+| [docs/api/README.md](../../docs/api/README.md) | 공통 규칙 9절 — 기준 URL·CORS·인증·요청/응답 규약·한도·도메인 개요·데이터 출처/이용 조건·타입 쓰기·알려진 한계 | 수기 | HEAD 264줄(10-10 `36f07eb3` 뒤 커밋 변경 없음) → 작업 트리 271줄(2026-10-26 파일 표·5절 한도 표·6절 등산/`menuBoard`·7절 등산·9절 파일 응답, 커밋 전)(09-24 243줄 → 10-05 첫 개정 `d07281f0`·`007ac899`·`7587b470`) → **2026-11-15(32차): 271줄 그대로**(31차 판이 커밋된 뒤 11-06~14 기능 커밋 20개 모두 README 무변경 — 스토리·'안 먹음'·식당 메뉴 미기재) |
+| [docs/api/endpoints.md](../../docs/api/endpoints.md) | 태그 28개 절로 나눈 엔드포인트 색인 — 메서드·경로·인증·한도·입력·한 줄 설명 | 자동(`export:openapi`) | HEAD 357줄 · 207개 → 작업 트리 358줄 · **208개**(10-10 엔 345줄 · 200개, 10-04 엔 344줄 · 199개) → **32차 374줄 · 219개 · 태그 29개**(`meal-story` 절 신설, 11-14 `0d21d4d3` 기준) |
+| [docs/api/openapi.json](../../docs/api/openapi.json) | OpenAPI 3.0.3 — 요청·응답 스키마 전체 | 자동 | HEAD 58,762줄 · 2,140,732바이트 → 작업 트리 58,818줄 · 2,143,160바이트(바이트는 LF 기준. 10-10 엔 55,971줄 — 그때 적은 2,095,016바이트는 CRLF 체크아웃 기준이고 LF 로는 2,039,045) → **32차 62,882줄 · 2,314,430바이트**(LF, `0d21d4d3`), paths 182 |
 
 이 토픽이 다루는 것:
 
@@ -35,7 +37,7 @@ aliases: [api-docs, 외부 API 문서, 외부용 API 문서, API 문서, 외부 
 3. **외부 계약이 된 공통 규약** — 에러 본문 `{ statusCode, error, message }`(429 수정 `678ecc0`), 레이트리밋 응답 헤더 노출, 인증 3등급(공개·선택·로그인) 표기.
 4. **작업 규칙** — [CLAUDE.md](../../CLAUDE.md) 6번과 앱 연결 테스트 위치(`src/app.*.test.ts`).
 
-도메인별 동작(파라미터 의미·캐시·폴백)은 각 도메인 토픽 소관이고, README 6절 "도메인 개요" 는 그 외부용 요약이다 — [weather](weather.md)·[air-quality](air-quality.md)·[bus](bus.md)·[subway](subway.md)·[sea](sea.md)·[parking](parking.md)·[hiking](hiking.md)(2026-10-25~, README 6·7절은 2026-10-26 작업 트리에서 추가)·[life-map](life-map.md)·[housing](housing.md)·[tour](tour.md)·[tarot](tarot.md)·[saju-c](saju-c.md)·[saju-g](saju-g.md)·[meal](meal.md)·[food](food.md)·[settlement](settlement.md)·[vote](vote.md). 백엔드 공통 관점은 [friendly](friendly.md), 스키마 원천은 [api-contract](api-contract.md), LLM 기능의 일일 한도는 [usage-quota](usage-quota.md).
+도메인별 동작(파라미터 의미·캐시·폴백)은 각 도메인 토픽 소관이고, README 6절 "도메인 개요" 는 그 외부용 요약이다 — [weather](weather.md)·[air-quality](air-quality.md)·[bus](bus.md)·[subway](subway.md)·[sea](sea.md)·[parking](parking.md)·[hiking](hiking.md)(2026-10-25~, README 6·7절은 2026-10-26 작업 트리에서 추가)·[life-map](life-map.md)·[housing](housing.md)·[tour](tour.md)·[tarot](tarot.md)·[saju-c](saju-c.md)·[saju-g](saju-g.md)·[meal](meal.md)·[food](food.md)·[settlement](settlement.md)·[vote](vote.md)·[meal-story](meal-story.md)(2026-11-09~, README 6절엔 아직 없음). 백엔드 공통 관점은 [friendly](friendly.md), 스키마 원천은 [api-contract](api-contract.md), LLM 기능의 일일 한도는 [usage-quota](usage-quota.md).
 
 사용자 결정(2026-09-24, 작업 기록): "내 다른 프로젝트에서 쓸 것 — 운영도 CORS 다 풀고, 트래픽 보고 나중에 제한. 어드민 제외, 열 수 있는 건 다 열기(LLM 포함)." 커밋 본문은 "사용자의 다른 프로젝트가 브라우저에서 이 API 를 직접 쓰도록 운영 CORS 를 연다. 트래픽을 보고 CORS_ORIGIN 목록으로 다시 좁힌다" 로 적었고, PLAN-perf-security 는 같은 결정을 "2026-09-24 번복(사용자 결정)" 으로 남겼다.
 
@@ -203,7 +205,7 @@ CORS 정책 변천(`git log -- apps/friendly/src/plugins/cors.ts`):
 
 소스(위 링크 외): [app.ts](../../apps/friendly/src/app.ts), [swagger.ts](../../apps/friendly/src/plugins/swagger.ts), [README.md](../../docs/api/README.md), [openapi.json](../../docs/api/openapi.json), [parking.route.ts](../../apps/friendly/src/modules/parking/parking.route.ts), [sea.route.ts](../../apps/friendly/src/modules/sea/sea.route.ts), [routes.ts](../../packages/api-contract/src/routes.ts)(`Routes.Meal.nutrition*`·`Routes.Tarot.cardTexture`)
 
-## API Surface [coverage: high — 16 sources]
+## API Surface [coverage: high — 20 sources]
 
 ### 인증 등급 (x-auth)
 
@@ -225,12 +227,13 @@ README 3절의 의미 정의: `선택` = 토큰 없이도 동작하고 유효한
 | auth | `/auth/*` | 4 | 2 | 0 | 2 | 로그인 20/분 · 가입 40/시간 |
 | bus | `/bus/*` | 5 | 5 | 0 | 0 | 도착·위치·노선 상세·정류장 검색 60/분(10-05 부터 상세·검색 추가, 주변만 없음) |
 | bus-favorite | `/bus/favorites*` | 6 | 0 | 0 | 6 | — |
-| food | `/food/*` | 2 | 0 | 0 | 2 | 검색 120/분 · 역검색 60/분 |
+| food | `/food/*` | 2 | 0 | 0 | 2 | 검색 120/분 · 역검색 60/분 (32차: 수 그대로, `/food/search` 응답에 `servingKcal`·`myCount`) |
 | health | `/health` | 1 | 1 | 0 | 0 | — |
 | **hiking**(2026-10-25~) | `/hiking/*` | 8 | 8 | 0 | 0 | 산·코스·주변·사진·GPX 240/분(`hikingRead`) · 조건 60/분(`transitRealtime`) · 추천 30/분(`hikingRecommend`) |
 | housing | `/housing/*` | 6 | 6 | 0 | 0 | 지도·주변·거래 240/분 · 검색 120/분 · 적재 현황 120/분(10-05, 라우트 로컬) |
 | life-map | `/life-map/*` | 6 | 6 | 0 | 0 | 지도·주변 240/분 · 검색 60/분 |
-| meal | `/meals*` | 34 | 0 | 0 | 34 | 사진 30/분 · 인식·추천 10/분 · 백업·복원·내보내기 10/시간(내보내기는 10-05) · 영양 점검 30/분 · 영양제 조언 5/분 |
+| meal | `/meals*` | 34 | 0 | 0 | 34 | 사진 30/분 · 인식·추천 10/분 · 백업·복원·내보내기 10/시간(내보내기는 10-05) · 영양 점검 30/분 · 영양제 조언 5/분 · **32차(2026-11-14) 41개(전부 로그인)** — 통계 영양 2(`/meals/stats/nutrition`·`/nutrients`, 30/분 `mealNutrition`)·'안 먹음' 4(`/meals/skips` GET·PUT·DELETE + `/batch`, 한도 없음)·식당 메뉴 1(`/meals/place-menus`, 한도 없음) |
+| **meal-story**(2026-11-09~, 32차) | `/meal-stories*` | 4 | 1 | 2 | 1 | 목록·한 편 120/분(`mealStoryRead`, 선택 인증) · 사진 300/분(`mealStoryImage`, 공개 — 이 문서 첫 300/분) · [이 레시피로 기록] 없음(로그인) |
 | media | `/media/*` | 2 | 2 | 0 | 0 | — |
 | parking | `/parking/*` + `/restaurants/public/:placeId/parking-reviews` | 9 | 9 | 0 | 0 | status 외 240/분 |
 | picks | `/picks*` | 6 | 0 | 0 | 6 | — |
@@ -249,22 +252,25 @@ README 3절의 의미 정의: `선택` = 토큰 없이도 동작하고 유효한
 | vote | `/votes*`·`/share/votes/:token*` | 5 | 0 | 2 | 3 | 공유 조회 120/분 · 투표 30/분 |
 | weather | `/weather/*` | 6 | 6 | 0 | 0 | 60/분 |
 | **합계** | | **208** | **91** | **16** | **101** | (HEAD 207 · 90 — 10-10 엔 200 · 83) |
+| **합계(32차, 2026-11-14 `0d21d4d3`)** | | **219** | **92** | **18** | **109** | 태그 29개 — `meal` +7·`meal-story` +4 |
 
 - 태그 이름은 각 route schema 의 `tags[0]` 이지 경로가 아니다: `saju` = 사주(C)(`/saju-c/*`), `public` = 맛집 공개 읽기 + 지도 공개 설정, 맛집 상세 탭용 `tour-stats`·`parking-reviews` 는 각각 `tour`·`parking` 절에 있다.
 - 메서드 분포: (2026-10-26 작업 트리) **GET 126** · POST 44 · DELETE 23 · PUT 12 · PATCH 3, 경로 173개 — 등산 8개가 모두 GET 이다(HEAD: GET 125·172경로).
   (10-10) GET 118 · POST 44 · DELETE 23 · PUT 12 · PATCH 3. 경로(path) 165개(10-04: GET 117·164경로, 09-26: GET 113 · POST 43 · DELETE 21, 159경로).
+  → (2026-11-14, 32차) **GET 133** · POST 46 · DELETE 24 · PUT 13 · PATCH 3, 경로 182개 — 스토리 GET 3·POST 1, 식단 GET 4(통계 2·skips·place-menus)·PUT 1·DELETE 1·POST 1(batch).
 
 ### 한도(x-rate-limit) 분포
 
 | 한도 | 개수 | 대표 프리셋 (`RATE`) |
 |---|---|---|
-| 없음 → 전역 1000/분 | 113(10-04 118 — 10-26 까지 그대로, 등산 8개는 모두 라우트 한도가 있다) | — (10-05: 한도가 생긴 6개가 빠지고 `by-place` 1개가 더해짐) |
+| 없음 → 전역 1000/분 | 113(10-04 118 — 10-26 까지 그대로, 등산 8개는 모두 라우트 한도가 있다) → **32차 119**(+6: 식단 '안 먹음' 4·`/meals/place-menus`·`POST /meal-stories/:slug/food`) | — (10-05: 한도가 생긴 6개가 빠지고 `by-place` 1개가 더해짐) |
 | 60/분 | 27(10-10 26 — 10-25 등산 조건 +1) | `transitRealtime`(대기·날씨·바다·버스/지하철 실시간 + 10-05 버스 노선 상세·정류장 검색 + 10-25 `/hiking/courses/:id/conditions`), `lifeMapSearch`, `publicPick`, `foodRestaurants` |
-| 120/분 | 17(+1) | `tourRead`, `publicShare`(공유 조회·PNG·사주(C) 잡 폴링), `housingSearch`, `foodSearch`, 10-05 `/housing/status`(라우트 로컬 `STATUS_RATE`) |
+| 120/분 | 17(+1) | `tourRead`, `publicShare`(공유 조회·PNG·사주(C) 잡 폴링), `housingSearch`, `foodSearch`, 10-05 `/housing/status`(라우트 로컬 `STATUS_RATE`) · **32차 19**(+2 `mealStoryRead` — 스토리 목록·한 편, 같은 프리셋을 `/api/v1` 밖 공유 미리보기 HTML 도 씀) |
 | 240/분 | **19**(HEAD 18, 10-10 13) | `lifeMapRead` 2, `housingRead` 3, `parkingRead` 8, **`hikingRead` 6**(산 목록·상세·코스·주변·사진 + 작업 트리 GPX) |
+| **300/분**(32차 신규) | 1 | `mealStoryImage`(2026-11-09 — 건강식단 스토리 사진, 공개. 주석 "한 편에 사진 몇 장 + 목록 표지, 브라우저·엣지가 오래 캐시한다(`?v=`)") |
 | 설정값/분(`dynamic`) | 11(+1) | 타로 1·사주(C) 7·사주(G) 2·**리뷰 Q&A 1**(10-05) — usage-quota `ipPerMinute` |
 | 10/분 | 6 | `tarotShare`(세 운세의 공유 발급 + 사주(G) 공유 취소), `mealRecognize`, `mealRecommend` |
-| 30/분 | 7(10-10 6) | `publicVote`, `mealPhotoUpload` 2, 사주(G) 명식 2(인라인 `{ max: 30 }`), `mealNutrition`(2026-10-04), **`hikingRecommend`**(2026-10-25 — 상위 12산만 오늘의 조건을 받아 업스트림이 낄 수 있음) |
+| 30/분 | 7(10-10 6) | `publicVote`, `mealPhotoUpload` 2, 사주(G) 명식 2(인라인 `{ max: 30 }`), `mealNutrition`(2026-10-04), **`hikingRecommend`**(2026-10-25 — 상위 12산만 오늘의 조건을 받아 업스트림이 낄 수 있음) · **32차 9**(+2 — 통계 묶음별 영양·영양소별 통계가 `mealNutrition` 을 같이 씀) |
 | 20/분 | 3(+2) | `authLogin`, 10-05 영수증 업로드·추출(라우트 로컬 `RECEIPT_*_RATE` — 진짜 방어선은 사용자 일일 50) |
 | 5/분 | 1 | `mealSupplement`(2026-10-04 — 영양제 조언 POST, 일일 10회가 진짜 방어선) |
 | 10/시간 | 3(+1) | `mealDataArchive`(백업·복원 + 10-05 내보내기) |
@@ -278,14 +284,15 @@ README 3절의 의미 정의: `선택` = 토큰 없이도 동작하고 유효한
 - 타로 2: `POST /tarot/{readings, shares}`
 - 투표 2: `GET /share/votes/:token`, `PUT /share/votes/:token/ballot`
 - **리뷰 Q&A 1(2026-10-05 `ab7dad28`)**: `POST /restaurants/:placeId/qa` — 회원이면 게스트·IP 한도 대신 회원 상한, 게스트는 `x-guest-key`·IP. 태그는 여전히 `public` 절
+- **건강식단 스토리 2(2026-11-09 `e3c6f6e5`, 32차 — 16 → 18개)**: `GET /meal-stories`·`GET /meal-stories/:slug` — 토큰이 관리자면 초안(`status: draft`)까지 준다. 선택 인증 GET 이 1 → 3 이 됐다(전엔 투표 공유 조회 하나 — 나머지 열다섯은 POST 14·PUT 1). 사진 `…/images/:file` 은 `<img>` 가 부르므로 인증 없는 공개
 
 ### 문서에 없는 표면
 
-어드민 `/api/v1/admin/**` 전부(SSE 포함 — README 9절 "서버 푸시(SSE)는 어드민 전용"), 공유 미리보기 HTML·PNG(`/r/:placeId`, `/share/settlements/:token(/image.png)`, `/s/`, `/vote/:token`, `/tarot/s/:token(/image.png)`, `/saju-c/s/…`, `/saju-g/s/:token`), prefix 없는 `/health`(`hide`), robots·sitemap·well-known, `/docs`(dev 전용 UI), 요청 헤더 `x-guest-key`(스키마 미선언 — 스펙 전체에 header 파라미터 0개, README 5·9절에만 설명).
+어드민 `/api/v1/admin/**` 전부(SSE 포함 — README 9절 "서버 푸시(SSE)는 어드민 전용"), 공유 미리보기 HTML·PNG(`/r/:placeId`, `/share/settlements/:token(/image.png)`, `/s/`, `/vote/:token`, `/tarot/s/:token(/image.png)`, `/saju-c/s/…`, `/saju-g/s/:token`), prefix 없는 `/health`(`hide`), robots·sitemap·well-known, `/docs`(dev 전용 UI), 요청 헤더 `x-guest-key`(스키마 미선언 — 스펙 전체에 header 파라미터 0개, README 5·9절에만 설명). → **32차 추가분**: 건강식단 스토리 공유 미리보기 HTML `/meal/stories[/:slug[/recipe]]`([meal-story-preview.ts](../../apps/friendly/src/modules/meal-story/meal-story-preview.ts) — `.route.ts` 가 아니라 app.ts 가 등록, 운영 nginx `location ^~ /meal/stories` 필요), 어드민 영양 기준 음식 `/api/v1/admin/food/nutrient-refs*` 3경로, 스토리 사진의 캐시 쿼리 `?v=`(라우트가 querystring 스키마 없이 `req.query.v` 를 읽어 스펙에 파라미터가 안 나온다 — 설명 문구에만 "?v=(수정 시각)가 붙은 주소는 1년 캐시").
 
 소스: [endpoints.md](../../docs/api/endpoints.md), [openapi.json](../../docs/api/openapi.json), [README.md](../../docs/api/README.md), [swagger.ts](../../apps/friendly/src/plugins/swagger.ts), [export-openapi.ts](../../apps/friendly/scripts/export-openapi.ts), [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts), [tarot.route.ts](../../apps/friendly/src/modules/tarot/tarot.route.ts), [saju.route.ts](../../apps/friendly/src/modules/saju/saju.route.ts), [saju-g.route.ts](../../apps/friendly/src/modules/saju-g/saju-g.route.ts), [vote.route.ts](../../apps/friendly/src/modules/vote/vote.route.ts), [health.route.ts](../../apps/friendly/src/modules/health/health.route.ts)
 
-## Data [coverage: high — 19 sources]
+## Data [coverage: high — 21 sources]
 
 ### 생성물 규모 이력
 
@@ -315,7 +322,20 @@ README 3절의 의미 정의: `선택` = 토큰 없이도 동작하고 유효한
 | `0e38c4ee` 2026-10-26 | 변화 없음 | +137 → 58,762줄 | 설명만 | 국립공원(`park`·`parkArea`·`source: park`) |
 | 작업 트리(커밋 전, 2026-10-26) | **208 (91·16·101)** | +56 → 58,818줄 | +1 → 358줄 | GPX `GET /hiking/courses/:id/gpx` + `HikingParkCourse.reversed`·`elevationFrom` |
 | `a382e01c` 2026-10-24(author)·10-29(committer) | 변화 없음 | +76/−2 → **58,892줄** | 변화 없음(358줄) | 여행로그 15차 — plan 본문 `startDow`, 응답 `info`·`closedThatDay`·`infoNote`, description "운영 정보(15차)" 문단. 직전 줄 작업 트리 분은 `39dd1abb`(10-27)로 커밋됐다 |
+| `bec2e294` 2026-11-06 | 변화 없음 | +0(1줄 교체) → 58,892줄 | — | 등산 추천 description — 날씨 격자 캐시 미스는 요청당 3곳만, 나머지 `weather` null 가능 |
+| `1ba0381a`·`f4cec51d` 2026-11-07 | 변화 없음 | → 58,907 → 58,945줄 | 줄 수 그대로(조언 GET 설명 1줄 교체, `f4cec51d`) | 영양소 enum 15종(마그네슘·아연·엽산)·`recordGap`·`sideSuggestions`·조언 `stale`(GET summary 도 바뀜) |
+| (`7fa6e64d` 11-08 01:04) | 수 변화 없음 | **재생성 안 함** | — | 추천 `sides` — 다음 `981dbfbd` 가 흡수(28차 `9019cf5` 와 같은 중간 드리프트) |
+| `981dbfbd` 2026-11-08 | 변화 없음 | → 59,130줄 | 줄 수 그대로(설명·입력 2줄 교체) | `/food/search` `servingKcal`·`myCount`, `/meals/items/frequent` `q`·`kcal` + 위 `sides` |
+| `9080097f`·`bc24caf4` 2026-11-08 | **209 (91·16·102)** | → 59,603 → 59,707줄 | +1 | `GET /meals/stats/nutrition`(30/분) + 열량 구성 `composition` |
+| `937f2dd2` 2026-11-08 | 210 (91·16·103) | → 60,045줄 | +1 | `GET /meals/stats/nutrients`(30/분) |
+| `90ccdff6`·`46134eb8` 2026-11-08~09 | **213 (91·16·106)** | → 60,282 → 60,334줄 | +3 | `/meals/skips` GET·PUT·DELETE, 백업·내보내기·삭제 결과 `skips`, 평균에 넣는 날 문구 |
+| `e39b1366` 2026-11-09 | 214 (91·16·107) | → 60,462줄 | +1 | `POST /meals/skips/batch` |
+| `e3c6f6e5` 2026-11-09 | **218 (92·18·108)** | +1,207 → 61,669줄 | +9(태그 절) | 건강식단 스토리 4 — 태그 29번째 `meal-story`, 선택 인증 2·공개 사진 1·로그인 1 |
+| `6a3f4b49`~`82e02c3d` 2026-11-10~13(7커밋) | 변화 없음 | → 62,436줄 | — | 스토리 응답 스키마만 — 여러 식품 합·소품 enum·소금 환산·`recipeFoodId`·칼슘·비타민 C·`lineup`·`kicker`·`look` |
+| `d5fab013` 2026-11-14 | **219 (92·18·109)** | → 62,757줄 | +1 | `GET /meals/place-menus`, 항목·백업 `menuName`·`menuPrice`, 인식 `menuName` |
+| `0d21d4d3` 2026-11-14 | 변화 없음 | +125 → **62,882줄** | 변화 없음(**374줄**) | 식당 메뉴 `choices`·`portion`·`pending`, description 에 코스·세트 구성 |
 
+(2026-11-15) `git log -- docs/api/` 는 **44커밋**이다 — 아래 24 + 32차 20(전부 기능 커밋이 같은 커밋에서 재생성, 문서 전용 커밋 없음 — 빠진 것은 `7fa6e64d` 하나).
 (2026-10-31) `git log -- docs/api/` 는 **24커밋**이다 — 아래 22 + `39dd1abb`(등산 10차, 10-27) + `a382e01c`(여행로그 15차).
 (2026-10-26) `git log -- docs/api/` 는 **22커밋**이다 — 아래 14 + 30차 8(`0408f2f2` + 등산 7, 전부 기능 커밋이 같은 커밋에서 재생성 — 문서 전용 커밋 없음).
 (10-10 기록) `git log -- docs/api/` 는 14커밋이다(`1b621c4`·`2ff2c31` + 28차 5 + 여행로그 10~14차 3 + 이번 4 — 28차 기록 "7커밋" 이후 10-04 의 달력 kcal 재커밋 `5a306f8d` 도 포함). 28차까지는 전부 "기능 커밋이 같은 커밋에서 재생성" 이었는데,
@@ -352,7 +372,10 @@ README 3절의 의미 정의: `선택` = 토큰 없이도 동작하고 유효한
 
 소스: [openapi.json](../../docs/api/openapi.json), [endpoints.md](../../docs/api/endpoints.md), [README.md](../../docs/api/README.md), [export-openapi.ts](../../apps/friendly/scripts/export-openapi.ts), [env.ts](../../apps/friendly/src/config/env.ts), 204 실측은 [auth.route.ts](../../apps/friendly/src/modules/auth/auth.route.ts)·[contact.route.ts](../../apps/friendly/src/modules/contact/contact.route.ts)·[picks.route.ts](../../apps/friendly/src/modules/picks/picks.route.ts)·[saju.route.ts](../../apps/friendly/src/modules/saju/saju.route.ts)·[saju-g.route.ts](../../apps/friendly/src/modules/saju-g/saju-g.route.ts)·[settlement.route.ts](../../apps/friendly/src/modules/settlement/settlement.route.ts)·[settlement-draft.route.ts](../../apps/friendly/src/modules/settlement/settlement-draft.route.ts)·[tarot.route.ts](../../apps/friendly/src/modules/tarot/tarot.route.ts) 의 `reply.code(204)`, 선언된 204 는 [meal.route.ts](../../apps/friendly/src/modules/meal/meal.route.ts)
 
-## Key Decisions [coverage: high — 18 sources]
+## Key Decisions [coverage: high — 21 sources]
+
+- **2026-11-09 (`e3c6f6e5`): 스토리는 로그인 없이 읽히는 표면으로 — 목록·한 편은 선택 인증, 사진은 공개** — 같은 날 개인 데이터인 식단 사진(`/meals/photos/:token`)은 JWT 가 필요해 `<img src>` 에 못 쓰는 것과 반대로, 스토리 사진은 `<img>` 가 바로 부르도록 인증 없이 열고 `?v=`(수정 시각)가 붙으면 1년 `immutable` 캐시를 준다. 목록·한 편이 선택 인증인 것은 토큰이 관리자면 초안을 더 주기 위해서뿐이고, 응답에 사용자별 값은 없다(내 기록 숫자는 `figure.my` 키만 주고 화면이 `/meals/stats/nutrients` 로 채운다). 그래서 CORS 개방 정책(어드민 외 `*`) 아래에서 외부 프로젝트가 스토리를 그대로 가져다 쓸 수 있다 — 다만 이용 조건은 README 에 아직 없다(Gotchas 26).
+- **2026-11-07~14: 재생성 관례 유지 — 20커밋이 각자 같은 커밋에** — 30·31차의 "기능 커밋 = 같은 커밋" 이 이어졌고, 스토리 편을 더하는 커밋처럼 op 수가 그대로인 스키마 변경도 빠짐없이 재생성했다. 예외는 `7fa6e64d` 하나(Gotchas 28).
 
 - **2026-10-10~26: 재생성은 다시 "기능 커밋 = 같은 커밋", 스키마만 바꾼 커밋도 포함** — 30차의 8커밋이 전부 자기 커밋에 `docs/api` 를 실었고, 그중 라우트 수가
   그대로인 `a77d1ac6`·`bff8ca7c`·`7eb02951`·`0e38c4ee`(응답 필드·summary 만)도 빠뜨리지 않았다 — 28차 `9019cf5`("스키마만 바꿔 재생성 누락", Gotchas 4)와 다른
@@ -393,7 +416,7 @@ README 3절의 의미 정의: `선택` = 토큰 없이도 동작하고 유효한
 
 소스: [cors.ts](../../apps/friendly/src/plugins/cors.ts), [swagger.ts](../../apps/friendly/src/plugins/swagger.ts), [error-handler.ts](../../apps/friendly/src/plugins/error-handler.ts), [app.errors.test.ts](../../apps/friendly/src/app.errors.test.ts), [app.cors.test.ts](../../apps/friendly/src/app.cors.test.ts), [PLAN-perf-security.md](../../docs/PLAN-perf-security.md), [CLAUDE.md](../../CLAUDE.md), [parking.route.ts](../../apps/friendly/src/modules/parking/parking.route.ts), [.env.example](../../apps/friendly/.env.example), [README.md](../../docs/api/README.md), [endpoints.md](../../docs/api/endpoints.md), [export-openapi.ts](../../apps/friendly/scripts/export-openapi.ts), [tsup.config.ts](../../apps/friendly/tsup.config.ts)
 
-## Gotchas [coverage: high — 41 sources]
+## Gotchas [coverage: high — 44 sources]
 
 1. **운영 `.env` 의 `CORS_ORIGIN` 이 목록이면 개방되지 않는다** — 비-dev 는 목록이 있으면 그 목록만 허용한다. 운영 `.env` 가 옛 `.env.example`(`http://localhost:5173,http://localhost:8081`)에서 복사됐다면 외부 origin 은 계속 막힌다 → `*` 로 바꾸거나 줄을 지우고(기본 `*`) [deploy.sh](../../deploy.sh) 5번(".env만" = `pm2 reload friendly --update-env`) 로 반영, 기동 로그 `CORS: 어드민 외 모든 origin 허용, 어드민은 https://ninelife.kr 만` 으로 확인. [deploy-friendly.md](../../docs/deploy-friendly.md) 의 "환경 변수" 절은 `CORS_ORIGIN` 을 언급하지 않는다(작업 기록상 운영 확인 미완 ⚠️).
 2. **dev 와 운영의 CORS 동작이 다르다** — dev 는 `CORS_ORIGIN` 목록을 무시하고 전부 `*`, 어드민은 요청 origin 을 반사한다. "로컬에서 되니 운영도 된다" 로 판단하면 운영 목록·어드민 제한을 놓친다. 반대로 테스트(`NODE_ENV=test`)는 운영 분기를 탄다 — 로컬 `.env` 의 `CORS_ORIGIN` 이 dev 목록이면 `buildApp` 테스트의 결과가 달라지므로 `app.cors.test.ts` 처럼 import 전에 env 를 고정해야 한다([vitest.config.ts](../../apps/friendly/vitest.config.ts) 는 `.env` 를 읽되 이미 있는 값은 덮지 않는다).
@@ -449,14 +472,25 @@ README 3절의 의미 정의: `선택` = 토큰 없이도 동작하고 유효한
     가공 집계로 알 수 있다. 관광정보는 맞춘 곳에만 있고, 운영 서버는 이 커밋이 배포되더라도 동기화(`sync:tour-kto`)를 따로 돌리기 전까지 `info: null`·
     `infoNote: null` 이다(PLAN 15차 "남은 것" — 운영 배포·동기화 여부는 확인하지 않았다, [tour](tour.md) Gotchas). 외부에서 보면 "필드는 있는데 늘 null" 일 수 있다.
 
+24. **(32차) `DELETE /meals/skips` 는 실제 204 인데 스펙은 "200 Default Response"** — [meal-skip.route.ts](../../apps/friendly/src/modules/meal/meal-skip.route.ts) 가 `reply.code(204).send()` 하면서 `response` 를 선언하지 않았다. 28차 `DELETE /meals/recommendations/:id` 는 `{ 204: z.null() }` 로 선언해 스펙에 204 가 나온다 — 같은 태그 안에서 관례가 갈렸다. `openapi-typescript` 로 만든 외부 클라이언트는 200 본문을 기대할 수 있다.
+25. **(32차) 상태 코드는 설명에만** — `PUT /meals/skips` 의 409(그 끼니에 이미 기록)·400(앞으로 올 날), `POST /meals/skips/batch` 의 400(앞날 섞임·`set`/`clear` 둘 다 빔), `GET /meals/place-menus` 의 404(등록 식당 아님), `POST /meal-stories/:slug/food` 의 404(레시피 없음)·409(같은 이름 음식 있음) — 전부 description 문구로만 있고 `responses` 에는 200 뿐이다(오류 응답을 스키마에 선언하지 않는 기존 관례 — 공통 본문은 README 4절).
+26. **(32차) README 가 건강식단 스토리를 모른다** — 공개·선택 인증 표면 4개가 생겼는데 수기 [README.md](../../docs/api/README.md) 6절 도메인 개요에 스토리 절이 없고(`publishedAt`·초안은 관리자만·숫자는 서버 계산·출처 `sources` 를 같이 보여야 하는지 등 이용 조건도 없음), 5절 대표 한도 표에 120/분·300/분이 없으며, 9절 "이미지·파일 응답" 목록에 스토리 사진이 없다. 응답의 `coverUrl`·장면 `image` 는 `/api/v1/meal-stories/<slug>/images/<file>?v=…` **상대 경로**라 외부 소비자는 기준 URL 을 붙여야 한다(앱도 같다 — PLAN-mobile-meal 2번). 식단 항목도 '안 먹음'(기록이 이긴다·평균에 넣는 날 규칙)·식당 메뉴(`menuName` 은 서버가 대조하지 않는 스냅샷)·통계 영양 설명이 README 에 없다.
+27. **(32차) 공용 검색 응답에 사용자별 값** — `/food/search` 의 `myCount`(내가 최근 180일 적은 횟수)는 토큰 주인의 값이다. 외부 프로젝트가 서버 쪽에서 검색 결과를 캐시해 여러 사용자에게 나눠 주면 남의 기록 수가 샌다 — 스펙에서는 필드 설명이 없어(스키마 주석은 문서로 가지 않는다) 알아채기 어렵다.
+28. **(32차) 재생성 누락 한 번** — `7fa6e64d`(추천 `sides`)가 계약을 바꾸고 `export:openapi` 를 돌리지 않았다. 11시간 뒤 `981dbfbd` 가 흡수해 HEAD 는 맞지만, 기능 커밋 단위로 스펙을 받아 가는 외부 소비자에겐 그 사이 스펙이 응답보다 필드 하나 적었다(Gotchas 4 — 재생성이 수동이라는 것의 또 한 사례).
 소스(위 링크 외): [cors.ts](../../apps/friendly/src/plugins/cors.ts), [.env.example](../../apps/friendly/.env.example), [app.cors.test.ts](../../apps/friendly/src/app.cors.test.ts), [app.openapi.test.ts](../../apps/friendly/src/app.openapi.test.ts), [env.ts](../../apps/friendly/src/config/env.ts), [endpoints.md](../../docs/api/endpoints.md), [openapi.json](../../docs/api/openapi.json), [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts), [export-openapi.ts](../../apps/friendly/scripts/export-openapi.ts), [housing.route.ts](../../apps/friendly/src/modules/housing/housing.route.ts), [summaries.ts](../../apps/friendly/src/plugins/summaries.ts), [parking.route.ts](../../apps/friendly/src/modules/parking/parking.route.ts), [app.ts](../../apps/friendly/src/app.ts), [tsup.config.ts](../../apps/friendly/tsup.config.ts), [swagger.ts](../../apps/friendly/src/plugins/swagger.ts), [picks.route.ts](../../apps/friendly/src/modules/picks/picks.route.ts), [jwt.ts](../../apps/friendly/src/plugins/jwt.ts), [vote.route.ts](../../apps/friendly/src/modules/vote/vote.route.ts), [auth.route.ts](../../apps/friendly/src/modules/auth/auth.route.ts), [saju-g-preview.ts](../../apps/friendly/src/modules/saju-g/saju-g-preview.ts), [review-search.route.ts](../../apps/friendly/src/modules/review-search/review-search.route.ts), [settlement-extraction.route.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts), [error-handler.ts](../../apps/friendly/src/plugins/error-handler.ts), [reply-upstream-error.ts](../../apps/friendly/src/lib/reply-upstream-error.ts)
 
-## Sources [coverage: high — 88 sources]
+## Sources [coverage: high — 93 sources]
 
+32차 신규 출처(2026-11-07~11-14 — 기존 `meal-nutrition.route.ts`·`food.route.ts`·`rate-limit.ts`·`meal.ts`(계약) 는 아래 기존 줄, 변경은 본문에 흡수):
+- [apps/friendly/src/modules/meal-story/meal-story.route.ts](../../apps/friendly/src/modules/meal-story/meal-story.route.ts) — `meal-story` 태그 4 op: 선택 인증 2(`OPTIONAL_BEARER`)·공개 사진 1(응답 스키마 없음, `?v=` 캐시)·로그인 1, 한국어 summary
+- [apps/friendly/src/modules/meal-story/meal-story-preview.ts](../../apps/friendly/src/modules/meal-story/meal-story-preview.ts) — `/meal/stories[/:slug[/recipe]]` 미리보기 HTML — `/api/v1` 밖이라 문서 밖, `RATE.mealStoryRead` 공유
+- [apps/friendly/src/modules/meal/meal-skip.route.ts](../../apps/friendly/src/modules/meal/meal-skip.route.ts) — `/meals/skips` GET·PUT·DELETE(204, 응답 스키마 없음)·`/batch`, 400·409 는 description 에만
+- [apps/friendly/src/modules/meal/meal-place-menu.route.ts](../../apps/friendly/src/modules/meal/meal-place-menu.route.ts) — `GET /meals/place-menus`(긴 description — 코스·세트 `choices`·`pending`)
+- [packages/api-contract/src/schemas/meal-story.ts](../../packages/api-contract/src/schemas/meal-story.ts) — 스토리 응답 원천(장면 9종이 스펙에 인라인으로 펼쳐져 openapi.json +1,207줄)
 외부 문서(생성물·수기):
-- [docs/api/README.md](../../docs/api/README.md) — 수기 가이드 9절(기준 URL·CORS·인증·에러·한도·도메인 개요·이용 조건·타입 쓰기·한계). 264줄 — 2026-10-05 첫 개정(성능 2차·주차 절·복원 재시도), 10-10 주차 요금 null. 파일 표의 "183개"(작업 트리에서 "(전체 개수는 파일 머리)" 로 고침)·5절 "리뷰 Q&A 15/분" 은 낡음, 영양제 조언 한도·타로 텍스처·대부분의 `Cache-Control` 미반영. 2026-10-26 작업 트리(커밋 전)에서 6절 등산 항목·7절 등산 이용 조건 추가, 파일 표 개수를 "(전체 개수는 파일 머리)" 로, 9절에 산 사진·등산 GPX, 5절 대표 한도 표에 등산 3행·주차, 6절 맛집에 공개 `menuBoard` AI 안내(271줄).
-- [docs/api/endpoints.md](../../docs/api/endpoints.md) — 자동 색인, 작업 트리 208개(공개 91·선택 16·로그인 101)·태그 28절·358줄(HEAD `0e38c4ee` 207개·357줄, 10-05 `d07281f0` 200개·345줄).
-- [docs/api/openapi.json](../../docs/api/openapi.json) — 자동, OpenAPI 3.0.3, 작업 트리 58,818줄·paths 173·description 77(HEAD 58,762줄·paths 172·description 76, 10-10 55,971줄), `components.schemas` 0(통째로 읽지 말 것 — node 로 집계). 31차 `a382e01c`: 58,892줄(plan `startDow`·`info`·`closedThatDay`·`infoNote`·운영 정보 description).
+- [docs/api/README.md](../../docs/api/README.md) — 수기 가이드 9절(기준 URL·CORS·인증·에러·한도·도메인 개요·이용 조건·타입 쓰기·한계). 264줄 — 2026-10-05 첫 개정(성능 2차·주차 절·복원 재시도), 10-10 주차 요금 null. 파일 표의 "183개"(작업 트리에서 "(전체 개수는 파일 머리)" 로 고침)·5절 "리뷰 Q&A 15/분" 은 낡음, 영양제 조언 한도·타로 텍스처·대부분의 `Cache-Control` 미반영. 2026-10-26 작업 트리(커밋 전)에서 6절 등산 항목·7절 등산 이용 조건 추가, 파일 표 개수를 "(전체 개수는 파일 머리)" 로, 9절에 산 사진·등산 GPX, 5절 대표 한도 표에 등산 3행·주차, 6절 맛집에 공개 `menuBoard` AI 안내(271줄). · **32차: 271줄 그대로 — 스토리·'안 먹음'·식당 메뉴·통계 영양 미기재(Gotchas 26)**
+- [docs/api/endpoints.md](../../docs/api/endpoints.md) — 자동 색인, 작업 트리 208개(공개 91·선택 16·로그인 101)·태그 28절·358줄(HEAD `0e38c4ee` 207개·357줄, 10-05 `d07281f0` 200개·345줄). · **32차 374줄·219개(92·18·109)·태그 29절(`meal-story` 신설)**
+- [docs/api/openapi.json](../../docs/api/openapi.json) — 자동, OpenAPI 3.0.3, 작업 트리 58,818줄·paths 173·description 77(HEAD 58,762줄·paths 172·description 76, 10-10 55,971줄), `components.schemas` 0(통째로 읽지 말 것 — node 로 집계). 31차 `a382e01c`: 58,892줄(plan `startDow`·`info`·`closedThatDay`·`infoNote`·운영 정보 description). · **32차 62,882줄·2,314,430바이트·paths 182·description 88·2xx 스키마 없음 26**
 
 2026-10-10~10-26 재생성분의 원천:
 - [apps/friendly/src/modules/hiking/hiking.route.ts](../../apps/friendly/src/modules/hiking/hiking.route.ts) — *NEW(`72c9982e`→작업 트리)*: 등산 공개 8개의 summary·description·한도·캐시(1시간/5분/사진 30일), 400·404·503 선언, 사진·GPX 는 응답 스키마 없음, GPX `Content-Disposition`.

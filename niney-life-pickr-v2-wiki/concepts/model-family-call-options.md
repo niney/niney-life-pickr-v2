@@ -1,6 +1,6 @@
 ---
 concept: 모델 계열별 호출 옵션 — 모델 기벽은 utils 순수 함수로 고정하고, 어드민 설정은 효과가 있는 계열에만 건다
-last_compiled: 2026-10-04
+last_compiled: 2026-11-15
 topics_connected: [ai, saju-c, utils, web, api-contract, friendly, meal-nutrition, meal]
 status: active
 ---
@@ -17,6 +17,7 @@ Ollama Cloud 에 올라온 모델들은 같은 `/api/chat` 이라도 **추론(th
 
 ## Instances
 
+- **2026-11-07** in [ai](../topics/ai.md) / [utils](../topics/utils.md) / [meal](../topics/meal.md) / [meal-nutrition](../topics/meal-nutrition.md) / [saju-c](../topics/saju-c.md) (`ad1feff8`·`54e4c4f3`, 32차): 추론(thinking) 단계를 켜자 **숨은 상한 둘**이 드러났다. ① 어댑터가 호출마다 `OLLAMA_CLOUD_TIMEOUT_MS`(60초)를 걸어 서비스가 단계만큼 늘린 대기가 무시됐다 — kimi-k3.1-pro 최대 추론에서 조언·추천이 정확히 60.0초에 실패(사주도 같은 구조) → `LLMCompleteOptions.timeoutMs`. ② 사고 토큰은 본문 길이와 상관없이 단계마다 대략 정해진 만큼 써서, 배수 예산만으로는 본문이 짧은 호출에서 사고가 예산을 다 먹고 본문이 비었다(`done_reason=length`) → utils `thinkMaxTokens`·`thinkTimeoutMs` = 배수와 '본문 + 단계별 여유(2천/4천/5천/8천 토큰, 30/60/90/150초)' 중 큰 쪽. 식단 추천도 `thinkOptionFor(모델, 설정)` 로 어드민 추론 설정을 읽되 kimi 계열에만 건다(gpt-oss low 기본 경로는 예산·대기 그대로). 실측(같은 기록): 끔 8초·낮음 14·보통 42·높음 45·최대 51초인데 후보는 단계와 무관 → 기본은 끔.
 - **2026-10-04** in [meal-nutrition](../topics/meal-nutrition.md) / [ai](../topics/ai.md) (`3d067a0`): 두 번째 소비자 — 영양제 조언(purpose `meal-supplement`, 기본 kimi-k3)이 `thinkOptionFor(model, resolved.thinking)` 로 어드민 "추론" 설정을 kimi 계열에만 반영하고 `thinkTokenMult` 로 출력 예산·타임아웃(상한 180초)을 키운다. 반면 같은 식단의 **추천**(`meal-recommendation.service.ts`)과 두 프로브(`probe:meal-models`·`probe:meal-nutrition`)는 `thinkOptionForModel(model)` 만 써서 어드민 설정을 읽지 않는다 — 한 도메인 안에 두 방식이 섞였고, 어드민 화면의 "최대 5배·120초" 안내도 사주 기준 그대로다(2026-10-04 위키 점검). `recommendModelForPurpose` 의 kimi 우선 목록은 saju·saju-g·meal-supplement 셋.
 - **2026-09-12** in [ai](../topics/ai.md) / [utils](../topics/utils.md) / [api-contract](../topics/api-contract.md) / [web](../topics/web.md) (`a823af1`): thinking 설정 도입 — DB 열 + 계약 enum + 어드민 select + 어댑터 전달 + 순수 함수 2개(`thinkOptionForModel`, `thinkOptionFor`) + 테스트. 실측 표(모델별 think 반응)가 코드 주석으로 남았다.
 - **2026-09-12** in [saju-c](../topics/saju-c.md) (`a823af1`·`baecb9b`): 첫 소비자 — 사주(C) 풀이(섹션 4개 병렬 job)와 "사주에 묻기"가 kimi 모델일 때 어드민이 고른 추론 단계로 돈다. 기본 끔이라 운영 비용은 그대로.
@@ -28,8 +29,11 @@ Ollama Cloud 에 올라온 모델들은 같은 `/api/chat` 이라도 **추론(th
 2. **설정의 범위를 설정 자체에 적어라.** "kimi 전용"을 UI 라벨과 함수 시그니처에 명시했기 때문에, 다른 모델에서 추론이 안 켜지는 게 버그가 아니라 규칙으로 읽힌다. 범용처럼 보이는 스위치가 특정 계열에만 듣는 상황은 LLM 통합에서 반복되므로 이 규칙을 기본값으로 둔다.
 3. **다음 옵션 후보**(온도·응답 형식 강제·컨텍스트 창)도 같은 형태 — 계열 판정 함수 + 계열 한정 설정 + 계약 enum — 로 붙이면 된다. 옵션이 늘면 `thinkOptionFor` 처럼 "설정 × 계열 → 실제 요청 값" 함수 하나가 진실이 된다.
 
+4. **(32차) 계열 옵션은 어댑터까지 관통해야 효과가 있다.** 서비스가 계산한 예산·대기 시간이 어댑터의 전역 기본값에 덮이면 설정 화면은 거짓말을 한다. 옵션을 추가할 땐 "이 값이 실제 HTTP 호출까지 내려가는가" 를 테스트로 묶는다.
+
 ## Sources
 
+- [packages/utils/src/aiModel.ts](../../packages/utils/src/aiModel.ts) — 32차 `thinkMaxTokens`·`thinkTimeoutMs`
 - [ai](../topics/ai.md)
 - [saju-c](../topics/saju-c.md)
 - [utils](../topics/utils.md)

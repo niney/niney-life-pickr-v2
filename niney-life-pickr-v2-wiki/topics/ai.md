@@ -1,12 +1,14 @@
 ---
 topic: ai
-last_compiled: 2026-10-26
-sources_count: 104
+last_compiled: 2026-11-15
+sources_count: 108
 status: active
-aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think, thinking, 추론, 추론 선택, 추론 5단계, LlmThinking, LlmThinkingType, LlmThinkingSetting, LLM_THINKING_SETTINGS, ThinkOption, thinkOptionFor, thinkTokenMult, isKimiModel, kimi 전용, kimi-only-thinking, llm_provider_configs.thinking, LlmProviderConfig.thinking, 20260912120000_add_llm_provider_thinking, add_llm_provider_thinking, aiModelThink, aiModelThink.test, THINKING_OPTIONS, THINK_TIMEOUT_MAX_MS, think-max, done_reason=length, meal-supplement, purpose-9종, 영양제 조언, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, MEAL_NUTRITION_ADVICE_VERSION, meal-nutrition-advice, MealNutritionAdviceService, sanitizeAdvice, MAX_ENTRIES=16, MEAL_RECOMMENDATION_VERSION, 추천 프롬프트 v5, common-meals, probe:meal-models, probe:meal-nutrition, 모델 비교, gpt-oss vs kimi-k3, acquireLlmTelemetryStream, isLlmTelemetryConnected, 텔레메트리 스트림 공유, RecentCallRow, invalidateProviders, 모델 카탈로그 재조회, review-ask, ASK_CHAT_CONCURRENCY, askChatGate, chatJson, 게이트 밖 LLM 호출, MEMBER_PER_DAY, 회원 일일 100, member_daily, AsyncGate, GateBusyError, 세마포어 통합, TOUR_COLD_CONCURRENCY, BACKGROUND_CHAINS, FailureBackoff, MENU_FAILURE_BACKOFF_MS, MENU_FAILURE_GIVE_UP_AFTER, 메뉴 칼로리 LLM 동시 8, menu-board, purpose-10종, 열 번째 purpose, 메뉴판 읽기, OLLAMA_MENU_BOARD_MODEL, MenuBoardService, MENU_BOARD_PROMPT_VERSION, MENU_BOARD_IMAGE_SIDE, eval:menu-boards, menu-board-ocr-probe, 비전 모델 9개 비교, ScanText, qwen3.5 퇴역, qwen3.5:397b-cloud, Pro 5시간 한도, MealNutritionEstimator, 식단 이름 추정]
+aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think, thinking, 추론, 추론 선택, 추론 5단계, LlmThinking, LlmThinkingType, LlmThinkingSetting, LLM_THINKING_SETTINGS, ThinkOption, thinkOptionFor, thinkTokenMult, isKimiModel, kimi 전용, kimi-only-thinking, llm_provider_configs.thinking, LlmProviderConfig.thinking, 20260912120000_add_llm_provider_thinking, add_llm_provider_thinking, aiModelThink, aiModelThink.test, THINKING_OPTIONS, THINK_TIMEOUT_MAX_MS, think-max, done_reason=length, meal-supplement, purpose-9종, 영양제 조언, OLLAMA_MEAL_SUPPLEMENT_MODEL, MEAL_SUPPLEMENT_DAILY_LIMIT, MEAL_NUTRITION_ADVICE_VERSION, meal-nutrition-advice, MealNutritionAdviceService, sanitizeAdvice, MAX_ENTRIES=16, MEAL_RECOMMENDATION_VERSION, 추천 프롬프트 v5, common-meals, probe:meal-models, probe:meal-nutrition, 모델 비교, gpt-oss vs kimi-k3, acquireLlmTelemetryStream, isLlmTelemetryConnected, 텔레메트리 스트림 공유, RecentCallRow, invalidateProviders, 모델 카탈로그 재조회, review-ask, ASK_CHAT_CONCURRENCY, askChatGate, chatJson, 게이트 밖 LLM 호출, MEMBER_PER_DAY, 회원 일일 100, member_daily, AsyncGate, GateBusyError, 세마포어 통합, TOUR_COLD_CONCURRENCY, BACKGROUND_CHAINS, FailureBackoff, MENU_FAILURE_BACKOFF_MS, MENU_FAILURE_GIVE_UP_AFTER, 메뉴 칼로리 LLM 동시 8, menu-board, purpose-10종, 열 번째 purpose, 메뉴판 읽기, OLLAMA_MENU_BOARD_MODEL, MenuBoardService, MENU_BOARD_PROMPT_VERSION, MENU_BOARD_IMAGE_SIDE, eval:menu-boards, menu-board-ocr-probe, 비전 모델 9개 비교, ScanText, qwen3.5 퇴역, qwen3.5:397b-cloud, Pro 5시간 한도, MealNutritionEstimator, 식단 이름 추정, 32차, thinkMaxTokens, thinkTimeoutMs, THINK_EXTRA_TOKENS, THINK_EXTRA_MS, LLMCompleteOptions.timeoutMs, 호출별 타임아웃, 어댑터 60초, 추론 단계 실측, kimi-k3.1-pro, done_reason=length, adapter-lane, 갈래, lane, chat:review-qa, review-qa, ASK_LANE, 본문 타임아웃, LLM_TIMEOUT_MAX_MS, MenuCompositionService, MENU_COMPOSITION_VERSION, FoodNutrientRefService, FOOD_NUTRIENT_REF_VERSION, MEAL_RECOMMENDATION_VERSION-6, MEAL_NUTRITION_ADVICE_VERSION-3, MENU_LLM_MATCH_VERSION-2]
 ---
 
 # ai — LLM 통합(Ollama Cloud): 용도별 provider 설정·어댑터·2단 게이트·텔레메트리
+
+> **2026-11-06~11-14 변경 흡수 (32차) — 추론을 켠 호출이 어댑터 60초와 배수 출력 예산에 막히던 것을 고치고(`ad1feff8`, 11-07) 식단 추천도 어드민 추론 설정을 읽게 했으며(`54e4c4f3`) 그 실측을 남겼다(`2497046f`). 리뷰 질문·enrich·군집 라벨 LLM 이 직접 fetch 를 걷고 공용 어댑터로 들어왔다 — 어댑터 캐시에 "갈래(lane)" 가 생겼고 어댑터 타이머가 본문까지 덮는다(`784bda21`, 11-07). 새 purpose·새 env 는 없다.** 범위 133커밋 중 `apps/friendly/src/modules/ai/` 를 고친 것은 이 둘(`784bda21`·`ad1feff8`, 6파일)과 utils [`aiModel.ts`](../../packages/utils/src/aiModel.ts)뿐이다. (1) **호출별 대기 시간 `LLMCompleteOptions.timeoutMs`** — [`OllamaCloudAdapter`](../../apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.ts) 가 호출마다 `OLLAMA_CLOUD_TIMEOUT_MS`(60초) 타이머를 걸어, 서비스가 추론 단계만큼 늘린 대기 시간(자기 `AbortSignal`)이 무시됐다 — kimi-k3.1-pro 최대 추론에서 영양제 조언·식단 추천이 **정확히 60.0초에 실패**(사주(C)도 같은 구조). 이제 `setTimeout(…, opts.timeoutMs ?? this.opts.timeoutMs)` — 호출이 준 값이 어댑터 기본을 덮는다(더 짧게도, 더 길게도). 어댑터 캐시 키에는 여전히 `resolved.timeoutMs`(env)만 들어가므로 호출별 값이 어댑터를 늘리지 않는다. (2) **출력 예산·대기 시간 헬퍼** — utils `thinkMaxTokens(base, think)` = 끄면 `base`, 켜면 `max(base × thinkTokenMult, base + 단계별 여유)`(`THINK_EXTRA_TOKENS` low 2,000 · medium 4,000 · high 5,000 · max 8,000), `thinkTimeoutMs(baseMs, think, capMs)` = 같은 모양(`THINK_EXTRA_MS` 30·60·90·150초)에 상한. 까닭: 사고 토큰은 본문 길이와 상관없이 단계마다 대략 정해진 만큼 쓴다(kimi-k3.1-pro 사고+본문 실측 — 추천 끔 550 · 보통 1.6~3천 · 최대 4.7~5.2천, 조언 1.6천 · 4천 · 6.4천 토큰). 배수만 주면 본문 예산이 작은 추천(1,200)에서 사고가 예산을 다 먹어 **본문이 비었다**(`done_reason=length`, 보통 3번 중 2번). 사주(C)·영양제 조언·식단 추천 셋이 함께 쓰고 `timeoutMs` 를 어댑터에 넘긴다 — 상한은 사주 120초 그대로, 영양제 조언 180 → **240초**, 식단 추천 **240초**(`LLM_TIMEOUT_MAX_MS`). 끄면(기본) 출력 예산은 예전과 같고, 세 서비스가 늘 `timeoutMs` 를 넘기므로 대기 시간은 서비스가 원래 정한 값(사주 섹션 25초·조언 90초·추천 60초)이 실제로 걸린다 — 영양제 조언은 추론을 꺼도 실효 대기가 어댑터 60초 → 90초로 늘었다(코드 추론). (3) **식단 추천이 추론 설정을 읽는 셋째 컨슈머** — [meal-recommendation.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts) 가 `thinkOptionFor(model, resolved.thinking)`(kimi 계열에만 반영)를 쓰고, 결과가 규칙(`thinkOptionForModel` — gpt-oss `'low'` 포함)과 같으면 예산·대기 시간도 예전 값(1,200 토큰·60초) 그대로 — 켰을 때만 늘린다(kimi-k3.1-pro high → 6,200 토큰·180초, 테스트). 작업 로그 `llm` 단계 meta 에 `think`. 어드민 [AdminAiKeysPage](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) '식단 추천' 카드도 `thinking: true` 가 되어 kimi 모델일 때 select 가 보이고, select 문구를 실측 기준으로 바꿨다("보통 — 응답 2~3배 느림 / 높음 — 3~4배 / 최대 — 1분 넘게", 안내 "최대 5배·120초" → "최대 단계는 1분 넘게 걸림"). (4) **실측 결론**([PLAN-meal](../../docs/PLAN-meal.md) 11-07, Aside 로 같은 기록·오늘 저녁) — 추천: 끔 8초 · 낮음 14 · 보통 42 · 높음 45 · 최대 51초, 후보는 단계와 무관하게 거의 같다(삼치구이 10/10·수육 9/10) / 조언: 숫자·구성은 같고 보통·높음에서 섬세한 문장만 더해짐(16 → 38~49초) → **두 용도 모두 끔(또는 낮음) 권장**. 운영 nginx `proxy_read_timeout` 은 86400s 라 1분 넘는 응답도 받는다. (5) **리뷰 LLM 이 공용 어댑터로**(`784bda21`) — [review-search.service.ts](../../apps/friendly/src/modules/review-search/review-search.service.ts) `chatJson`(리랭크·답변·검증·enrich)과 [review-clustering.service.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) 군집 라벨이 `getResolved('ollama-cloud','chat')` → `adapterCache.get(resolved[, { lane }]).complete({ prompt, model, format? })` 로 바뀌어 계정 게이트·429 재시도·텔레메트리를 탄다(전엔 `fetchWithTimeout` 으로 `/api/chat` 직접 — 같은 계정의 요약·식단·타로와 합산 한도를 넘을 수 있었고 사용량 패널에 안 보였다). [`AdapterCache.get(resolved, { lane? })`](../../apps/friendly/src/modules/ai/adapter-cache.ts) — 갈래가 있으면 라벨 `purpose:lane`(예 `chat:review-qa`)이 캐시 키·purpose 게이트·텔레메트리 라벨에 들어가고 **계정 게이트는 같이 쓴다**(한도가 같아 계정 cap 도 그대로). 공개 질문(`ASK_LANE = 'review-qa'`)이 같은 chat 대기열의 요약·enrich 뒤에 줄 서지 않게 하려는 것이고, enrich·군집 라벨은 일괄 작업이라 chat 대기열에 선다. 같은 질문이 앞사람 한도로 거부되면 함께 기다리던 사람이 각자 파이프라인을 다시 돌던 것(3명 → 3번)도 먼저 다시 돈 사람의 진행에 합류하게 고쳤다. 임베딩 `/api/embed` 는 여전히 직접 fetch. (6) **어댑터 타이머가 본문까지** — `doComplete()` 가 `res.json()` 까지 같은 try 안에서 읽고 그 뒤에 타이머를 푼다(전엔 헤더가 오면 풀어 본문이 오다 멈추면 undici 기본 300초까지 매달렸다 — friendly [lib/fetch-timeout.ts](../../apps/friendly/src/lib/fetch-timeout.ts) `8cadb898` 과 같은 원칙). 본문 읽기 중 끊기면 원인(호출자 취소 / 우리 타임아웃)대로 `LLMCancelledError`/`LLMTimeoutError`. 테스트 adapter +2(본문 멈춤·호출별 timeoutMs)·adapter-cache +1(갈래)·review-search +2·utils `aiModelThink.test` +1(`thinkMaxTokens`·`thinkTimeoutMs`). (7) **새 LLM 소비자 둘(ai 모듈 무변경)** — 식당 메뉴 구성 읽기 [`MenuCompositionService`](../../apps/friendly/src/modules/food/menu-composition.service.ts)(`MENU_COMPOSITION_VERSION = 1`, 코스·세트·택1, 글 단위 영구 캐시 `menu_llm_compositions`, 동시 3·temperature 0·maxTokens 400·30초)와 영양 기준 음식 [`FoodNutrientRefService`](../../apps/friendly/src/modules/food/food-nutrient-ref.service.ts)(`FOOD_NUTRIENT_REF_VERSION = 1`, 동시 4·maxTokens 300, `AsyncGate` 백그라운드) — 둘 다 메뉴 칼로리와 같은 "chat 용도 + `OLLAMA_MENU_MATCH_MODEL` 모델 덮기" 이고 `think: thinkOptionForModel(model)`. 프롬프트 버전은 식단 추천 v5 → **v6**(`cd17ebf3` — 영양 점검 반영·근거 없는 영양 주장 서버 검사), 영양제 조언 v1 → **v3**(`1ba0381a`·`f4cec51d`), 메뉴 칼로리 LLM 매칭 v1 → **v2**(`cf06d9bc`) — 각 [meal](meal.md)·[meal-nutrition](meal-nutrition.md)·[food](food.md).
 
 > **2026-10-10~10-26 변경 흡수 — 열 번째 purpose `menu-board`(메뉴판 사진 읽기, 비전, 기본 kimi-k3) 신설(`4597294b`)과 그 첫 백그라운드 소비자인 네이버 크롤 직후 메뉴판 사진 자동 읽기(`0408f2f2`), 메뉴판 읽기 프롬프트 v2(`faa12818`). 고른 근거는 ollama cloud 비전 모델 9개 + OCR 3종 + Claude·Codex 통사진 비교([menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md)).** 21커밋(+ 작업 트리) 중 ai 모듈 디렉터리를 고친 건 `4597294b` 의 세 파일뿐이다 — [`adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts) 주석 "용도 9개 → 10개"(`MAX_ENTRIES = 16` 그대로), [`ai.config.service.test.ts`](../../apps/friendly/src/modules/ai/ai.config.service.test.ts) 가 **열 장** 합성 기대, [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 한 줄. 도메인은 새 토픽 [menu-board](menu-board.md). (1) **용도 10종** — 계약 [`ai.ts`](../../packages/api-contract/src/schemas/ai.ts) `LlmProviderPurpose` 끝에 `'menu-board'`(주석 "비전 — 메뉴판 사진 읽기(어드민 테스트). 기본 kimi-k3"). 같은 값을 `buildLlmProviderEnv().defaultModels['menu-board'] = env.OLLAMA_MENU_BOARD_MODEL`, utils [`aiModel.ts`](../../packages/utils/src/aiModel.ts) `ModelPurpose`, 어드민 [AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) `PURPOSE_ORDER`(맨 끝)/`PURPOSE_META`(아이콘 `ScanText`, '메뉴판 읽기', placeholder `kimi-k3`, **`thinking` 없음** — 추론 선택을 안 보인다) 네 곳에 더했다. env `OLLAMA_MENU_BOARD_MODEL` 은 [`env.ts`](../../apps/friendly/src/config/env.ts) **코드 기본값 `kimi-k3`**(tarot·saju·saju-g·meal-supplement 처럼 `.env` 에 키만 있으면 켜진다), [`.env.example`](../../apps/friendly/.env.example) 도 `kimi-k3`. 키는 chat 계정 키 상속 — 크롤 직후 자동 읽기가 같은 계정 게이트를 다른 백그라운드 LLM 과 나눈다. 새 마이그레이션 없음(`purpose` 는 free TEXT). (2) **추천 모델** — `recommendModelForPurpose('menu-board', …)` 는 계열 `kimi-k3` 를 먼저 찾고, 없으면 image·meal-photo 와 같은 규칙(가장 작은 비전 모델)으로 떨어진다(주석: kimi-k3 + 규칙 99.8%, gemma4:31b 는 OCR 힌트 없이 89.6%). [aiModel.test.ts](../../packages/utils/src/aiModel.test.ts) +6줄. (3) **호출 옵션** — [MenuBoardService](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) 는 `getResolved('ollama-cloud', 'menu-board')` → `adapterCache.get(resolved).complete({ prompt, model, images: [긴 변 2,000px JPEG base64], temperature: 0, think: thinkOptionForModel(model) })` 한 번. 어드민 추론 설정(`resolved.thinking`)은 읽지 않는다 — 비교에서 생각 켬이 점수를 못 올리고(kimi-k3 97.9%·장당 중앙 71초, gemma4 60번 중 7번 5분 넘게 무응답) 느렸기 때문. `opts.model` 로 용도 기본 모델을 덮을 수 있어 `eval:menu-boards --model=…` 이 모델 비교에 쓴다(세 번째 패턴 `OLLAMA_MENU_MATCH_MODEL` 의 "호출자가 모델만 덮어쓰기"와 같은 모양). 프롬프트는 버전 상수 `MENU_BOARD_PROMPT_VERSION = 2` 로 관리하고, 네이버 사진 읽기 결과에 버전을 남겨 낮은 버전만 다시 읽는다([versioned-llm-prompts](../concepts/versioned-llm-prompts.md)). (4) **비교 실측(보고서)** — 검수 정답 20장 F1: kimi-k3 + 규칙 + 작은 사진 확대 99.8%(friendly 경로 99.7%·장당 중앙 5.5초), gemma4:31b + Paddle 힌트 + 규칙 99.4%(2.7초), Claude Sonnet CLI 99.2%, Codex 98.0%, kimi-k3 단독 97.4%, gemma4 단독 92.6%, 로컬 OCR 25~64%. kimi-k3 는 해상도만큼 토큰을 써서(420×596 사진 입력 약 740 → 4,240토큰) 작은 사진을 키우는 게 듣고, gemma4 는 사진을 정해진 토큰으로 봐서 영향이 거의 없다. 비교 실행이 ollama cloud **Pro 5시간 한도를 소진**해 같은 키의 다른 LLM 기능이 그동안 막혔다. 같은 비교에서 영수증 `image` 의 예시 모델 `qwen3.5:397b-cloud` 가 **2026-09-25 퇴역**한 것을 발견했다(Gotchas — 미수정). (5) **식단 쪽 LLM 소비자(ai 모듈 무변경)** — 웹 식단 사진 인식(`49cb17f0`)은 기존 `meal-photo` 경로를 웹 화면에서 부를 뿐이고, 식단 빈 열량 이름 추정(`92e79e9a`)은 메뉴 칼로리와 같은 `MenuLlmMatchService`(chat 키 + `OLLAMA_MENU_MATCH_MODEL`)를 식단 저장 뒤 백그라운드(`MealNutritionEstimator`, [plugins/meal.ts](../../apps/friendly/src/plugins/meal.ts))와 `backfill:meal-nutrition --estimate` 에서도 쓴다 — 새 purpose·새 env 없음([meal](meal.md)·[food](food.md)). 등산 1~10차는 LLM 을 쓰지 않는다.
 
@@ -28,7 +30,7 @@ aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, im
 >
 > **2026-05-25 변경 흡수 — provider purpose 분리 (chat/image) + 영수증 추출 vision LLM 컨슈머 신규.** `LlmProviderConfig` 의 unique 키가 `(provider, purpose)` 로 확장되어 같은 `ollama-cloud` 에서도 텍스트 추론 (`chat`) 과 비전 (`image`) 모델을 별도 row 로 운영한다. AI 라우트의 모든 `:id` 엔드포인트가 `:purpose` 파라미터를 추가로 받고, `AiConfigService.getResolved(provider, purpose)` 가 purpose 별로 다른 ResolvedProviderConfig 를 반환한다. `adapterCache` 키에도 purpose 가 포함돼 chat/image 어댑터·FIFO 게이트가 분리된다. env fallback 은 `chat` purpose 에만 적용 — `image` 는 DB row 가 있어야 활성화된다. 신규 컨슈머 [`settlement-extraction`](settlement.md) 모듈이 `getResolved('ollama-cloud', 'image')` 로 vision provider 를 얻어 영수증 → 구조화 항목 추출에 사용. 어드민 UI(`AdminAiKeysPage`)는 (provider × purpose) 조합별로 카드를 그리고 "다른 용도 추가" 버튼으로 신규 조합을 등록할 수 있다. `AdminAiTestPage` 는 현재 chat 만 다룬다.
 
-## Purpose [coverage: high — 19 sources]
+## Purpose [coverage: high — 23 sources]
 
 `apps/friendly`의 LLM 통합 모듈. Ollama Cloud(`https://ollama.com`)를 기본 백엔드로
 두고, 어드민 전용으로 노출되는 텍스트 컴플리션·배치 컴플리션·프로바이더 설정
@@ -90,7 +92,8 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
   `food-classify`(`FOOD_CLASSIFY_VERSION`, 40개 청크) — 모두 `chat` purpose. 상세는 각 토픽.
   ([`review-search`](review-search.md)(리랭크·RAG·검증)·[`review-clustering`](review-clustering.md)(군집
   라벨)도 `chat` row 의 키·모델을 쓰지만 **어댑터를 거치지 않는다** — 아래 "게이트 밖 컨슈머". 2026-10-05
-  이전 위키는 이 둘을 게이트 경유로 적고 있었다.)
+  이전 위키는 이 둘을 게이트 경유로 적고 있었다. **→ 2026-11-07 `784bda21` 부터 다시 어댑터 경유** — `chat` purpose, 공개 질문만
+  갈래 `chat:review-qa`(같은 계정 게이트, 따로 보이는 purpose 게이트·텔레메트리 라벨).)
 - [`settlement-extraction`](settlement.md) 모듈 — 영수증 이미지 → 메뉴/금액 구조화
   추출 (`EXTRACTION_VERSION`). **`image` purpose**. 도메인 자체는 settlement 토픽 참고.
 - [`log-analysis`](../../apps/friendly/src/modules/logs/log-analysis.service.ts) 모듈
@@ -102,10 +105,14 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
 - [`meal-recommendation`](meal.md) 모듈 — 다음 끼니 추천
   (`MEAL_RECOMMENDATION_VERSION = 2` → 2026-10-04 `e3afe9c`·`2aaaa7e` 로 **5**). **`meal-recommend` purpose**(2026-08-22). 미설정이면
   LLM 없이 점수 폴백(`status: 'fallback'`). 기본 모델 gpt-oss:120b 는 2026-10-04 `probe:meal-models` 비교로 유지.
+  **→ 2026-11-07**: 영양 점검 반영·근거 없는 영양 주장 서버 검사로 **v6**(`cd17ebf3`), 추천 카드 곁들임 한 줄(`7fa6e64d` — LLM 이 아니라 서버 계산),
+  어드민 추론 설정을 읽는 **셋째 컨슈머**(`54e4c4f3` — kimi 계열만, 켰을 때만 `thinkMaxTokens`·`thinkTimeoutMs` 상한 240초).
 - [`meal-nutrition`](meal.md) 모듈의 영양제 조언(`MealNutritionAdviceService`, `MEAL_NUTRITION_ADVICE_VERSION = 1`)
   — **`meal-supplement` purpose — 2026-10-04 `3d067a0` 신규**, 기본 kimi-k3. 부족 판정은 서버가 끝내고
   LLM 은 대상 영양소의 문장만 쓴다. 모델 없음·실패·검사 탈락은 칸 단위 서버 문장(`fallback`). 영양소 점검
   (`GET /meals/nutrition`) 자체는 LLM 을 쓰지 않는다. 사주(C) 다음으로 `resolved.thinking` 을 읽는 두 번째 컨슈머.
+  **→ 2026-11-07**: 프롬프트 v3(`1ba0381a`·`f4cec51d` — 마그네슘·아연·엽산, 지난 조언 표시), 대기 시간 `thinkTimeoutMs(90s, think, 240s)`
+  를 어댑터에 `timeoutMs` 로 넘긴다(`ad1feff8` — 전엔 상한 180초를 걸어도 어댑터 60초에서 끊겼다).
 - [`tarot`](tarot.md) 모듈 — 뽑은 카드 → 해석 JSON(`TAROT_PROMPT_VERSION = 2`, 메뉴 타로는
   정적 후보 위에 LLM 이유만). **`tarot` purpose — 2026-09-02 신규**. 키·모델 없거나 파싱·
   호출 실패면 **정적 해석**으로 폴백(요청은 실패하지 않는다). 한도는 [usage-quota](usage-quota.md)
@@ -124,6 +131,12 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
   분해(`MENU_LLM_MATCH_VERSION` / `MENU_LLM_DECOMPOSE_VERSION = 3`). **`chat` purpose + 모델
   override `OLLAMA_MENU_MATCH_MODEL`**. 어휘 단위 영구 캐시라 호출 자체가 드물다. 2026-10-23(`92e79e9a`)부터 식단의 빈 열량
   이름 추정(`MealNutritionEstimator`, [meal](meal.md))도 같은 서비스·캐시를 쓴다(식단 저장 뒤 백그라운드 + `backfill:meal-nutrition --estimate`).
+  **→ 2026-11-08 `cf06d9bc`**: `MENU_LLM_MATCH_VERSION` 1 → 2(영양 없는 행·범주어를 후보에서 뺌 — 옛 판정은 메뉴 탭을 볼 때 백그라운드로 다시 묻는다).
+- [`menu-composition`](food.md) / [`food-nutrient-ref`](food.md) — **(NEW 2026-11-07~14, 32차)** 같은 "chat + `OLLAMA_MENU_MATCH_MODEL`" 패턴의 소비자 둘.
+  메뉴 구성 읽기(`MenuCompositionService`, `MENU_COMPOSITION_VERSION = 1` — 식당 메뉴 이름+설명 → 코스·세트 구성과 택1 묶음, 글 단위 영구 캐시
+  `menu_llm_compositions`, 식단 '식당 메뉴에서 넣기' 응답 뒤 백그라운드)와 영양 기준 음식(`FoodNutrientRefService`, `FOOD_NUTRIENT_REF_VERSION = 1` —
+  비타민·무기질 없는 이름 → 표준 음식 후보 중 하나, 규칙이 못 잡은 이름만, 확신이 낮으면 채택하지 않고 `candidateFoodId` 로 남김).
+  둘 다 `adapterCache.get(resolved)`·`temperature: 0`·`think: thinkOptionForModel(model)` — 추론 설정은 안 읽는다. 앱 싱글톤은 `plugins/meal.ts`.
 - [`menu-board`](menu-board.md) 모듈 — 메뉴판 사진 한 장 → 메뉴·가격·설명 목록(`MENU_BOARD_PROMPT_VERSION = 2`, 사진 긴 변
   2,000px 맞춤 JPEG, `temperature: 0`, `think: thinkOptionForModel(model)` — 추론 설정은 안 읽음). **`menu-board` purpose —
   2026-10-10 `4597294b` 신규**, 기본 kimi-k3. 호출처: 어드민 테스트 라우트(`POST /admin/menu-board/read`, 분당 20),
@@ -138,7 +151,7 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
   기본 `http://localhost:11434` + `bge-m3`). chat/image 어댑터·게이트와 무관하고
   텔레메트리 집계에도 안 잡힌다.
   ai 토픽에선 "임베딩은 별도 경로" 정도만 — 상세는 각 토픽.
-- **chat 도 직접 fetch** — 같은 두 모듈의 LLM 호출(review-search `chatJson` — 리랭크·답변·검증·enrich,
+- ~~**chat 도 직접 fetch**~~ **→ 2026-11-07 `784bda21` 로 해소, 지금은 어댑터 경유(위 흡수 문단 (5)) — 아래는 그 전 기록.** 같은 두 모듈의 LLM 호출(review-search `chatJson` — 리랭크·답변·검증·enrich,
   review-clustering 군집 라벨)은 `getResolved('ollama-cloud','chat')` 로 키·baseUrl·`defaultModel` 만 받아
   `${baseUrl}/api/chat` 을 `fetchWithTimeout(…, 60s)` 로 직접 부른다(`adapterCache` import 없음). 그래서
   purpose·계정 게이트, 429 백오프, `think` 조립, 텔레메트리가 모두 빠진다. 2026-10-05 `ab7dad28` 부터 공개
@@ -164,7 +177,8 @@ LLM 게이트 도메인들(위 목록 — 게이트 밖 둘 제외)은 모두 �
   잘림·파싱 실패·thinking 제어를 위한 의도적 누출. `think` 는 2026-09-12(`a823af1`)부터 코드 규칙
   (`thinkOptionForModel`: gpt-oss `'low'`, 그 외 `false`) 위에 **어드민 DB 설정**(`thinking`
   off/low/medium/high/max, kimi 계열에만 반영)이 한 겹 더 얹힌다 — 사주(C)와 2026-10-04 영양제 조언
-  (`meal-supplement`)이 읽는다(같은 식단 도메인의 추천 `meal-recommend` 는 읽지 않음).
+  (`meal-supplement`)이 읽는다(같은 식단 도메인의 추천 `meal-recommend` 는 읽지 않음). **→ 2026-11-07 `54e4c4f3`: 식단 추천도 읽어 셋.**
+  켜면 출력 예산·대기 시간을 utils `thinkMaxTokens`·`thinkTimeoutMs` 로 늘려 어댑터에 `timeoutMs` 로 넘긴다(`ad1feff8`).
 - **용도별 모델 분리 + 계정 키 공유** — purpose 별 모델/동시성은 따로, 키는
   하나. 한 키로 열 용도(2026-10-10~)를 돌리되 무거운 vision 호출이 chat 슬롯을 묶지 않게
   purpose 게이트로 분리하고(식단 사진 `meal-photo` 는 영수증 `image` 와도 분리),
@@ -176,7 +190,7 @@ LLM 게이트 도메인들(위 목록 — 게이트 밖 둘 제외)은 모두 �
   쓰는지"를 실시간으로 본다. 모든 호출이 한 어댑터 경로로 수렴하는 구조를 이용해
   호출부 수정 없이 계측.
 
-## Architecture [coverage: high — 32 sources]
+## Architecture [coverage: high — 36 sources]
 
 ```
 apps/friendly/src/modules/ai/
@@ -298,6 +312,10 @@ export 하는 `aiRoutes` fastify 플러그인. fastify의 `@fastify/autoload`가
   기준 축출 — 조회해도 순서를 갱신하지 않으므로 엄밀한 LRU 가 아니라 FIFO) — chat/image/log-analysis 어댑터가 동시에 공존한다(이전 "교체"
   gotcha 해소; 상한은 키 회전으로 죽은 엔트리가 무한히 쌓이는 것만 막는 안전벨트). 16 은 용도 9개가 한 키로 다 돌아도
   여유를 두려는 값이고, 주석은 "상한에 닿으면 가장 오래된 것부터 지워 자주 쓰는 chat 이 먼저 밀려난다" 고 적는다.
+  **(2026-11-07 `784bda21`) 갈래(lane)** — `get(resolved, { lane? })`. 갈래가 있으면 `label = '<purpose>:<lane>'` 이 키의 purpose 자리에
+  들어가 **어댑터(=purpose 게이트)가 따로** 생기고, 텔레메트리 `record(label)`·`registerPurposeGate(label)` 도 그 라벨로 따로 보인다.
+  계정 게이트는 `AccountGateRegistry` 가 `apiKey|baseUrl` 로 주므로 그대로 공유 — 한도(`maxConcurrent`)가 같아 계정 cap 도 늘지 않는다.
+  지금 쓰는 갈래는 review-search 공개 질문의 `review-qa` 하나(`chat:review-qa`). 캐시 상한 16 안에서 엔트리 하나를 더 쓴다.
   `get(resolved)` 가 어댑터를 만들 때 두 가지를 주입한다: (1) `accountGateRegistry`
   에서 받은 **계정 게이트**(키 단위 공유, cap = 그 키 purpose 한도들의 max),
   (2) `onEvent` 계측 훅(purpose 라벨을 붙여 `llmTelemetry.record` 로 흘림). 또
@@ -474,6 +492,9 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 5. `doComplete()` — `/api/chat` POST. body 에 `messages` (system + user),
    `options.temperature`, `options.num_predict`, `options.num_ctx`, 최상위
    `format` / `think` 를 조립. vision 호출이면 user 메시지에 `images: [base64...]` 추가.
+   **(2026-11-07)** 타이머는 `opts.timeoutMs ?? this.opts.timeoutMs`(`ad1feff8` — 호출별 대기 시간)이고, `fetch` 와 `res.json()` 을
+   같은 try 안에서 읽은 **뒤에** 푼다(`784bda21` — 헤더에서 풀면 본문이 오다 멈출 때 undici 기본 300초까지 매달렸다). 본문 읽기 중
+   끊기면 호출자 취소가 먼저(`LLMCancelledError`), 아니면 우리 타임아웃(`LLMTimeoutError`).
 6. `onEvent({type:'end', callId, status, errorName, prompt/completionTokens,
    durationMs, retries})` emit (ok/error/cancelled/timeout 분기). emit 은 항상
    try/catch 로 삼켜 본 호출 흐름을 깨지 않는다.
@@ -663,7 +684,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `max(10)` 제약으로 폭발하지 않음.
 - `OllamaCloudAdapter.doComplete()`는 caller `AbortSignal`과 자체 timeout을
   단일 `AbortController`로 합성하고, abort가 어느 쪽에서 왔는지 플래그로
-  추적해 `LLMCancelledError` vs `LLMTimeoutError`를 구분.
+  추적해 `LLMCancelledError` vs `LLMTimeoutError`를 구분. (2026-11-07 부터 그 합성 타이머가 본문 읽기까지 덮고, 길이는 호출의 `timeoutMs` 가 덮을 수 있다.)
 - 429 재시도는 어댑터 내부에서만 보이고 caller에는 성공 또는 최종 실패만
   올라간다. `AiService` / 도메인 서비스 모두 재시도 사실을 모른다. 단 재시도
   횟수(`retries`)는 end 이벤트로 텔레메트리에 흘러 패널/페이지에 노출된다.
@@ -672,7 +693,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 - 게이트 acquire 순서는 모든 호출자에서 동일(purpose → account)이라 두 게이트가
   교착하지 않는다. release 는 역순.
 
-## API Surface [coverage: high — 20 sources]
+## API Surface [coverage: high — 23 sources]
 
 모든 라우트 prefix는 `Routes.Ai`(=`/api/v1/admin/ai/*`)이며, 항상
 `onRequest: [authenticate, requireAdmin]` 가드가 걸려 있다. provider 식별은
@@ -718,7 +739,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 - `LLMCompleteOptions` — `prompt` / `model` 필수. `systemPrompt`, `temperature`,
   `maxTokens`, **`numCtx`**, **`format` ('json' | JSON Schema 객체)**, **`images`
   (base64 문자열 배열, vision 입력)**, **`think` (boolean | 'low'|'medium'|'high'|'max',
-  추론 제어 — `'max'` 는 2026-09-12 `a823af1` 추가)**, `signal` 선택. `numCtx` / `format` / `images` / `think` 는 Ollama 가
+  추론 제어 — `'max'` 는 2026-09-12 `a823af1` 추가)**, **`timeoutMs`(이 호출만의 대기 시간 — 없으면 어댑터 기본 `OLLAMA_CLOUD_TIMEOUT_MS`, 2026-11-07 `ad1feff8`)**, `signal` 선택. `numCtx` / `format` / `images` / `think` 는 Ollama 가
   1차 시민으로 받지만, 다른 어댑터는 자유롭게 무시 가능. `think` 는 thinking
   미지원 모델에 보내면 Ollama 가 에러를 내므로 모델 판단은 호출자 몫(utils `thinkOptionForModel` /
   `thinkOptionFor`). 어댑터는 `opts.think !== undefined` 일 때만 body 최상위 `think` 에 그대로 싣는다.
@@ -759,6 +780,8 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `thinkOptionFor(modelId, setting)` / `thinkTokenMult(think)` / `LLM_THINKING_SETTINGS`**(+ 타입
   `LlmThinkingSetting`·`ThinkOption`, 2026-09-12 `a823af1`). 모델
   식별·그룹핑·용도별 추천·JSON 호출용 `think` 값(`false | 'low'`)·어드민 추론 설정 → `think`/토큰 배수.
+  **(2026-11-07 `ad1feff8`)** `thinkMaxTokens(base, think)`·`thinkTimeoutMs(baseMs, think, capMs)` — 끄면 base 그대로, 켜면 배수와
+  "base + 단계별 여유"(토큰 2천/4천/5천/8천, 시간 30/60/90/150초) 중 큰 쪽(시간은 cap 으로 자름). 소비처: 사주(C)·영양제 조언·식단 추천.
 - 도메인이 export 한 LLM 호출 함수(프로브와 공유, 어댑터 인터페이스만 의존):
   [`requestTarotLlm(provider, model, args)`](../../apps/friendly/src/modules/tarot/tarot.service.ts) →
   `{ output, calls, lastText }` /
@@ -850,7 +873,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   — 꺼두면 필드를 보내지 않아 provider 기본값 사용. **현재 chat purpose 전용**
   — `useProviderModels` 에 `purpose: 'chat'` 하드코딩.
 
-## Data [coverage: high — 20 sources]
+## Data [coverage: high — 21 sources]
 
 **테이블: `llm_provider_configs`** (Prisma 모델 `LlmProviderConfig`)
 
@@ -914,7 +937,7 @@ SQLite, 외래키 없음 — `updatedById`는 단순 텍스트 참조(soft).
 | ----------------------------- | --------------------- | ------------------------------------- |
 | `OLLAMA_CLOUD_API_KEY`        | `''`                  | 계정 키(chat). 비면 chat row 도 없을 시 `no_api_key`; 다른 용도도 상속 불가|
 | `OLLAMA_CLOUD_BASE_URL`       | `https://ollama.com`  | 계정 baseUrl. DB row의 `baseUrl`이 우선  |
-| `OLLAMA_CLOUD_TIMEOUT_MS`     | `60000`               | 모든 용도 공통. DB에 컬럼 없음 — env 단독 소스 |
+| `OLLAMA_CLOUD_TIMEOUT_MS`     | `60000`               | 모든 용도 공통. DB에 컬럼 없음 — env 단독 소스. **2026-11-07 부터 호출이 `timeoutMs` 를 주면 그 값이 이긴다** — 사주(C)·영양제 조언·식단 추천 셋은 추론을 꺼도 늘 준다(끔이면 25·90·60초), 타이머는 본문 읽기까지 |
 | `OLLAMA_CLOUD_MAX_CONCURRENT` | `15`                  | row 없을 때 폴백 + 계정 게이트 부트스트랩값. DB row의 `maxConcurrent`이 우선|
 | `OLLAMA_DEFAULT_MODEL`        | `''` / `gpt-oss:120b` | **chat** 모델 폴백. DB `defaultModel` 빌 때만 |
 | `OLLAMA_IMAGE_MODEL`          | `''` / `qwen3.5:397b-cloud` | **image** 모델 폴백 (영수증 추출 등). ⚠️ `.env.example` 값 `qwen3.5:397b-cloud` 는 **2026-09-25 ollama cloud 에서 퇴역**(2026-10-10 메뉴판 비교 중 발견 — [menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md)). 예시·운영 `.env` 교체 필요(Gotchas) |
@@ -1016,7 +1039,20 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   `/complete-batch`)에만 적용** — 백그라운드 도메인은 `AiService` 를 거치지
   않으므로 영향 없음. 영속성 없음 (프로세스 재시작 시 리셋).
 
-## Key Decisions [coverage: high — 37 sources]
+## Key Decisions [coverage: high — 41 sources]
+
+- **2026-11-07 (`ad1feff8`): 추론 예산은 "배수" 만이 아니라 "본문 + 단계별 고정 여유" 중 큰 쪽, 대기 시간은 호출이 어댑터에 직접 넘긴다.**
+  사고 토큰이 본문 길이와 무관하게 단계마다 대략 일정하다는 실측(kimi-k3.1-pro) 때문 — 본문 예산이 작은 호출일수록 배수가 모자란다.
+  대기 시간은 서비스의 `AbortSignal` 을 늘리는 것만으로는 안 되고(어댑터 자체 타이머가 먼저 끊는다) `LLMCompleteOptions.timeoutMs` 로
+  어댑터 타이머 자체를 바꾸게 했다. 어댑터 캐시 키(env `timeoutMs`)는 건드리지 않아 호출마다 어댑터가 새로 생기지 않는다. 계산은
+  utils 순수 함수 둘로 모아 세 서비스(사주(C)·영양제 조언·식단 추천)가 같은 표를 쓴다 — 상한만 서비스마다(120·240·240초).
+- **2026-11-07 (`54e4c4f3`·`2497046f`): 식단 추천도 어드민 추론 설정을 따르게 하되 기본은 끔, 규칙 경로는 예산·대기 시간을 바꾸지 않는다.**
+  같은 식단 화면에서 영양제 조언만 설정을 따르고 추천은 따르지 않던 비대칭(10-04 Gotchas)을 없앴다. 실측상 추천 후보는 단계와
+  무관하게 같고 시간만 8 → 51초로 늘어 권장은 끔 — 켤 수 있게만 둔 것. `byRule`(설정 결과가 모델 규칙과 같음)이면 1,200 토큰·60초를
+  그대로 써서 gpt-oss `'low'` 기본 경로가 이 변경으로 느려지지 않게 했다.
+- **2026-11-07 (`784bda21`): 리뷰 질문을 공용 어댑터로 옮기되, 공개 질문은 "갈래" 로 purpose 대기열만 나눈다.** 새 purpose 를 만들면
+  키·모델·한도 설정이 하나 더 생기고 어드민 카드가 늘어난다. 갈래는 같은 chat 설정(키·모델·한도)을 쓰면서 purpose 게이트와 텔레메트리
+  라벨만 따로 둬, 공개 질문이 요약·enrich 일괄 작업 뒤에 줄 서지 않게 하고 계정 합산 동시성은 그대로 묶는다. 모듈 로컬 게이트(4)는 남겼다.
 
 - **2026-10-10 (`4597294b`): 메뉴판 읽기는 새 purpose `menu-board` + kimi-k3, OCR 없이 비전 호출 한 번.** 기존 `image`(영수증)·
   `meal-photo` 와 모델·게이트·텔레메트리 라벨을 나누려고 purpose 를 새로 뒀다(같은 이유로 `meal-photo` 를 `image` 와 나눴던 2026-08
@@ -1270,7 +1306,7 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   어댑터가 `listModels`를 구현 안 했거나 호출 실패 시 `{ models: [] }` 반환.
   UI는 `<datalist>`로 자동완성하되 자유 입력도 허용.
 
-## Gotchas [coverage: high — 35 sources]
+## Gotchas [coverage: high — 39 sources]
 
 - **영수증 `image` 예시 모델 `qwen3.5:397b-cloud` 가 퇴역했다 — `.env.example` 미수정** (2026-10-10 발견) — 메뉴판 비교
   보고서([menu-board-ocr-probe.md](../../docs/menu-board-ocr-probe.md) 결론 6)가 "2026-09-25 ollama cloud 에서 퇴역, 운영 `.env` 포함
@@ -1285,7 +1321,7 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
 - **`menu-board` 는 어드민 추론 설정을 읽지 않는다** — DB row 에 `thinking` 이 들어 있어도(API 로 넣을 수는 있다 —
   `UpdateLlmProviderInput.thinking` 은 purpose 제한 없음) `MenuBoardService` 는 `thinkOptionForModel(model)` 만 쓴다. 화면에도 선택이 없다.
 - **`menu-board` 의 5xx 는 클라이언트에서 500 으로 보인다** — 라우트가 `no_provider` 503·`llm_failed`/`parse_failed` 502 를 던지지만
-  공통 에러 핸들러가 5xx 를 500 으로 접는다(같은 문제가 다른 라우트에도 있다 — [menu-board](menu-board.md) Gotchas).
+  공통 에러 핸들러가 5xx 를 500 으로 접는다(같은 문제가 다른 라우트에도 있다 — [menu-board](menu-board.md) Gotchas). → 2026-11-15(32차) 그대로(error-handler·라우트 미변경).
 - **계약 주석이 소비자를 다 말하지 않는다** — [`ai.ts`](../../packages/api-contract/src/schemas/ai.ts) 의 purpose 목록 주석은
   `menu-board` 를 "메뉴판 사진 읽기(어드민 테스트)" 로만 적어, 네이버 크롤 직후 백그라운드 자동 읽기(`0408f2f2`)가 같은 purpose·계정 게이트를
   쓴다는 것이 드러나지 않는다(미수정). 어드민 카드 설명도 "어드민 테스트 —" 로 시작한다.
@@ -1296,11 +1332,18 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   동시 호출보다 작게 보일 수 있다(2026-10-05 부터 질문 경로만 로컬 게이트 4, enrich 는 `ENRICH_CONCURRENCY`). 기본 chat 모델이
   gpt-oss 처럼 `think` 가 필요한 계열이면 이 경로는 아래 "think 를 안 보내면 content 가 빈다" 에 그대로 노출된다 — 두 모듈은 빈
   응답을 `null`·폴백으로 처리한다.
+  **→ 2026-11-07 `784bda21` 로 대부분 해소** — 두 모듈의 chat 호출이 `adapterCache` 를 지나 purpose·계정 게이트, 429 재시도, 텔레메트리에 잡힌다
+  (공개 질문은 `chat:review-qa` 줄로 따로 보인다). **남은 것**: 호출 옵션은 예전 직접 fetch 와 같이 `{ prompt, model, format? }` 뿐이라
+  `think`·`maxTokens`·`numCtx` 를 여전히 보내지 않는다 — chat 기본 모델이 gpt-oss 계열이면 아래 "think 를 안 보내면 content 가 빈다" 에 그대로
+  노출되고(코드 확인, 동작은 고치기 전과 같음), 대기 시간은 어댑터 기본(`OLLAMA_CLOUD_TIMEOUT_MS`). 임베딩은 여전히 밖.
 - **세마포어 구현이 넷이다 — 통합은 후속.** ai 의 `ConcurrencyGate`(signal-aware FIFO, `setLimit`·`snapshot`, 대기열 무제한 —
   어댑터 2단 게이트·review-search·tour), [`lib/async-gate.ts`](../../apps/friendly/src/lib/async-gate.ts) `AsyncGate`(대기열·대기 시간
   상한 → `GateBusyError`, signal 없음 — 식단·HEIC·메뉴 칼로리), `lib/share-render.ts` 의 `active` 카운터(렌더 동시 1), `media/thumbnail-cache.ts` 의
   `waiters`(썸네일 미스 동시 4·대기 128 초과 503). PLAN-perf-2 "남은 것" 은 앞의 두 개만 적는다. 새 상한을 둘 때 대기열 상한·거절이
   필요하면 `AsyncGate`, 취소 신호·한도 변경·스냅샷이 필요하면 `ConcurrencyGate` — 섞어 쓰면 대기 큐가 두 겹이 될 수 있다.
+  **→ 2026-11-15(32차) 여전히 넷.** 실제로 겹친 예가 생겼다 — 공개 리뷰 질문은 로컬 `ConcurrencyGate(4)` → 어댑터 purpose 게이트(`chat:review-qa`)
+  → 계정 게이트 세 겹이고, 새 LLM 소비자(영양 기준 음식·식당 메뉴 구성)는 `AsyncGate` 백그라운드 체인 안에서 다시 자기 동시성(4·3)으로
+  어댑터를 부른다.
 - **`thinking` 은 어느 용도 row 에도 저장되지만 읽는 곳은 사주(C)와 영양제 조언 둘(2026-09-12 `a823af1` → 2026-10-04 `3d067a0`).**
   `UpdateLlmProviderInput.thinking` 은 purpose 를 가리지 않고 `AiConfigService.update` 도 그대로 저장한다(테스트도
   `saju` 로만 검증). `resolved.thinking` 을 소비하는 서비스는 [`saju.service.ts`](../../apps/friendly/src/modules/saju/saju.service.ts)
@@ -1311,6 +1354,10 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   넓히려면 그 서비스가 `thinkOptionFor(model, resolved.thinking)` 를 쓰고 자기 토큰·타임아웃 배수를 적용해야 한다
   (영양제 조언은 2000×배수·90s×배수, 상한 180s — 사주(C)의 상한 120s 와 다르다). 어드민 select 의 안내 문구("최대 5배·120초")는
   사주(C) 기준이라 영양제 조언 행에서도 같은 120초로 보인다.
+  **→ 2026-11-07 (`54e4c4f3`·`ad1feff8`)**: 읽는 곳이 **셋**(식단 추천 추가)이고 웹도 `meal-recommend` 행에 select 를 그린다. 안내 문구는
+  "최대 단계는 1분 넘게 걸림" 으로 바뀌어 120초 표기는 사라졌다(앞부분 "무대 연출보다 첫 문장이 늦게 옵니다" 는 여전히 사주(C) 화면 말이라
+  식단 행에선 어색하다). 상한은 사주 120초·조언 240초·추천 240초로 서로 다르다. 나머지 용도(타로·사주(G)·식단 인식·메뉴판·food·리뷰)는
+  그대로 무시한다.
 - **운영 마이그레이션 1건 — `thinking` 열이 없으면 어드민 화면뿐 아니라 모든 LLM 컨슈머가 죽는다.** Prisma 는
   모델의 스칼라 열을 전부 SELECT 하므로 `20260912120000_add_llm_provider_thinking` 없이 새 코드를 띄우면
   `list()`·`getResolved()`(요약·머지·타로·사주… 전부의 진입점)가 `no such column: thinking` 으로 실패한다 —
@@ -1329,6 +1376,16 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   inherited`)면 계정 게이트도 그만큼 — 공개 트래픽 + max 조합은 chat 백그라운드(요약·머지) 큐를 밀 수 있다
   (분리하려면 사주(C) 카드에 own 키). 출력 토큰은 사고 포함(섹션 400 → 1,600~1,900)이라 사용량 패널의 토큰이
   5배로 보인다.
+  **→ 2026-11-07**: 추론을 켠 영양제 조언·식단 추천은 호출 하나가 최대 240초까지 슬롯을 잡을 수 있다(실측 최대 단계 51~78초). 둘 다 기본 키가
+  chat 계정 키라 켜 두면 같은 계정 게이트의 요약·머지·리뷰 질문과 슬롯을 나눈다.
+- **(32차) 세 서비스는 추론을 꺼도 `timeoutMs` 를 넘긴다 — 영양제 조언의 실효 대기가 60 → 90초가 됐다(코드 추론)** — `ad1feff8` 전엔 서비스 자체
+  타이머(조언 90초)보다 어댑터 60초가 먼저 끊었다. 이제 `thinkTimeoutMs(90s, false, …)` = 90초가 어댑터에 그대로 가서 끔에서도 90초를 기다린다.
+  사주(C)는 25초(어댑터보다 짧아 예전과 같음), 추천은 60초(같음). 느린 업스트림에서 조언 버튼의 대기 체감이 길어질 수 있다.
+- **(32차) `LLMCompleteOptions.timeoutMs` 는 어댑터 기본보다 짧게도 만든다** — `opts.timeoutMs ?? this.opts.timeoutMs` 라 최소값이 아니라
+  호출 값이 그대로 이긴다. 서비스가 실수로 작은 값을 넘기면 env 를 올려도 소용없다. 429 재시도(최대 3회·백오프)는 이 타이머와 별개로
+  슬롯을 잡은 채 돈다(아래 "429 백오프는 슬롯을 보유한 채 잠든다" 그대로).
+- **(32차) 갈래는 어댑터 캐시 엔트리를 하나 더 쓴다** — 키가 `provider|purpose:lane|apiKey|…` 라 `MAX_ENTRIES = 16` 안에서 용도 10 + 갈래 1.
+  어드민에서 용도별 전용 키를 두면 키마다 엔트리가 늘어 상한에 더 가까워진다(삽입순 축출 — 2026-10-04 Gotchas).
 - **실측 수치가 두 종류(3문장 답 vs 사주 섹션)이고, 레벨이 지연에 단조롭지 않다.** UI `THINKING_OPTIONS` 주석의
   "낮음 2.7s / 보통 5.9s / 높음 3.1s / 최대 11.4s" 는 3문장 답 기준, `.env.example`·PLAN 의 "low 5.3s /
   medium 5.0s / high 6.9s / max 16~29s" 는 사주 섹션(≈400자, 2사주×4) 기준. 둘 다 low/medium/high 사이엔
@@ -1545,8 +1602,21 @@ row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tar
   재사용할 수 있어 의도적으로 피한 것 — 미리보기는 비용이 작고(`/models` 한
   번) 빈도도 낮으므로 캐시 효용이 미미.
 
-## Sources [coverage: high — 104 sources]
+## Sources [coverage: high — 108 sources]
 
+- [`apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.ts`](../../apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.ts) (2026-11-07 `784bda21` — 타이머가 `res.json()` 까지, `ad1feff8` — `opts.timeoutMs ?? this.opts.timeoutMs`)
+- [`apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.test.ts`](../../apps/friendly/src/modules/ai/adapters/ollama-cloud.adapter.test.ts) (2026-11-07 — 본문 멈춤 → `LLMTimeoutError`, 호출별 timeoutMs 2건)
+- [`apps/friendly/src/modules/ai/adapters/llm-provider.ts`](../../apps/friendly/src/modules/ai/adapters/llm-provider.ts) (2026-11-07 `ad1feff8` — `LLMCompleteOptions.timeoutMs`)
+- [`apps/friendly/src/modules/ai/adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts) · [`adapter-cache.test.ts`](../../apps/friendly/src/modules/ai/adapter-cache.test.ts) (2026-11-07 `784bda21` — 갈래 `get(resolved, { lane })`, 라벨 `purpose:lane`, 계정 게이트 공유 테스트)
+- [`packages/utils/src/aiModel.ts`](../../packages/utils/src/aiModel.ts) · [`aiModelThink.test.ts`](../../packages/utils/src/aiModelThink.test.ts) (2026-11-07 `ad1feff8` — `thinkMaxTokens`·`thinkTimeoutMs`·단계별 여유 표)
+- [`apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts`](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts) (2026-11-07 `54e4c4f3` — 추론 설정 셋째 컨슈머, `byRule` 이면 1,200·60초, 상한 240초, 작업 로그 meta `think`)
+- [`apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts`](../../apps/friendly/src/modules/meal-nutrition/meal-nutrition-advice.service.ts) (2026-11-07 `ad1feff8` — `thinkMaxTokens`·`thinkTimeoutMs(90s, …, 240s)` 를 어댑터에)
+- [`apps/friendly/src/modules/saju/saju.service.ts`](../../apps/friendly/src/modules/saju/saju.service.ts) (2026-11-07 `ad1feff8` — 같은 헬퍼, 상한 120초, `timeoutMs` 전달)
+- [`apps/friendly/src/modules/review-search/review-search.service.ts`](../../apps/friendly/src/modules/review-search/review-search.service.ts) · [`review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) (2026-11-07 `784bda21` — 직접 `/api/chat` → `adapterCache`, `ASK_LANE = 'review-qa'`, 재실행 합류)
+- [`apps/friendly/src/modules/food/menu-composition.service.ts`](../../apps/friendly/src/modules/food/menu-composition.service.ts) · [`food-nutrient-ref.service.ts`](../../apps/friendly/src/modules/food/food-nutrient-ref.service.ts) (2026-11-07~14 — chat + `OLLAMA_MENU_MATCH_MODEL` 새 소비자 둘, `thinkOptionForModel`)
+- [`apps/web/src/routes/admin/AdminAiKeysPage.tsx`](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) (2026-11-07 `54e4c4f3` — `meal-recommend` 카드 `thinking: true`, select·안내 문구 실측 기준)
+- [`docs/PLAN-meal.md`](../../docs/PLAN-meal.md) (2026-11-07 `2497046f` — 추론 단계 실측: 어댑터 60초·출력 예산 발견, 단계별 시간·품질, 끔 권장)
+- [`apps/friendly/src/lib/fetch-timeout.ts`](../../apps/friendly/src/lib/fetch-timeout.ts) (2026-11-06 `8cadb898` — 본문까지 덮는 타이머, 어댑터와 같은 원칙)
 - [`apps/friendly/src/modules/menu-board/menu-board.service.ts`](../../apps/friendly/src/modules/menu-board/menu-board.service.ts) (신규 2026-10-10 `4597294b` — `menu-board` purpose 소비자, `getResolved`·`adapterCache`·`thinkOptionForModel`, 긴 변 2,000px JPEG, `opts.model` 덮기)
 - [`apps/friendly/src/modules/menu-board/menu-board.prompt.ts`](../../apps/friendly/src/modules/menu-board/menu-board.prompt.ts) (신규 — `MENU_BOARD_PROMPT`·`MENU_BOARD_PROMPT_VERSION = 2`(`faa12818`)·`'</think>'` 뒤 파싱)
 - [`apps/friendly/src/modules/menu-board/menu-board.route.ts`](../../apps/friendly/src/modules/menu-board/menu-board.route.ts) (신규 — 어드민 읽기 라우트, 503/502 → 공통 핸들러가 500)

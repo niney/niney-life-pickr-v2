@@ -1,12 +1,14 @@
 ---
 topic: review-clustering
-last_compiled: 2026-10-10
-sources_count: 33
+last_compiled: 2026-11-15
+sources_count: 35
 status: active
-aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, review_clusters, clusterVersion, CLUSTERING_VERSION, corpusSize, cluster_compute.py, UMAP, HDBSCAN, c-TF-IDF, medoid, aspect 극성 주입, NEG_INJECT_MIN, shouldRecluster, CLUSTER_AUTO_ENABLED, CLUSTER_RECONCILE_DELAY_MS, scheduleStartupReconcile, cluster-bg, cluster-pending, ClusterTopics, useRestaurantClusters, useClusterStatus, probe:cluster-health, buildLlmProviderEnv, buildClusterComputePayload, vecJson, isNonEmptyJsonArray, countEnrichedByRestaurant, 군집 입력 원문 이어 붙이기, 군집 대기 재발]
+aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, review_clusters, clusterVersion, CLUSTERING_VERSION, corpusSize, cluster_compute.py, UMAP, HDBSCAN, c-TF-IDF, medoid, aspect 극성 주입, NEG_INJECT_MIN, shouldRecluster, CLUSTER_AUTO_ENABLED, CLUSTER_RECONCILE_DELAY_MS, scheduleStartupReconcile, cluster-bg, cluster-pending, ClusterTopics, useRestaurantClusters, useClusterStatus, probe:cluster-health, buildLlmProviderEnv, buildClusterComputePayload, vecJson, isNonEmptyJsonArray, countEnrichedByRestaurant, 군집 입력 원문 이어 붙이기, 군집 대기 재발, enriched-counts, cachedEnrichedCounts, 검색 가능 리뷰 수 캐시, adapterCache, 공용 어댑터, 군집 라벨 어댑터]
 ---
 
 # review-clustering — 비슷한 문맥 리뷰 군집화(bge-m3 → UMAP → HDBSCAN → c-TF-IDF → LLM 라벨)
+
+**2026-11-06~11-14 변경 흡수 (32차) — 군집 상태의 검색 가능 수를 리뷰 검색과 같은 30초 캐시로(`a00c3092`)·군집 라벨 LLM 을 공용 어댑터로(`784bda21`), 둘 다 2026-11-07 성능 묶음**: (1) **검색 가능 수(`a00c3092`)** — [review-clustering.service.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) 의 private `countEnrichedByRestaurant`(10-05 에 GROUP BY 로 바꾼 쌍둥이)를 지우고 [review-search](review-search.md) 의 새 [enriched-counts.ts](../../apps/friendly/src/modules/review-search/enriched-counts.ts) 를 import 한다. 어드민 군집 상태(`clusterStatus`)는 `cachedEnrichedCounts(prisma)` — 리뷰 검색 상태와 **같은** 전 가게 집계 한 칸(30초, `KeyedCache`)을 함께 쓴다. 미군집 일괄(`clusterAllEligibleInBackground` = `cluster-pending`)은 캐시가 아니라 `countEnrichedByRestaurant(prisma, memberIds)` 로 늘 새로 센다("고를 때는 지금 값으로"). 캐시는 review-search 의 enrich 가 임베딩을 쓸 때 비운다. 실측(운영 DB 사본): 군집 상태 243 → 15ms. 요약 행마다 ~13KB 임베딩 열을 확인하던 groupBy(운영 요약 19.8만 건, ~200ms)가 두 상태 목록에서 한 번으로 준 것이다. (2) **군집 라벨 LLM(`784bda21`)** — `labelClusters` 가 `fetchWithTimeout(${baseUrl}/api/chat, …, 60_000)` 직접 호출에서 `(deps.cache ?? adapterCache).get(resolved).complete({ prompt, model: resolved.defaultModel })` 로 바뀌었다. 이제 chat 용도 게이트·계정 게이트·429 재시도·LLM 사용량 텔레메트리(라벨 `'chat'`)를 탄다 — 일괄 작업이라 리뷰 질문처럼 갈래를 두지 않고 요약·enrich 와 같은 chat 대기열에 선다. `format` 은 여전히 주지 않고(gpt-oss 가 무시) 결과 텍스트를 같은 견고 파싱으로 읽는다. 실패는 catch 가 빈 맵 → c-TF-IDF 첫 키워드 폴백(그대로). 타임아웃은 어댑터 설정 `OLLAMA_CLOUD_TIMEOUT_MS`(기본 60초 — 예전 하드코딩과 같은 값). 생성자에 `deps: { cache?: AdapterCache }`(테스트 격리용)가 붙었다. `CLUSTERING_VERSION`(4)·스키마·라우트·Python 계산기 변경 없음.
 
 **2026-10-05 변경 흡수 — 군집 입력을 임베딩 원문 이어 붙이기로·enrich 카운트 GROUP BY·랜덤 크롤/자동 발견 경로의 군집 대기 재발 해소(`ab7dad28`·`12bc6ac5`, 성능 감사 2차 B-7·B-6·A-3)**: (1) **Python 입력(B-7)** — [review-clustering.service.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) 가 코퍼스를 읽을 때 `embeddingJson` 을 `JSON.parse` 해 `number[]` 로 들고 있다가 `runPython` 에서 `JSON.stringify({minClusterSize, aspectWeight, docs})` 로 다시 직렬화하던 것을, `Doc.vecJson`(저장된 원문 문자열)을 파싱 없이 들고 신규 export `buildClusterComputePayload(docs, minClusterSize, aspectWeight)` 가 **예전과 같은 키 순서·같은 바이트**로 문자열을 이어 붙여 만든다(`"vec":${vecJson}` — Node 는 벡터를 쓰지 않고 넘기기만 하므로). 빈 벡터 판정도 파싱 대신 `isNonEmptyJsonArray`(`length > 2` + `[`…`]` — 쓰는 곳이 `JSON.stringify(number[])` 하나뿐이라 `'[]'` 만 거르면 예전 판정과 같음). 측정(findings): 1,032건 가게 파싱 25~40ms + stringify 69~77ms(10.8MB)가 한 매크로태스크로 이어져 ~100~115ms 메인 스레드 블로킹 → 이어 붙이기 9.6ms(파싱 0). `aspectsJson`(작음)만 여전히 파싱(극성 주입 판정·영속 aspects). Python 스크립트는 그대로. (2) **enrich 카운트(B-6, `12bc6ac5`)** — 상태 표·`cluster-pending`·기동 리컨실이 쓰는 private `countEnrichedByRestaurant(ids?)` 가 `reviewSummary.findMany` 관계 select 로 전 행을 읽어 JS 로 세던 것을 review-search 쌍둥이처럼 `visitorReview.groupBy({ by: ['restaurantId'], where: { summary: { is: { embeddingJson: { not: null } } } }, _count })` 한 쿼리로(실측 임베딩 6.1만 행 1,134ms·63쿼리·RSS +165MB → review-search 판 229ms·1쿼리 수준). (3) **군집 '대기' 재발 해소(A-3)** — 랜덤 크롤 플러그인·자동 발견 라우트가 각자 `SummaryService`·`ReviewSearchService` 를 조립해, 그 경로로 등록한 가게의 enrich 는 plugins/summaries 의 `app.reviewSearch.onEnrichProgress` → 군집화 배선에 닿지 않았다(런타임 확인: `enrichListeners` app=1, random-crawl=0) — 2026-07-13 `1f5ed30` 이 고친 "군집 대기 잔존" 이 이 두 경로로 다시 나타난 셈이었다. `app.crawl` 싱글톤([crawl](crawl.md))으로 모든 진입점이 `app.summaries` → `app.reviewSearch` → 군집화를 탄다. 그 전에 쌓인 '대기' 는 배포 후 기동 리컨실(`scheduleStartupReconcile`)이 한 번 훑어 채운다. 테스트: [review-clustering.test.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) +2(페이로드가 예전 `JSON.stringify` 와 같은 바이트, 빈 벡터 `'[]'` 는 파싱 없이 제외). 스키마·라우트·`CLUSTERING_VERSION`(4) 변경 없음. 웹은 어드민 군집 상태 표 검색어 300ms 디바운스(`e50ccfe6` — [AdminReviewSearchPage.tsx](../../apps/web/src/routes/admin/AdminReviewSearchPage.tsx)). 원문: [PLAN-perf-2-findings.md](../../docs/PLAN-perf-2-findings.md) B-6·B-7·A-3. 관련 컨셉: [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)(싱글톤 공유가 깨지면 이벤트 배선도 끊긴다 — 2026-10-05 사례).
 
@@ -24,7 +26,7 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 
 연구·방법 선택 배경은 `research/review-clustering/README.md`에, 운영 배포(Python 설치)는 [friendly](friendly.md) deploy 가이드에 있다.
 
-## Architecture [coverage: high — 11 sources]
+## Architecture [coverage: high — 12 sources]
 
 **분업(Node ↔ Python)** — probe 단계에서 검증한 경계다:
 
@@ -39,7 +41,7 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 5. **c-TF-IDF**(`ctfidf_keywords`) — 군집을 한 문서로 보고 변별 키워드 상위 6개 추출.
 6. 군집별 대표 리뷰 3건 = medoid(원본 임베딩 공간 centroid 에 가까운 순), size 내림차순 정렬.
 
-**LLM 라벨링** (`labelClusters`) — 군집별 키워드+대표리뷰 블록을 묶어 운영 Ollama(`ollama-cloud`/`chat`)에 **1콜 일괄**로 보내고 `[{id, label, tone}]` 를 받는다. 실패하면 빈 맵 → c-TF-IDF 첫 키워드를 폴백 라벨로.
+**LLM 라벨링** (`labelClusters`) — 군집별 키워드+대표리뷰 블록을 묶어 운영 Ollama(`ollama-cloud`/`chat`)에 **1콜 일괄**로 보내고 `[{id, label, tone}]` 를 받는다. 실패하면 빈 맵 → c-TF-IDF 첫 키워드를 폴백 라벨로. → 2026-11-07(`784bda21`): 호출은 공용 어댑터(`adapterCache.get(resolved).complete`)라 chat 용도·계정 게이트와 429 재시도, 사용량 텔레메트리를 함께 탄다(예전엔 `fetchWithTimeout` 직접, 60초 하드코딩).
 
 **영속** (`persist`) — `ReviewCluster.deleteMany → create → ReviewSummary.updateMany(clusterId 배정)` 를 **한 트랜잭션**으로 통째 교체. 군집 행 삭제 시 멤버의 `clusterId` 는 FK `SetNull`.
 
@@ -48,24 +50,24 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 - **어드민 수동** — 단건 동기(`run`) / 단건 백그라운드(`cluster-bg`) / 미군집 일괄 순차(`cluster-pending`). 게이트 없이 강제.
 - **서비스 등록** — [`plugins/summaries.ts`](../../apps/friendly/src/plugins/summaries.ts) 에서 `ReviewClusteringService` 를 app 전역 singleton(`app.reviewClustering`)으로 decorate. 요약 훅과 라우트가 **같은 인스턴스**를 공유해야 진행 가드(in-memory Set)가 의미를 가진다 → [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
-## Talks To [coverage: high — 10 sources]
+## Talks To [coverage: high — 12 sources]
 
-- **[review-search](review-search.md)** (`retrieval.ts`) — `isJunk` 본문 필터를 재사용하고, 같은 `ReviewSummary.embeddingJson`(bge-m3)·`aspectsJson`·**canonical 통합 코퍼스**를 공유한다. ASPECTS 9축("맛/양/가격/주차/웨이팅/서비스/분위기/위생/재방문")도 retrieval.ts 와 동일하게 유지(극성 주입용).
+- **[review-search](review-search.md)** (`retrieval.ts`) — `isJunk` 본문 필터를 재사용하고, 같은 `ReviewSummary.embeddingJson`(bge-m3)·`aspectsJson`·**canonical 통합 코퍼스**를 공유한다. ASPECTS 9축("맛/양/가격/주차/웨이팅/서비스/분위기/위생/재방문")도 retrieval.ts 와 동일하게 유지(극성 주입용). → 2026-11-07(`a00c3092`): 검색 가능 리뷰 수도 review-search 의 [enriched-counts.ts](../../apps/friendly/src/modules/review-search/enriched-counts.ts) 에서 가져온다 — 상태는 `cachedEnrichedCounts`(리뷰 검색 상태와 한 캐시), 일괄은 `countEnrichedByRestaurant`. 캐시 무효화는 review-search 의 enrich 가 한다.
 - **[canonical](canonical.md)** (`canonical-members.ts`) — `resolveCanonicalMembersByRestaurantId`/`...ByPlaceId`/`listPublicPlaces` 로 가게(canonical)의 공개 멤버 행 전체를 해석. 군집은 **대표 키(primary)** 로 영속하고 같은 키로 읽는다(다소스 행이 합쳐진 통합 코퍼스).
-- **[ai](ai.md)** (`AiConfigService.getResolved('ollama-cloud','chat')`) — LLM 라벨링용 운영 Ollama 해석. baseUrl/apiKey/defaultModel. `AiConfigService` 인스턴스는 plugins/summaries 가 `buildLlmProviderEnv()`(2026-08-22)로 조립해 주입.
+- **[ai](ai.md)** (`AiConfigService.getResolved('ollama-cloud','chat')`) — LLM 라벨링용 운영 Ollama 해석. baseUrl/apiKey/defaultModel. `AiConfigService` 인스턴스는 plugins/summaries 가 `buildLlmProviderEnv()`(2026-08-22)로 조립해 주입. → 2026-11-07(`784bda21`): 호출은 [adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts) 의 공용 `adapterCache`(테스트는 `deps.cache` 로 격리 캐시) — 갈래 없이 `'chat'` 용도라 요약·enrich 와 같은 용도 대기열.
 - **[summary](friendly.md)** (`summary.service.ts`) — 요약 종료 훅이 enrich 를 부르고, enrich 완료 이벤트(plugins/summaries 배선)가 군집화를 부른다(임베딩이 있어야 군집화 가능). 2026-10-05 부터 크롤 진입점이 모두 `app.crawl` → `app.summaries` 라 랜덤 크롤·자동 발견 경로도 이 체인을 탄다([crawl](crawl.md)·[random-crawl](random-crawl.md)·[auto-discover](auto-discover.md)).
 - **[api-contract](api-contract.md)** (`schemas/review-clustering.ts` + `Routes.ReviewClustering`) — 모든 입출력 zod 스키마의 SSOT → [zod-ssot-buildless](../concepts/zod-ssot-buildless.md).
 - **[shared](shared.md)** (`review-clustering.api.ts` + `useReviewClusters.ts`) — 웹/앱 공통 API 함수 + React Query 훅.
 - **[web](web.md)** / **[mobile](mobile.md)** (`ClusterTopics.tsx`) — 분석 탭 "리뷰 주제" 섹션(읽기 전용) → [platform-ui-split](../concepts/platform-ui-split.md).
 
-## API Surface [coverage: high — 5 sources]
+## API Surface [coverage: high — 6 sources]
 
 라우트는 [`review-clustering.route.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.route.ts), 경로 상수는 [`routes.ts`](../../packages/api-contract/src/routes.ts) 의 `ReviewClustering` 네임스페이스. 어드민 4개는 `authenticate + requireAdmin` 가드, 공개 1개는 무인증 → [public-admin-route-split](../concepts/public-admin-route-split.md).
 
 | Method | Path | 핸들러 | 의미 |
 |---|---|---|---|
 | POST | `/api/v1/admin/review-clustering/run` | `runForRestaurant` | **동기** 단건 군집화. 무거운 배치지만 어드민 대기 허용. `{clusters, noise, total, skipped, reason, ms}` 반환. |
-| GET | `/api/v1/admin/review-clustering/status` | `clusterStatus` | 식당별 군집 상태 목록(검색가능 수·eligible·clustered·inProgress·**lastReason**). enrich 상태 미러링. 페이지네이션 + `q` 필터 + "미군집 우선" 정렬. |
+| GET | `/api/v1/admin/review-clustering/status` | `clusterStatus` | 식당별 군집 상태 목록(검색가능 수·eligible·clustered·inProgress·**lastReason**). enrich 상태 미러링. 페이지네이션 + `q` 필터 + "미군집 우선" 정렬. 2026-11-07~ 검색가능 수는 리뷰 검색 상태와 같은 30초 캐시. |
 | POST | `/api/v1/admin/review-clustering/cluster-bg` | `clusterInBackground` | 단건 **백그라운드**(즉시 반환, `{started, inProgress}`). Python+LLM 수십초가 HTTP 타임아웃 안 나게. 상태는 폴링. |
 | POST | `/api/v1/admin/review-clustering/cluster-pending` | `clusterAllEligibleInBackground` | 군집화 가능(통합 enrich ≥ 30)하나 현재 버전 군집이 없는 가게 **일괄 순차**(`{queued}`). |
 | GET | `/api/v1/restaurants/:placeId/clusters` | `getPublicClusters` | **공개**(인증 없음·계산 없음). 저장된 군집을 읽어 반환. 군집 없으면 관점집계 폴백, 그것도 없으면 `ready=false`. |
@@ -101,7 +103,11 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 
 **API 와이어 타입** ([`schemas/review-clustering.ts`](../../packages/api-contract/src/schemas/review-clustering.ts)) — `ClusterTone` enum, `ReviewClusterItem`(id/ordinal/label/tone/size/keywords/aspects/repReviews), `ReviewClusterAspect`(`{key, count}` — record 대신 배열로 zod 버전 무관·와이어 명시), `ReviewClusterAspectSummary`(폴백용 `{aspect, pos, neg, neu}`), `ReviewClustersResult`(공개), `ReviewClusterStatus*`(어드민), run/bg/pending 입출력.
 
-## Key Decisions [coverage: high — 13 sources]
+## Key Decisions [coverage: high — 15 sources]
+
+**2026-11-07: 검색 가능 수는 리뷰 검색과 한 모듈·한 캐시 — 상태 목록만 캐시, 일괄 선별은 새로** (`a00c3092`) — 같은 쿼리를 두 상태 목록이 따로 하던 것을 모듈 하나로 합쳐, 군집 상태가 리뷰 검색 상태 뒤에 열리면 집계를 다시 하지 않는다. "아직 안 된 가게" 를 고르는 `cluster-pending` 은 늦은 값이면 이미 군집할 수 있게 된 가게를 빠뜨리므로 캐시를 쓰지 않는다.
+
+**2026-11-07: 군집 라벨도 공용 어댑터, 갈래 없이 chat 대기열** (`784bda21`) — 계정 동시성·사용량 기록을 우회하던 직접 호출을 없앴다. 리뷰 질문(공개, 기다리면 안 됨)과 달리 군집 라벨은 백그라운드 일괄 작업이라 요약·enrich 와 같은 chat 용도 게이트에 줄 세운다.
 
 **2026-10-05: Node 는 임베딩을 파싱하지 않고 Python 에 원문 그대로 넘긴다** (`ab7dad28`, B-7) — Node 쪽은 벡터를 한 번도 쓰지 않는다(극성 판정은 `aspectsJson`, 대표 리뷰·군집은 Python). 파싱 → 재직렬화가 큰 가게에서 ~100ms 메인 스레드를 막는 백그라운드 경로(enrich 완료 → 자동 군집, 기동 리컨실, 버전 범프 시 전 가게)라 원문 이어 붙이기로 바꿨고, Python 입력 형태가 바이트까지 같아 스크립트는 손대지 않았다. findings 가 경로가 백그라운드라 HIGH 는 아니라며 MEDIUM 으로 올린 항목.
 
@@ -125,8 +131,10 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 
 **clusterVersion 히스토리** — `CLUSTERING_VERSION=4`. v2: 극성 주입, v3: corpusSize(자동 게이트), v4: **canonical 통합 코퍼스**(다소스 행 합산). 상수 옆 줄단위 코멘트 → [versioned-llm-prompts](../concepts/versioned-llm-prompts.md).
 
-## Gotchas [coverage: high — 6 sources]
+## Gotchas [coverage: high — 8 sources]
 
+- **군집 상태의 검색 가능 수·eligible 은 최대 30초(만료 직후엔 그보다 더) 늦다** (2026-11-07) — 공용 `KeyedCache` 는 만료 뒤 TTL 안이면 지난 값을 내고 뒤에서 갱신한다. enrich 가 임베딩을 쓰면 비우지만 군집 실행·재크롤 삭제는 비우지 않는다(군집 수·`clustered` 는 따로 `reviewCluster.groupBy` 를 매번 세므로 영향 없음). 실제로 고르는 `cluster-pending` 은 캐시를 안 쓴다.
+- **군집 라벨 대기 시간이 env 를 따른다** (2026-11-07) — 예전엔 60초 하드코딩, 지금은 어댑터의 `OLLAMA_CLOUD_TIMEOUT_MS`(기본 60초). 이 env 를 바꾸면 라벨 호출 대기도 같이 바뀐다. 또 요약이 chat 용도 슬롯을 꽉 쓰는 동안엔 라벨 호출이 용도 게이트에서 기다린다 — 실패가 아니라 늦어질 뿐이고, 끝내 실패하면 키워드 폴백 라벨.
 - **페이로드는 DB 의 임베딩 문자열을 믿는다** (2026-10-05) — `isNonEmptyJsonArray` 는 대괄호만 보고 내용은 검사하지 않는다. 쓰는 곳이 `JSON.stringify(number[])` 하나뿐이라 지금은 안전하지만, `embeddingJson` 에 손으로 넣은 값·잘린 문자열이 하나라도 있으면 예전엔 그 행만 `safeParse` 로 빠졌던 것이 이제는 **가게 전체 페이로드 JSON 이 깨져** Python 이 읽지 못한다(사유는 '계산 엔진 오류'). 임베딩 열을 다른 경로로 쓰게 되면 이 판정부터 다시 볼 것.
 - **2026-10-05 이전 랜덤 크롤·자동 발견으로 등록된 가게는 군집이 '대기' 일 수 있다** — 그 경로의 enrich 가 군집화 배선에 닿지 않았다(A-3). 배포 뒤 기동 리컨실이 미군집 백로그를 한 번 훑으므로 보통 저절로 채워지고, 남아 있으면 어드민 `cluster-pending`.
 
@@ -137,11 +145,13 @@ aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, rev
 - **medoid vs 군집화 공간 분리** — 극성 주입 시 군집화는 증강 공간(9D concat)에서 하지만 대표 리뷰(medoid)는 **원본 임베딩 공간**에서 뽑는다(증강 좌표가 대표성을 왜곡하지 않게). 품질 지표(silhouette 등)도 원본 공간 기준.
 - **소량 코퍼스 조기 반환** — `cluster_compute` 는 `n < max(2*min, 10)` 이면 UMAP 도 안 돌리고 전부 노이즈로 반환. c-TF-IDF 는 빈 군집(`np.vstack([])`)·어휘 부족(`CountVectorizer` ValueError) 모두 우아하게 빈 결과/키워드 생략으로 처리.
 
-## Sources [coverage: high — 33 sources]
+## Sources [coverage: high — 35 sources]
 
 운영 (Node):
 - [`apps/friendly/src/modules/review-clustering/review-clustering.route.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.route.ts)
-- [`apps/friendly/src/modules/review-clustering/review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) (2026-10-05 — `vecJson`·`buildClusterComputePayload`·`isNonEmptyJsonArray`; `countEnrichedByRestaurant` GROUP BY(`12bc6ac5`))
+- [`apps/friendly/src/modules/review-clustering/review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts) (2026-10-05 — `vecJson`·`buildClusterComputePayload`·`isNonEmptyJsonArray`; `countEnrichedByRestaurant` GROUP BY(`12bc6ac5`); 2026-11-07 — private 카운트 삭제 → `enriched-counts`(`a00c3092`), 라벨 LLM 공용 어댑터·`deps.cache`(`784bda21`))
+- [`apps/friendly/src/modules/review-search/enriched-counts.ts`](../../apps/friendly/src/modules/review-search/enriched-counts.ts) (신규 2026-11-07 — 리뷰 검색과 공용 검색 가능 수, 상태 30초 캐시)
+- [`apps/friendly/src/modules/ai/adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts) (2026-11-07 — 라벨 호출이 지나는 공용 어댑터 캐시)
 - [`apps/friendly/src/modules/review-clustering/review-clustering.test.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처; 2026-10-05 — 페이로드 바이트 동일·빈 벡터 제외)
 - [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 플러그인 env 조립)
 - [`apps/friendly/src/plugins/summaries.ts`](../../apps/friendly/src/plugins/summaries.ts) (app singleton 등록 + enrich 완료 → 군집화 배선·기동 리컨실)

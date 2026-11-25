@@ -1,6 +1,6 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
-last_compiled: 2026-10-26
+last_compiled: 2026-11-15
 topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, api-docs, hiking, menu-board]
 status: active
 ---
@@ -13,6 +13,7 @@ status: active
 
 ## Instances
 
+- **2026-11-09~13** in [meal](../topics/meal.md) / [mobile](../topics/mobile.md) / [api-contract](../topics/api-contract.md) (`46134eb8`·`d5fab013`, 32차): **SSOT 의 한계 — 같은 스키마라도 판이 다르면 갈라진다.** 앱은 빌드할 때 `@repo/api-contract` 를 번들에 굳히고, 식단 백업 복원은 그 스키마 `MealDataBackup.safeParse` 로 파일을 검사한다(`MealDataManagementCard.tsx`). 백업 스키마는 `.strict()` 라 모르는 키를 거절한다. 그런데 서버가 선택 필드를 더했다 — 11-09 `skips`('안 먹음'), 11-13 항목마다 `menuName`·`menuPrice`(null 이어도 키가 실린다). 새 서버가 만든 백업을 **옛 앱 빌드는 통째로 거절**한다. 배포 문서·PLAN 은 `skips` 만 이유로 적어 "새 백업은 새 앱 빌드" 를 안내했지만, `menuName`·`menuPrice` 키만으로도 같은 이유로 거절된다(32차 meal 점검, 코드 읽기 — 실기기 미확인). 반대로 추천 응답의 `sides` 는 클라이언트가 응답을 검증하지 않아 옛 앱도 견딘다.
 - **2026-10-25~26** in [hiking](../topics/hiking.md) / [menu-board](../topics/menu-board.md) / [api-contract](../topics/api-contract.md) / [utils](../topics/utils.md) (`72c9982e`…`0e38c4ee` + 작업 트리): 이중 정의 추적의 다음 장. 등산은 코스 형태·난이도·추천 입력(산행 시간·난이도·이동 수단) 리터럴을 계약 `schemas/hiking.ts` 의 인라인 `z.enum` 과 utils `HIKING_*` 목록에 따로 적었고 9차까지 동일성 테스트가 없었다 — 위키 점검에서 지적돼 `hiking-contract.test.ts` 가 다섯 쌍을 대조한다(작업 트리, 주차 `parking-master.service.test.ts` 와 같은 장치; enum 이 객체 안 인라인이라 zod v3 내부(`.unwrap()`·`_def.innerType`·`_def.schema.shape`)로 꺼낸다). 새 **스키마 간 import 방향**도 생겼다 — `hiking.ts` 가 `air-quality`·`weather` 스키마를 가져다 쓰고(산행 조건이 대기·날씨 모양을 그대로 싣는다), 공공데이터 도메인 스키마가 지켜 오던 "파일 하나로 자기완결" 이 처음 깨졌다. 메뉴판은 `crawl.ts` → `menu-board.ts` 방향이 생겼다(크롤 스냅샷 필드가 메뉴판 읽기 결과 모양을 싣는다). 둘 다 순환은 아니지만, 스키마 파일 하나를 고칠 때 다른 도메인의 응답 모양이 함께 바뀐다.
 - **2026-05-07** in [[../topics/api-contract]]: `package.json`이 `./src/index.ts`를 main/types로 직접 가리킨다. 컴파일 산출물 없음. `Routes.Auth.login` 같은 경로 상수 + zod 스키마가 한 파일에서 노출.
 - **2026-05-07** in [[../topics/friendly]]: `fastify-type-provider-zod`로 동일 zod 스키마를 검증기 + 시리얼라이저 + OpenAPI 변환기로 재사용. `app.ts`가 `setValidatorCompiler` / `setSerializerCompiler`로 와이어링.
@@ -67,8 +68,12 @@ status: active
 
 순환 의존 금지 규칙(`shared → api-contract`만 허용)도 이 패턴의 보호 장치다 — api-contract는 leaf로 유지돼야 SSOT 노드가 다중화되지 않는다.
 
+1. **(32차) 빌드에 굳는 클라이언트(앱)가 `.strict()` 로 검사하는 계약은 "필드 추가" 도 깨는 변경이다.** 웹은 배포와 함께 새 스키마를 받지만 앱은 스토어 빌드 주기만큼 옛 스키마로 산다. 앱이 서버가 만든 문서(백업 파일·저장된 JSON)를 검사하는 자리는 `.strict()` 대신 모르는 키를 버리는(`strip`) 쪽이 하위 호환이다. 아니면 서버가 판 번호를 올리고 앱이 "새 판" 을 알려 주는 쪽으로 — 어느 쪽이든 결정은 스키마를 고칠 때 해야 한다.
+
 ## Sources
 
+- [apps/mobile/src/components/meal/MealDataManagementCard.tsx](../../apps/mobile/src/components/meal/MealDataManagementCard.tsx) — 32차 `MealDataBackup.safeParse`(strict)
+- [packages/api-contract/src/schemas/meal.ts](../../packages/api-contract/src/schemas/meal.ts) — 32차 `MealDataBackup.skips`·`MealDataBackupItem.menuName`·`menuPrice`
 - [hiking](../topics/hiking.md)
 - [menu-board](../topics/menu-board.md)
 - [[../topics/api-contract]]

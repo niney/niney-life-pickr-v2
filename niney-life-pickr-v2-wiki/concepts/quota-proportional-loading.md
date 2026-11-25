@@ -1,7 +1,7 @@
 ---
 concept: quota-proportional-loading
-last_compiled: 2026-10-10
-topics_connected: [bus, subway, transit, friendly, air-quality, weather, life-map, housing, sea, parking, meal, api-docs]
+last_compiled: 2026-11-15
+topics_connected: [bus, subway, transit, friendly, air-quality, weather, life-map, housing, sea, parking, meal, api-docs, hiking]
 status: active
 ---
 
@@ -19,6 +19,7 @@ status: active
 
 ## Instances
 
+- **2026-11-06~07 (공용 쿼터의 몫 나누기 + 쿨다운 기준 시각)** in [hiking](../topics/hiking.md) / [weather](../topics/weather.md) / [air-quality](../topics/air-quality.md) / [bus](../topics/bus.md) / [subway](../topics/subway.md) / [sea](../topics/sea.md) (`bec2e294`·`9b7beef0`·`d1f63bfd`, 32차): 단기예보 vilage 하루 7,500 은 상단바 날씨·`/weather`·식단 추천·등산이 같이 쓰는데, 등산 추천 1회가 상위 코스 12~20개 들머리 격자를 업스트림까지 받아 IP 하나로 약 13분이면 하루치를 태울 수 있었다 → **소비자별 몫**: 등산이 새로 받는 격자 하루 1,500회(`HIKING_WEATHER_DAILY_LIMIT`, 공용의 20%)·요청당 3곳(`RECOMMEND_WEATHER_FETCH_MAX`), 나머지는 `WeatherService.peekForecast`(업스트림 없이 캐시만, 만료분 포함). 그리고 29차가 지적한 **실패 쿨다운 기준 시각**을 고쳤다 — 6곳(대기·버스·지하철·날씨·AWS·바다)이 조회 시작 시각으로 쿨다운(30초 → 5분)을 기록해, 40초 매달린 실패는 기록하는 순간 쿨다운이 이미 지나 곧바로 다시 불렀다. 이제 실패한 시각(주입 시계)부터. 대기 측정소 이름 확인은 목록(24h 캐시)을 먼저 보고 목록에 없을 때만 전국 실시간(쿼터)을 본다.
 - **2026-10-05 (5번째 층 — 남용·장애 방어)** in [bus](../topics/bus.md) / [subway](../topics/subway.md) / [weather](../topics/weather.md) / [air-quality](../topics/air-quality.md) / [sea](../topics/sea.md) / [transit](../topics/transit.md) (`fd957320`, `lib/upstream-guard.ts`): 위 Pattern 의 2026-10 확장 그대로. 9월 sea 인스턴스가 지적한 "4층 중 게이트가 없다·물때 임의 날짜·실패를 캐시하지 않아 장애 중 요청마다 재시도" 가 이 커밋으로 메워졌다(`SEA_QUOTA_LIMITS` + 날짜 제한 + 쿨다운). 응답 계약도 바뀌어(대기 시계열 404·중기 400·지하철 429·쿨다운 503) 외부 문서 [api-docs](../topics/api-docs.md) 에 반영됐다. 남은 후속(PLAN "리뷰 반영 → 남긴 것"): 실패 쿨다운의 기준 시각이 조회 **시작**이라 8초 예산을 다 쓰고 실패하면 쿨다운이 그만큼 짧다 — 대기·버스·지하철·날씨·AWS·바다 6곳 공통으로 실패 시점 기준으로 바꿀 것, 측정소 화이트리스트는 목록을 먼저 보고 전국 조회는 필요할 때만.
 - **2026-10-05** in [life-map](../topics/life-map.md) / [meal](../topics/meal.md) (`5655abbc`·`fd957320`): 사용자 비례 런타임 소비가 남은 두 곳에도 같은 층 — VWorld 지역 검색은 고유 검색어마다 2콜이라 검색어 순회로 지오코더와 같은 키의 한도를 태울 수 있어 in-flight + 전역 일일 예산 3,000. 식단 추천은 날씨를 **부르지 않고** `app.weather` 캐시만 엿본다 — 별도 인스턴스가 카운터를 둘로 나눠 합계 18,000 을 허용하던 8월의 함정(아래 2026-08-21 weather)이 닫혔다.
 - **2026-09-25 (반례 — 고정 예산 폴링)** in [parking](../topics/parking.md) (`2ff2c31`): 주차는 이 컨셉의 (3) "트리거는 의도에 묶기" 를 **의도적으로 뒤집었다**. 서울 시영 실시간 여석·공항 주차(한국공항공사 15158689·인천공항 15095047)는 `PARKING_LIVE_CRON`(기본 5분) 폴러가, 충전기 상태(환경공단 15076352)는 `EV_STATUS_CRON`(기본 10분) 폴러가 **보는 사람이 없어도** 부른다(원천당 하루 ~290콜, 충전기는 개발계정 일 1,000건 중 ~290). 사용자 요청은 폴러 메모리와 로컬 DB 만 읽어 업스트림 0콜이고(`RATE.parkingRead` 240/분), 쿼터 소비가 사용자 수와 무관한 **상수**가 된다. 이유는 데이터의 가치가 "지금 값" 이 아니라 **연속 관측**에 있어서다 — 요일×시간 평소 혼잡도(`ParkingOccupancyStat`)는 균일한 표본이 필요하고, 사용자 비례 호출로는 사람이 안 보는 새벽이 비어 통계가 기운다. 같은 칸을 4분 안에 다시 쓰지 않는 가드(재기동 직후 폴링·겹친 cron 이 표본을 부풀리지 않게)와 `onListen` 에서만 시작하는 배치([server-only-boot-effects](server-only-boot-effects.md) — 테스트·`export:openapi` 가 예산을 쓰지 않게)가 이 고정 예산을 지킨다. 원칙의 재진술: 한도 소비는 **데이터가 가치를 갖는 단위**에 비례시킨다 — 보통은 사용자 의도, 관측 누적형은 시간.
@@ -46,8 +47,12 @@ status: active
 
 6. **게이트는 마지막 층이 아니라 칸막이다** (2026-10). 9월까지 게이트는 "일일 카운터 하나" 였고, 그 하나가 바닥나면 기능 전체가 멈췄다 — 남용한 쪽과 피해를 보는 쪽이 같은 칸에 있었다. 이번 라운드는 게이트를 오퍼레이션별 칸으로 나누고(남용한 기능만 멈춤), 입력 검증으로 가짜 요청을 쿼터 앞에서 버리고(비용 0), 실패를 쿨다운으로 기억해 장애 중 재시도가 쿼터를 태우지 않게 했다. 외부에 API 를 연 뒤의 무인증 호출자는 "명시적 의도" 를 얼마든지 흉내 낼 수 있으므로, 의도 비례(1~4층)는 정직한 사용자에게 싼 화면을 주는 장치이고 칸막이·화이트리스트·쿨다운(5층)은 그렇지 않은 호출자에게서 공유 예산을 지키는 장치다. 요청 수 대신 요청의 효과를 묶는 [amplification-caps](amplification-caps.md) 와 같은 결.
 
+7. **(32차) 공용 쿼터는 소비자별 몫이 있어야 한다.** 쿼터를 나눠 쓰는 기능이 넷이 되자, 가장 많이 부르는 새 기능(등산 추천)이 기존 기능(상단바 날씨)의 하루를 먹을 수 있었다. 새 소비자는 들어올 때 몫(하루·요청당 상한)과 "몫을 다 쓰면 캐시만" 경로를 같이 가져와야 한다. 쿨다운·한도 같은 시간 규칙은 **사건이 끝난 시각**을 기준으로 — 시작 시각 기준은 느린 실패에서 무력해진다.
+
 ## Sources
 
+- [hiking](../topics/hiking.md) — 32차 날씨 몫
+- [apps/friendly/src/modules/hiking/hiking-recommend.service.ts](../../apps/friendly/src/modules/hiking/hiking-recommend.service.ts) — 32차 `RECOMMEND_WEATHER_FETCH_MAX`
 - [docs/PLAN-perf-2.md](../../docs/PLAN-perf-2.md)
 - [apps/friendly/src/lib/upstream-guard.ts](../../apps/friendly/src/lib/upstream-guard.ts)
 - [meal](../topics/meal.md)
